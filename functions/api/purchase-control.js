@@ -299,6 +299,22 @@ function isPastIso(value) {
   return Number.isFinite(time) && time <= Date.now();
 }
 
+// Default lifetime for a captured session that arrives WITHOUT a usable
+// expiry timestamp. Bounds two failure modes at once: (1) the KV blob would
+// otherwise be written with no TTL and linger forever (orphan leak); (2) the
+// scout would treat a no-expiry session as live indefinitely. 6h mirrors the
+// Chrome-extension fallback and is short enough that a dead portal self-clears
+// by the next morning scout.
+const SESSION_DEFAULT_TTL_S = 6 * 3600;
+
+// Single source of truth for "is this captured session safe to scrape with?"
+// Routed through by every consumer (scout export, portal-health badge, write
+// gate) so the readiness rule can never drift between them. A session is
+// usable only when it carries an expiry that is still in the future.
+function sessionUsable(session) {
+  return !!session && !!session.expires_at && !isPastIso(session.expires_at);
+}
+
 function countCookies(payload) {
   const storedCount = Array.isArray(payload?.cookies) ? payload.cookies.length : 0;
   const visibleCount = payload?.visible_cookies && typeof payload.visible_cookies === 'object'
@@ -1687,7 +1703,7 @@ async function handleSessionExport(url, env) {
     }
     const p = session.payload;
     out[sourceKey] = {
-      ready: !!session.expires_at && !isPastIso(session.expires_at),
+      ready: sessionUsable(session),
       captured_at: session.captured_at || '',
       expires_at: session.expires_at || '',
       captured_url: p.captured_url || '',
@@ -2386,8 +2402,16 @@ async function upsertPortalSession(body, user, env) {
 
   const payload = body.session || body.payload || body.storage_state || null;
   const hasPayload = payload && typeof payload === 'object' && Object.keys(payload).length > 0;
-  const expiresAt = body.expires_at || payload?.expires_at || payload?.expiry || '';
+  const suppliedExpiry = body.expires_at || payload?.expires_at || payload?.expiry || '';
   const now = new Date().toISOString();
+  // A capture that carries auth material but no usable expiry is stamped with a
+  // bounded default (SESSION_DEFAULT_TTL_S) rather than left blank. Blank meant
+  // a permanent KV write (orphan leak) AND a session the scout-export refused
+  // to serve (sessionUsable === false). Bounding it makes the entry self-clean
+  // and keeps the stored expiry consistent across every consumer.
+  const expiresAt = (suppliedExpiry && !isPastIso(suppliedExpiry))
+    ? suppliedExpiry
+    : (hasPayload ? new Date(Date.now() + SESSION_DEFAULT_TTL_S * 1000).toISOString() : '');
   // READY truth-gate: a session is only READY when it carries real auth
   // material (cookies and/or tokens) AND is not past expiry. "Payload
   // non-empty" alone is too coarse — a logged-out portal with junk
@@ -2425,12 +2449,14 @@ async function upsertPortalSession(body, user, env) {
   };
 
   if (hasPayload) {
-    const ttl = expiresAt ? Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000) : 0;
-    if (ttl > 60) {
-      await env.SESSIONS.put(portalSessionKey(sourceKey), JSON.stringify(kvValue), { expirationTtl: ttl });
-    } else {
-      await env.SESSIONS.put(portalSessionKey(sourceKey), JSON.stringify(kvValue));
-    }
+    // expiresAt is now always a future ISO when hasPayload (see above), so the
+    // TTL is always bounded — KV self-evicts at expiry and no entry is ever
+    // written permanently. Floor at 60s as a final guard against a supplied
+    // expiry that is future-but-imminent.
+    const ttl = expiresAt ? Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000) : SESSION_DEFAULT_TTL_S;
+    await env.SESSIONS.put(portalSessionKey(sourceKey), JSON.stringify(kvValue), {
+      expirationTtl: Math.max(60, ttl),
+    });
   }
 
   await env.DB.prepare(`
@@ -3379,6 +3405,15 @@ function detectFamily(unitLike) {
   if (/(kg|gm?|gram)/i.test(u)) return 'mass';
   if (/(litre|liter|ml|^l$|\bl\b)/i.test(u)) return 'vol';
   if (/(unit|pc|pcs?|piece|nos|count|bunch)/i.test(u)) return 'count';
+  // 'pack' family — the material's UOM IS the pack/container itself
+  // (box / packet / pouch / bundle / can / bottle / jar / tin / sachet /
+  // roll / strip). For these the natural comparison is ₹/pack, NOT a
+  // normalisation to kg/L. Treating them as a recognised family (rather
+  // than returning null) is what stops the silent-zero cascade: 40 of 221
+  // live materials carry these UOMs and were being hard-zeroed to
+  // UOM_MISMATCH no matter how good the portal quote was. We map 'pack' to
+  // behave like 'count' downstream (each pack = 1 countable unit).
+  if (/(box|packet|pkt|pouch|bundle|\bcan\b|bottle|jar|tin|sachet|roll|strip|carton|crate|bag|pack)/i.test(u)) return 'pack';
   return null;
 }
 
@@ -3386,13 +3421,35 @@ function detectFamily(unitLike) {
 // where qty is the pack's quantity expressed in the MATERIAL's UOM.
 // Returns null when conversion is impossible.
 function packQtyInMaterialUom(packSizeStr, materialUom, materialName) {
+  const matFamily = detectFamily(materialUom);
+  if (!matFamily) return null;
+
+  // 'pack' material (box/packet/pouch/...): the material's UOM IS the pack/
+  // container, so the quote is compared per-pack. We must count PACKS, not
+  // read an embedded gram/ml figure — otherwise "Amul Cheese Block 400 g"
+  // (a box material) would parse as 400 and divide the price by 400, turning
+  // a silent-zero into a silent-WRONG (near-free). So: look only for an
+  // explicit pack multiplicity ("Pack of 6", "6 x", a combo "Buns x12"),
+  // and DEFAULT TO 1 when none is stated (a single pack, clean ₹/pack). This
+  // also rescues sizeless titles ("Surf Excel") that parsePackSize can't read.
+  // (Genuinely mis-coded liquids like "Sunflower Oil (1 Liter)" tagged
+  // 'packet' should be UOM-corrected to L in Odoo for true per-litre maths —
+  // flagged in the Nihaf-only block; here we at least stop the hard zero.)
+  if (matFamily === 'pack') {
+    const txt = String(packSizeStr || '').toLowerCase();
+    let count = 1;
+    const packOf = txt.match(/pack\s*of\s*(\d+)/);
+    const times = txt.match(/(?:^|\b)(\d+)\s*[x×*]\b/) || txt.match(/[x×*]\s*(\d+)\b/);
+    if (packOf) count = Number(packOf[1]);
+    else if (times) count = Number(times[1]);
+    return count > 0 ? count : 1;
+  }
+
   const pack = parsePackSize(packSizeStr);
   if (!pack || pack.qty <= 0) return null;
-  const matFamily = detectFamily(materialUom);
   const packFamily = (pack.unit === 'kg' || pack.unit === 'g') ? 'mass'
                    : (pack.unit === 'l' || pack.unit === 'ml') ? 'vol'
                    : 'count';
-  if (!matFamily) return null;
 
   // Same family — direct conversion (kg/g/l/ml/unit normalisation)
   if (matFamily === packFamily) {
