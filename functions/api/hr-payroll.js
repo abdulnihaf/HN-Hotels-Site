@@ -28,14 +28,10 @@
 // Auth: same as hr-admin (DASHBOARD_KEY via x-dashboard-key header).
 
 'use strict';
+import { verifyToken, corsHeaders } from './_lib/darbar-auth.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
-
-function authOk(request, env, body) {
-  const key = request.headers.get('x-dashboard-key') || body?.dashboard_key;
-  return key && key === env.DASHBOARD_KEY;
-}
 
 function daysInMonth(yyyymm) {
   const [y, m] = yyyymm.split('-').map(Number);
@@ -197,16 +193,26 @@ async function snapshotPayable(env, computation, opts = {}) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export async function onRequest({ request, env }) {
+  const ch = corsHeaders(request);
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: ch });
   const url = new URL(request.url);
   const action = url.searchParams.get('action') || '';
   const method = request.method;
   const db = env.DB;
 
+  // All payroll actions require a valid Darbar token. The raw DASHBOARD_KEY
+  // no longer lives in the browser — the client sends x-darbar-token only.
+  const auth = await verifyToken(env, request).catch(() => null);
+  if (!auth) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json', ...ch } });
+
+  // salary-sensitive writes require admin (fin=true)
+  const FIN_WRITES = new Set(['compute-payable','approve-payable','mark-paid','delete-advance']);
+  if (FIN_WRITES.has(action) && !auth.f) return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { 'content-type': 'application/json', ...ch } });
+
   let body = {};
   if (method === 'POST') {
-    try { body = await request.json(); } catch { return json({ error: 'invalid JSON' }, 400); }
+    try { body = await request.json(); } catch { return new Response(JSON.stringify({ error: 'invalid JSON' }), { status: 400, headers: { 'content-type': 'application/json', ...ch } }); }
   }
-  if (!authOk(request, env, body)) return json({ error: 'unauthorized' }, 401);
 
   // ─── Advances CRUD ──────────────────────────────────────────────────────
   if (action === 'record-advance' && method === 'POST') {

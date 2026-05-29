@@ -27,12 +27,32 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 import { sendWithFallback } from './_lib/comms-core.js';
+import { mintToken, verifyToken, corsHeaders } from './_lib/darbar-auth.js';
+
+// Server-side PIN map — the REAL auth boundary (mirrors ops/darbar/app.js USERS,
+// which is now only a UX convenience). PINs are verified here, never client-side.
+const AUTH_PINS = {
+  '0305': { name: 'Nihaf',   role: 'admin',      fin: true  },
+  '8523': { name: 'Basheer', role: 'manager',    fin: false },
+  '2026': { name: 'Zoya',    role: 'onboarding', fin: false },
+  '4040': { name: 'Haneef',  role: 'manager',    fin: false },
+  '5050': { name: 'Nissar',  role: 'manager',    fin: false },
+};
+// Actions that mutate money / roster identity — admin (fin) only.
+const ADMIN_ONLY = new Set(['salary-override', 'mark-exit', 'onboard']);
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), {
     status,
-    headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+    headers: { 'content-type': 'application/json' },
   });
+
+// Attach reflected CORS headers to any Response before it leaves.
+function withCors(resp, request) {
+  const h = corsHeaders(request);
+  for (const [k, v] of Object.entries(h)) resp.headers.set(k, v);
+  return resp;
+}
 
 // Departed tiers (consecutive silent days). Never auto-deactivate — surface to owner.
 const DEPARTED_WATCH = 7;        // first nudge
@@ -49,40 +69,47 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const action = url.searchParams.get('action') || 'home';
   const db = env.DB;
-  if (!db) return json({ error: 'DB binding missing' }, 500);
+
+  if (request.method === 'OPTIONS') return withCors(new Response(null, { status: 204 }), request);
+  if (!db) return withCors(json({ error: 'DB binding missing' }, 500), request);
 
   try {
+    // ── auth: the only unauthenticated action. Verifies the PIN server-side. ──
+    if (action === 'auth' && request.method === 'POST') {
+      const { pin } = await request.json().catch(() => ({}));
+      const u = pin && AUTH_PINS[String(pin)];
+      if (!u) return withCors(json({ error: 'invalid PIN' }, 401), request);
+      const token = await mintToken(env, u);
+      return withCors(json({ token, user: u.name, role: u.role, fin: u.fin }), request);
+    }
+
+    // ── everything else REQUIRES a valid token (or internal service key) ──
+    const auth = await verifyToken(env, request);
+    if (!auth) return withCors(json({ error: 'unauthorized' }, 401), request);
+
     if (request.method === 'GET') {
-      if (action === 'home') return await home(db, url);
-      if (action === 'reconcile') return await reconcile(db, false);
-      return json({ error: `unknown GET action: ${action}` }, 400);
+      if (action === 'home') return withCors(await home(db, url), request);
+      if (action === 'reconcile') return withCors(await reconcile(db, false), request);
+      return withCors(json({ error: `unknown GET action: ${action}` }, 400), request);
     }
     if (request.method === 'POST') {
-      if (action === 'reconcile') return await reconcile(db, true);
-      // Write-backs — owner-only (dashboard key). The inbox mutates state in one tap.
-      if (!authed(request, env)) return json({ error: 'unauthorized — dashboard key required' }, 401);
+      if (ADMIN_ONLY.has(action) && !(auth.f || auth.r === 'admin')) {
+        return withCors(json({ error: 'forbidden — admin only' }, 403), request);
+      }
       const body = await request.json().catch(() => ({}));
-      if (action === 'mark-exit')       return await markExit(db, body);
-      if (action === 'mark-leave')      return await markLeave(db, body);
-      if (action === 'fix-punch')       return await fixPunch(db, body);
-      if (action === 'salary-override') return await salaryOverride(db, body);
-      if (action === 'dismiss-ghost')   return await dismissGhost(db, body);
-      if (action === 'onboard')         return await onboard(db, body);
-      if (action === 'notify-run')      return await notifyRun(db, env, body);
-      return json({ error: `unknown POST action: ${action}` }, 400);
+      if (action === 'reconcile')       return withCors(await reconcile(db, true), request);
+      if (action === 'mark-exit')       return withCors(await markExit(db, body), request);
+      if (action === 'mark-leave')      return withCors(await markLeave(db, body), request);
+      if (action === 'fix-punch')       return withCors(await fixPunch(db, body), request);
+      if (action === 'salary-override') return withCors(await salaryOverride(db, body), request);
+      if (action === 'dismiss-ghost')   return withCors(await dismissGhost(db, body), request);
+      if (action === 'onboard')         return withCors(await onboard(db, body), request);
+      if (action === 'notify-run')      return withCors(await notifyRun(db, env, body), request);
+      return withCors(json({ error: `unknown POST action: ${action}` }, 400), request);
     }
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'access-control-allow-origin': '*',
-          'access-control-allow-methods': 'GET,POST,OPTIONS',
-          'access-control-allow-headers': 'content-type,x-dashboard-key',
-        },
-      });
-    }
-    return json({ error: 'method not allowed' }, 405);
+    return withCors(json({ error: 'method not allowed' }, 405), request);
   } catch (e) {
-    return json({ error: String(e && e.message || e) }, 500);
+    return withCors(json({ error: 'server error' }, 500), request);   // never echo internals
   }
 }
 
@@ -250,11 +277,7 @@ async function reconcile(db, persist) {
   return json({ unknown_pins: (unknown.results || []).map(r => r.pin), detail: unknown.results || [], inserted });
 }
 
-/* ━━━ Write-backs (owner-only) ━━━ */
-function authed(request, env) {
-  const k = request.headers.get('x-dashboard-key') || '';
-  return !!env.DASHBOARD_KEY && k === env.DASHBOARD_KEY;
-}
+/* ━━━ Write-backs (owner-only — gated by token + ADMIN_ONLY in onRequest) ━━━ */
 
 // O1 resolution: the worker has left. Record the exit, stop counting them.
 // Never auto-fires — only the owner, from the Today inbox, can confirm a departure.

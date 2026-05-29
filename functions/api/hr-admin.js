@@ -4,23 +4,18 @@
  * D1:     DB (hn-hiring) — tables prefixed hr_*
  * Secret: ODOO_API_KEY, CAMS_AUTH_TOKEN (optional — device remote)
  *
- * Design mirrors rm-admin.js:
- *   GET  ?action=employees|employee|attendance|deductions|status|...
- *   POST {action, pin, ...}  — PIN-gated writes + Odoo sync
- *
- * Conventions borrowed from Nihaf's Apps Script:
- *   • pin (string) = biometric ID, maps to hr.employee.pin
- *   • fields_get() cached to skip invalid fields per Odoo version
- *   • search-by-pin dedup before create/update
- *   • archive = active:false, never delete
- *   • Multi-company job fix: HE=1, NCH=10, HQ=false (shared)
+ * Auth (Darbar audit 2026-05-29):
+ *   ALL GET reads now require a valid Darbar token (x-darbar-token) OR
+ *   the internal service key (x-service-key = CAMS_AUTH_TOKEN).
+ *   POST writes still require the PIN in the body PLUS a valid token.
+ *   CORS locked to the Darbar origin; no wildcard on a PII surface.
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+import { verifyToken, corsHeaders } from './_lib/darbar-auth.js';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+// CORS is now request-aware (reflected origin, Darbar-only). Defined lazily
+// because we need the request object. Legacy constant kept for the one HTML
+// response (settlement sheet, rendered server-side, same-origin only).
+const CORS_LEGACY = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 
 const ODOO_URL  = 'https://ops.hamzahotel.com/jsonrpc';
 const ODOO_DB   = 'main';
@@ -245,7 +240,7 @@ async function camsCommand(serial, token, cmd, params = {}) {
  * GET handlers — D1 reads (no auth)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-async function handleGet(url, env) {
+async function handleGet(url, env, auth = null) {
   const db = env.DB;
   const action = url.searchParams.get('action');
 
@@ -302,9 +297,8 @@ async function handleGet(url, env) {
   if (action === 'attendance-daily') {
     const date = url.searchParams.get('date') || istDate();
     const brand = url.searchParams.get('brand');
-    const viewerPin = url.searchParams.get('pin');
-    const viewer = viewerPin ? PINS[viewerPin] : null;
-    const redact = viewer ? !viewer.view_financials : false;
+    // Financial redaction: use the verified token's fin flag; default=redact if no auth.
+    const redact = !(auth?.f);
 
     let q = `SELECT a.*, e.name, e.known_as, e.pin as emp_pin, e.brand_label, e.pay_type,
                     e.monthly_salary, e.daily_rate, e.job_name, e.department_name
@@ -335,7 +329,7 @@ async function handleGet(url, env) {
       }
       return out;
     });
-    return json({ date, brand: brand || 'all', viewer: viewer?.name || null, rows: enriched, count: enriched.length });
+    return json({ date, brand: brand || 'all', rows: enriched, count: enriched.length });
   }
 
   // --- Daily digest (WhatsApp-ready text for Nihaf + Basheer) ---
@@ -346,9 +340,7 @@ async function handleGet(url, env) {
     const date = url.searchParams.get('date') || istDate();
     const brand = url.searchParams.get('brand') || 'HE';
     const mode = url.searchParams.get('mode') || 'recap';
-    const viewerPin = url.searchParams.get('pin');
-    const viewer = viewerPin ? PINS[viewerPin] : null;
-    const includeFin = viewer ? !!viewer.view_financials : false;
+    const includeFin = !!(auth?.f);
 
     const digest = await buildDigest(db, brand, date, mode, includeFin);
     return json({ brand, date, mode, ...digest });
@@ -362,9 +354,7 @@ async function handleGet(url, env) {
   //   Financials (deductions) only shown if viewer is admin.
   if (action === 'settlement') {
     const date = url.searchParams.get('date') || shiftDayDelta(istDate(), -1);
-    const viewerPin = url.searchParams.get('pin');
-    const viewer = viewerPin ? PINS[viewerPin] : null;
-    const includeFin = viewer ? !!viewer.view_financials : false;
+    const includeFin = !!(auth?.f);
 
     const rows = (await db.prepare(
       `SELECT a.*, e.name, e.known_as, e.pin as emp_pin, e.brand_label, e.pay_type,
@@ -2319,14 +2309,30 @@ async function getGDriveToken(env) {
 
 export async function onRequest(context) {
   const { request, env } = context;
-  if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+  const ch = corsHeaders(request);
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: ch });
   try {
     const url = new URL(request.url);
-    if (request.method === 'GET')  return await handleGet(url, env);
-    if (request.method === 'POST') return await handlePost(request, env);
-    return json({ error: 'Method not allowed' }, 405);
+    // All GET reads require a valid Darbar token or the internal CAMS service key.
+    if (request.method === 'GET') {
+      const auth = await verifyToken(env, request);
+      if (!auth) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json', ...ch } });
+      const res = await handleGet(url, env, auth);
+      for (const [k, v] of Object.entries(ch)) res.headers.set(k, v);
+      return res;
+    }
+    if (request.method === 'POST') {
+      // POST writes are PIN-gated inside handlePost; service key bypasses PIN check.
+      // We also require a token so cross-site POST is blocked.
+      const auth = await verifyToken(env, request);
+      if (!auth) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json', ...ch } });
+      const res = await handlePost(request, env, auth);
+      for (const [k, v] of Object.entries(ch)) res.headers.set(k, v);
+      return res;
+    }
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: { 'content-type': 'application/json', ...ch } });
   } catch (err) {
-    console.error('HR Admin error:', err);
-    return json({ error: err.message, stack: err.stack }, 500);
+    console.error('HR Admin error:', err?.message);       // stack to logs only, never to response
+    return new Response(JSON.stringify({ error: 'server error' }), { status: 500, headers: { 'content-type': 'application/json', ...ch } });
   }
 }
