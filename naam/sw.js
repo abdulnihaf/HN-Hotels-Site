@@ -1,7 +1,7 @@
 /* Naam service worker — instant open + offline last-known view.
    Strategy: app shell cache-first; data network-first with cache fallback;
    creative thumbs cache-first (immutable by content-hash id). */
-const VER = 'naam-v5';
+const VER = 'naam-v6';
 const SHELL = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {

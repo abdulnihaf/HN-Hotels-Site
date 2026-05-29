@@ -96,8 +96,11 @@ async function main() {
   let memOk = false, metricSources = 0;
 
   // ── 1. marketing-memory (read-only) ───────────────────────────────────────
+  let memoryUpdatedAt = null;
   try {
     const mem = JSON.parse(fs.readFileSync(MEM_FILE, 'utf8'));
+    // Capture when Codex last actually wrote this memory (distinct from when WE ran the snapshot)
+    memoryUpdatedAt = mem.updated_at || mem.published_at || null;
     const memLanes = mem.lanes || mem; // tolerate shape
     const arr = Array.isArray(memLanes) ? memLanes : Object.values(memLanes);
     for (const m of arr) {
@@ -183,12 +186,40 @@ async function main() {
     }
   } catch (e) { console.warn('[leads] kept seed:', e.message); }
 
-  // ── 4. stamp + write ──────────────────────────────────────────────────────
+  // ── 4. validate lane↔manifest contract ───────────────────────────────────
+  // Warn if a lane's related_creative_lane value has no match in the manifest.
+  // Catches silent 0-count mismatches BEFORE they reach production.
+  const manifestFile = require('path').join(ROOT, 'naam', 'data', 'creative-manifest.json');
+  if (fs.existsSync(manifestFile)) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+      const manifestLanes = new Set(manifest.lanes || []);
+      let validationWarnings = 0;
+      for (const lane of data.lanes) {
+        const rl = lane.related_creative_lane;
+        if (rl && rl !== 'other' && !manifestLanes.has(rl)) {
+          console.warn(`[validate] lane "${lane.id}" related_creative_lane="${rl}" not found in creative-manifest lanes: [${[...manifestLanes].join(', ')}]. Re-run build-creative-manifest.py.`);
+          validationWarnings++;
+        }
+      }
+      if (validationWarnings === 0) console.log('[validate] lane↔manifest contract OK');
+    } catch (e) { console.warn('[validate] could not read creative-manifest.json:', e.message); }
+  } else {
+    console.warn('[validate] creative-manifest.json not found — run build-creative-manifest.py');
+  }
+
+  // ── 5. stamp + write ──────────────────────────────────────────────────────
   data.generated_at = istISO();
+  // memory_updated_at = when Codex last ACTUALLY updated the marketing memory
+  // This is DISTINCT from generated_at (= when this script ran).
+  // The You-tab staleness banner uses generated_at; the lane freshness_days
+  // per lane uses last_run. memory_updated_at lets the UI warn when the entire
+  // memory source is stale even if individual lanes show "today".
+  data.memory_updated_at = memoryUpdatedAt || null;
   data.today = TODAY;
-  data.as_of_note = `Refreshed ${istISO()} · memory:${memOk ? 'ok' : 'skip'} · live metric sources:${metricSources}. Run: node scripts/naam-snapshot.js`;
+  data.as_of_note = `Refreshed ${istISO()} · memory last updated: ${memoryUpdatedAt || 'unknown'} · live metric sources:${metricSources}. Run: node scripts/naam-snapshot.js`;
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2) + '\n');
-  console.log(`[done] naam-data.json refreshed — memory:${memOk ? 'ok' : 'skip'}, ${metricSources} live metric sources, today=${TODAY}`);
+  console.log(`[done] naam-data.json refreshed — memory:${memOk ? 'ok' : 'skip'} (updated ${memoryUpdatedAt || '?'}), ${metricSources} live metric sources, today=${TODAY}`);
 }
 
 main().catch(e => { console.error('[fatal]', e); process.exit(1); });

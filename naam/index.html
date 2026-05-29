@@ -513,7 +513,8 @@ function renderYou(){
     <div class="you-group"><div class="brand-seg" id="brandSegYou" style="margin:10px"></div></div>
     <div class="section-header">Data freshness</div>
     <div class="you-group">
-      <div class="you-row"><span class="yl">Snapshot</span><span class="yv">${esc(state.data.generated_at.slice(0,10))}</span></div>
+      <div class="you-row"><span class="yl">Snapshot run</span><span class="yv">${esc(state.data.generated_at.slice(0,10))}</span></div>
+      <div class="you-row"><span class="yl">Codex memory</span><span class="yv ${(()=>{if(!state.data.memory_updated_at)return '';const d=Math.floor((Date.now()-new Date(state.data.memory_updated_at).getTime())/86400000);return d>7?'warn':d>14?'bad':'';})()} ">${(()=>{if(!state.data.memory_updated_at)return 'unknown';const d=Math.floor((Date.now()-new Date(state.data.memory_updated_at).getTime())/86400000);return esc(state.data.memory_updated_at.slice(0,10))+(d>0?' · '+d+'d ago':'');})()}</span></div>
       <div class="you-row"><span class="yl">Creative library</span><span class="yv">${state.creative?esc((state.creative.generated_at||'').slice(0,10))+' · '+state.creative.counts.total+' assets':'not built'}</span></div>
     </div>
     <div class="section-header">Lane health · ${esc(state.brand)}</div>
