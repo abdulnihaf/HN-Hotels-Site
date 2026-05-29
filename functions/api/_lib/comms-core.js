@@ -156,28 +156,37 @@ export async function sendWabaText(env, { brand, phone, body }) {
 // Provider switch (env.SMS_PROVIDER): 'fast2sms' (default) | 'bsnl'
 // For BSNL direct gateway, set BSNL_DLT_API_URL + BSNL_DLT_TOKEN secrets.
 
-export async function sendSms(env, { phone, message, route = 'q', sender_id, message_id }) {
+export async function sendSms(env, { phone, message, route = 'q', sender_id, message_id, entity_id }) {
   const provider = (env.SMS_PROVIDER || 'fast2sms').toLowerCase();
-  if (provider === 'bsnl' && route === 'dlt') return sendBsnlDltSms(env, { phone, message, sender_id, message_id });
-  return sendFast2SmsSms(env, { phone, message, route, sender_id, message_id });
+  const isDlt = route === 'dlt' || route === 'dlt_manual';
+  if (provider === 'bsnl' && isDlt) return sendBsnlDltSms(env, { phone, message, sender_id, message_id });
+  return sendFast2SmsSms(env, { phone, message, route, sender_id, message_id, entity_id });
 }
 
-async function sendFast2SmsSms(env, { phone, message, route = 'q', sender_id, message_id }) {
+async function sendFast2SmsSms(env, { phone, message, route = 'q', sender_id, message_id, entity_id }) {
   if (!env.FAST2SMS_API_KEY) {
     return { ok: false, status: 500, response: { error: 'FAST2SMS_API_KEY not set' } };
   }
   const to = normalizePhone(phone).replace(/^91/, '');
+  const isDlt = route === 'dlt' || route === 'dlt_manual';
   const url = new URL(FAST2SMS_BASE);
   url.searchParams.set('authorization', env.FAST2SMS_API_KEY);
-  url.searchParams.set('route', route);
   url.searchParams.set('numbers', to);
   url.searchParams.set('message', message);
   url.searchParams.set('flash', '0');
-  if (route === 'dlt') {
+  if (isDlt) {
+    // Fast2SMS DLT on OUR PE registration: route=dlt_manual + sender_id + entity_id + DLT content template_id.
+    // (route='dlt' + message_id was the stale, silently-unsendable shape — fixed 2026-05-29.)
+    const eid = entity_id || env.FAST2SMS_DLT_ENTITY_ID || '1401667060000079296';
     if (!sender_id) return { ok: false, status: 400, response: { error: 'sender_id required for DLT route' } };
+    if (!message_id) return { ok: false, status: 400, response: { error: 'template_id (message_id) required for DLT route' } };
+    url.searchParams.set('route', 'dlt_manual');
     url.searchParams.set('sender_id', sender_id);
+    url.searchParams.set('entity_id', eid);
+    url.searchParams.set('template_id', message_id);
     url.searchParams.set('language', 'english');
-    if (message_id) url.searchParams.set('message_id', message_id);
+  } else {
+    url.searchParams.set('route', route);
   }
 
   const res = await fetch(url.toString(), { method: 'GET' });
@@ -206,7 +215,7 @@ async function sendBsnlDltSms(env, { phone, message, sender_id, message_id }) {
     method: 'POST',
     headers: { authorization: `Bearer ${env.BSNL_DLT_TOKEN}`, 'content-type': 'application/json' },
     body: JSON.stringify({
-      entity_id: env.BSNL_DLT_ENTITY_ID || 'BL-1400079296',
+      entity_id: env.BSNL_DLT_ENTITY_ID || '1401667060000079296',
       header: sender_id,
       template_id: message_id,
       to,
@@ -383,7 +392,7 @@ export async function sendAndLog(env, opts) {
     // waba
     template, vars = [], language = 'en', buttons = [],
     // sms
-    message, route = 'q',
+    message, route = 'q', sender_id, message_id, entity_id,
     // voice
     message_text,
   } = opts;
@@ -400,7 +409,7 @@ export async function sendAndLog(env, opts) {
       result = await sendWaba(env, { brand, phone: recipient, template, vars, language, buttons });
     } else if (channel === 'sms') {
       if (!message) return { ok: false, error: 'message required for sms' };
-      result = await sendSms(env, { phone: recipient, message, route });
+      result = await sendSms(env, { phone: recipient, message, route, sender_id, message_id, entity_id });
     } else if (channel === 'voice') {
       if (!message_text) return { ok: false, error: 'message_text required for voice' };
       result = await sendVoice(env, { phone: recipient, message_text, alert_id });
@@ -585,9 +594,10 @@ export async function runEscalation(env, { limit = 50, gap_minutes = DEFAULT_GAP
             tier: row.tier,
             brand: row.brand,
             message: dlt.message,
-            route: 'dlt',
+            route: 'dlt_manual',
             sender_id: dlt.sender_id,
             message_id: dlt.message_id,
+            entity_id: dlt.entity_id,
           });
           await scheduleNextEscalation(env, attempt.outbox_id, chain, nextStep, gap_minutes, origOpts);
         }
