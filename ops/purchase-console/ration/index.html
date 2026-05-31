@@ -62,6 +62,9 @@
         <label>Cheapest source (last seen)</label>
         <div class="cmp" id="cmp"></div>
         <div class="hint" id="cmphint"></div>
+        <button class="go online" id="refreshPrices" style="margin-top:12px">⚡ Refresh live prices</button>
+        <div id="liveBox"></div>
+        <div class="hint" id="liveStamp"></div>
       </div>
       <div class="card">
         <label id="qtyLabel">Quantity</label>
@@ -110,6 +113,17 @@ $('addList').onclick=async()=>{const q=parseFloat($('qty').value);if(!(q>0)){$('
   else{p.innerHTML='<span style="color:var(--warn)">⚠ '+(r.error||'Failed')+'</span>';p.classList.add('show');}
   $('addList').disabled=false;$('addList').textContent='＋ Add to Basheer pickup list';};
 $('orderOnline').onclick=()=>{window.open('https://blinkit.com/s/?q='+encodeURIComponent(ITEM.name),'_blank');};
+// ⚡ live price scrape across all ready portals, ranked cheapest-first
+$('refreshPrices').onclick=async()=>{
+  const b=$('refreshPrices');b.disabled=true;b.textContent='⚡ Scanning all portals…';
+  $('liveBox').innerHTML='';$('liveStamp').textContent='';
+  const d=await fetch(`${API}?action=prices&code=${encodeURIComponent(CODE)}`).then(r=>r.json()).catch(()=>({success:false}));
+  b.disabled=false;b.textContent='⚡ Refresh live prices';
+  if(!d.success||!(d.results||[]).length){$('liveBox').innerHTML='<div class="hint" style="color:var(--warn)">No live prices right now — '+((d.no_result||[]).length?'portals returned nothing (sessions may be stale)':'try again')+'.</div>';return;}
+  const rows=d.results.map((r,i)=>`<div class="listrow" style="${i===0?'border-color:var(--gold)':''}"><span>${i===0?'⭐ ':''}<b>₹${r.price}</b> · ${r.src}${r.sku?'<br><span style="font-size:11px;color:var(--dim)">'+r.sku.slice(0,38)+'</span>':''}</span><a class="x" style="color:var(--gold);text-decoration:none" href="https://www.google.com/search?q=${encodeURIComponent(ITEM.name+' '+r.src)}" target="_blank">open ↗</a></div>`).join('');
+  $('liveBox').innerHTML=rows;
+  $('liveStamp').textContent='live · '+new Date(d.fetched_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+(d.no_result&&d.no_result.length?' · '+d.no_result.length+' portals no-match':'');
+};
 async function loadList(){const r=await fetch(`${API}?action=manager-list`).then(r=>r.json()).catch(()=>({success:false,items:[]}));
   LIST=r.items||[];MGR=r.manager_phone||'';
   $('listCnt').textContent=LIST.length;$('listTab').classList.toggle('has',LIST.length>0);
