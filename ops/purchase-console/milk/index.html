@@ -8,13 +8,10 @@
 <title>Milk · Nawabi · Sauda</title>
 <link rel="manifest" href="manifest.json">
 <style>
-  :root{ --gold:#c9a14a; --bg:#08080d; --elev:#15151f; --elev2:#1c1c28; --line:rgba(201,161,74,.22);
-         --ok:#3ba776; --okbg:rgba(59,167,118,.13); --warn:#d8923a; --warnbg:rgba(216,146,58,.13);
-         --bad:#cf5b4e; --wa:#25d366; --txt:#f3f3f6; --dim:#8a8a99; }
+  :root{ --gold:#c9a14a; --bg:#08080d; --elev:#15151f; --line:rgba(201,161,74,.22);
+         --ok:#3ba776; --okbg:rgba(59,167,118,.13); --warn:#d8923a; --bad:#cf5b4e; --wa:#25d366; --txt:#f3f3f6; --dim:#8a8a99; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-       background:radial-gradient(130% 80% at 50% 0%,#13131e,#06060a);color:var(--txt);
-       min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 28px)}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(130% 80% at 50% 0%,#13131e,#06060a);color:var(--txt);min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 28px)}
   .wrap{max-width:480px;margin:0 auto}
   .top{display:flex;align-items:center;gap:10px;margin:22px 0 2px}
   .top .glyph{width:42px;height:42px;border-radius:12px;background:var(--elev);border:1px solid var(--line);display:grid;place-items:center;font-size:22px}
@@ -23,7 +20,7 @@
   .tabs{display:flex;gap:6px;background:var(--elev);border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:18px}
   .tabs button{flex:1;background:transparent;border:none;color:var(--dim);border-radius:10px;padding:11px 0;font-size:14px;font-weight:600;position:relative}
   .tabs button.on{background:var(--gold);color:#1a1408}
-  .tabs button .dot{position:absolute;top:6px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--ok);display:none}
+  .tabs button .dot{position:absolute;top:6px;right:14px;width:7px;height:7px;border-radius:50%;background:var(--ok);display:none}
   .tabs button.has-order .dot{display:block}
   .card{background:var(--elev);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
   .vrow{display:flex;justify-content:space-between;align-items:center}
@@ -32,9 +29,6 @@
   input[type=number],input[type=password]{width:100%;background:#0b0b13;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:21px;padding:13px;outline:none;font-variant-numeric:tabular-nums}
   select{width:100%;background:#0b0b13;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:17px;padding:13px;outline:none;-webkit-appearance:none;appearance:none}
   .row2{display:flex;gap:11px}.row2>div{flex:1}
-  .seg{display:flex;gap:7px}
-  .seg button{flex:1;background:#0b0b13;border:1px solid var(--line);color:var(--txt);border-radius:11px;padding:12px 0;font-size:14px;font-weight:600}
-  .seg button.on{background:var(--gold);color:#1a1408;border-color:var(--gold)}
   .toggle{display:flex;align-items:center;gap:9px;margin-bottom:13px}
   .toggle input{width:19px;height:19px;accent-color:var(--gold)}
   .toggle label{margin:0;font-size:13px;text-transform:none;letter-spacing:0;color:var(--txt)}
@@ -42,28 +36,16 @@
   .preview{background:#0b0b13;border:1px dashed var(--line);border-radius:12px;padding:13px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;margin-top:4px;min-height:38px}
   .send{display:block;width:100%;background:var(--wa);color:#06351a;border:none;border-radius:13px;padding:17px;font-size:17px;font-weight:700;margin-top:8px;text-align:center;text-decoration:none}
   .send.off{pointer-events:none;opacity:.4}
-  .confirm{margin-top:12px;display:none}
-  .confirm.show{display:block}
-  .confirm p{font-size:13.5px;color:var(--txt);margin:0 0 10px;text-align:center}
+  .confirm{margin-top:12px;display:none}.confirm.show{display:block}
+  .confirm p{font-size:13.5px;margin:0 0 10px;text-align:center}
   .confirm .yes{width:100%;background:var(--gold);color:#1a1408;border:none;border-radius:12px;padding:15px;font-size:16px;font-weight:700}
   .confirm .no{width:100%;background:transparent;color:var(--dim);border:none;padding:10px;font-size:12.5px;margin-top:4px}
   .placed{display:none;margin-top:10px;padding:15px;border-radius:13px;background:var(--okbg);border:1px solid var(--ok);font-size:14px}
-  .placed.show{display:block}
-  .placed b{color:var(--ok)}
+  .placed.show{display:block}.placed b{color:var(--ok)}
   .go{width:100%;background:var(--gold);color:#1a1408;border:none;border-radius:13px;padding:17px;font-size:17px;font-weight:700}
-  .go:disabled{opacity:.4}
-  .cans{display:flex;gap:8px}
-  .cans button{flex:1;background:#0b0b13;border:1px solid var(--line);color:var(--txt);border-radius:11px;padding:11px;font-size:13.5px;text-align:left}
-  .cans button.on{outline:2px solid var(--gold)}
-  .cans small{display:block;color:var(--dim);font-size:10.5px;margin-top:3px}
-  .shoot{width:100%;background:#0b0b13;border:1.5px dashed var(--line);border-radius:15px;color:var(--gold);padding:24px;font-size:15px;font-weight:600;text-align:center;display:block}
-  .shoot.has{border-style:solid;padding:7px}.shoot img{width:100%;border-radius:10px;display:block}
-  .calc{font-size:14px;color:var(--dim);margin:9px 2px 0}.calc b{color:var(--txt);font-size:18px}
-  .result{padding:15px;border-radius:13px;margin-top:10px;display:none}
-  .result.show{display:block}.result.ok{background:var(--okbg);border:1px solid var(--ok)}.result.warn{background:var(--warnbg);border:1px solid var(--warn)}
   .hide{display:none!important}
   .small{font-size:11.5px;color:var(--dim);text-align:center;margin-top:16px}
-  .led{font-size:13px}.led .day{font-weight:700;color:var(--gold);margin:14px 0 6px;font-size:13px}
+  .led{font-size:13px}.led .day{font-weight:700;color:var(--gold);margin:14px 0 6px}
   .led .ln{display:flex;justify-content:space-between;padding:9px 11px;background:#0b0b13;border:1px solid var(--line);border-radius:10px;margin-bottom:6px}
   .led .v.ok{color:var(--ok)}.led .v.warn{color:var(--warn)}.led .v.dim{color:var(--dim)}
   a.back{color:var(--dim);font-size:13px;text-decoration:none;display:inline-block;margin-top:18px}
@@ -75,202 +57,77 @@
   <div class="sub">Nawabi · chai · Prabhu · delivered</div>
 
   <div id="gate" class="card">
-    <label>Staff PIN</label>
+    <label>PIN</label>
     <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
     <button class="go" id="pinBtn" style="margin-top:12px">Unlock</button>
-    <div id="pinErr" class="calc" style="color:var(--bad)"></div>
+    <div id="pinErr" class="small" style="color:var(--bad)"></div>
   </div>
 
   <div id="app" class="hide">
     <div class="tabs">
       <button data-t="order" class="on">Order<span class="dot"></span></button>
-      <button data-t="receive">Receive</button>
       <button data-t="ledger">Record</button>
     </div>
 
-    <!-- ORDER -->
     <section id="t-order">
-      <div class="card vrow">
-        <div><div class="nm">Prabhu Buffalo Milk Vendor</div><div class="ph">+91 98868 06395 · ₹55/L</div></div>
-        <div style="font-size:24px">📲</div>
-      </div>
+      <div class="card vrow"><div><div class="nm">Prabhu Buffalo Milk Vendor</div><div class="ph">+91 98868 06395 · ₹55/L</div></div><div style="font-size:24px">📲</div></div>
       <div class="card"><label>Delivery date</label><select id="forDate"></select></div>
-      <div class="card">
-        <div class="toggle"><input type="checkbox" id="amOn" checked><label for="amOn">Morning delivery</label></div>
-        <div class="row2" id="amBody"><div><label>Litres</label><input id="amL" type="number" inputmode="numeric" placeholder="100"></div><div><label>Time</label><select id="amT"></select></div></div>
-      </div>
-      <div class="card">
-        <div class="toggle"><input type="checkbox" id="pmOn" checked><label for="pmOn">Evening delivery</label></div>
-        <div class="row2" id="pmBody"><div><label>Litres</label><input id="pmL" type="number" inputmode="numeric" placeholder="60"></div><div><label>Time</label><select id="pmT"></select></div></div>
-      </div>
-      <div class="card">
-        <label>Message to Prabhu</label>
-        <div class="preview" id="preview"></div>
+      <div class="card"><div class="toggle"><input type="checkbox" id="amOn" checked><label for="amOn">Morning delivery</label></div>
+        <div class="row2" id="amBody"><div><label>Litres</label><input id="amL" type="number" inputmode="numeric" placeholder="100"></div><div><label>Time</label><select id="amT"></select></div></div></div>
+      <div class="card"><div class="toggle"><input type="checkbox" id="pmOn" checked><label for="pmOn">Evening delivery</label></div>
+        <div class="row2" id="pmBody"><div><label>Litres</label><input id="pmL" type="number" inputmode="numeric" placeholder="60"></div><div><label>Time</label><select id="pmT"></select></div></div></div>
+      <div class="card"><label>Message to Prabhu</label><div class="preview" id="preview"></div>
         <a class="send off" id="send" target="_blank" rel="noopener">Send on WhatsApp</a>
-        <!-- confirmation gate: opening WhatsApp ≠ sent. Owner confirms he hit send. -->
-        <div class="confirm" id="confirm">
-          <p>Did you send the order to Prabhu on WhatsApp?</p>
-          <button class="yes" id="confirmYes">✓ Yes, order sent</button>
-          <button class="no" id="confirmNo">Not yet — go back</button>
-        </div>
+        <div class="confirm" id="confirm"><p>Did you send the order to Prabhu on WhatsApp?</p>
+          <button class="yes" id="confirmYes">✓ Yes, order sent</button><button class="no" id="confirmNo">Not yet — go back</button></div>
         <div class="placed" id="placed"></div>
       </div>
-      <div class="small">Tap Send → WhatsApp opens with the order ready → come back and confirm you sent it. Only then is the order logged.</div>
+      <div class="small">Tap Send → WhatsApp opens → come back and confirm you sent it. Only then is the order logged.</div>
     </section>
 
-    <!-- RECEIVE -->
-    <section id="t-receive" class="hide">
-      <div class="card"><label>Which delivery</label>
-        <div class="seg" id="rSlot"><button data-s="AM" class="on">Morning</button><button data-s="PM">Evening</button><button data-s="ADHOC">Emergency</button></div>
-      </div>
-      <div class="card"><label>Which can</label><div class="cans" id="cans"></div></div>
-      <div class="card"><label>Photo of the can on the scale (live camera)</label>
-        <label class="shoot" id="shootLbl" for="cam">📷 Tap to shoot live photo</label>
-        <input id="cam" type="file" accept="image/*" capture="environment" class="hide">
-      </div>
-      <div class="card"><label>Weight on the scale (kg)</label>
-        <input id="gross" type="number" inputmode="decimal" step="0.01" placeholder="47.50">
-        <div class="calc" id="rCalc"></div>
-      </div>
-      <button class="go" id="submit" disabled>Record receiving</button>
-      <div id="rResult" class="result"></div>
-    </section>
-
-    <!-- LEDGER -->
     <section id="t-ledger" class="hide">
       <div class="card led" id="ledBox"><div class="small">Loading…</div></div>
-      <div class="small">Ideal (ordered) vs actual (received). Tracking only — pull any day when you want to look.</div>
+      <div class="small">Ordered (you) vs received (staff). Tracking only — pull any day when you want to look.</div>
     </section>
 
     <a class="back" href="/ops/purchase-console/">← Back to Sauda</a>
   </div>
 </div>
-
 <script>
-const API='/api/milk-thread';
-let PIN='',NAME='',SLOT='AM',CAN=null,CANS=[],PHOTO=null;
-const $=id=>document.getElementById(id);
-
-$('pinBtn').onclick=async()=>{
-  const pin=$('pin').value.trim(); if(!pin)return;
+const API='/api/milk-thread';let PIN='',NAME='';const $=id=>document.getElementById(id);
+$('pinBtn').onclick=async()=>{const pin=$('pin').value.trim();if(!pin)return;
   const r=await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(pin)}`).then(r=>r.json()).catch(()=>({success:false}));
-  if(r.success){PIN=pin;NAME=r.name;$('gate').classList.add('hide');$('app').classList.remove('hide');initOrder();loadCans();}
-  else $('pinErr').textContent='Wrong PIN';
-};
+  if(r.success){PIN=pin;NAME=r.name;$('gate').classList.add('hide');$('app').classList.remove('hide');initOrder();}else $('pinErr').textContent='Wrong PIN';};
 $('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
-
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
-  ['order','receive','ledger'].forEach(t=>$('t-'+t).classList.toggle('hide',t!==b.dataset.t));
-  if(b.dataset.t==='ledger')loadLedger();
-});
-
-// ---------- ORDER ----------
-function initOrder(){
-  const sel=$('forDate'),dn=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  for(let i=0;i<3;i++){const d=new Date();d.setDate(d.getDate()+i);const iso=d.toISOString().slice(0,10);
-    const o=document.createElement('option');o.value=iso;o.textContent=(i===0?'Today':i===1?'Tomorrow':'')+' · '+dn[(d.getDay()+6)%7]+' '+d.getDate()+' '+mn[d.getMonth()];o.dataset.disp=d.getDate()+' '+mn[d.getMonth()];sel.appendChild(o);}
-  sel.selectedIndex=1;
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');['order','ledger'].forEach(t=>$('t-'+t).classList.toggle('hide',t!==b.dataset.t));if(b.dataset.t==='ledger')loadLedger();});
+function initOrder(){const sel=$('forDate'),dn=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for(let i=0;i<3;i++){const d=new Date();d.setDate(d.getDate()+i);const iso=d.toISOString().slice(0,10);const o=document.createElement('option');o.value=iso;o.textContent=(i===0?'Today':i===1?'Tomorrow':'')+' · '+dn[(d.getDay()+6)%7]+' '+d.getDate()+' '+mn[d.getMonth()];o.dataset.disp=d.getDate()+' '+mn[d.getMonth()];sel.appendChild(o);}sel.selectedIndex=1;
   fillTimes($('amT'),'09:00');fillTimes($('pmT'),'17:00');
-  ['amOn','pmOn','amL','pmL','amT','pmT','forDate'].forEach(id=>{$(id).addEventListener('input',onEdit);$(id).addEventListener('change',onEdit);});
-  buildMsg();
-}
+  ['amOn','pmOn','amL','pmL','amT','pmT','forDate'].forEach(id=>{$(id).addEventListener('input',onEdit);$(id).addEventListener('change',onEdit);});buildMsg();}
 function fillTimes(sel,def){for(let h=6;h<=22;h++)for(const m of[0,30]){const hh=String(h).padStart(2,'0'),mm=String(m).padStart(2,'0'),ap=h<12?'AM':'PM',h12=((h+11)%12)+1;const o=document.createElement('option');o.value=`${hh}:${mm}`;o.textContent=`${h12}:${mm} ${ap}`;sel.appendChild(o);}sel.value=def;}
-function disp(s){return s.selectedOptions[0]?s.selectedOptions[0].textContent:'';}
-function dateDisp(){return $('forDate').selectedOptions[0].dataset.disp;}
-// editing after a send resets the confirm state (it's a new/changed order)
-function onEdit(){ $('confirm').classList.remove('show'); $('placed').classList.remove('show'); buildMsg(); }
-function buildMsg(){
-  const amOn=$('amOn').checked,pmOn=$('pmOn').checked;
-  $('amBody').classList.toggle('off',!amOn);$('pmBody').classList.toggle('off',!pmOn);
-  const amL=parseInt($('amL').value)||0,pmL=parseInt($('pmL').value)||0;
-  const lines=['Nawabi Chai House','Buffalo milk order — '+dateDisp(),''];
-  if(amOn&&amL)lines.push(`Morning: ${amL} litre at ${disp($('amT'))}`);
-  if(pmOn&&pmL)lines.push(`Evening: ${pmL} litre at ${disp($('pmT'))}`);
-  const valid=(amOn&&amL)||(pmOn&&pmL),msg=lines.join('\n');
-  $('preview').textContent=valid?msg:'Enter litres to build the order…';
-  const s=$('send');
-  if(valid){s.classList.remove('off');s.href=`https://wa.me/919886806395?text=${encodeURIComponent(msg)}`;}
-  else s.classList.add('off');
-}
-// Tapping Send opens WhatsApp AND reveals the confirm gate (does NOT log yet).
-$('send').addEventListener('click',()=>{ setTimeout(()=>$('confirm').classList.add('show'),400); });
+function disp(s){return s.selectedOptions[0]?s.selectedOptions[0].textContent:'';}function dateDisp(){return $('forDate').selectedOptions[0].dataset.disp;}
+function onEdit(){$('confirm').classList.remove('show');$('placed').classList.remove('show');buildMsg();}
+function buildMsg(){const amOn=$('amOn').checked,pmOn=$('pmOn').checked;$('amBody').classList.toggle('off',!amOn);$('pmBody').classList.toggle('off',!pmOn);
+  const amL=parseInt($('amL').value)||0,pmL=parseInt($('pmL').value)||0;const lines=['Nawabi Chai House','Buffalo milk order — '+dateDisp(),''];
+  if(amOn&&amL)lines.push(`Morning: ${amL} litre at ${disp($('amT'))}`);if(pmOn&&pmL)lines.push(`Evening: ${pmL} litre at ${disp($('pmT'))}`);
+  const valid=(amOn&&amL)||(pmOn&&pmL),msg=lines.join('\n');$('preview').textContent=valid?msg:'Enter litres to build the order…';
+  const s=$('send');if(valid){s.classList.remove('off');s.href=`https://wa.me/919886806395?text=${encodeURIComponent(msg)}`;}else s.classList.add('off');}
+$('send').addEventListener('click',()=>{setTimeout(()=>$('confirm').classList.add('show'),400);});
 $('confirmNo').onclick=()=>$('confirm').classList.remove('show');
-// Confirm = the real "order placed" moment → log to server, show badge, mark tab.
-$('confirmYes').onclick=async()=>{
-  $('confirmYes').disabled=true;$('confirmYes').textContent='Saving…';
-  const fd=$('forDate').value,msg=$('preview').textContent;
-  const jobs=[];
+$('confirmYes').onclick=async()=>{$('confirmYes').disabled=true;$('confirmYes').textContent='Saving…';const fd=$('forDate').value,msg=$('preview').textContent;const jobs=[];
   if($('amOn').checked&&parseInt($('amL').value))jobs.push({slot:'AM',litres:parseInt($('amL').value),t:disp($('amT'))});
-  if($('pmOn').checked&&parseInt($('pmL').value))jobs.push({slot:'PM',litres:parseInt($('pmL').value),t:disp($('pmT'))});
-  let ok=true;
-  for(const j of jobs){
-    const r=await fetch(`${API}?action=log-order`,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pin:PIN,slot:j.slot,litres:j.litres,for_date:fd,delivery_time:j.t,message:msg})}).then(r=>r.json()).catch(()=>({success:false}));
-    if(!r.success)ok=false;
-  }
-  $('confirm').classList.remove('show');
-  const p=$('placed');
-  if(ok){
-    const when=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-    const parts=jobs.map(j=>`${j.slot==='AM'?'Morning':'Evening'} ${j.litres}L · ${j.t}`).join('  ·  ');
-    p.innerHTML=`<b>✓ Order placed</b> &nbsp;<span style="opacity:.7">logged ${when}</span><br><span style="opacity:.85">${parts}</span>`;
-    p.classList.add('show');
-    document.querySelector('.tabs button[data-t="order"]').classList.add('has-order');
-  }else{
-    p.innerHTML='<span style="color:var(--warn)">⚠ Could not log — but your WhatsApp message still went. Try confirm again.</span>';
-    p.classList.add('show');$('confirmYes').disabled=false;$('confirmYes').textContent='✓ Yes, order sent';$('confirm').classList.add('show');
-  }
-};
-
-// ---------- RECEIVE ----------
-$('rSlot').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('rSlot').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');SLOT=b.dataset.s;});
-async function loadCans(){
-  const r=await fetch(`${API}?action=cans`).then(r=>r.json());CANS=r.cans||[];
-  $('cans').innerHTML=CANS.map((c,i)=>`<button data-id="${c.can_id}" class="${i===0?'on':''}">${c.label}<small>empty ${c.tare_kg} kg</small></button>`).join('');
-  CAN=CANS[0]?.can_id||null;
-  $('cans').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('cans').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');CAN=b.dataset.id;rCompute();});
-}
-$('cam').onchange=e=>{const f=e.target.files[0];if(!f)return;const img=new Image(),rd=new FileReader();
-  rd.onload=()=>{img.onload=()=>{const max=900,sc=Math.min(1,max/Math.max(img.width,img.height));const cv=document.createElement('canvas');cv.width=img.width*sc;cv.height=img.height*sc;cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);PHOTO=cv.toDataURL('image/jpeg',0.7);$('shootLbl').classList.add('has');$('shootLbl').innerHTML=`<img src="${PHOTO}">`;rCompute();};img.src=rd.result;};rd.readAsDataURL(f);};
-function rCompute(){const can=CANS.find(c=>c.can_id===CAN),g=parseFloat($('gross').value);
-  if(can&&g>0){const l=Math.round(((g-can.tare_kg)/1.03)*100)/100;$('rCalc').innerHTML=`= <b>${l} L</b> &nbsp;<span style="opacity:.6">(${g} − ${can.tare_kg} kg ÷ 1.03)</span>`;}else $('rCalc').textContent='';
-  $('submit').disabled=!(can&&g>0&&PHOTO);}
-$('gross').oninput=rCompute;
-$('submit').onclick=async()=>{
-  $('submit').disabled=true;$('submit').textContent='Recording…';
-  const r=await fetch(`${API}?action=receive`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({pin:PIN,slot:SLOT,can_id:CAN,gross_kg:parseFloat($('gross').value),photo_data:PHOTO})}).then(r=>r.json()).catch(()=>({success:false,error:'Network'}));
-  const el=$('rResult');
-  if(r.success){
-    const vtxt=r.ordered_litres!=null?` · ordered ${r.ordered_litres} L · ${r.variance_litres>0?'short '+r.variance_litres:r.variance_litres<0?'over '+(-r.variance_litres):'exact'} L`:'';
-    el.className='result show '+(r.variance_litres&&Math.abs(r.variance_litres)>2?'warn':'ok');
-    el.innerHTML=`✓ Recorded <b>${r.litres_received} L</b> · ${r.can}${vtxt}<br><span style="opacity:.7">${new Date(r.received_at).toLocaleString('en-IN')}</span>`;
-    $('submit').textContent='Recorded';
-    setTimeout(()=>{$('gross').value='';PHOTO=null;$('shootLbl').classList.remove('has');$('shootLbl').innerHTML='📷 Tap to shoot live photo';$('submit').textContent='Record receiving';el.className='result';},5000);
-  }else{el.className='result show warn';el.textContent='⚠ '+(r.error||'Failed');$('submit').disabled=false;$('submit').textContent='Record receiving';}
-};
-
-// ---------- LEDGER ----------
-async function loadLedger(){
-  const r=await fetch(`${API}?action=ledger&days=14`).then(r=>r.json()).catch(()=>({success:false}));
-  if(!r.success){$('ledBox').innerHTML='<div class="small">Could not load.</div>';return;}
-  const byDate={};
-  (r.orders||[]).forEach(o=>{(byDate[o.for_date]=byDate[o.for_date]||{}); (byDate[o.for_date][o.slot]=byDate[o.for_date][o.slot]||{}).ordered=o.litres;});
-  (r.receipts||[]).forEach(o=>{(byDate[o.for_date]=byDate[o.for_date]||{}); (byDate[o.for_date][o.slot]=byDate[o.for_date][o.slot]||{}).recv=o.litres_received;});
-  const dates=Object.keys(byDate).sort().reverse();
-  if(!dates.length){$('ledBox').innerHTML='<div class="small">No orders yet. Place one in the Order tab.</div>';return;}
-  const slotName={AM:'Morning',PM:'Evening',ADHOC:'Emergency'};
-  $('ledBox').innerHTML=dates.map(d=>{
-    const rows=Object.entries(byDate[d]).map(([s,v])=>{
-      const ord=v.ordered!=null?v.ordered+' L':'—',rec=v.recv!=null?v.recv+' L':'—';
-      let cls='dim',note='';
-      if(v.ordered!=null&&v.recv!=null){const diff=Math.round((v.ordered-v.recv)*100)/100;cls=Math.abs(diff)>2?'warn':'ok';note=diff===0?' · exact':diff>0?` · short ${diff}`:` · over ${-diff}`;}
-      return `<div class="ln"><span>${slotName[s]||s}</span><span class="v ${cls}">ordered ${ord} → got ${rec}${note}</span></div>`;
-    }).join('');
-    return `<div class="day">${d}</div>${rows}`;
-  }).join('');
-}
+  if($('pmOn').checked&&parseInt($('pmL').value))jobs.push({slot:'PM',litres:parseInt($('pmL').value),t:disp($('pmT'))});let ok=true;
+  for(const j of jobs){const r=await fetch(`${API}?action=log-order`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,slot:j.slot,litres:j.litres,for_date:fd,delivery_time:j.t,message:msg})}).then(r=>r.json()).catch(()=>({success:false}));if(!r.success)ok=false;}
+  $('confirm').classList.remove('show');const p=$('placed');
+  if(ok){const when=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});const parts=jobs.map(j=>`${j.slot==='AM'?'Morning':'Evening'} ${j.litres}L · ${j.t}`).join('  ·  ');
+    p.innerHTML=`<b>✓ Order placed</b> &nbsp;<span style="opacity:.7">logged ${when}</span><br><span style="opacity:.85">${parts}</span>`;p.classList.add('show');document.querySelector('.tabs button[data-t="order"]').classList.add('has-order');}
+  else{p.innerHTML='<span style="color:var(--warn)">⚠ Could not log — your WhatsApp message still went. Try confirm again.</span>';p.classList.add('show');$('confirmYes').disabled=false;$('confirmYes').textContent='✓ Yes, order sent';$('confirm').classList.add('show');}};
+async function loadLedger(){const r=await fetch(`${API}?action=ledger&days=14`).then(r=>r.json()).catch(()=>({success:false}));if(!r.success){$('ledBox').innerHTML='<div class="small">Could not load.</div>';return;}
+  const byDate={};(r.orders||[]).forEach(o=>{(byDate[o.for_date]=byDate[o.for_date]||{});(byDate[o.for_date][o.slot]=byDate[o.for_date][o.slot]||{}).ordered=o.litres;});
+  (r.receipts||[]).forEach(o=>{(byDate[o.for_date]=byDate[o.for_date]||{});(byDate[o.for_date][o.slot]=byDate[o.for_date][o.slot]||{}).recv=o.litres_received;});
+  const dates=Object.keys(byDate).sort().reverse();if(!dates.length){$('ledBox').innerHTML='<div class="small">No orders yet. Place one in the Order tab.</div>';return;}
+  const sn={AM:'Morning',PM:'Evening',ADHOC:'Emergency'};
+  $('ledBox').innerHTML=dates.map(d=>{const rows=Object.entries(byDate[d]).map(([s,v])=>{const ord=v.ordered!=null?v.ordered+' L':'—',rec=v.recv!=null?v.recv+' L':'—';let cls='dim',note='';if(v.ordered!=null&&v.recv!=null){const diff=Math.round((v.ordered-v.recv)*100)/100;cls=Math.abs(diff)>2?'warn':'ok';note=diff===0?' · exact':diff>0?` · short ${diff}`:` · over ${-diff}`;}return `<div class="ln"><span>${sn[s]||s}</span><span class="v ${cls}">ordered ${ord} → got ${rec}${note}</span></div>`;}).join('');return `<div class="day">${d}</div>${rows}`;}).join('');}
 </script>
 </body>
 </html>
