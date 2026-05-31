@@ -666,9 +666,18 @@ async function handleGet(url, env, auth = null) {
     if (!emp) return json({ error: 'employee not found' }, 404);
     const tok = await staffToken(env, empId);
     const origin = url.origin;
+    // Pin the report month into the link so it can never drift to the empty
+    // current month. Default = last completed month during the settlement window.
+    const reportMonth = (() => {
+      const d = new Date(Date.now() + 5.5 * 3600 * 1000);
+      if (d.getUTCDate() <= 10) d.setUTCMonth(d.getUTCMonth() - 1);
+      return d.toISOString().slice(0, 7);
+    })();
+    const month = url.searchParams.get('month') || reportMonth;
     return json({
-      url: `${origin}/hr/me/?id=${empId}&t=${tok}`,
+      url: `${origin}/hr/me/?id=${empId}&t=${tok}&month=${month}`,
       token: tok,
+      month,
       employee: emp,
     });
   }

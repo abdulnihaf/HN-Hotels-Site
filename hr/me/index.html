@@ -112,10 +112,18 @@
 const params = new URLSearchParams(location.search);
 const employeeId = params.get('id');
 const token = params.get('t');
-let monthState = params.get('month') || todayIST().slice(0, 7);
 let DAYS = [];
 
 function todayIST() { return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10); }
+// An attendance report is about a COMPLETED month. In the first 10 days of a month
+// (the settlement window) the meaningful month is the one just finished — so on
+// June 1 this opens on May, never the near-empty June. The picker still lets them flip.
+function reportMonth() {
+  const d = new Date(Date.now() + 5.5 * 3600 * 1000);
+  if (d.getUTCDate() <= 10) d.setUTCMonth(d.getUTCMonth() - 1);
+  return d.toISOString().slice(0, 7);
+}
+let monthState = params.get('month') || reportMonth();
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(n){ return String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join('')||'?'; }
 function fmtTime(ts){ if(!ts) return '—'; return ts.slice(11,16); }
