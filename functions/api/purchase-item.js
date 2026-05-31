@@ -242,7 +242,21 @@ export async function onRequest(context) {
       const all = await Promise.all(SCRAPEABLE.map(scout));
       const live = all.filter(r => r.ok).sort((a,b) => (a.unit_price || a.price) - (b.unit_price || b.price));
       const dead = all.filter(r => !r.ok).map(r => r.src);
-      return json({ success:true, item: it.name, query, match_rule: it.match_rule, fetched_at: new Date().toISOString(), results: live, no_result: dead });
+      // Speak the OWNER's unit: how much is needed today (from demand) + how many market packs that is.
+      const ownerUnit = it.order_unit || it.receive_unit || '';
+      const today = new Date(Date.now() + 864e5).toISOString().slice(0,10);
+      const dem = await DB.prepare('SELECT qty_text, unit FROM purchase_demand WHERE item_code=? ORDER BY for_date DESC LIMIT 1').bind(code).first().catch(() => null);
+      const needText = dem ? `${dem.qty_text} ${dem.unit || ownerUnit}` : '';
+      const needNum = dem ? parseFloat(String(dem.qty_text).replace(/[^\d.]/g,'')) : 0;
+      for (const r of live) {
+        const b = parsePackBase(`${r.pack} ${r.sku}`);
+        // packs to buy to cover the need (when units align)
+        if (needNum && b.qty && b.unit && (b.unit === 'kg' || b.unit === 'L' || b.unit === 'each')) {
+          r.packs_needed = Math.ceil(needNum / b.qty);
+          r.est_total = Math.round(r.packs_needed * r.price * 100) / 100;
+        }
+      }
+      return json({ success:true, item: it.name, owner_unit: ownerUnit, need: needText, query, match_rule: it.match_rule, fetched_at: new Date().toISOString(), results: live, no_result: dead });
     }
     if (action === 'items') {
       const brand = url.searchParams.get('brand');
