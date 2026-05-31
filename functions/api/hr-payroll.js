@@ -54,11 +54,13 @@ async function computePayableFor(env, employeeId, payPeriod) {
   const { start, end, days } = monthBounds(payPeriod);
   const isApril = payPeriod === '2026-04';
 
-  // Sum advances paid in this month (any source)
+  // Sum advances paid in this month (true advances only — settlements are wage
+  // payments, not recoverable advances, so they must NOT reduce the payable here).
   const advAgg = await db.prepare(`
     SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS cnt
       FROM hr_advances
      WHERE employee_id = ? AND advance_date BETWEEN ? AND ?
+       AND COALESCE(source,'') != 'settlement'
   `).bind(employeeId, start, end).first();
   const advances_total = Number(advAgg?.total || 0);
   const advances_count = Number(advAgg?.cnt || 0);
@@ -468,13 +470,84 @@ export async function onRequest({ request, env }) {
     return json({ ok: true });
   }
 
+  // ─── Settle context: one-call picture for settling a person (read-only lens) ──
+  // Defined salary + this-month attendance breakdown (parity, matching the Darbar
+  // engine) + true advances taken + a remaining hint. The owner reads this WHEN he
+  // chooses to settle — it never gates, and never auto-deducts for absences.
+  if (action === 'settle-context' && method === 'GET') {
+    const employeeId = url.searchParams.get('employee_id');
+    const month = url.searchParams.get('month') || new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
+    if (!employeeId) return json({ error: 'employee_id required' }, 400);
+    const emp = await db.prepare(`SELECT id, COALESCE(known_as,name) AS name, brand_label, pay_type, monthly_salary, daily_rate FROM hr_employees WHERE id = ?`).bind(employeeId).first();
+    if (!emp) return json({ error: 'employee not found' }, 404);
+    const { start, end } = monthBounds(month);
+
+    const att = await db.prepare(`
+      SELECT
+        SUM(CASE WHEN status IN ('week_off','leave') THEN 1 ELSE 0 END) AS off,
+        SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status NOT IN ('week_off','leave','pending') AND punch_count>0 AND punch_count%2=0 THEN 1 ELSE 0 END) AS present,
+        SUM(CASE WHEN status NOT IN ('week_off','leave','pending') AND punch_count>0 AND punch_count%2=1 THEN 1 ELSE 0 END) AS irregular,
+        SUM(CASE WHEN status NOT IN ('week_off','leave','pending') AND (punch_count=0 OR punch_count IS NULL) THEN 1 ELSE 0 END) AS absent,
+        COUNT(*) AS recorded
+        FROM hr_attendance_daily
+       WHERE employee_id = ? AND date BETWEEN ? AND ?
+    `).bind(employeeId, start, end).first();
+
+    const offDays = await db.prepare(`
+      SELECT date, status, COALESCE(punch_count,0) AS punch_count
+        FROM hr_attendance_daily
+       WHERE employee_id = ? AND date BETWEEN ? AND ?
+         AND ( status IN ('week_off','leave')
+            OR (status NOT IN ('pending') AND (punch_count=0 OR punch_count IS NULL)) )
+       ORDER BY date
+    `).bind(employeeId, start, end).all();
+
+    const advRows = await db.prepare(`
+      SELECT id, advance_date, amount, paid_via, COALESCE(reason,'') AS reason
+        FROM hr_advances
+       WHERE employee_id = ? AND advance_date BETWEEN ? AND ?
+         AND COALESCE(source,'') != 'settlement'
+       ORDER BY advance_date DESC
+    `).bind(employeeId, start, end).all();
+    const advances_total = (advRows.results || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+
+    const setRows = await db.prepare(`
+      SELECT id, advance_date, amount, paid_via FROM hr_advances
+       WHERE employee_id = ? AND advance_date BETWEEN ? AND ?
+         AND COALESCE(source,'') = 'settlement' ORDER BY advance_date DESC
+    `).bind(employeeId, start, end).all();
+    const settled_total = (setRows.results || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+
+    const monthly = Number(emp.monthly_salary || 0);
+    const daily = Number(emp.daily_rate || 0);
+    const remaining_hint = emp.pay_type === 'Contract'
+      ? Math.max(0, Number(att?.present || 0) * daily - advances_total - settled_total)
+      : Math.max(0, monthly - advances_total - settled_total);
+
+    return json({
+      ok: true,
+      employee: { id: emp.id, name: emp.name, brand: emp.brand_label, pay_type: emp.pay_type, monthly_salary: monthly, daily_rate: daily },
+      month,
+      attendance: {
+        present: Number(att?.present || 0), irregular: Number(att?.irregular || 0),
+        absent: Number(att?.absent || 0), off: Number(att?.off || 0),
+        pending: Number(att?.pending || 0), recorded: Number(att?.recorded || 0),
+        off_absent_days: (offDays.results || []),
+      },
+      advances: { total: advances_total, rows: advRows.results || [] },
+      settlements: { total: settled_total, rows: setRows.results || [] },
+      remaining_hint,
+    });
+  }
+
   // ─── Summary dashboard ─────────────────────────────────────────────────
   if (action === 'summary' && method === 'GET') {
     const period = url.searchParams.get('pay_period');
     const totals = await db.prepare(`
       SELECT
-        (SELECT COALESCE(SUM(amount), 0) FROM hr_advances WHERE recovered = 0) AS advances_outstanding,
-        (SELECT COUNT(*)                FROM hr_advances WHERE recovered = 0) AS advances_outstanding_count,
+        (SELECT COALESCE(SUM(amount), 0) FROM hr_advances WHERE recovered = 0 AND COALESCE(source,'') != 'settlement') AS advances_outstanding,
+        (SELECT COUNT(*)                FROM hr_advances WHERE recovered = 0 AND COALESCE(source,'') != 'settlement') AS advances_outstanding_count,
         (SELECT COALESCE(SUM(net_payable), 0) FROM hr_payroll_snapshots WHERE pay_period = ? AND status != 'paid') AS due_this_period,
         (SELECT COALESCE(SUM(net_payable), 0) FROM hr_payroll_snapshots WHERE pay_period = ? AND status = 'paid') AS paid_this_period,
         (SELECT COUNT(*)                       FROM hr_payroll_snapshots WHERE pay_period = ? AND status != 'paid') AS due_count,

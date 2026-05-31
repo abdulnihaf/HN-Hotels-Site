@@ -254,10 +254,14 @@
   <!-- PAY -->
   <main class="pane hide" id="p-pay" data-tab="pay">
     <div class="nav" id="nav-pay"><div></div><div class="t">Pay</div><button class="act r" onclick="openAdvance()">＋</button></div>
-    <div class="lt"><h1>Pay</h1><div class="sub" id="paySub">Advances today · settlement on the 7th</div></div>
+    <div class="lt"><h1>Pay</h1><div class="sub" id="paySub">Settle or advance — anyone, any day</div></div>
     <div id="settleBanner" style="margin:0 16px 12px"></div>
-    <div class="sechead">Advances <span class="c" id="advMonth"></span></div>
-    <div class="stream" id="advList"><div class="empty">Enter your dashboard key in ⚙ to load advances.</div></div>
+    <div style="margin:0 16px 14px;display:flex;gap:8px">
+      <button class="btn primary" style="flex:1" onclick="openSettle()">Settle a person</button>
+      <button class="btn ghost-b" style="flex:1" onclick="openAdvance()">Pay advance</button>
+    </div>
+    <div class="sechead">Payments this month <span class="c" id="advMonth"></span></div>
+    <div class="stream" id="advList"><div class="empty">Enter your PIN to load payments.</div></div>
   </main>
 
   <!-- ROSTER -->

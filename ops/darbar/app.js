@@ -216,7 +216,7 @@ function cardFor(x) {
 
 /* ━━━ inbox actions ━━━ */
 function confirmExit(id, name) {
-  if (!needToken()) return;
+  if (needToken()) return;
   sheet(`<h2>Mark ${esc(name)} as left</h2>
     <div class="sd">Stops counting them, archives the roster row, drafts a final settlement. The roster self-corrects.</div>
     <div class="fld"><label>Reason (optional)</label><input id="exReason" placeholder="stopped coming / found other work"></div>
@@ -233,7 +233,7 @@ async function doExit(id) {
   } catch (e) { toast(e.message, 'err'); }
 }
 function leaveSheet(id, name) {
-  if (!needToken()) return;
+  if (needToken()) return;
   const t = todayIST();
   sheet(`<h2>${esc(name)} — on leave</h2><div class="sd">Suppresses the alerts and feeds payroll. Not gone, just away.</div>
     <div class="fld"><label>From</label><input id="lvFrom" type="date" value="${t}"></div>
@@ -250,7 +250,7 @@ async function doLeave(id) {
 function keepActive() { toast('Kept active — will re-ask if still silent', 'info'); }
 
 function nameGhost(pin) {
-  if (!needToken()) return;
+  if (needToken()) return;
   sheet(`<h2>Name PIN ${esc(pin)}</h2><div class="sd">Turn this working ghost into a real roster member. Attendance starts counting immediately.</div>
     <div class="fld"><label>Name</label><input id="obName" placeholder="full name"></div>
     <div class="fld"><label>Brand</label><select id="obBrand"><option value="NCH">Nawabi Chai House</option><option value="HE">Hamza Express</option><option value="HQ">HQ</option></select></div>
@@ -271,7 +271,7 @@ async function doOnboard(pin) {
   } catch (e) { toast(e.message, 'err'); }
 }
 async function dismissGhost(pin) {
-  if (!needToken()) return;
+  if (needToken()) return;
   try { await post('/api/darbar?action=dismiss-ghost', { pin }); toast('Ghost dismissed'); loadHome(); }
   catch (e) { toast(e.message, 'err'); }
 }
@@ -341,7 +341,7 @@ function sessionLine(r) {
   return `${t(r.first_in_at)} → ${r.last_out_at ? t(r.last_out_at) : '<span style="color:var(--blue)">open</span>'}${hrs}${br} · ${pc}`;
 }
 async function fixPunch(empId, date) {
-  if (!needToken()) return;
+  if (needToken()) return;
   try { await post('/api/darbar?action=fix-punch', { employee_id: empId, date }); toast('Checkout imputed'); loadAttend(); }
   catch (e) { toast(e.message, 'err'); }
 }
@@ -351,9 +351,7 @@ function settlementOpen() { return (new Date(Date.now() + 5.5 * 3600e3)).getUTCD
 async function loadPay() {
   const open = settlementOpen();
   const monthLbl = new Date(Date.now() + 5.5 * 3600e3).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
-  $('settleBanner').innerHTML = open
-    ? `<div class="card" style="border-color:var(--green-soft)"><b style="color:var(--green)">Settlement open</b><div class="xc-meta" style="margin-top:4px">Classify leaves → compute → approve → pay. Last month's salary settles now.</div></div>`
-    : `<div class="card"><b style="color:var(--dim)">🔒 Settlement opens on the 7th</b><div class="xc-meta" style="margin-top:4px">Salary is settled on the 7th of next month — never mid-month (it would over-deduct). Advances can be paid any day.</div></div>`;
+  $('settleBanner').innerHTML = `<div class="card"><div class="xc-meta">Pay an advance or <b style="color:var(--gold)">settle anyone, any day</b> — you set the amount, the system records it. ${open ? "Month-end totals are reliable now." : "Mid-month: the “remaining” shown is salary − advance; dock absences at your discretion."}</div></div>`;
   const month = todayIST().slice(0, 7);
   $('advMonth').textContent = monthLbl;
   if (!S.token) { $('advList').innerHTML = '<div class="empty">Enter your PIN to load advances.</div>'; return; }
@@ -362,17 +360,23 @@ async function loadPay() {
     const r = await fetch(`/api/hr-payroll?action=list-advances&month=${month}`, { headers: authHeaders() }).then(x => x.json());
     const adv = r.advances || r.rows || [];
     if (!adv.length) { $('advList').innerHTML = `<div class="empty">No advances in ${esc(monthLbl)} yet. Tap ＋ to pay one.</div>`; return; }
-    $('advList').innerHTML = adv.map(a => `<div class="card"><div class="xc-top">
-      <div><div class="xc-name">${esc(a.name || a.known_as || ('Emp #' + a.employee_id))}</div>
+    $('advList').innerHTML = adv.map(a => {
+      const nm = a.employee_known_as || a.employee_name || a.name || a.known_as || ('Emp #' + a.employee_id);
+      const tag = a.source === 'settlement'
+        ? '<span class="pill" style="background:var(--gold-soft);color:var(--gold)">settlement</span>'
+        : '<span class="pill" style="background:var(--dim-soft,#2a2a2a);color:var(--dim)">advance</span>';
+      return `<div class="card"><div class="xc-top">
+      <div><div class="xc-name">${esc(nm)} ${tag}</div>
       <div class="xc-meta">${esc(a.advance_date || '')} · ${esc(a.paid_via || 'cash')}${a.reason ? ' · ' + esc(a.reason) : ''}${a.recovered ? ' · <span style="color:var(--green)">recovered</span>' : ''}</div></div>
-      <div style="font-weight:800;font-size:16px" class="num">${inr(a.amount)}</div></div></div>`).join('');
+      <div style="font-weight:800;font-size:16px" class="num">${inr(a.amount)}</div></div></div>`;
+    }).join('');
   } catch (e) { $('advList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 async function openAdvance() {
-  if (!needToken()) return;
+  if (needToken()) return;
   if (!S.employees.length) { try { S.employees = (await api(`/api/hr-admin?action=employees&active=1`)).employees || []; } catch {} }
   const opts = S.employees.filter(e => e.is_active).map(e => `<option value="${e.id}">${esc(e.known_as || e.name)} · ${esc(e.brand_label)}</option>`).join('');
-  sheet(`<h2>Pay advance</h2><div class="sd">Records the cash event + fires a WhatsApp confirmation to the worker immediately.</div>
+  sheet(`<h2>Pay advance</h2><div class="sd">Records the cash event in the ledger — any day, any amount.</div>
     <div class="fld"><label>Worker</label><select id="advEmp">${opts}</select></div>
     <div class="fld"><label>Amount ₹</label><input id="advAmt" type="number" inputmode="numeric" placeholder="3000"></div>
     <div class="fld"><label>Paid via</label><select id="advVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
@@ -387,7 +391,62 @@ async function doAdvance() {
       method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ employee_id: Number($('advEmp').value), amount: amt, advance_date: todayIST(), paid_via: $('advVia').value, reason: $('advNote').value || null }),
     }).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); });
-    closeSheet(); toast('Advance recorded · WhatsApp fired'); loadPay();
+    closeSheet(); toast('Advance recorded'); loadPay();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+/* ━━━ Settle a person — flexible, any day, owner sets the amount ━━━ */
+async function openSettle() {
+  if (!S.fin) return toast('Pay is owner-only', 'info');
+  if (needToken()) return;
+  if (!S.employees.length) { try { S.employees = (await api('/api/hr-admin?action=employees&active=1')).employees || []; } catch {} }
+  const opts = S.employees.filter(e => e.is_active).map(e => `<option value="${e.id}">${esc(e.known_as || e.name)} · ${esc(e.brand_label || '')}</option>`).join('');
+  if (!opts) return toast('No staff loaded — re-enter PIN', 'err');
+  sheet(`<h2>Settle a person</h2><div class="sd">Pick who you're paying — you'll see their days off, advance taken and what's left, then you type what you actually paid.</div>
+    <div class="fld"><label>Worker</label><select id="setEmp">${opts}</select></div>
+    <div class="acts"><button class="btn primary" onclick="loadSettle()">See & settle</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
+}
+async function loadSettle() {
+  const sel = $('setEmp'); const id = sel ? sel.value : null;
+  if (!id) return;
+  const month = todayIST().slice(0, 7);
+  sheet(`<h2>Loading…</h2><div class="skel"></div><div class="skel"></div>`);
+  let c;
+  try { c = await api(`/api/hr-payroll?action=settle-context&employee_id=${id}&month=${month}`); }
+  catch (e) { return sheet(`<h2>Settle</h2><div class="empty">${esc(e.message)}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`); }
+  if (!c || c.error || !c.employee) return sheet(`<h2>Settle</h2><div class="empty">${esc((c && c.error) || 'no data')}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`);
+  const a = c.attendance, emp = c.employee;
+  const off = (a.off_absent_days || []).map(d => `${String(d.date).slice(8)} ${d.status === 'week_off' ? 'off' : d.status === 'leave' ? 'leave' : 'absent'}`).join(' · ') || '—';
+  const advs = (c.advances.rows || []).map(r => `${inr(r.amount)} · ${String(r.advance_date).slice(5)}`).join('   ') || 'none';
+  const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
+  sheet(`<h2>Settle ${esc(emp.name)}</h2>
+    <div class="sd">${esc(emp.brand || '')} · ${esc(emp.pay_type || '')} · ${salaryLbl}</div>
+    <div class="card"><div class="xc-meta">${esc(c.month)} — context only, you decide any docking</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <span class="pill green">present ${a.present}</span>
+        ${a.irregular ? `<span class="pill yellow">missed-punch ${a.irregular}</span>` : ''}
+        <span class="pill ${a.absent ? 'red' : 'green'}">absent ${a.absent}</span>
+        ${a.off ? `<span class="pill">off ${a.off}</span>` : ''}</div>
+      <div class="xc-meta" style="margin-top:8px">Off / absent: ${esc(off)}</div></div>
+    <div class="card"><div class="xc-top"><div>Advance already taken</div><div class="num" style="font-weight:800">${inr(c.advances.total)}</div></div>
+      <div class="xc-meta">${esc(advs)}</div></div>
+    ${c.settlements && c.settlements.total ? `<div class="card"><div class="xc-top"><div>Already settled this month</div><div class="num">${inr(c.settlements.total)}</div></div></div>` : ''}
+    <div class="card" style="border-color:var(--gold-soft)"><div class="xc-top"><div><b>Remaining</b><div class="xc-meta">salary − advance, before any docking</div></div><div class="num" style="font-weight:800;color:var(--gold);font-size:18px">${inr(c.remaining_hint)}</div></div></div>
+    <div class="fld"><label>You paid ₹ — your number</label><input id="setAmt" type="number" inputmode="numeric" placeholder="${c.remaining_hint || ''}"></div>
+    <div class="fld"><label>Paid via</label><select id="setVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
+    <div class="fld"><label>Note (optional)</label><input id="setNote" placeholder="final settlement / partial"></div>
+    <div class="acts"><button class="btn primary" onclick='doSettle(${emp.id})'>Record settlement</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
+}
+async function doSettle(id) {
+  const amt = Number($('setAmt').value);
+  if (!amt) return toast('Type what you paid', 'err');
+  const month = todayIST().slice(0, 7);
+  try {
+    await fetch('/api/hr-payroll?action=record-advance', {
+      method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ employee_id: Number(id), amount: amt, advance_date: todayIST(), paid_via: ($('setVia') || {}).value || 'cash', source: 'settlement', reason: 'salary settlement', notes: (($('setNote') || {}).value || ('Settlement ' + month)) }),
+    }).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); });
+    closeSheet(); toast('Settlement recorded'); loadPay();
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -418,7 +477,7 @@ function renderRoster() {
 }
 function overrideSheet(id, name) {
   if (!S.fin) return toast('Pay is owner-only', 'info');
-  if (!needToken()) return;
+  if (needToken()) return;
   const period = todayIST().slice(0, 7);
   sheet(`<h2>${esc(name)} — over-write pay</h2><div class="sd">Set the final payable yourself when attendance is gappy. Recorded alongside the computed figure, never silently replacing it.</div>
     <div class="fld"><label>Pay period</label><input id="ovPeriod" type="month" value="${period}"></div>
