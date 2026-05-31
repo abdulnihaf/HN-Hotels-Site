@@ -25,6 +25,7 @@
   .card .nm{font-size:14px;font-weight:600;line-height:1.25;margin-top:8px}
   .card .qty{font-size:13px;color:var(--gold);font-weight:700;margin-top:4px}
   .card .meta{font-size:11px;color:var(--dim);margin-top:3px}
+  .card .cheap{font-size:11px;color:var(--ok);margin-top:5px;font-weight:600}
   .card.done{border-color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
   .card .badge{position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px}
   .card .badge.ord{background:rgba(59,167,118,.18);color:var(--ok)}
@@ -92,7 +93,9 @@ async function load(){
       const qtxt=(it.qty_text&&it.qty_text!=='—')?`${it.qty_text} ${it.demand_unit||''}`:(it.qty_text==='—'?'qty at counter':'');
       const qline=qtxt?`<div class="qty">${qtxt}</div>`:'';
       const note=it.note?`<div class="meta">${it.note}</div>`:'';
-      return `<a class="card ${done?'done':''}" href="${hrefFor(it)}">${badge}<div class="em">${it.emoji||'📦'}</div><div><div class="nm">${it.name}</div>${qline}<div class="meta">${meta}</div>${note}</div></a>`;
+      // pre-computed cheapest source (snapshot) shown right on the card — the "from where" pre-answered
+      const cheap=it.best_src?`<div class="cheap">⚡ ${it.best_src} · ₹${it.best_price}${it.best_unit_price?' <span style="opacity:.7">(₹'+it.best_unit_price+'/'+it.best_unit+')</span>':''}</div>`:'';
+      return `<a class="card ${done?'done':''}" href="${hrefFor(it)}">${badge}<div class="em">${it.emoji||'📦'}</div><div><div class="nm">${it.name}</div>${qline}<div class="meta">${meta}</div>${cheap}${note}</div></a>`;
     }).join('');
     html+=`</div></div>`;
   }
