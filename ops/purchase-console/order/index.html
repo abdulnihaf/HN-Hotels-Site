@@ -53,12 +53,21 @@
   <div id="app" class="hide">
     <div class="brandtog"><button data-b="NCH" class="on">Nawabi</button><button data-b="HE">Hamza Express</button></div>
     <div class="datebar" id="datebar"></div>
+    <button id="refreshAll" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--gold);border-radius:12px;padding:13px;font-size:14px;font-weight:600;margin-bottom:14px">⚡ Refresh all prices</button>
     <div id="groups"></div>
-    <a class="back" href="/ops/purchase-console/">← Back to Sauda</a>
+    <a class="back" href="/portals/">⚙ Portals & cookie health</a>
+    <a class="back" href="/ops/purchase-console/" style="margin-left:16px">← Sauda</a>
   </div>
 </div>
 <script>
 const API='/api/purchase-item';let PIN='',BRAND='NCH';const $=id=>document.getElementById(id);
+document.addEventListener('click',async e=>{ if(e.target&&e.target.id==='refreshAll'){
+  const b=e.target;b.disabled=true;let total=0;
+  for(let i=0;i<12;i++){ b.textContent=`⚡ Scanning portals… (${total} done)`;
+    let d; try{ d=await fetch(`${API}?action=snapshot-run&brand=${BRAND}&all=1`).then(r=>r.json()); }catch(_){ break; }
+    if(!d||!d.success) break; total+=(d.items||[]).filter(x=>x.best_src).length; if(!d.more) break; }
+  b.disabled=false;b.textContent=`✓ ${total} priced · tap to refresh`;load();
+}});
 $('pinBtn').onclick=async()=>{const p=$('pin').value.trim();if(!p)return;
   const r=await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(p)}`).then(r=>r.json()).catch(()=>({success:false}));
   if(r.success){PIN=p;$('gate').classList.add('hide');$('app').classList.remove('hide');load();}else $('pinErr').textContent='Wrong PIN';};
