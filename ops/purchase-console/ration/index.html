@@ -55,7 +55,7 @@
   </div>
 
   <div id="app" class="hide">
-    <div class="tabs"><button data-t="buy" class="on">Buy</button><button data-t="list" id="listTab">Basheer's List<span class="cnt" id="listCnt">0</span></button></div>
+    <div class="tabs"><button data-t="buy" class="on">Buy</button><button data-t="list" id="listTab">Basheer List<span class="cnt" id="listCnt">0</span></button></div>
 
     <section id="t-buy">
       <div class="card">
@@ -66,7 +66,7 @@
       <div class="card">
         <label id="qtyLabel">Quantity</label>
         <input id="qty" type="number" inputmode="decimal" step="0.5" placeholder="3.5">
-        <button class="go dept" id="addList">＋ Add to Basheer's pickup list</button>
+        <button class="go dept" id="addList">＋ Add to Basheer pickup list</button>
         <button class="go online" id="orderOnline">Order online instead ↗</button>
         <div class="placed" id="placed"></div>
         <div class="hint">Departmental (Ashrafiya / Shariff) = Basheer walks over, same day. Online = quick-commerce, same/next day.</div>
@@ -76,7 +76,7 @@
 
     <section id="t-list" class="hide">
       <div class="card">
-        <label>Today's pickup list for Basheer</label>
+        <label>Today pickup list for Basheer</label>
         <div id="listBox"><div class="small">Loading…</div></div>
         <a class="go send hide" id="sendList" target="_blank" rel="noopener">📲 Send list to Basheer</a>
         <div class="hint" id="listHint"></div>
@@ -106,9 +106,9 @@ $('addList').onclick=async()=>{const q=parseFloat($('qty').value);if(!(q>0)){$('
   $('addList').disabled=true;$('addList').textContent='Adding…';
   const r=await fetch(`${API}?action=add-to-manager-list`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,item_code:CODE,qty:q})}).then(r=>r.json()).catch(()=>({success:false}));
   const p=$('placed');
-  if(r.success){p.innerHTML=`<b>✓ Added to Basheer's list</b><br><span style="opacity:.85">${q} ${ITEM.order_unit} · ${ITEM.name}</span>`;p.classList.add('show');loadList();}
+  if(r.success){p.innerHTML=`<b>✓ Added to Basheer list</b><br><span style="opacity:.85">${q} ${ITEM.order_unit} · ${ITEM.name}</span>`;p.classList.add('show');loadList();}
   else{p.innerHTML='<span style="color:var(--warn)">⚠ '+(r.error||'Failed')+'</span>';p.classList.add('show');}
-  $('addList').disabled=false;$('addList').textContent='＋ Add to Basheer's pickup list';};
+  $('addList').disabled=false;$('addList').textContent='＋ Add to Basheer pickup list';};
 $('orderOnline').onclick=()=>{window.open('https://blinkit.com/s/?q='+encodeURIComponent(ITEM.name),'_blank');};
 async function loadList(){const r=await fetch(`${API}?action=manager-list`).then(r=>r.json()).catch(()=>({success:false,items:[]}));
   LIST=r.items||[];MGR=r.manager_phone||'';
@@ -123,7 +123,7 @@ async function loadList(){const r=await fetch(`${API}?action=manager-list`).then
   const msg=lines.join('\n');
   const send=$('sendList');
   if(MGR){send.classList.remove('hide');send.href=`https://wa.me/${MGR}?text=${encodeURIComponent(msg)}`;send.onclick=()=>{setTimeout(()=>{fetch(`${API}?action=mark-list-sent`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN})}).then(()=>loadList());},800);};$('listHint').textContent='Sends the whole list to Basheer in one message.';}
-  else{send.classList.add('hide');$('listHint').innerHTML='<span style="color:var(--warn)">⚠ Basheer's WhatsApp number not set yet — list is saved, tell Claude the number to enable one-tap send.</span>';}}
+  else{send.classList.add('hide');$('listHint').innerHTML='<span style="color:var(--warn)">⚠ Basheer WhatsApp number not set yet — list is saved, tell Claude the number to enable one-tap send.</span>';}}
 </script>
 </body>
 </html>
