@@ -34,10 +34,13 @@ export async function onRequest(context) {
         for_date TEXT NOT NULL, qty_received REAL NOT NULL, ordered_qty REAL, variance REAL,
         photo_data TEXT, received_by_pin TEXT, received_by TEXT, received_at TEXT NOT NULL, notes TEXT)`),
     ]);
-    // idempotent seed — Buns first. (Water/packaging added later, same shape.)
-    await DB.prepare(`INSERT OR IGNORE INTO purchase_items
-      (code,name,brand,vendor,vendor_phone,emoji,order_unit,pack_qty,pack_rate,pack_label,receive_unit,active,sort) VALUES
-      ('BUNS','Buns','NCH','Ganga Bakery','917019547835','🍞','buns',3,25,'3-piece pack','buns',1,10)`).run();
+    // idempotent seed. Single-item count-vendor purchases.
+    await DB.batch([
+      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,order_unit,pack_qty,pack_rate,pack_label,receive_unit,active,sort) VALUES
+        ('BUNS','Buns','NCH','Ganga Bakery','917019547835','🍞','buns',3,25,'3-piece pack','buns',1,10)`),
+      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,order_unit,pack_qty,pack_rate,pack_label,receive_unit,active,sort) VALUES
+        ('WATER','Bisleri 500ml Water','NCH','Nadeem (Water & Cold Drinks)','919900323484','💧','cases',1,0,'','cases',1,20)`),
+    ]);
   }
 
   try {
