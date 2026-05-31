@@ -331,3 +331,5 @@ export async function onRequest(context) {
     return json({ success:false, error:'Invalid action' }, 400);
   } catch (e) { return json({ success:false, error: e.message }, 500); }
 }
+
+// rebuild bump 20260531T222624Z — bind SCOUT_VPS secrets
