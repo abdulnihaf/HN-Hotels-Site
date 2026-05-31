@@ -53,28 +53,75 @@ export async function onRequest(context) {
     ]);
     // MIGRATE FIRST — older purchase_items table may predate these columns (CREATE IF NOT EXISTS skips them).
     // Must run before any INSERT that references the new columns.
+    // receivable: 1 = something is DELIVERED (vendor / quick-commerce) → gets a receive link.
+    //             0 = owner/manager BUYS IN PERSON (Shariff/Ashrafiya go-collect) → no receive step.
     for (const col of [
       "channel TEXT NOT NULL DEFAULT 'vendor'", 'last_dept_price REAL DEFAULT 0',
-      "last_dept_store TEXT DEFAULT ''", 'last_qcomm_price REAL DEFAULT 0']) {
+      "last_dept_store TEXT DEFAULT ''", 'last_qcomm_price REAL DEFAULT 0',
+      'receivable INTEGER NOT NULL DEFAULT 1']) {
       try { await DB.prepare(`ALTER TABLE purchase_items ADD COLUMN ${col}`).run(); } catch (_) { /* already exists */ }
     }
-    // idempotent seed (now safe — columns guaranteed present).
-    await DB.batch([
-      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,pack_qty,pack_rate,pack_label,receive_unit,active,sort) VALUES
-        ('BUNS','Buns','NCH','Ganga Bakery','917019547835','🍞','vendor','buns',3,25,'3-piece pack','buns',1,10)`),
-      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,pack_qty,pack_rate,pack_label,receive_unit,active,sort) VALUES
-        ('WATER','Bisleri 500ml Water','NCH','Nadeem (Water & Cold Drinks)','919900323484','💧','vendor','cases',1,0,'','cases',1,20)`),
-      // ration items carry empty vendor strings — the live table predates nullable vendor cols
-      // (CREATE IF NOT EXISTS won't relax the old NOT NULL), so '' satisfies the constraint.
-      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
-        ('BUTTER','Amul Butter','NCH','','','🧈','ration','kg','kg',285,'Ashrafiya',280,1,30)`),
-      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
-        ('MILKMAID','Milkmaid (Condensed Milk)','NCH','','','🥫','ration','kg','kg',324,'Ashrafiya',0,1,40)`),
-      // ensure existing rows carry channel even if they were inserted pre-migration
-      DB.prepare(`UPDATE purchase_items SET channel='vendor' WHERE code IN ('BUNS','WATER') AND (channel IS NULL OR channel='')`),
-      DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=285, last_dept_store='Ashrafiya', last_qcomm_price=280 WHERE code='BUTTER'`),
-      DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=324, last_dept_store='Ashrafiya' WHERE code='MILKMAID'`),
-    ]);
+    // ── CATALOG: full NCH + HE purchase items (tomorrow's POs), seeded idempotently. ──
+    // channel: vendor=WhatsApp delivered · ration=departmental/q-comm · qcomm=quick-commerce.
+    // receivable: 1 if delivered (vendor/qcomm) → has receive link; 0 if bought-in-person (go-collect).
+    // [code,name,brand,vendor,phone,emoji,channel,order_unit,pack_qty,pack_rate,pack_label,receive_unit,dept_price,dept_store,qcomm_price,receivable,sort]
+    const CAT = [
+      // ===== NCH =====
+      ['BUNS','Buns','NCH','Ganga Bakery','917019547835','🍞','vendor','buns',3,25,'3-piece pack','buns',0,'',0,1,10],
+      ['WATER','Bisleri 500ml Water','NCH','Nadeem (Water & Cold Drinks)','919900323484','💧','vendor','cases',1,0,'','cases',0,'',0,1,20],
+      ['BUTTER','Amul Butter','NCH','','','🧈','ration','kg',1,0,'','kg',285,'Ashrafiya',280,0,30],
+      ['MILKMAID','Milkmaid (Condensed Milk)','NCH','','','🥫','ration','kg',1,0,'','kg',324,'Ashrafiya',0,0,40],
+      ['NCH_LEMON','Lemon','NCH','','','🍋','ration','pcs',1,0,'','pcs',0,'Ashrafiya',0,0,50],
+      ['NCH_CUTLET','Chicken Cutlets','NCH','','','🍗','vendor','box',1,0,'','box',0,'',0,1,60],
+      ['NCH_SAMOSA','Samosa','NCH','','','🥟','vendor','pcs',1,0,'','pcs',0,'',0,1,70],
+      ['NCH_CARRY_S','Small carry bags','NCH','Shree Ram Deepak','919620515684','🛍️','vendor','packet',1,0,'','packet',0,'',0,1,80],
+      ['NCH_CARRY_M','Medium carry bags','NCH','Shree Ram Deepak','919620515684','🛍️','vendor','packet',1,0,'','packet',0,'',0,1,81],
+      ['NCH_CUPS','Small use-&-throw cups','NCH','Shree Ram Deepak','919620515684','🥤','vendor','packet',1,0,'','packet',0,'',0,1,82],
+      // ===== HE ===== dry goods / pantry (ration unless a known vendor)
+      ['HE_CHILLI_PWD','Chilli powder','HE','','','🌶️','ration','kg',1,0,'','kg',0,'Ashrafiya',0,0,110],
+      ['HE_TOMATO_SAUCE','Tomato sauce (Kissan)','HE','','','🍅','ration','bottle',1,0,'','bottle',0,'Ashrafiya',0,0,111],
+      ['HE_CHILLI_SAUCE','Chilli sauce','HE','','','🌶️','ration','pc',1,0,'','pc',0,'Ashrafiya',0,0,112],
+      ['HE_SOYA_SAUCE','Soya sauce','HE','','','🫙','ration','pc',1,0,'','pc',0,'Ashrafiya',0,0,113],
+      ['HE_KKING','Kitchen King masala','HE','','','🧂','ration','kg',1,0,'','kg',0,'Ashrafiya',0,0,114],
+      ['HE_OIL_BOX','Oil','HE','','','🛢️','ration','box',1,0,'','box',0,'Ashrafiya',0,0,115],
+      ['HE_SUNFLOWER','Sunflower oil','HE','','','🛢️','ration','L',1,0,'','L',0,'Ashrafiya',0,0,116],
+      ['HE_MAIDA','Maida','HE','','','🌾','ration','kg',1,0,'','kg',0,'Ashrafiya',0,0,117],
+      // HE fresh & dairy
+      ['HE_AMUL_CREAM','Amul cream','HE','','','🥛','ration','L',1,0,'','L',0,'Ashrafiya',0,0,120],
+      ['HE_DAHI','Dahi','HE','','','🥛','ration','L',1,0,'','L',0,'Ashrafiya',0,0,121],
+      ['HE_MILK','Milk','HE','','','🥛','ration','L',1,0,'','L',0,'Ashrafiya',0,0,122],
+      ['HE_CAPSICUM','Capsicum','HE','Manju Veg','919886744138','🫑','vendor','kg',1,0,'','kg',0,'',0,1,123],
+      ['HE_DHANIA','Dhania patta (coriander)','HE','Manju Veg','919886744138','🌿','vendor','bunch',1,0,'','bunch',0,'',0,1,124],
+      ['HE_SPRING_ONION','Spring onion','HE','Manju Veg','919886744138','🧅','vendor','bunch',1,0,'','bunch',0,'',0,1,125],
+      ['HE_CARROT','Carrot','HE','Manju Veg','919886744138','🥕','vendor','kg',1,0,'','kg',0,'',0,1,126],
+      ['HE_CABBAGE','Cabbage','HE','Manju Veg','919886744138','🥬','vendor','kg',1,0,'','kg',0,'',0,1,127],
+      ['HE_PANEER','Paneer','HE','','','🧀','ration','kg',1,0,'','kg',0,'Ashrafiya',0,0,128],
+      ['HE_BUTTER','Butter','HE','','','🧈','ration','gm',1,0,'','gm',285,'Ashrafiya',280,0,129],
+      // HE proteins (vendor-delivered)
+      ['HE_MUTTON','Mutton','HE','Mutton Irshad Bhai','919880656387','🐐','vendor','kg',1,0,'','kg',0,'',0,1,140],
+      ['HE_MUTTON_BRAIN','Mutton brain','HE','Mutton Irshad Bhai','919880656387','🧠','vendor','pcs',1,0,'','pcs',0,'',0,1,141],
+      ['HE_EGG','Egg','HE','','','🥚','ration','crate',1,0,'','crate',0,'Ashrafiya',0,0,142],
+      ['HE_BONELESS','Boneless chicken','HE','M.N. Broilers','919845237700','🍗','vendor','kg',1,0,'','kg',0,'',0,1,143],
+      ['HE_SHAWARMA','Shawarma chicken','HE','M.N. Broilers','919845237700','🍗','vendor','kg',1,0,'','kg',0,'',0,1,144],
+      ['HE_TANDOORI','Tandoori chicken','HE','M.N. Broilers','919845237700','🍗','vendor','birds',1,0,'','birds',0,'',0,1,145],
+      // HE other
+      ['HE_CHARCOAL','Charcoal','HE','Charcoal Mudassir','918050547191','🪵','vendor','bag',1,0,'','bag',0,'',0,1,150],
+      ['HE_SILVER_POUCH','Silver pouch (8×10)','HE','Shree Ram Deepak','919620515684','🥡','vendor','packet',1,0,'','packet',0,'',0,1,151],
+      ['HE_CARRY_68','Carry bag (6×8)','HE','Shree Ram Deepak','919620515684','🛍️','vendor','packet',1,0,'','packet',0,'',0,1,152],
+      ['HE_CARRY_810','Carry bag (8×10)','HE','Shree Ram Deepak','919620515684','🛍️','vendor','packet',1,0,'','packet',0,'',0,1,153],
+      ['HE_WATER_1L','Bisleri 1L water','HE','Nadeem (Water & Cold Drinks)','919900323484','💧','vendor','cases',1,0,'','cases',0,'',0,1,154],
+      ['HE_WATER_500','Bisleri 500ml water','HE','Nadeem (Water & Cold Drinks)','919900323484','💧','vendor','cases',1,0,'','cases',0,'',0,1,155],
+      ['HE_COKE','Coke (200ml)','HE','Nadeem (Water & Cold Drinks)','919900323484','🥤','vendor','cases',1,0,'','cases',0,'',0,1,156],
+      ['HE_SELLO','Sello tape','HE','','','📦','ration','pc',1,0,'','pc',0,'Ashrafiya',0,0,157],
+    ];
+    const stmts = CAT.map(r => DB.prepare(
+      `INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,pack_qty,pack_rate,pack_label,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,receivable,sort,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`
+    ).bind(...r));
+    // keep the proven-correct fields fresh on the already-seeded items (idempotent UPDATEs)
+    stmts.push(DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=285, last_dept_store='Ashrafiya', last_qcomm_price=280, receivable=0 WHERE code='BUTTER'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=324, last_dept_store='Ashrafiya', receivable=0 WHERE code='MILKMAID'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET receivable=1 WHERE code IN ('BUNS','WATER')`));
+    await DB.batch(stmts);
   }
 
   try {
@@ -87,8 +134,24 @@ export async function onRequest(context) {
       return it ? json({ success:true, item:it }) : json({ success:false, error:'Unknown item' }, 404);
     }
     if (action === 'items') {
-      const r = await DB.prepare('SELECT * FROM purchase_items WHERE active=1 ORDER BY sort, name').all();
+      const brand = url.searchParams.get('brand');
+      const r = brand
+        ? await DB.prepare('SELECT * FROM purchase_items WHERE active=1 AND brand=? ORDER BY sort, name').bind(brand).all()
+        : await DB.prepare('SELECT * FROM purchase_items WHERE active=1 ORDER BY sort, name').all();
       return json({ success:true, items:r.results || [] });
+    }
+
+    // Purchase Home — items for a brand + today's order/receive status, for the card grid.
+    if (action === 'home') {
+      const brand = url.searchParams.get('brand') || 'NCH';
+      const date = url.searchParams.get('date') || new Date(Date.now() + 864e5).toISOString().slice(0,10); // default tomorrow
+      const items = (await DB.prepare('SELECT * FROM purchase_items WHERE active=1 AND brand=? ORDER BY sort, name').bind(brand).all()).results || [];
+      const ordered = (await DB.prepare('SELECT DISTINCT item_code FROM purchase_item_orders WHERE for_date=?').bind(date).all()).results || [];
+      const orderedSet = new Set(ordered.map(o => o.item_code));
+      const onList = (await DB.prepare(`SELECT DISTINCT item_code FROM manager_pickup_list WHERE for_date=? AND status='open'`).bind(date).all()).results || [];
+      const listSet = new Set(onList.map(o => o.item_code));
+      for (const it of items) { it.is_ordered = orderedSet.has(it.code); it.on_pickup_list = listSet.has(it.code); }
+      return json({ success:true, brand, date, manager_phone: await managerPhone(), items });
     }
 
     if (action === 'log-order' && context.request.method === 'POST') {
