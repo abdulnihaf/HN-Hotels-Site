@@ -18,7 +18,7 @@ const S = {
   token: null, user: null, role: null, fin: false,
   tab: 'today',
   home: null,
-  attendDate: null, attendBrand: 'all', attendRows: [],
+  attendDate: null, attendBrand: 'all', attendRows: [], attendFilter: null,
   rosterBrand: 'all', employees: [],
 };
 
@@ -306,21 +306,26 @@ function attState(r) {
   if (pc % 2 === 1) return { k: 'missing', label: pc === 1 ? 'NO OUT' : 'MISSED PUNCH' };
   return { k: 'present', label: r.status === 'pending' ? 'ON SHIFT' : 'PRESENT' };
 }
+function attMatch(r, f) { const k = attState(r).k; return f === 'present' ? (k === 'present' || k === 'inprog') : k === f; }
+function setAttendFilter(k) { S.attendFilter = (S.attendFilter === k) ? null : k; renderAttend(); }
 function renderAttend() {
   let rows = S.attendRows;
   if (S.attendBrand !== 'all') rows = rows.filter(r => r.brand_label === S.attendBrand);
-  // stats
+  // stats (clickable — tap a card to see exactly those people)
   const c = { present: 0, missing: 0, absent: 0, off: 0 };
   rows.forEach(r => { const st = attState(r); c[st.k === 'inprog' ? 'present' : st.k]++; });
+  const f = S.attendFilter;
   $('attStats').innerHTML = [
-    ['Present', 'g', c.present], ['Missed', 'y', c.missing], ['Absent', 'r', c.absent], ['Off', '', c.off],
-  ].map(([l, cl, n]) => `<div class="stat ${cl}"><div class="n num">${n}</div><div class="l">${l}</div></div>`).join('');
+    ['Present', 'g', c.present, 'present'], ['Missed', 'y', c.missing, 'missing'], ['Absent', 'r', c.absent, 'absent'], ['Off', '', c.off, 'off'],
+  ].map(([l, cl, n, k]) => `<div class="stat ${cl}" onclick="setAttendFilter('${k}')" style="cursor:pointer${f === k ? ';outline:2px solid var(--gold);outline-offset:-2px' : ''}"><div class="n num">${n}</div><div class="l">${l}</div></div>`).join('');
 
-  // order: missing first (need attention), then present, absent, off
+  // list: filtered to the tapped card if any; missing first, then present, absent, off
+  let list = f ? rows.filter(r => attMatch(r, f)) : rows;
   const rank = { missing: 0, present: 1, inprog: 1, absent: 2, off: 3 };
-  rows = [...rows].sort((a, b) => rank[attState(a).k] - rank[attState(b).k]);
-  if (!rows.length) { $('attList').innerHTML = '<div class="empty">No one on this day.</div>'; return; }
-  $('attList').innerHTML = rows.map(r => {
+  list = [...list].sort((a, b) => rank[attState(a).k] - rank[attState(b).k]);
+  if (!list.length) { $('attList').innerHTML = `<div class="empty">${f ? 'No one ' + (f === 'missing' ? 'missed' : f) + ' on this day.' : 'No one on this day.'}</div>`; return; }
+  const hdr = f ? `<div class="xc-meta" style="margin:2px 0 8px 2px">Showing ${list.length} ${f === 'missing' ? 'missed' : f} — tap the card again to clear</div>` : '';
+  $('attList').innerHTML = hdr + list.map(r => {
     const st = attState(r); const nm = r.known_as && r.known_as !== r.name ? `${esc(r.name)} <span style="color:var(--mute)">(${esc(r.known_as)})</span>` : esc(r.name);
     const sess = sessionLine(r);
     const fixBtn = (st.k === 'missing') ? `<button class="btn primary sm" style="margin-top:9px" onclick='fixPunch(${r.employee_id}, ${JSON.stringify(S.attendDate)})'>Fix — impute out</button>` : '';
@@ -385,15 +390,26 @@ async function loadPay() {
     const r = await fetch(`/api/hr-payroll?action=list-advances&month=${month}`, { headers: authHeaders() }).then(x => x.json());
     const adv = r.advances || r.rows || [];
     if (!adv.length) { $('advList').innerHTML = `<div class="empty">No payments recorded for ${esc(monthLbl)} yet.</div>`; return; }
-    $('advList').innerHTML = adv.map(a => {
-      const nm = a.employee_known_as || a.employee_name || a.name || a.known_as || ('Emp #' + a.employee_id);
-      const tag = a.source === 'settlement'
-        ? '<span class="pill" style="background:var(--gold-soft);color:var(--gold)">settlement</span>'
-        : '<span class="pill" style="background:var(--dim-soft,#2a2a2a);color:var(--dim)">advance</span>';
+    // Group BY PERSON — show what's DONE this month (total paid), not per-transaction.
+    const byEmp = {};
+    adv.forEach(a => {
+      const id = a.employee_id;
+      if (!byEmp[id]) byEmp[id] = { name: a.employee_known_as || a.employee_name || a.name || a.known_as || ('Emp #' + id), brand: a.brand_label || '', advTotal: 0, setTotal: 0 };
+      if (a.source === 'settlement') byEmp[id].setTotal += Number(a.amount || 0);
+      else byEmp[id].advTotal += Number(a.amount || 0);
+    });
+    const people = Object.values(byEmp).sort((x, y) => (y.advTotal + y.setTotal) - (x.advTotal + x.setTotal));
+    $('advList').innerHTML = people.map(p => {
+      const total = p.advTotal + p.setTotal;
+      const settled = p.setTotal > 0;
+      const badge = settled
+        ? '<span class="pill" style="background:var(--green-soft);color:var(--green)">✓ Settled</span>'
+        : '<span class="pill" style="background:var(--gold-soft);color:var(--gold)">advance only</span>';
+      const parts = [p.advTotal ? `advance ${inr(p.advTotal)}` : '', p.setTotal ? `settlement ${inr(p.setTotal)}` : ''].filter(Boolean).join(' + ');
       return `<div class="card"><div class="xc-top">
-      <div><div class="xc-name">${esc(nm)} ${tag}</div>
-      <div class="xc-meta">${esc(a.advance_date || '')} · ${esc(a.paid_via || 'cash')}${a.reason ? ' · ' + esc(a.reason) : ''}${a.recovered ? ' · <span style="color:var(--green)">recovered</span>' : ''}</div></div>
-      <div style="font-weight:800;font-size:16px" class="num">${inr(a.amount)}</div></div></div>`;
+        <div><div class="xc-name">${esc(p.name)} ${p.brand ? `<span class="pill ${(p.brand || '').toLowerCase()}">${esc(p.brand)}</span>` : ''} ${badge}</div>
+        <div class="xc-meta">${esc(parts)}${settled ? ' · month complete' : ''}</div></div>
+        <div class="num" style="font-weight:800;font-size:17px">${inr(total)}</div></div></div>`;
     }).join('');
   } catch (e) { $('advList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
