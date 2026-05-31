@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Ration · Nawabi · Sauda</title>
+<style>
+  :root{ --gold:#c9a14a; --elev:#15151f; --line:rgba(201,161,74,.22); --ok:#3ba776; --okbg:rgba(59,167,118,.13); --warn:#d8923a; --bad:#cf5b4e; --wa:#25d366; --blue:#5e9eff; --txt:#f3f3f6; --dim:#8a8a99; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(130% 80% at 50% 0%,#13131e,#06060a);color:var(--txt);min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 28px)}
+  .wrap{max-width:480px;margin:0 auto}
+  .top{display:flex;align-items:center;gap:10px;margin:22px 0 2px}
+  .top .glyph{width:42px;height:42px;border-radius:12px;background:var(--elev);border:1px solid var(--line);display:grid;place-items:center;font-size:22px}
+  h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:28px;margin:0}
+  .sub{color:var(--gold);font-size:12.5px;font-style:italic;margin:2px 0 18px 52px}
+  .tabs{display:flex;gap:6px;background:var(--elev);border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:18px}
+  .tabs button{flex:1;background:transparent;border:none;color:var(--dim);border-radius:10px;padding:11px 0;font-size:14px;font-weight:600;position:relative}
+  .tabs button.on{background:var(--gold);color:#1a1408}
+  .tabs button .cnt{position:absolute;top:5px;right:10px;background:var(--blue);color:#04132b;font-size:10px;font-weight:700;border-radius:9px;padding:1px 6px;display:none}
+  .tabs button.has .cnt{display:inline}
+  .card{background:var(--elev);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
+  label{display:block;font-size:11.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;margin:0 0 7px}
+  input[type=number],input[type=password]{width:100%;background:#0b0b13;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:22px;padding:14px;outline:none;font-variant-numeric:tabular-nums}
+  .cmp{display:flex;gap:10px;margin-bottom:4px}
+  .cmp .opt{flex:1;background:#0b0b13;border:1px solid var(--line);border-radius:13px;padding:13px;text-align:center}
+  .cmp .opt.best{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+  .cmp .opt .lbl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+  .cmp .opt .pr{font-size:22px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+  .cmp .opt .tag{font-size:10px;color:var(--gold);margin-top:3px;min-height:13px}
+  .go{width:100%;border:none;border-radius:13px;padding:16px;font-size:16px;font-weight:700;margin-top:8px}
+  .go.dept{background:var(--blue);color:#04132b}
+  .go.online{background:transparent;color:var(--gold);border:1px solid var(--line)}
+  .go.send{background:var(--wa);color:#06351a}
+  .go:disabled{opacity:.4}
+  .hint{font-size:12px;color:var(--dim);margin:10px 2px 0;line-height:1.5}
+  .placed{display:none;margin-top:10px;padding:14px;border-radius:12px;background:var(--okbg);border:1px solid var(--ok);font-size:14px}.placed.show{display:block}.placed b{color:var(--ok)}
+  .listrow{display:flex;justify-content:space-between;align-items:center;padding:13px;background:#0b0b13;border:1px solid var(--line);border-radius:11px;margin-bottom:8px}
+  .listrow .x{color:var(--bad);font-size:18px;background:none;border:none;padding:0 4px}
+  .hide{display:none!important}.small{font-size:11.5px;color:var(--dim);text-align:center;margin-top:16px}
+  a.back{color:var(--dim);font-size:13px;text-decoration:none;display:inline-block;margin-top:18px}
+  .gate input{margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div class="glyph" id="glyph">🧈</div><h1 id="title">Ration</h1></div>
+  <div class="sub" id="sub">Nawabi · departmental / quick-commerce</div>
+
+  <div id="gate" class="card gate">
+    <label>PIN</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+    <button class="go dept" id="pinBtn">Unlock</button>
+    <div id="pinErr" class="small" style="color:var(--bad)"></div>
+  </div>
+
+  <div id="app" class="hide">
+    <div class="tabs"><button data-t="buy" class="on">Buy</button><button data-t="list" id="listTab">Basheer's List<span class="cnt" id="listCnt">0</span></button></div>
+
+    <section id="t-buy">
+      <div class="card">
+        <label>Cheapest source (last seen)</label>
+        <div class="cmp" id="cmp"></div>
+        <div class="hint" id="cmphint"></div>
+      </div>
+      <div class="card">
+        <label id="qtyLabel">Quantity</label>
+        <input id="qty" type="number" inputmode="decimal" step="0.5" placeholder="3.5">
+        <button class="go dept" id="addList">＋ Add to Basheer's pickup list</button>
+        <button class="go online" id="orderOnline">Order online instead ↗</button>
+        <div class="placed" id="placed"></div>
+        <div class="hint">Departmental (Ashrafiya / Shariff) = Basheer walks over, same day. Online = quick-commerce, same/next day.</div>
+      </div>
+      <a class="back" href="/ops/purchase-console/">← Back to Sauda</a>
+    </section>
+
+    <section id="t-list" class="hide">
+      <div class="card">
+        <label>Today's pickup list for Basheer</label>
+        <div id="listBox"><div class="small">Loading…</div></div>
+        <a class="go send hide" id="sendList" target="_blank" rel="noopener">📲 Send list to Basheer</a>
+        <div class="hint" id="listHint"></div>
+      </div>
+      <a class="back" href="/ops/purchase-console/">← Back to Sauda</a>
+    </section>
+  </div>
+</div>
+<script>
+const API='/api/purchase-item';
+const CODE=new URLSearchParams(location.search).get('item')||'BUTTER';
+let PIN='',NAME='',ITEM=null,LIST=[],MGR='';const $=id=>document.getElementById(id);
+$('pinBtn').onclick=async()=>{const pin=$('pin').value.trim();if(!pin)return;
+  const r=await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(pin)}`).then(r=>r.json()).catch(()=>({success:false}));
+  if(r.success){PIN=pin;NAME=r.name;$('gate').classList.add('hide');$('app').classList.remove('hide');await loadItem();loadList();}else $('pinErr').textContent='Wrong PIN';};
+$('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');['buy','list'].forEach(t=>$('t-'+t).classList.toggle('hide',t!==b.dataset.t));if(b.dataset.t==='list')loadList();});
+async function loadItem(){const r=await fetch(`${API}?action=item&code=${encodeURIComponent(CODE)}`).then(r=>r.json());ITEM=r.item;
+  $('glyph').textContent=ITEM.emoji||'🧈';$('title').textContent=ITEM.name;$('qtyLabel').textContent=ITEM.order_unit.charAt(0).toUpperCase()+ITEM.order_unit.slice(1);
+  const dept=ITEM.last_dept_price||0,q=ITEM.last_qcomm_price||0;
+  const deptBest=q===0||(dept>0&&dept<=q);
+  $('cmp').innerHTML=`
+    <div class="opt ${deptBest?'best':''}"><div class="lbl">${ITEM.last_dept_store||'Departmental'}</div><div class="pr">₹${dept||'—'}</div><div class="tag">${deptBest?'cheapest':''}</div></div>
+    <div class="opt ${!deptBest&&q?'best':''}"><div class="lbl">Quick-comm</div><div class="pr">${q?'₹'+q:'—'}</div><div class="tag">${!deptBest&&q?'cheapest':''}</div></div>`;
+  $('cmphint').textContent=q===0?'No quick-commerce price yet — departmental is the known source.':(deptBest?`Departmental is ₹${q-dept} cheaper per ${ITEM.order_unit}.`:`Quick-commerce is ₹${dept-q} cheaper per ${ITEM.order_unit}.`);}
+$('addList').onclick=async()=>{const q=parseFloat($('qty').value);if(!(q>0)){$('qty').focus();return;}
+  $('addList').disabled=true;$('addList').textContent='Adding…';
+  const r=await fetch(`${API}?action=add-to-manager-list`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,item_code:CODE,qty:q})}).then(r=>r.json()).catch(()=>({success:false}));
+  const p=$('placed');
+  if(r.success){p.innerHTML=`<b>✓ Added to Basheer's list</b><br><span style="opacity:.85">${q} ${ITEM.order_unit} · ${ITEM.name}</span>`;p.classList.add('show');loadList();}
+  else{p.innerHTML='<span style="color:var(--warn)">⚠ '+(r.error||'Failed')+'</span>';p.classList.add('show');}
+  $('addList').disabled=false;$('addList').textContent='＋ Add to Basheer's pickup list';};
+$('orderOnline').onclick=()=>{window.open('https://blinkit.com/s/?q='+encodeURIComponent(ITEM.name),'_blank');};
+async function loadList(){const r=await fetch(`${API}?action=manager-list`).then(r=>r.json()).catch(()=>({success:false,items:[]}));
+  LIST=r.items||[];MGR=r.manager_phone||'';
+  $('listCnt').textContent=LIST.length;$('listTab').classList.toggle('has',LIST.length>0);
+  const box=$('listBox');
+  if(!LIST.length){box.innerHTML='<div class="small">List is empty. Add ration items from the Buy tab.</div>';$('sendList').classList.add('hide');$('listHint').textContent='';return;}
+  box.innerHTML=LIST.map(it=>`<div class="listrow"><span>${it.item_name} — <b>${it.qty} ${it.unit||''}</b>${it.store_hint?' · '+it.store_hint:''}</span><button class="x" data-id="${it.id}">✕</button></div>`).join('');
+  box.querySelectorAll('.x').forEach(b=>b.onclick=async()=>{await fetch(`${API}?action=remove-from-manager-list`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,id:parseInt(b.dataset.id)})});loadList();});
+  // build consolidated message
+  const lines=['Nawabi Chai House — departmental pickup',new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'}),''];
+  LIST.forEach(it=>lines.push(`${it.item_name}: ${it.qty} ${it.unit||''}${it.store_hint?' ('+it.store_hint+')':''}`));
+  const msg=lines.join('\n');
+  const send=$('sendList');
+  if(MGR){send.classList.remove('hide');send.href=`https://wa.me/${MGR}?text=${encodeURIComponent(msg)}`;send.onclick=()=>{setTimeout(()=>{fetch(`${API}?action=mark-list-sent`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN})}).then(()=>loadList());},800);};$('listHint').textContent='Sends the whole list to Basheer in one message.';}
+  else{send.classList.add('hide');$('listHint').innerHTML='<span style="color:var(--warn)">⚠ Basheer's WhatsApp number not set yet — list is saved, tell Claude the number to enable one-tap send.</span>';}}
+</script>
+</body>
+</html>
