@@ -14,6 +14,26 @@ export async function onRequest(context) {
   const DB = context.env.DB;
   const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: cors });
 
+  // pack → base qty (kg / L / each) for per-unit price ranking. Mirrors VPS utils.parsePackToBase.
+  function parsePackBase(text) {
+    const t = String(text || '').toLowerCase().replace(/,/g, '');
+    let mult = 1, qty = 0, unit = '';
+    const mm = t.match(/(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(kg|g|gm|gram|grams|l|ml|litre|liter)/);
+    const pof = t.match(/pack of\s*(\d+)/);
+    if (mm) { mult = parseInt(mm[1]) || 1; qty = parseFloat(mm[2]); unit = mm[3]; }
+    else { const m = t.match(/(\d+(?:\.\d+)?)\s*(kg|g|gm|gram|grams|l|ml|litre|liter)\b/); if (m) { qty = parseFloat(m[1]); unit = m[2]; } if (pof) mult = parseInt(pof[1]) || 1; }
+    if (!qty || !unit) {
+      const c = t.match(/(\d+)\s*(pcs?|pieces?|eggs?|units?|nos?|tin|tins|can|cans|bottle|bottles)/);
+      if (c) return { qty: (parseInt(c[1]) || 1), unit: 'each' };
+      return { qty: 0, unit: '' };
+    }
+    if (unit === 'kg') return { qty: qty * mult, unit: 'kg' };
+    if (['g','gm','gram','grams'].includes(unit)) return { qty: (qty * mult) / 1000, unit: 'kg' };
+    if (['l','litre','liter'].includes(unit)) return { qty: qty * mult, unit: 'L' };
+    if (unit === 'ml') return { qty: (qty * mult) / 1000, unit: 'L' };
+    return { qty: 0, unit: '' };
+  }
+
   const USERS = { '0305':'Nihaf','5882':'Nihaf','2026':'Zoya','8316':'Zoya','3678':'Faheem','6045':'Faheem','6890':'Tanveer','7115':'Kesmat','3946':'Jafar','9991':'Mujib','3697':'Yashwant','3754':'Naveen','8241':'Nafees','8523':'Basheer','4040':'Haneef','5050':'Nisar' };
   const who = pin => USERS[(pin || '').trim()] || null;
 
