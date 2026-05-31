@@ -339,11 +339,24 @@ export async function onRequest(context) {
       return json({ success:true, items:r.results || [] });
     }
 
-    // Purchase Home — the DAY'S PO: only items with demand for the date, each with its qty-to-buy.
-    // This screen IS "what to buy tomorrow"; the owner's only job is "from where" → tap a card.
+    // Purchase Home — the active PO. Date logic is SMART, not rigid:
+    //   - if ?date given, use it (lets owner browse history).
+    //   - else default to the ACTIVE PO = the nearest for_date >= today (IST) that has demand;
+    //     a PO for date D is uploaded the night before, so on the morning of D it's the live one.
+    //   - if nothing today-or-future, fall back to the most recent past PO (never an empty screen).
+    // Past POs are NEVER lost — they stay queryable by ?date and listed in available_dates.
     if (action === 'home') {
       const brand = url.searchParams.get('brand') || 'NCH';
-      const date = url.searchParams.get('date') || new Date(Date.now() + 864e5).toISOString().slice(0,10); // default tomorrow
+      // IST "today" (worker clock is UTC; IST = UTC+5:30)
+      const istToday = new Date(Date.now() + 5.5*3600e3).toISOString().slice(0,10);
+      let date = url.searchParams.get('date');
+      // all dates this brand has a PO for (newest first) — for the picker + fallback
+      const dateRows = (await DB.prepare('SELECT DISTINCT for_date FROM purchase_demand WHERE brand=? ORDER BY for_date DESC').bind(brand).all()).results || [];
+      const allDates = dateRows.map(r => r.for_date);
+      if (!date) {
+        const upcoming = allDates.filter(d => d >= istToday).sort();      // soonest active first
+        date = upcoming[0] || allDates[0] || istToday;                     // active, else latest past, else today
+      }
       const demand = (await DB.prepare('SELECT item_code, qty_text, unit, note FROM purchase_demand WHERE brand=? AND for_date=?').bind(brand, date).all()).results || [];
       const demandMap = Object.fromEntries(demand.map(d => [d.item_code, d]));
       const codes = demand.map(d => d.item_code);
@@ -367,7 +380,9 @@ export async function onRequest(context) {
         const s = snaps[it.code];
         if (s) { it.best_src = s.best_src; it.best_price = s.best_price; it.best_unit_price = s.best_unit_price; it.best_unit = s.best_unit; it.best_sku = s.best_sku; it.price_captured_at = s.captured_at; }
       }
-      return json({ success:true, brand, date, manager_phone: await managerPhone(), items });
+      // is this PO today's, upcoming, or a past one being viewed? + give the date list for the picker.
+      const day_kind = date === istToday ? 'today' : (date > istToday ? 'upcoming' : 'past');
+      return json({ success:true, brand, date, ist_today: istToday, day_kind, available_dates: allDates, manager_phone: await managerPhone(), items });
     }
 
     if (action === 'log-order' && context.request.method === 'POST') {
