@@ -249,10 +249,16 @@ export async function onRequest(context) {
     // an owner "refresh all" button. After this, /order cards show cheapest instantly.
     if (action === 'snapshot-run') {
       const brand = url.searchParams.get('brand'); // optional filter
-      const q = brand
-        ? await DB.prepare("SELECT * FROM purchase_items WHERE active=1 AND channel='ration' AND brand=?").bind(brand).all()
-        : await DB.prepare("SELECT * FROM purchase_items WHERE active=1 AND channel='ration'").all();
+      const limit = Math.min(parseInt(url.searchParams.get('limit')) || 6, 10); // chunk to stay under CF 100s wall
+      const fresh = url.searchParams.get('all') ? '0000' : new Date(Date.now() - 6*3600e3).toISOString(); // skip items snapshotted < 6h ago unless ?all=1
+      // process items missing a snapshot OR with a stale one first; LIMIT keeps each call under the wall.
+      const where = `active=1 AND channel='ration'${brand ? ' AND brand=?' : ''} AND code NOT IN (SELECT item_code FROM price_snapshot WHERE captured_at > ?)`;
+      const binds = brand ? [brand, fresh] : [fresh];
+      const q = await DB.prepare(`SELECT * FROM purchase_items WHERE ${where} ORDER BY sort LIMIT ${limit}`).bind(...binds).all();
       const items = q.results || [];
+      // how many ration items still remain unsnapshotted (so the UI knows to loop)
+      const remWhere = `active=1 AND channel='ration'${brand ? ' AND brand=?' : ''} AND code NOT IN (SELECT item_code FROM price_snapshot WHERE captured_at > ?)`;
+      const remRow = await DB.prepare(`SELECT COUNT(*) n FROM purchase_items WHERE ${remWhere}`).bind(...binds).first().catch(() => ({ n: 0 }));
       const out = [];
       for (const it of items) {
         const { results } = await scrapeItem(it);
@@ -263,9 +269,16 @@ export async function onRequest(context) {
             best_unit_price=excluded.best_unit_price,best_unit=excluded.best_unit,best_sku=excluded.best_sku,n_sources=excluded.n_sources,captured_at=excluded.captured_at`)
             .bind(it.code, best.src, best.price, best.unit_price, best.unit, best.sku, results.length, new Date().toISOString()).run();
           out.push({ code: it.code, best_src: best.src, best_price: best.price, best_unit_price: best.unit_price, n: results.length });
-        } else out.push({ code: it.code, best_src: null, n: 0 });
+        } else {
+          // record a captured_at even with no result, so it doesn't re-scrape every call (stale after 6h)
+          await DB.prepare(`INSERT INTO price_snapshot (item_code,best_src,best_price,n_sources,captured_at) VALUES (?,?,?,?,?)
+            ON CONFLICT(item_code) DO UPDATE SET n_sources=0,captured_at=excluded.captured_at`)
+            .bind(it.code, null, null, 0, new Date().toISOString()).run();
+          out.push({ code: it.code, best_src: null, n: 0 });
+        }
       }
-      return json({ success:true, ran: out.length, captured_at: new Date().toISOString(), items: out });
+      const remaining = Math.max(0, (remRow?.n || 0) - out.length);
+      return json({ success:true, ran: out.length, remaining, more: remaining > 0, captured_at: new Date().toISOString(), items: out });
     }
 
     if (action === 'prices') {
