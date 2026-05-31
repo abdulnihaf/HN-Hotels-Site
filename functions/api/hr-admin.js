@@ -665,7 +665,7 @@ async function handleGet(url, env, auth = null) {
     const emp = await db.prepare('SELECT id, name, pin, brand_label FROM hr_employees WHERE id=?').bind(empId).first();
     if (!emp) return json({ error: 'employee not found' }, 404);
     const tok = await staffToken(env, empId);
-    const origin = new URL(request.url).origin;
+    const origin = url.origin;
     return json({
       url: `${origin}/hr/me/?id=${empId}&t=${tok}`,
       token: tok,
