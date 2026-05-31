@@ -17,6 +17,15 @@ export async function onRequest(context) {
   const USERS = { '0305':'Nihaf','5882':'Nihaf','2026':'Zoya','8316':'Zoya','3678':'Faheem','6045':'Faheem','6890':'Tanveer','7115':'Kesmat','3946':'Jafar','9991':'Mujib','3697':'Yashwant','3754':'Naveen','8241':'Nafees','8523':'Basheer','4040':'Haneef','5050':'Nisar' };
   const who = pin => USERS[(pin || '').trim()] || null;
 
+  // Manager (Basheer) WhatsApp — pulled LIVE from Darbar's hr_employees (single source of truth,
+  // not hardcoded). Basheer = PIN 8523. Falls back to '' so the UI shows "set number" rather than guess.
+  async function managerPhone() {
+    try {
+      const r = await DB.prepare(`SELECT phone FROM hr_employees WHERE pin='8523' AND is_active=1 LIMIT 1`).first();
+      return (r?.phone || '').replace(/[^\d]/g, '');
+    } catch (_) { return ''; }
+  }
+
   async function ensureSchema() {
     await DB.batch([
       DB.prepare(`CREATE TABLE IF NOT EXISTS purchase_items (
@@ -115,7 +124,7 @@ export async function onRequest(context) {
     if (action === 'manager-list') {
       const date = url.searchParams.get('date') || new Date().toISOString().slice(0,10);
       const r = await DB.prepare(`SELECT id,item_code,item_name,qty,unit,store_hint,status,added_by FROM manager_pickup_list WHERE for_date=? AND status='open' ORDER BY id`).bind(date).all();
-      return json({ success:true, manager_phone: MANAGER_PHONE, items: r.results || [] });
+      return json({ success:true, manager_phone: await managerPhone(), items: r.results || [] });
     }
 
     // remove a line from the list
