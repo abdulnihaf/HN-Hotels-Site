@@ -39,6 +39,38 @@ export async function onRequest(context) {
 
   // Manager (Basheer) WhatsApp — pulled LIVE from Darbar's hr_employees (single source of truth,
   // not hardcoded). Basheer = PIN 8523. Falls back to '' so the UI shows "set number" rather than guess.
+  // Reusable: scrape all wired portals for one item, return ranked-by-₹/unit results.
+  async function scrapeItem(it) {
+    const code = it.code;
+    const query = (it.match_rule === 'locked' && it.locked_query) ? it.locked_query : it.name;
+    const SCRAPEABLE = ['HYPERPURE','BIGBASKET','JIOMART','BLINKIT','FLIPKART_MINUTES','AMAZON_NOW','AMAZON_FRESH','ZEPTO'];
+    const VPS_URL = context.env.SCOUT_VPS_URL, BEARER = context.env.SCOUT_VPS_BEARER;
+    if (!VPS_URL || !BEARER) return { results: [], no_result: SCRAPEABLE, query, err: 'scout not configured' };
+    const scout = async (src) => {
+      try {
+        const r = await fetch(`${VPS_URL}/scout`, {
+          method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${BEARER}`},
+          body: JSON.stringify({ material_id: code, name: it.name, search_query: query,
+            match_rule: it.match_rule === 'locked' ? 'EXACT_SKU' : 'COMMODITY_EQUIVALENT', sources:[src] }),
+          signal: AbortSignal.timeout(40000),
+        });
+        if (!r.ok) return { src, ok:false };
+        const data = await r.json().catch(() => ({}));
+        const d = data.results?.[src];
+        if (!d || d.stock_status === 'ERROR') return { src, ok:false };
+        const paise = d.price_paise || (d.unit_price_paise || 0);
+        if (!paise) return { src, ok:false };
+        const pack = d.pack_size || '';
+        const base = parsePackBase(`${pack} ${d.sku_title || ''}`);
+        const unit_paise = base.qty ? Math.round(paise / base.qty) : 0;
+        return { src, ok:true, price: Math.round(paise)/100, unit_price: unit_paise ? Math.round(unit_paise)/100 : null, unit: base.unit || null, sku: d.sku_title || '', url: d.sku_url || '', pack, eta: d.eta_label || '', conf: d.match_confidence || 0 };
+      } catch (e) { return { src, ok:false }; }
+    };
+    const all = await Promise.all(SCRAPEABLE.map(scout));
+    const results = all.filter(r => r.ok).sort((a,b) => (a.unit_price || a.price) - (b.unit_price || b.price));
+    return { results, no_result: all.filter(r => !r.ok).map(r => r.src), query };
+  }
+
   async function managerPhone() {
     // Prefer live Darbar data (single source of truth); fall back to Basheer's
     // known number so the ration send is NEVER dead. Drop the is_active filter —
@@ -80,6 +112,11 @@ export async function onRequest(context) {
         id INTEGER PRIMARY KEY AUTOINCREMENT, brand TEXT NOT NULL, for_date TEXT NOT NULL,
         item_code TEXT NOT NULL, qty_text TEXT, unit TEXT, note TEXT,
         UNIQUE(brand, for_date, item_code))`),
+      // PRICE SNAPSHOT = pre-computed cheapest per item (cron-fillable). /order reads this so
+      // the cheapest source is ALREADY on the card — owner never waits for a live scrape.
+      DB.prepare(`CREATE TABLE IF NOT EXISTS price_snapshot (
+        item_code TEXT PRIMARY KEY, best_src TEXT, best_price REAL, best_unit_price REAL, best_unit TEXT,
+        best_sku TEXT, n_sources INTEGER DEFAULT 0, captured_at TEXT)`),
     ]);
     // MIGRATE FIRST — older purchase_items table may predate these columns (CREATE IF NOT EXISTS skips them).
     // Must run before any INSERT that references the new columns.
@@ -208,6 +245,29 @@ export async function onRequest(context) {
     // ── LIVE PRICES — scrape the ready+wired portals for one item, rank cheapest. ──
     // Uses the proven VPS scout (same call shape as purchase-control). Stale/unwired
     // portals self-filter (return ERROR → dropped). Locked items query exact SKU.
+    // SNAPSHOT RUN — scrape every open-market item once, store cheapest. Cron-fillable; also
+    // an owner "refresh all" button. After this, /order cards show cheapest instantly.
+    if (action === 'snapshot-run') {
+      const brand = url.searchParams.get('brand'); // optional filter
+      const q = brand
+        ? await DB.prepare("SELECT * FROM purchase_items WHERE active=1 AND channel='ration' AND brand=?").bind(brand).all()
+        : await DB.prepare("SELECT * FROM purchase_items WHERE active=1 AND channel='ration'").all();
+      const items = q.results || [];
+      const out = [];
+      for (const it of items) {
+        const { results } = await scrapeItem(it);
+        const best = results[0];
+        if (best) {
+          await DB.prepare(`INSERT INTO price_snapshot (item_code,best_src,best_price,best_unit_price,best_unit,best_sku,n_sources,captured_at)
+            VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(item_code) DO UPDATE SET best_src=excluded.best_src,best_price=excluded.best_price,
+            best_unit_price=excluded.best_unit_price,best_unit=excluded.best_unit,best_sku=excluded.best_sku,n_sources=excluded.n_sources,captured_at=excluded.captured_at`)
+            .bind(it.code, best.src, best.price, best.unit_price, best.unit, best.sku, results.length, new Date().toISOString()).run();
+          out.push({ code: it.code, best_src: best.src, best_price: best.price, best_unit_price: best.unit_price, n: results.length });
+        } else out.push({ code: it.code, best_src: null, n: 0 });
+      }
+      return json({ success:true, ran: out.length, captured_at: new Date().toISOString(), items: out });
+    }
+
     if (action === 'prices') {
       const code = url.searchParams.get('code');
       const it = await DB.prepare('SELECT * FROM purchase_items WHERE code=? AND active=1').bind(code).first();
@@ -282,11 +342,17 @@ export async function onRequest(context) {
       const ordered = new Set((await DB.prepare('SELECT DISTINCT item_code FROM purchase_item_orders WHERE for_date=?').bind(date).all()).results.map(o => o.item_code));
       const listSet = new Set((await DB.prepare(`SELECT DISTINCT item_code FROM manager_pickup_list WHERE for_date=? AND status='open'`).bind(date).all()).results.map(o => o.item_code));
       // milk receipts count as "ordered" too (milk uses its own thread)
+      // attach pre-computed cheapest from the latest snapshot → cheapest is ON the card, no wait
+      const snaps = {};
+      const sr = await DB.prepare('SELECT * FROM price_snapshot').all().catch(() => ({ results: [] }));
+      for (const s of (sr.results || [])) snaps[s.item_code] = s;
       for (const it of items) {
         const d = demandMap[it.code] || {};
         it.qty_text = d.qty_text; it.demand_unit = d.unit; it.note = d.note;
         it.is_ordered = ordered.has(it.code);
         it.on_pickup_list = listSet.has(it.code);
+        const s = snaps[it.code];
+        if (s) { it.best_src = s.best_src; it.best_price = s.best_price; it.best_unit_price = s.best_unit_price; it.best_unit = s.best_unit; it.best_sku = s.best_sku; it.price_captured_at = s.captured_at; }
       }
       return json({ success:true, brand, date, manager_phone: await managerPhone(), items });
     }
