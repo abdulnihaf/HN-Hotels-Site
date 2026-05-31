@@ -20,10 +20,11 @@
   .top .glyph{width:42px;height:42px;border-radius:12px;background:var(--elev);border:1px solid var(--line);display:grid;place-items:center;font-size:22px}
   h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:28px;margin:0;letter-spacing:.4px}
   .sub{color:var(--gold);font-size:12.5px;font-style:italic;margin:2px 0 18px 52px}
-  /* tabs */
   .tabs{display:flex;gap:6px;background:var(--elev);border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:18px}
-  .tabs button{flex:1;background:transparent;border:none;color:var(--dim);border-radius:10px;padding:11px 0;font-size:14px;font-weight:600}
+  .tabs button{flex:1;background:transparent;border:none;color:var(--dim);border-radius:10px;padding:11px 0;font-size:14px;font-weight:600;position:relative}
   .tabs button.on{background:var(--gold);color:#1a1408}
+  .tabs button .dot{position:absolute;top:6px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--ok);display:none}
+  .tabs button.has-order .dot{display:block}
   .card{background:var(--elev);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
   .vrow{display:flex;justify-content:space-between;align-items:center}
   .vrow .nm{font-size:16px;font-weight:600}.vrow .ph{font-size:12.5px;color:var(--dim);margin-top:2px}
@@ -41,6 +42,14 @@
   .preview{background:#0b0b13;border:1px dashed var(--line);border-radius:12px;padding:13px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;margin-top:4px;min-height:38px}
   .send{display:block;width:100%;background:var(--wa);color:#06351a;border:none;border-radius:13px;padding:17px;font-size:17px;font-weight:700;margin-top:8px;text-align:center;text-decoration:none}
   .send.off{pointer-events:none;opacity:.4}
+  .confirm{margin-top:12px;display:none}
+  .confirm.show{display:block}
+  .confirm p{font-size:13.5px;color:var(--txt);margin:0 0 10px;text-align:center}
+  .confirm .yes{width:100%;background:var(--gold);color:#1a1408;border:none;border-radius:12px;padding:15px;font-size:16px;font-weight:700}
+  .confirm .no{width:100%;background:transparent;color:var(--dim);border:none;padding:10px;font-size:12.5px;margin-top:4px}
+  .placed{display:none;margin-top:10px;padding:15px;border-radius:13px;background:var(--okbg);border:1px solid var(--ok);font-size:14px}
+  .placed.show{display:block}
+  .placed b{color:var(--ok)}
   .go{width:100%;background:var(--gold);color:#1a1408;border:none;border-radius:13px;padding:17px;font-size:17px;font-weight:700}
   .go:disabled{opacity:.4}
   .cans{display:flex;gap:8px}
@@ -54,7 +63,6 @@
   .result.show{display:block}.result.ok{background:var(--okbg);border:1px solid var(--ok)}.result.warn{background:var(--warnbg);border:1px solid var(--warn)}
   .hide{display:none!important}
   .small{font-size:11.5px;color:var(--dim);text-align:center;margin-top:16px}
-  /* ledger */
   .led{font-size:13px}.led .day{font-weight:700;color:var(--gold);margin:14px 0 6px;font-size:13px}
   .led .ln{display:flex;justify-content:space-between;padding:9px 11px;background:#0b0b13;border:1px solid var(--line);border-radius:10px;margin-bottom:6px}
   .led .v.ok{color:var(--ok)}.led .v.warn{color:var(--warn)}.led .v.dim{color:var(--dim)}
@@ -66,7 +74,6 @@
   <div class="top"><div class="glyph">🥛</div><h1>Buffalo Milk</h1></div>
   <div class="sub">Nawabi · chai · Prabhu · delivered</div>
 
-  <!-- PIN -->
   <div id="gate" class="card">
     <label>Staff PIN</label>
     <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
@@ -76,7 +83,7 @@
 
   <div id="app" class="hide">
     <div class="tabs">
-      <button data-t="order" class="on">Order</button>
+      <button data-t="order" class="on">Order<span class="dot"></span></button>
       <button data-t="receive">Receive</button>
       <button data-t="ledger">Record</button>
     </div>
@@ -100,8 +107,15 @@
         <label>Message to Prabhu</label>
         <div class="preview" id="preview"></div>
         <a class="send off" id="send" target="_blank" rel="noopener">Send on WhatsApp</a>
+        <!-- confirmation gate: opening WhatsApp ≠ sent. Owner confirms he hit send. -->
+        <div class="confirm" id="confirm">
+          <p>Did you send the order to Prabhu on WhatsApp?</p>
+          <button class="yes" id="confirmYes">✓ Yes, order sent</button>
+          <button class="no" id="confirmNo">Not yet — go back</button>
+        </div>
+        <div class="placed" id="placed"></div>
       </div>
-      <div class="small">Opens WhatsApp with the order ready. You tap send. We log it so receiving can check against it.</div>
+      <div class="small">Tap Send → WhatsApp opens with the order ready → come back and confirm you sent it. Only then is the order logged.</div>
     </section>
 
     <!-- RECEIVE -->
@@ -137,7 +151,6 @@ const API='/api/milk-thread';
 let PIN='',NAME='',SLOT='AM',CAN=null,CANS=[],PHOTO=null;
 const $=id=>document.getElementById(id);
 
-// PIN
 $('pinBtn').onclick=async()=>{
   const pin=$('pin').value.trim(); if(!pin)return;
   const r=await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(pin)}`).then(r=>r.json()).catch(()=>({success:false}));
@@ -146,7 +159,6 @@ $('pinBtn').onclick=async()=>{
 };
 $('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
 
-// tabs
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
   ['order','receive','ledger'].forEach(t=>$('t-'+t).classList.toggle('hide',t!==b.dataset.t));
@@ -160,12 +172,14 @@ function initOrder(){
     const o=document.createElement('option');o.value=iso;o.textContent=(i===0?'Today':i===1?'Tomorrow':'')+' · '+dn[(d.getDay()+6)%7]+' '+d.getDate()+' '+mn[d.getMonth()];o.dataset.disp=d.getDate()+' '+mn[d.getMonth()];sel.appendChild(o);}
   sel.selectedIndex=1;
   fillTimes($('amT'),'09:00');fillTimes($('pmT'),'17:00');
-  ['amOn','pmOn','amL','pmL','amT','pmT','forDate'].forEach(id=>{$(id).addEventListener('input',buildMsg);$(id).addEventListener('change',buildMsg);});
+  ['amOn','pmOn','amL','pmL','amT','pmT','forDate'].forEach(id=>{$(id).addEventListener('input',onEdit);$(id).addEventListener('change',onEdit);});
   buildMsg();
 }
 function fillTimes(sel,def){for(let h=6;h<=22;h++)for(const m of[0,30]){const hh=String(h).padStart(2,'0'),mm=String(m).padStart(2,'0'),ap=h<12?'AM':'PM',h12=((h+11)%12)+1;const o=document.createElement('option');o.value=`${hh}:${mm}`;o.textContent=`${h12}:${mm} ${ap}`;sel.appendChild(o);}sel.value=def;}
 function disp(s){return s.selectedOptions[0]?s.selectedOptions[0].textContent:'';}
 function dateDisp(){return $('forDate').selectedOptions[0].dataset.disp;}
+// editing after a send resets the confirm state (it's a new/changed order)
+function onEdit(){ $('confirm').classList.remove('show'); $('placed').classList.remove('show'); buildMsg(); }
 function buildMsg(){
   const amOn=$('amOn').checked,pmOn=$('pmOn').checked;
   $('amBody').classList.toggle('off',!amOn);$('pmBody').classList.toggle('off',!pmOn);
@@ -176,17 +190,38 @@ function buildMsg(){
   const valid=(amOn&&amL)||(pmOn&&pmL),msg=lines.join('\n');
   $('preview').textContent=valid?msg:'Enter litres to build the order…';
   const s=$('send');
-  if(valid){s.classList.remove('off');s.href=`https://wa.me/919886806395?text=${encodeURIComponent(msg)}`;s.dataset.am=amOn&&amL?amL:'';s.dataset.pm=pmOn&&pmL?pmL:'';}
+  if(valid){s.classList.remove('off');s.href=`https://wa.me/919886806395?text=${encodeURIComponent(msg)}`;}
   else s.classList.add('off');
 }
-// log the order on tap (fire-and-forget; never blocks the WhatsApp open)
-$('send').addEventListener('click',()=>{
-  const fd=$('forDate').value;
-  const post=(slot,litres,t)=>{if(!litres)return;fetch(`${API}?action=log-order`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({pin:PIN,slot,litres:parseInt(litres),for_date:fd,delivery_time:t,message:$('preview').textContent})}).catch(()=>{});};
-  if($('amOn').checked)post('AM',$('amL').value,disp($('amT')));
-  if($('pmOn').checked)post('PM',$('pmL').value,disp($('pmT')));
-});
+// Tapping Send opens WhatsApp AND reveals the confirm gate (does NOT log yet).
+$('send').addEventListener('click',()=>{ setTimeout(()=>$('confirm').classList.add('show'),400); });
+$('confirmNo').onclick=()=>$('confirm').classList.remove('show');
+// Confirm = the real "order placed" moment → log to server, show badge, mark tab.
+$('confirmYes').onclick=async()=>{
+  $('confirmYes').disabled=true;$('confirmYes').textContent='Saving…';
+  const fd=$('forDate').value,msg=$('preview').textContent;
+  const jobs=[];
+  if($('amOn').checked&&parseInt($('amL').value))jobs.push({slot:'AM',litres:parseInt($('amL').value),t:disp($('amT'))});
+  if($('pmOn').checked&&parseInt($('pmL').value))jobs.push({slot:'PM',litres:parseInt($('pmL').value),t:disp($('pmT'))});
+  let ok=true;
+  for(const j of jobs){
+    const r=await fetch(`${API}?action=log-order`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pin:PIN,slot:j.slot,litres:j.litres,for_date:fd,delivery_time:j.t,message:msg})}).then(r=>r.json()).catch(()=>({success:false}));
+    if(!r.success)ok=false;
+  }
+  $('confirm').classList.remove('show');
+  const p=$('placed');
+  if(ok){
+    const when=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    const parts=jobs.map(j=>`${j.slot==='AM'?'Morning':'Evening'} ${j.litres}L · ${j.t}`).join('  ·  ');
+    p.innerHTML=`<b>✓ Order placed</b> &nbsp;<span style="opacity:.7">logged ${when}</span><br><span style="opacity:.85">${parts}</span>`;
+    p.classList.add('show');
+    document.querySelector('.tabs button[data-t="order"]').classList.add('has-order');
+  }else{
+    p.innerHTML='<span style="color:var(--warn)">⚠ Could not log — but your WhatsApp message still went. Try confirm again.</span>';
+    p.classList.add('show');$('confirmYes').disabled=false;$('confirmYes').textContent='✓ Yes, order sent';$('confirm').classList.add('show');
+  }
+};
 
 // ---------- RECEIVE ----------
 $('rSlot').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('rSlot').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');SLOT=b.dataset.s;});
