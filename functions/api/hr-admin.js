@@ -722,6 +722,7 @@ async function handleGet(url, env, auth = null) {
         first_in_at: a?.first_in_at || null,
         last_out_at: a?.last_out_at || null,
         total_hours: a?.total_hours != null ? Number(a.total_hours) : null,
+        punch_count: a?.punch_count || 0,
         is_single_punch: a?.is_single_punch || 0,
       });
     }
@@ -771,6 +772,10 @@ async function handleGet(url, env, auth = null) {
         elapsed_leave: lv,
         elapsed_week_off: wo,
         elapsed_ambiguous: amb,
+        present_days: p,                 // any-tap days (owner's rule)
+        accurate_days: Math.max(0, p - amb), // clean punches (even taps)
+        inaccurate_days: amb,            // odd taps — a punch missing
+        off_days: wo + lv,               // week-off + approved leave
         elapsed_total_hours: Math.round(hrs * 10) / 10,
         worked_days: p + 0.5 * h,
         advances_total: advancesTotal,
