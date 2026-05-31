@@ -189,21 +189,26 @@ export async function onRequest(context) {
       if (!it) return json({ success:false, error:'Unknown item' }, 404);
       // only items that are open-market get scraped; vendor/known-rate items don't need it
       const query = (it.match_rule === 'locked' && it.locked_query) ? it.locked_query : it.name;
-      const SCRAPEABLE = ['HYPERPURE','BLINKIT','ZEPTO','FLIPKART_MINUTES','AMAZON_NOW','AMAZON_FRESH','INSTAMART','BIGBASKET','JIOMART'];
+      // Only portals with a wired VPS adapter (kept in sync with purchase-control VPS_WIRED_SOURCES).
+      const SCRAPEABLE = ['HYPERPURE','BIGBASKET','JIOMART','BLINKIT','FLIPKART_MINUTES','AMAZON_NOW','AMAZON_FRESH','ZEPTO'];
       const VPS_URL = context.env.SCOUT_VPS_URL, BEARER = context.env.SCOUT_VPS_BEARER;
       if (!VPS_URL || !BEARER) return json({ success:false, error:'Price scout not configured on this environment' }, 503);
+      // Mirror the PROVEN scout contract: {material_id,name,search_query,match_rule,sources:[src]} → data.results[src]
       const scout = async (src) => {
         try {
           const r = await fetch(`${VPS_URL}/scout`, {
             method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${BEARER}`},
-            body: JSON.stringify({ source: src, query, material_code: code, brand: it.brand }),
+            body: JSON.stringify({ material_id: code, name: it.name, search_query: query,
+              match_rule: it.match_rule === 'locked' ? 'EXACT_SKU' : 'COMMODITY_EQUIVALENT', sources:[src] }),
             signal: AbortSignal.timeout(40000),
           });
-          const d = await r.json().catch(() => null);
-          if (!d) return { src, ok:false };
-          const paise = d.price_paise || (d.price ? Math.round(d.price*100) : 0);
-          if (d.stock_status === 'ERROR' || !paise) return { src, ok:false, note: d.match_notes || 'no match' };
-          return { src, ok:true, price: paise/100, sku: d.sku_title || d.title || '', url: d.sku_url || d.url || '', pack: d.pack_size || '', eta: d.eta_label || '', conf: d.match_confidence || 0 };
+          if (!r.ok) return { src, ok:false, note:`VPS ${r.status}` };
+          const data = await r.json().catch(() => ({}));
+          const d = data.results?.[src];
+          if (!d || d.stock_status === 'ERROR') return { src, ok:false, note: d?.match_notes || 'no match' };
+          const paise = d.price_paise || (d.unit_price_paise || 0);
+          if (!paise) return { src, ok:false, note: d.match_notes || 'no price' };
+          return { src, ok:true, price: Math.round(paise)/100, sku: d.sku_title || '', url: d.sku_url || '', pack: d.pack_size || '', eta: d.eta_label || '', conf: d.match_confidence || 0 };
         } catch (e) { return { src, ok:false, note: e.message }; }
       };
       const all = await Promise.all(SCRAPEABLE.map(scout));
