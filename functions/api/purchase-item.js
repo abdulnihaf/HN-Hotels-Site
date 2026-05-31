@@ -50,6 +50,11 @@ export async function onRequest(context) {
         id INTEGER PRIMARY KEY AUTOINCREMENT, item_code TEXT NOT NULL, brand TEXT DEFAULT 'NCH',
         for_date TEXT NOT NULL, qty_received REAL NOT NULL, ordered_qty REAL, variance REAL,
         photo_data TEXT, received_by_pin TEXT, received_by TEXT, received_at TEXT NOT NULL, notes TEXT)`),
+      // DEMAND = "what to buy" per day, seeded from the uploaded PO. The /order screen IS this list.
+      DB.prepare(`CREATE TABLE IF NOT EXISTS purchase_demand (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, brand TEXT NOT NULL, for_date TEXT NOT NULL,
+        item_code TEXT NOT NULL, qty_text TEXT, unit TEXT, note TEXT,
+        UNIQUE(brand, for_date, item_code))`),
     ]);
     // MIGRATE FIRST — older purchase_items table may predate these columns (CREATE IF NOT EXISTS skips them).
     // Must run before any INSERT that references the new columns.
@@ -67,6 +72,7 @@ export async function onRequest(context) {
     // [code,name,brand,vendor,phone,emoji,channel,order_unit,pack_qty,pack_rate,pack_label,receive_unit,dept_price,dept_store,qcomm_price,receivable,sort]
     const CAT = [
       // ===== NCH =====
+      ['MILK','Buffalo Milk','NCH','Prabhu Buffalo Milk','919886806395','🥛','vendor','litres',1,55,'','litres',0,'',0,1,5],
       ['BUNS','Buns','NCH','Ganga Bakery','917019547835','🍞','vendor','buns',3,25,'3-piece pack','buns',0,'',0,1,10],
       ['WATER','Bisleri 500ml Water','NCH','Nadeem (Water & Cold Drinks)','919900323484','💧','vendor','cases',1,0,'','cases',0,'',0,1,20],
       ['BUTTER','Amul Butter','NCH','','','🧈','ration','kg',1,0,'','kg',285,'Ashrafiya',280,0,30],
@@ -122,6 +128,39 @@ export async function onRequest(context) {
     stmts.push(DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=324, last_dept_store='Ashrafiya', receivable=0 WHERE code='MILKMAID'`));
     stmts.push(DB.prepare(`UPDATE purchase_items SET receivable=1 WHERE code IN ('BUNS','WATER')`));
     await DB.batch(stmts);
+
+    // ── DEMAND seed: tomorrow's PO (2026-06-01), both brands. qty_text keeps the PO's own wording. ──
+    // '—' = PO left it blank (confirm at purchase). Idempotent on (brand,for_date,item_code).
+    const D = '2026-06-01';
+    const DEM = [
+      // NCH
+      ['NCH','MILK','60 + 40','litres','morning 60 · evening 40'],
+      ['NCH','BUNS','100','buns',''],['NCH','BUTTER','3.5','kg','7 pkts'],
+      ['NCH','MILKMAID','5','kg',''],['NCH','NCH_LEMON','20','pcs',''],
+      ['NCH','NCH_CUTLET','3','box','30 pcs'],['NCH','NCH_SAMOSA','10','pcs','verify no vs pack'],
+      ['NCH','WATER','6','case',''],['NCH','NCH_CARRY_S','2','packet',''],
+      ['NCH','NCH_CARRY_M','2','packet',''],['NCH','NCH_CUPS','5','packet',''],
+      // HE
+      ['HE','HE_CHILLI_PWD','1','kg',''],['HE','HE_TOMATO_SAUCE','—','bottle','Kissan'],
+      ['HE','HE_CHILLI_SAUCE','2','pc',''],['HE','HE_SOYA_SAUCE','2','pc',''],
+      ['HE','HE_KKING','1','kg',''],['HE','HE_OIL_BOX','—','box',''],
+      ['HE','HE_SUNFLOWER','4','L',''],['HE','HE_MAIDA','10','kg',''],
+      ['HE','HE_AMUL_CREAM','1','L',''],['HE','HE_DAHI','4','L',''],
+      ['HE','HE_MILK','2','L',''],['HE','HE_CAPSICUM','2','kg',''],
+      ['HE','HE_DHANIA','2','bunch',''],['HE','HE_SPRING_ONION','1','bunch',''],
+      ['HE','HE_CARROT','2','kg',''],['HE','HE_CABBAGE','4','kg',''],
+      ['HE','HE_PANEER','1','kg',''],['HE','HE_BUTTER','500','gm',''],
+      ['HE','HE_MUTTON','3','kg',''],['HE','HE_MUTTON_BRAIN','20','pc',''],
+      ['HE','HE_EGG','3','crate',''],['HE','HE_BONELESS','10','kg',''],
+      ['HE','HE_SHAWARMA','7','kg',''],['HE','HE_TANDOORI','3','birds',''],
+      ['HE','HE_CHARCOAL','—','bag',''],['HE','HE_SILVER_POUCH','—','packet',''],
+      ['HE','HE_CARRY_68','—','packet',''],['HE','HE_CARRY_810','—','packet',''],
+      ['HE','HE_WATER_1L','2','case',''],['HE','HE_WATER_500','1','case',''],
+      ['HE','HE_COKE','1','case',''],['HE','HE_SELLO','5','pc',''],
+    ];
+    await DB.batch(DEM.map(d => DB.prepare(
+      `INSERT OR IGNORE INTO purchase_demand (brand,for_date,item_code,qty_text,unit,note) VALUES (?,?,?,?,?,?)`
+    ).bind(d[0], D, d[1], d[2], d[3], d[4])));
   }
 
   try {
@@ -141,16 +180,28 @@ export async function onRequest(context) {
       return json({ success:true, items:r.results || [] });
     }
 
-    // Purchase Home — items for a brand + today's order/receive status, for the card grid.
+    // Purchase Home — the DAY'S PO: only items with demand for the date, each with its qty-to-buy.
+    // This screen IS "what to buy tomorrow"; the owner's only job is "from where" → tap a card.
     if (action === 'home') {
       const brand = url.searchParams.get('brand') || 'NCH';
       const date = url.searchParams.get('date') || new Date(Date.now() + 864e5).toISOString().slice(0,10); // default tomorrow
-      const items = (await DB.prepare('SELECT * FROM purchase_items WHERE active=1 AND brand=? ORDER BY sort, name').bind(brand).all()).results || [];
-      const ordered = (await DB.prepare('SELECT DISTINCT item_code FROM purchase_item_orders WHERE for_date=?').bind(date).all()).results || [];
-      const orderedSet = new Set(ordered.map(o => o.item_code));
-      const onList = (await DB.prepare(`SELECT DISTINCT item_code FROM manager_pickup_list WHERE for_date=? AND status='open'`).bind(date).all()).results || [];
-      const listSet = new Set(onList.map(o => o.item_code));
-      for (const it of items) { it.is_ordered = orderedSet.has(it.code); it.on_pickup_list = listSet.has(it.code); }
+      const demand = (await DB.prepare('SELECT item_code, qty_text, unit, note FROM purchase_demand WHERE brand=? AND for_date=?').bind(brand, date).all()).results || [];
+      const demandMap = Object.fromEntries(demand.map(d => [d.item_code, d]));
+      const codes = demand.map(d => d.item_code);
+      let items = [];
+      if (codes.length) {
+        const ph = codes.map(() => '?').join(',');
+        items = (await DB.prepare(`SELECT * FROM purchase_items WHERE active=1 AND code IN (${ph}) ORDER BY sort, name`).bind(...codes).all()).results || [];
+      }
+      const ordered = new Set((await DB.prepare('SELECT DISTINCT item_code FROM purchase_item_orders WHERE for_date=?').bind(date).all()).results.map(o => o.item_code));
+      const listSet = new Set((await DB.prepare(`SELECT DISTINCT item_code FROM manager_pickup_list WHERE for_date=? AND status='open'`).bind(date).all()).results.map(o => o.item_code));
+      // milk receipts count as "ordered" too (milk uses its own thread)
+      for (const it of items) {
+        const d = demandMap[it.code] || {};
+        it.qty_text = d.qty_text; it.demand_unit = d.unit; it.note = d.note;
+        it.is_ordered = ordered.has(it.code);
+        it.on_pickup_list = listSet.has(it.code);
+      }
       return json({ success:true, brand, date, manager_phone: await managerPhone(), items });
     }
 
