@@ -29,6 +29,7 @@
 
 'use strict';
 import { verifyToken, corsHeaders } from './_lib/darbar-auth.js';
+import { sendAndLog } from './_lib/comms-core.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -222,6 +223,7 @@ export async function onRequest({ request, env }) {
       employee_id, advance_date, amount,
       paid_via = 'cash', reference = null, reason = null, notes = null,
       source = 'manual', recorded_by = null,
+      confirmed_phone = null,   // owner-confirmed number from the settle/advance screen
     } = body;
     if (!employee_id || !advance_date || !amount) {
       return json({ error: 'employee_id, advance_date, amount required' }, 400);
@@ -235,7 +237,44 @@ export async function onRequest({ request, env }) {
       employee_id, advance_date, Number(amount),
       paid_via, reference, reason, notes, source, recorded_by,
     ).first();
-    return json({ ok: true, id: r?.id });
+    // Best-effort WhatsApp receipt to the worker — never blocks the record.
+    // Reuses the EXISTING approved templates (already proven, send cold):
+    //   advance     -> hr_advance_paid_v1  {{1}}name {{2}}amount {{3}}date {{4}}via
+    //   settlement  -> hr_salary_paid_v1   {{1}}name {{2}}period {{3}}amount {{4}}via {{5}}ref
+    // Sent via the HE WABA where they live. sendAndLog honors the phone guard + logs.
+    let receipt = null;
+    try {
+      const w = await db.prepare(`SELECT COALESCE(known_as,name) AS nm, phone FROM hr_employees WHERE id = ?`).bind(employee_id).first();
+      // Owner-confirmed number from the screen wins; persist a correction so the
+      // stored number is fixed for next time. Receipt only goes to the confirmed number.
+      const cleanConfirmed = confirmed_phone ? String(confirmed_phone).replace(/\D/g, '') : '';
+      const toPhone = (cleanConfirmed.length >= 10) ? cleanConfirmed : (w && w.phone);
+      if (w && cleanConfirmed.length >= 10 && cleanConfirmed !== String(w.phone || '').replace(/\D/g, '')) {
+        try { await db.prepare(`UPDATE hr_employees SET phone = ? WHERE id = ?`).bind(cleanConfirmed, employee_id).run(); } catch (pe) { /* persist best-effort */ }
+      }
+      if (w && toPhone) {
+        const amt = String(Math.round(Number(amount)));
+        let template, vars;
+        if (source === 'settlement') {
+          const MO = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const ym = String(advance_date).slice(0, 7).split('-');
+          const periodLbl = (MO[Number(ym[1])] || ym[1]) + ' ' + ym[0];
+          template = 'hr_salary_paid_v1';
+          vars = [w.nm, periodLbl, amt, paid_via, (reason || notes || 'Final settlement')];
+        } else {
+          template = 'hr_advance_paid_v1';
+          vars = [w.nm, amt, advance_date, paid_via];
+        }
+        const sent = await sendAndLog(env, {
+          channel: 'waba', brand: 'he', phone: toPhone, template, language: 'en', vars,
+          alert_id: `pay_receipt:${employee_id}:${advance_date}:${amt}`, tier: 'info',
+        });
+        receipt = { attempted: true, template, to: toPhone, ok: !!(sent && sent.ok), skipped: sent && sent.skipped };
+      } else {
+        receipt = { attempted: false, reason: 'no_phone' };
+      }
+    } catch (e) { receipt = { attempted: true, ok: false, error: String(e && e.message || e) }; }
+    return json({ ok: true, id: r?.id, receipt });
   }
 
   if (action === 'record-advance-bulk' && method === 'POST') {
@@ -478,7 +517,7 @@ export async function onRequest({ request, env }) {
     const employeeId = url.searchParams.get('employee_id');
     const month = url.searchParams.get('month') || new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
     if (!employeeId) return json({ error: 'employee_id required' }, 400);
-    const emp = await db.prepare(`SELECT id, COALESCE(known_as,name) AS name, brand_label, pay_type, monthly_salary, daily_rate FROM hr_employees WHERE id = ?`).bind(employeeId).first();
+    const emp = await db.prepare(`SELECT id, COALESCE(known_as,name) AS name, brand_label, pay_type, monthly_salary, daily_rate, phone FROM hr_employees WHERE id = ?`).bind(employeeId).first();
     if (!emp) return json({ error: 'employee not found' }, 404);
     const { start, end } = monthBounds(month);
 
@@ -527,7 +566,7 @@ export async function onRequest({ request, env }) {
 
     return json({
       ok: true,
-      employee: { id: emp.id, name: emp.name, brand: emp.brand_label, pay_type: emp.pay_type, monthly_salary: monthly, daily_rate: daily },
+      employee: { id: emp.id, name: emp.name, brand: emp.brand_label, pay_type: emp.pay_type, monthly_salary: monthly, daily_rate: daily, phone: emp.phone || '' },
       month,
       attendance: {
         present: Number(att?.present || 0), irregular: Number(att?.irregular || 0),

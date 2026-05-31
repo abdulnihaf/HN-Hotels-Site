@@ -106,6 +106,17 @@ const DARBAR_TEMPLATES = [
       example: { body_text: [['46', '12', '5']] },
     }],
   },
+  {
+    // Payment receipt to the worker — fires on every advance + settlement.
+    // MARKETING per owner: our sends always initiate (never inside a 24h window),
+    // and a template of any category sends cold, so marketing is fine here.
+    name: 'darbar_payment_receipt_v1', language: 'en', category: 'MARKETING',
+    components: [{
+      type: 'BODY',
+      text: 'Hi {{1}}, HN Hotels ne aapko Rs {{2}} ka {{3}} diya hai. Dhanyavaad. - HN Hotels',
+      example: { body_text: [['Faizan', '6800', 'salary settlement']] },
+    }],
+  },
 ];
 
 function authOk(request, env, body) {

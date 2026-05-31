@@ -377,22 +377,38 @@ async function openAdvance() {
   if (!S.employees.length) { try { S.employees = (await api(`/api/hr-admin?action=employees&active=1`)).employees || []; } catch {} }
   const opts = S.employees.filter(e => e.is_active).map(e => `<option value="${e.id}">${esc(e.known_as || e.name)} · ${esc(e.brand_label)}</option>`).join('');
   sheet(`<h2>Pay advance</h2><div class="sd">Records the cash event in the ledger — any day, any amount.</div>
-    <div class="fld"><label>Worker</label><select id="advEmp">${opts}</select></div>
+    <div class="fld"><label>Worker</label><select id="advEmp" onchange="advPhonePrefill()">${opts}</select></div>
     <div class="fld"><label>Amount ₹</label><input id="advAmt" type="number" inputmode="numeric" placeholder="3000"></div>
+    <div class="fld"><label>📲 Receipt goes to — confirm the worker's number</label><input id="advPhone" type="tel" inputmode="numeric" placeholder="10-digit WhatsApp number"></div>
     <div class="fld"><label>Paid via</label><select id="advVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
     <div class="fld"><label>Note (optional)</label><input id="advNote" placeholder="reason"></div>
     <div class="acts"><button class="btn primary" onclick="doAdvance()">Pay + notify</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
+  advPhonePrefill();
+}
+function advPhonePrefill() {
+  const sel = $('advEmp'); if (!sel || !$('advPhone')) return;
+  const e = S.employees.find(x => String(x.id) === String(sel.value));
+  $('advPhone').value = (e && e.phone) || '';
 }
 async function doAdvance() {
   const amt = Number($('advAmt').value);
   if (!amt) return toast('Enter an amount', 'err');
   try {
-    await fetch('/api/hr-payroll?action=record-advance', {
+    const r = await fetch('/api/hr-payroll?action=record-advance', {
       method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ employee_id: Number($('advEmp').value), amount: amt, advance_date: todayIST(), paid_via: $('advVia').value, reason: $('advNote').value || null }),
-    }).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); });
-    closeSheet(); toast('Advance recorded'); loadPay();
+      body: JSON.stringify({ employee_id: Number($('advEmp').value), amount: amt, advance_date: todayIST(), paid_via: $('advVia').value, reason: $('advNote').value || null, confirmed_phone: ($('advPhone') || {}).value || '' }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'failed');
+    closeSheet(); toast(receiptToast('Advance recorded', j.receipt)); loadPay();
   } catch (e) { toast(e.message, 'err'); }
+}
+// Reflect whether the WhatsApp receipt actually went out, in the confirmation toast.
+function receiptToast(base, rc) {
+  if (!rc) return base;
+  if (rc.ok) return base + ' · receipt sent';
+  if (rc.reason === 'no_phone' || rc.attempted === false) return base + ' · no number on file, no receipt';
+  return base + ' · recorded, receipt didn’t send';
 }
 
 /* ━━━ Settle a person — flexible, any day, owner sets the amount ━━━ */
@@ -433,6 +449,7 @@ async function loadSettle() {
     ${c.settlements && c.settlements.total ? `<div class="card"><div class="xc-top"><div>Already settled this month</div><div class="num">${inr(c.settlements.total)}</div></div></div>` : ''}
     <div class="card" style="border-color:var(--gold-soft)"><div class="xc-top"><div><b>Remaining</b><div class="xc-meta">salary − advance, before any docking</div></div><div class="num" style="font-weight:800;color:var(--gold);font-size:18px">${inr(c.remaining_hint)}</div></div></div>
     <div class="fld"><label>You paid ₹ — your number</label><input id="setAmt" type="number" inputmode="numeric" placeholder="${c.remaining_hint || ''}"></div>
+    <div class="fld"><label>📲 Receipt goes to — confirm ${esc(emp.name)}'s number</label><input id="setPhone" type="tel" inputmode="numeric" value="${esc(emp.phone || '')}" placeholder="10-digit WhatsApp number"></div>
     <div class="fld"><label>Paid via</label><select id="setVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
     <div class="fld"><label>Note (optional)</label><input id="setNote" placeholder="final settlement / partial"></div>
     <div class="acts"><button class="btn primary" onclick='doSettle(${emp.id})'>Record settlement</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
@@ -442,11 +459,13 @@ async function doSettle(id) {
   if (!amt) return toast('Type what you paid', 'err');
   const month = todayIST().slice(0, 7);
   try {
-    await fetch('/api/hr-payroll?action=record-advance', {
+    const r = await fetch('/api/hr-payroll?action=record-advance', {
       method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ employee_id: Number(id), amount: amt, advance_date: todayIST(), paid_via: ($('setVia') || {}).value || 'cash', source: 'settlement', reason: 'salary settlement', notes: (($('setNote') || {}).value || ('Settlement ' + month)) }),
-    }).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); });
-    closeSheet(); toast('Settlement recorded'); loadPay();
+      body: JSON.stringify({ employee_id: Number(id), amount: amt, advance_date: todayIST(), paid_via: ($('setVia') || {}).value || 'cash', source: 'settlement', reason: 'salary settlement', notes: (($('setNote') || {}).value || ('Settlement ' + month)), confirmed_phone: ($('setPhone') || {}).value || '' }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'failed');
+    closeSheet(); toast(receiptToast('Settlement recorded', j.receipt)); loadPay();
   } catch (e) { toast(e.message, 'err'); }
 }
 

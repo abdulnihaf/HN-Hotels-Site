@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS hr_recipient_prefs (
 -- Seed managers
 INSERT OR IGNORE INTO hr_recipient_prefs (phone, name, waba_opted_in, dlt_sms_consent, preferred_channel, language) VALUES
   ('9341745726', 'Farooq',  1, 1, 'waba', 'hi'),
-  ('9945470320', 'Nihaf',   1, 1, 'waba', 'en');
+  ('7010426808', 'Nihaf',   1, 1, 'waba', 'en');
 -- Basheer: UPDATE after phone confirmed
 
 -- ─── DLT template registry (cache of approved templates) ────────────────────
@@ -83,7 +83,7 @@ INSERT OR IGNORE INTO dlt_templates (template_name, dlt_template_id, entity_id, 
    'HNHTLS: Hi {#var#}, PIN {#var#} not in roster, {#var#} punches/{#var#} days. Onboard: hnhotels.in/hr/respond/ghost?t={#var#} or reply STOP if unauthorized.',
    5, 'Sent to manager when CAMS PIN not in roster — name matches WABA template'),
   ('hr_leegality_reminder_v1', 'TBD', 'BL-1400079296', 'HNHTLS', 'transactional',
-   'HNHTLS: Hi {#var#}, your employment contract awaits Aadhaar OTP signature. Sign here: {#var#} (expires {#var#}). Questions: 9945470320',
+   'HNHTLS: Hi {#var#}, your employment contract awaits Aadhaar OTP signature. Sign here: {#var#} (expires {#var#}). Questions: 7010426808',
    3, 'Sent to employee for unsigned Leegality docs'),
   ('hr_fnf_completion_v1', 'TBD', 'BL-1400079296', 'HNHTLS', 'transactional',
    'HNHTLS: Hi {#var#}, your Final Settlement of Rs.{#var#} has been transferred to a/c ending {#var#}. UTR: {#var#}. Thank you.',
