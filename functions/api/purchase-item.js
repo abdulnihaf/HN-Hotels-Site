@@ -179,6 +179,38 @@ export async function onRequest(context) {
       const it = await DB.prepare('SELECT * FROM purchase_items WHERE code=? AND active=1').bind(url.searchParams.get('code')).first();
       return it ? json({ success:true, item:it }) : json({ success:false, error:'Unknown item' }, 404);
     }
+
+    // ── LIVE PRICES — scrape the ready+wired portals for one item, rank cheapest. ──
+    // Uses the proven VPS scout (same call shape as purchase-control). Stale/unwired
+    // portals self-filter (return ERROR → dropped). Locked items query exact SKU.
+    if (action === 'prices') {
+      const code = url.searchParams.get('code');
+      const it = await DB.prepare('SELECT * FROM purchase_items WHERE code=? AND active=1').bind(code).first();
+      if (!it) return json({ success:false, error:'Unknown item' }, 404);
+      // only items that are open-market get scraped; vendor/known-rate items don't need it
+      const query = (it.match_rule === 'locked' && it.locked_query) ? it.locked_query : it.name;
+      const SCRAPEABLE = ['HYPERPURE','BLINKIT','ZEPTO','FLIPKART_MINUTES','AMAZON_NOW','AMAZON_FRESH','INSTAMART','BIGBASKET','JIOMART'];
+      const VPS_URL = context.env.SCOUT_VPS_URL, BEARER = context.env.SCOUT_VPS_BEARER;
+      if (!VPS_URL || !BEARER) return json({ success:false, error:'Price scout not configured on this environment' }, 503);
+      const scout = async (src) => {
+        try {
+          const r = await fetch(`${VPS_URL}/scout`, {
+            method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${BEARER}`},
+            body: JSON.stringify({ source: src, query, material_code: code, brand: it.brand }),
+            signal: AbortSignal.timeout(40000),
+          });
+          const d = await r.json().catch(() => null);
+          if (!d) return { src, ok:false };
+          const paise = d.price_paise || (d.price ? Math.round(d.price*100) : 0);
+          if (d.stock_status === 'ERROR' || !paise) return { src, ok:false, note: d.match_notes || 'no match' };
+          return { src, ok:true, price: paise/100, sku: d.sku_title || d.title || '', url: d.sku_url || d.url || '', pack: d.pack_size || '', eta: d.eta_label || '', conf: d.match_confidence || 0 };
+        } catch (e) { return { src, ok:false, note: e.message }; }
+      };
+      const all = await Promise.all(SCRAPEABLE.map(scout));
+      const live = all.filter(r => r.ok).sort((a,b) => a.price - b.price);
+      const dead = all.filter(r => !r.ok).map(r => r.src);
+      return json({ success:true, item: it.name, query, match_rule: it.match_rule, fetched_at: new Date().toISOString(), results: live, no_result: dead });
+    }
     if (action === 'items') {
       const brand = url.searchParams.get('brand');
       const r = brand
