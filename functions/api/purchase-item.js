@@ -40,10 +40,15 @@ export async function onRequest(context) {
   // Manager (Basheer) WhatsApp — pulled LIVE from Darbar's hr_employees (single source of truth,
   // not hardcoded). Basheer = PIN 8523. Falls back to '' so the UI shows "set number" rather than guess.
   async function managerPhone() {
+    // Prefer live Darbar data (single source of truth); fall back to Basheer's
+    // known number so the ration send is NEVER dead. Drop the is_active filter —
+    // his row may not carry that flag, and an empty phone is worse than a stale one.
     try {
-      const r = await DB.prepare(`SELECT phone FROM hr_employees WHERE pin='8523' AND is_active=1 LIMIT 1`).first();
-      return (r?.phone || '').replace(/[^\d]/g, '');
-    } catch (_) { return ''; }
+      const r = await DB.prepare(`SELECT phone FROM hr_employees WHERE pin='8523' LIMIT 1`).first();
+      const p = (r?.phone || '').replace(/[^\d]/g, '');
+      if (p) return p;
+    } catch (_) {}
+    return '919061906916'; // Basheer Chembirikka — manager, from hr-admin USERS map
   }
 
   async function ensureSchema() {
