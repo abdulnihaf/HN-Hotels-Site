@@ -163,15 +163,15 @@ async function loadHome() {
     const dot = $('todayDot');
     if (n) { dot.textContent = n; dot.classList.remove('hide'); } else dot.classList.add('hide');
     const age = h.health?.cams_last_punch_age_min;
-    $('todaySub').innerHTML = `${h.stats.present + h.stats.in_progress} on shift · ` +
+    $('todaySub').innerHTML = `${h.stats.present} present · ` +
       (h.health?.cams_ok ? `device <b>live</b> (${age}m ago)` : `<b style="color:var(--red)">device silent ${age}m</b>`);
   } catch (e) { $('inbox').innerHTML = `<div class="empty">Couldn't load: ${esc(e.message)}</div>`; }
 }
 function renderHero(s) {
   $('hero').innerHTML = [
-    ['present', 'On shift', 'g', (s.present || 0) + (s.in_progress || 0)],
-    ['miss', 'Missed punch', 'y', s.missing_punch || 0],
-    ['absent', 'Absent', 'r', s.absent || 0],
+    ['present', 'Present', 'g', s.present || 0],
+    ['miss', '⚠ Fix', 'y', s.missing_punch || 0],
+    ['absent', 'Absent', 'r', (s.absent || 0) + (s.in_progress || 0)],
     ['exp', 'Expected', '', s.expected || 0],
   ].map(([k, l, c, n]) => `<div class="stat ${c}"><div class="n num">${n}</div><div class="l">${l}</div></div>`).join('');
 }
@@ -299,41 +299,52 @@ async function loadAttend() {
   } catch (e) { $('attList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function attState(r) {
-  if (r.status === 'week_off' || r.status === 'leave') return { k: 'off', label: r.status === 'leave' ? 'LEAVE' : 'WEEK OFF' };
+  // Owner's canonical rule: ANY tap = present (1/2/3/4…); 0 taps = absent.
+  // Odd taps = present but a punch is missing (forgot break-end or check-out) →
+  // still present, flagged `incomplete` so it can be fixed. 2/4 = clean shift.
+  if (r.status === 'week_off' || r.status === 'leave') return { k: 'off', incomplete: false, label: r.status === 'leave' ? 'LEAVE' : 'WEEK OFF' };
   const pc = r.punch_count || 0;
-  if (r.status === 'pending' && pc === 0) return { k: 'inprog', label: 'AWAITED' };
-  if (pc === 0) return { k: 'absent', label: 'ABSENT' };
-  if (pc % 2 === 1) return { k: 'missing', label: pc === 1 ? 'NO OUT' : 'MISSED PUNCH' };
-  return { k: 'present', label: r.status === 'pending' ? 'ON SHIFT' : 'PRESENT' };
+  if (pc >= 1) {
+    const incomplete = pc % 2 === 1;
+    return { k: 'present', incomplete, label: incomplete ? (pc === 1 ? 'IN — NO OUT' : 'MISSING PUNCH') : 'PRESENT' };
+  }
+  return { k: 'absent', incomplete: false, label: 'ABSENT' };
 }
-function attMatch(r, f) { const k = attState(r).k; return f === 'present' ? (k === 'present' || k === 'inprog') : k === f; }
+function attMatch(r, f) {
+  const st = attState(r);
+  if (f === 'incomplete') return st.k === 'present' && st.incomplete;
+  return st.k === f;
+}
 function setAttendFilter(k) { S.attendFilter = (S.attendFilter === k) ? null : k; renderAttend(); }
 function renderAttend() {
   let rows = S.attendRows;
   if (S.attendBrand !== 'all') rows = rows.filter(r => r.brand_label === S.attendBrand);
-  // stats (clickable — tap a card to see exactly those people)
-  const c = { present: 0, missing: 0, absent: 0, off: 0 };
-  rows.forEach(r => { const st = attState(r); c[st.k === 'inprog' ? 'present' : st.k]++; });
+  // stats (clickable — tap a card to see exactly those people). Present = ANY tap;
+  // Incomplete = present but a punch missing (subset of Present, the ones to fix).
+  const c = { present: 0, incomplete: 0, absent: 0, off: 0 };
+  rows.forEach(r => { const st = attState(r); if (st.k === 'present') { c.present++; if (st.incomplete) c.incomplete++; } else { c[st.k]++; } });
   const f = S.attendFilter;
   $('attStats').innerHTML = [
-    ['Present', 'g', c.present, 'present'], ['Missed', 'y', c.missing, 'missing'], ['Absent', 'r', c.absent, 'absent'], ['Off', '', c.off, 'off'],
+    ['Present', 'g', c.present, 'present'], ['⚠ Fix', 'y', c.incomplete, 'incomplete'], ['Absent', 'r', c.absent, 'absent'], ['Off', '', c.off, 'off'],
   ].map(([l, cl, n, k]) => `<div class="stat ${cl}" onclick="setAttendFilter('${k}')" style="cursor:pointer${f === k ? ';outline:2px solid var(--gold);outline-offset:-2px' : ''}"><div class="n num">${n}</div><div class="l">${l}</div></div>`).join('');
 
-  // list: filtered to the tapped card if any; missing first, then present, absent, off
+  // list: filtered to the tapped card if any; incomplete first (need a fix), then present, absent, off
   let list = f ? rows.filter(r => attMatch(r, f)) : rows;
-  const rank = { missing: 0, present: 1, inprog: 1, absent: 2, off: 3 };
-  list = [...list].sort((a, b) => rank[attState(a).k] - rank[attState(b).k]);
-  if (!list.length) { $('attList').innerHTML = `<div class="empty">${f ? 'No one ' + (f === 'missing' ? 'missed' : f) + ' on this day.' : 'No one on this day.'}</div>`; return; }
-  const hdr = f ? `<div class="xc-meta" style="margin:2px 0 8px 2px">Showing ${list.length} ${f === 'missing' ? 'missed' : f} — tap the card again to clear</div>` : '';
+  const order = (r) => { const st = attState(r); if (st.k === 'present') return st.incomplete ? 0 : 1; return st.k === 'absent' ? 2 : 3; };
+  list = [...list].sort((a, b) => order(a) - order(b));
+  if (!list.length) { $('attList').innerHTML = `<div class="empty">${f ? 'No one in “' + (f === 'incomplete' ? 'to fix' : f) + '” on this day.' : 'No one on this day.'}</div>`; return; }
+  const hdr = f ? `<div class="xc-meta" style="margin:2px 0 8px 2px">Showing ${list.length} ${f === 'incomplete' ? 'with a missing punch' : f} — tap the card again to clear</div>` : '';
   $('attList').innerHTML = hdr + list.map(r => {
     const st = attState(r); const nm = r.known_as && r.known_as !== r.name ? `${esc(r.name)} <span style="color:var(--mute)">(${esc(r.known_as)})</span>` : esc(r.name);
     const sess = sessionLine(r);
-    const fixBtn = (st.k === 'missing') ? `<button class="btn primary sm" style="margin-top:9px" onclick='fixPunch(${r.employee_id}, ${JSON.stringify(S.attendDate)})'>Fix — impute out</button>` : '';
+    const fixBtn = (st.k === 'present' && st.incomplete) ? `<button class="btn primary sm" style="margin-top:9px" onclick='fixPunch(${r.employee_id}, ${JSON.stringify(S.attendDate)})'>Fix — impute missing punch</button>` : '';
+    const dot = st.k === 'present' ? (st.incomplete ? 'missing' : 'present') : st.k;
+    const pill = st.k === 'present' ? (st.incomplete ? 'yellow' : 'green') : st.k === 'absent' ? 'red' : 'purple';
     return `<div class="arow"><div class="top"><div>
-        <div class="nm"><span class="sdot ${st.k}"></span>${nm} <span class="pill ${(r.brand_label||'').toLowerCase()}">${r.brand_label||''}</span></div>
+        <div class="nm"><span class="sdot ${dot}"></span>${nm} <span class="pill ${(r.brand_label||'').toLowerCase()}">${r.brand_label||''}</span></div>
         <div class="role">${esc(r.job_name || r.department_name || '')}</div>
         <div class="sess">${sess}</div></div>
-        <span class="pill ${st.k === 'present' ? 'green' : st.k === 'missing' ? 'yellow' : st.k === 'absent' ? 'red' : st.k === 'inprog' ? 'blue' : 'purple'}">${st.label}</span></div>
+        <span class="pill ${pill}">${st.label}</span></div>
         ${fixBtn}</div>`;
   }).join('');
 }

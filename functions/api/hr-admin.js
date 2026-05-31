@@ -1923,44 +1923,21 @@ async function pullAttendance(apiKey, db, from, to, userName) {
           reason = 'no punches';
         }
       } else {
-        // Has punches
-        const openPair = b.punches.find(p => p.in && !p.out) || null;
-        singlePunch = openPair ? 1 : 0;
-
-        if (!shiftClosed) {
-          // Shift still in progress → present until day closes
-          status = 'present';
-          deduction = 0;
-          reason = openPair ? 'shift in progress' : null;
-        } else if (openPair) {
-          // Shift-day closed but an IN has no OUT — check staleness
-          const ageH = Math.max(0, (now - parseIstWall(openPair.in)) / 3600000);
-          if (ageH < missingCheckoutH) {
-            // Inside grace window — still present (may punch out any moment)
-            status = 'present';
-            reason = `open IN — ${ageH.toFixed(1)}h, within ${missingCheckoutH}h grace`;
-          } else if (emp.allow_single_punch) {
-            status = 'present';
-            reason = 'single punch (approved)';
-          } else {
-            status = 'ghost';
-            deduction = daily(emp);
-            reason = `missing checkout — IN ${openPair.in}, no OUT after ${ageH.toFixed(0)}h`;
-          }
-        } else {
-          // All pairs closed — classic hour-based ladder
-          if (hours < (emp.half_day_threshold ?? 2)) {
-            status = 'ghost';
-            deduction = daily(emp);
-            reason = `only ${hours.toFixed(1)}h — likely ghost/bounce`;
-          } else if (hours < (emp.full_day_threshold ?? 6)) {
-            status = 'half';
-            deduction = daily(emp) * 0.5;
-            reason = `half-day (${hours.toFixed(1)}h)`;
-          } else {
-            status = 'present';
-          }
-        }
+        // Has ≥1 punch → PRESENT. Owner's rule (canonical): ANY tap = present.
+        // Hours never demote to half/ghost, and a present person is NEVER
+        // auto-deducted. Odd tap-count means a punch is missing (forgot the
+        // break-end or the check-out) → present but INCOMPLETE: flagged via
+        // is_single_punch so the UI can offer a fix, but it stays present and
+        // undeducted. 2 taps = clean shift, 4 = clean shift with a break.
+        const incomplete = (b.tapCount % 2) === 1;
+        singlePunch = incomplete ? 1 : 0;
+        status = 'present';
+        deduction = 0;
+        reason = !shiftClosed
+          ? 'shift in progress'
+          : incomplete
+            ? `present — ${b.tapCount} tap${b.tapCount > 1 ? 's' : ''}, a punch is missing (fix)`
+            : null;
       }
 
       await db.prepare(

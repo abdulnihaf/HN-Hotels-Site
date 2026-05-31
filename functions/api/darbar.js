@@ -123,13 +123,14 @@ async function home(db, url) {
   ).first();
   const businessDay = dayRow.d;
 
-  // Hero stats — display state derived from punch_count PARITY (not the over-fired
-  // stored `ghost`): even=present, odd=missing-punch, 0=absent/pending, off=week_off/leave.
+  // Hero stats — owner's canonical rule: ANY tap = present (1/2/3/4…); 0 taps = absent;
+  // off=week_off/leave. `missing_punch` = present-but-odd (a punch missing) — a SUBSET of
+  // present, surfaced as the "to fix" count, NOT a state outside present.
   const stats = await db.prepare(
     `SELECT
        SUM(CASE WHEN status IN ('week_off','leave') THEN 1 ELSE 0 END) AS off,
        SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS in_progress,
-       SUM(CASE WHEN status NOT IN ('week_off','leave','pending') AND punch_count>0 AND punch_count%2=0 THEN 1 ELSE 0 END) AS present,
+       SUM(CASE WHEN status NOT IN ('week_off','leave','pending') AND punch_count>0 THEN 1 ELSE 0 END) AS present,
        SUM(CASE WHEN status NOT IN ('week_off','leave','pending') AND punch_count>0 AND punch_count%2=1 THEN 1 ELSE 0 END) AS missing_punch,
        SUM(CASE WHEN status NOT IN ('week_off','leave','pending') AND (punch_count=0 OR punch_count IS NULL) THEN 1 ELSE 0 END) AS absent,
        COUNT(*) AS rows
