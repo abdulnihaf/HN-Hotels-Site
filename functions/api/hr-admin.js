@@ -2295,9 +2295,17 @@ export async function onRequest(context) {
   try {
     const url = new URL(request.url);
     // All GET reads require a valid Darbar token or the internal CAMS service key.
+    // EXCEPT staff-self: the public per-employee attendance page (/hr/me/). Staff
+    // opening their WhatsApp link have no Darbar session — that endpoint carries its
+    // own security (a per-employee HMAC token in ?t=, verified inside the handler),
+    // so it must pass the session gate. No other action is exempt.
     if (request.method === 'GET') {
-      const auth = await verifyToken(env, request);
-      if (!auth) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json', ...ch } });
+      const action = url.searchParams.get('action');
+      let auth = null;
+      if (action !== 'staff-self') {
+        auth = await verifyToken(env, request);
+        if (!auth) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json', ...ch } });
+      }
       const res = await handleGet(url, env, auth);
       for (const [k, v] of Object.entries(ch)) res.headers.set(k, v);
       return res;
