@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Receiving · Nawabi</title>
+<style>
+  :root{ --bg:#0c0e12; --elev:#161a20; --line:rgba(255,255,255,.12); --accent:#4a9eff; --ok:#3ba776; --okbg:rgba(59,167,118,.14); --warn:#d8923a; --warnbg:rgba(216,146,58,.14); --bad:#cf5b4e; --txt:#f3f5f8; --dim:#8a93a0; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--txt);min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 28px)}
+  .wrap{max-width:460px;margin:0 auto}
+  h1{font-size:24px;font-weight:700;margin:24px 0 2px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:20px}
+  .card{background:var(--elev);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+  label{display:block;font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin:0 0 9px;font-weight:600}
+  input[type=number],input[type=password]{width:100%;background:#0a0c10;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:24px;padding:15px;outline:none;font-variant-numeric:tabular-nums}
+  .shoot{width:100%;background:#0a0c10;border:1.5px dashed var(--line);border-radius:15px;color:var(--accent);padding:30px 18px;font-size:16px;font-weight:600;text-align:center;display:block}
+  .shoot.has{border-style:solid;padding:8px}.shoot img{width:100%;border-radius:11px;display:block}
+  .go{width:100%;background:var(--accent);color:#04132b;border:none;border-radius:14px;padding:18px;font-size:18px;font-weight:700}.go:disabled{opacity:.4}
+  .result{padding:16px;border-radius:14px;margin-top:12px;display:none;font-size:15px}.result.show{display:block}.result.ok{background:var(--okbg);border:1px solid var(--ok)}.result.warn{background:var(--warnbg);border:1px solid var(--warn)}.result b{font-size:18px}
+  .hide{display:none!important}.err{color:var(--bad);font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">📦 Receiving</h1>
+  <div class="sub" id="sub">Nawabi Chai House</div>
+  <div id="gate" class="card"><label>Your PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off"><button class="go" id="pinBtn" style="margin-top:12px">Start</button><div id="pinErr" class="err"></div></div>
+  <div id="app" class="hide">
+    <div class="card"><label>Photo: delivery on arrival (camera)</label><label class="shoot" id="shootLbl" for="cam">📷 Tap to take live photo</label><input id="cam" type="file" accept="image/*" capture="environment" class="hide"></div>
+    <div class="card"><label id="qtyLabel">Count received</label><input id="qty" type="number" inputmode="numeric" placeholder="100"></div>
+    <button class="go" id="submit" disabled>Record receiving</button>
+    <div id="result" class="result"></div>
+    <div class="sub" id="who" style="margin-top:16px;text-align:center"></div>
+  </div>
+</div>
+<script>
+const API='/api/purchase-item';const CODE=new URLSearchParams(location.search).get('item')||'BUNS';
+let PIN='',NAME='',ITEM=null,PHOTO=null;const $=id=>document.getElementById(id);
+$('pinBtn').onclick=async()=>{const pin=$('pin').value.trim();if(!pin)return;
+  const r=await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(pin)}`).then(r=>r.json()).catch(()=>({success:false}));
+  if(r.success){PIN=pin;NAME=r.name;$('gate').classList.add('hide');$('app').classList.remove('hide');$('who').textContent='Signed in: '+NAME;await loadItem();}else $('pinErr').textContent='Wrong PIN';};
+$('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
+async function loadItem(){const r=await fetch(`${API}?action=item&code=${encodeURIComponent(CODE)}`).then(r=>r.json());ITEM=r.item;
+  $('title').textContent=(ITEM.emoji||'📦')+' '+ITEM.name+' Receiving';$('sub').textContent='Nawabi · from '+ITEM.vendor;
+  $('qtyLabel').textContent='Count received ('+ITEM.receive_unit+')';$('qty').placeholder='100';}
+$('cam').onchange=e=>{const f=e.target.files[0];if(!f)return;const img=new Image(),rd=new FileReader();
+  rd.onload=()=>{img.onload=()=>{const max=900,sc=Math.min(1,max/Math.max(img.width,img.height));const cv=document.createElement('canvas');cv.width=img.width*sc;cv.height=img.height*sc;cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);PHOTO=cv.toDataURL('image/jpeg',0.7);$('shootLbl').classList.add('has');$('shootLbl').innerHTML=`<img src="${PHOTO}">`;chk();};img.src=rd.result;};rd.readAsDataURL(f);};
+function chk(){$('submit').disabled=!(parseFloat($('qty').value)>0&&PHOTO);}
+$('qty').oninput=chk;
+$('submit').onclick=async()=>{$('submit').disabled=true;$('submit').textContent='Recording…';
+  const r=await fetch(`${API}?action=receive`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,item_code:CODE,qty_received:parseFloat($('qty').value),photo_data:PHOTO})}).then(r=>r.json()).catch(()=>({success:false,error:'Network'}));
+  const el=$('result');
+  if(r.success){const v=r.ordered_qty!=null?` · ordered ${r.ordered_qty}`:'';el.className='result show ok';el.innerHTML=`✓ Recorded <b>${r.qty_received} ${ITEM.receive_unit}</b>${v}<br><span style="opacity:.7">${new Date(r.received_at).toLocaleString('en-IN')}</span>`;$('submit').textContent='Done ✓';
+    setTimeout(()=>{$('qty').value='';PHOTO=null;$('shootLbl').classList.remove('has');$('shootLbl').innerHTML='📷 Tap to take live photo';$('submit').textContent='Record receiving';el.className='result';},5000);}
+  else{el.className='result show warn';el.textContent='⚠ '+(r.error||'Failed');$('submit').disabled=false;$('submit').textContent='Record receiving';}};
+</script>
+</body>
+</html>
