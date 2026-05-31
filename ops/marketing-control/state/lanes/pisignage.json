@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-29T20:30:01+0530",
-  "published_at": "2026-05-29T20:30:01+0530",
+  "updated_at": "2026-05-31T21:43:30+0530",
+  "published_at": "2026-05-31T21:43:30+0530",
   "source": "github-main-static-json",
   "lane_slug": "pisignage",
   "lane": {
@@ -9,15 +9,34 @@
     "subgroup": "Creative Surface",
     "risk": "screen mutation",
     "status": "ready",
-    "last_task": "Initialize PiSignage lane and verify TV upload packet",
-    "last_summary": "Read lane memory/control graph/unified context/TV history and verified current HE TV choreography state. Source-of-truth is hamza-express-site ops/tv-mission-control/choreography/preview-data.json generated 2026-05-18 with 7 groups, 28 playlists, 113 listed assets and 28 contact sheets. Old JSON source_root points to Desktop, now missing after cleanup; relocated upload packet exists at /Users/nihaf/Documents/2026-05_Working-Files/Creative/HamzaExpress_TV_Copies_2026-05-16/_ORGANIZED_BY_TIMESLOT. All 113 listed files are present there; dimension audit checked 100 files as 1920x1080 with zero mismatches, while 13 PNGs need re-export/repair/probe review before any upload because image probes failed or hung. Live choreography page HTTP 200; no PiSignage/API/screen mutation performed.",
-    "next_action": "Before playlist mutation, repair or re-export the 13 probe-failing PNGs, then verify live PiSignage player/group state for the exact target screen: 7 V2 choreography groups versus legacy 6-TV fleet registry, confirm outdoor facade H2 assignment, and prepare rollback to previous playlists/groups before upload.",
-    "mutation_status": "No PiSignage playlist, asset upload, repo, Cloudflare, Odoo, ad, WABA, aggregator, or screen mutation. Read-only lane initialization plus local asset/location/dimension verification only.",
+    "last_task": "Load PiSignage creative-generation context for voice-driven offer workflow",
+    "last_summary": "Pulled current PiSignage lane memory, V2 choreography preview data, relocated upload packet, creative asset library, old HE creative-generation scripts, manual upload rules, live read-only PiSignage state, and updated ~/.codex/AGENTS.md timestamp. Confirmed execution scope should exclude PiSignage playlist/group/API mutation; owner will upload manually. Creative-generation truth: V2 choreography has 7 groups, 28 playlists, 113 listed assets, relocated packet under Documents/2026-05_Working-Files/Creative/HamzaExpress_TV_Copies_2026-05-16/_ORGANIZED_BY_TIMESLOT, vertical wall originals are 1080x1935 and must be exported as upload-ready rotated 1920x1080 files, horizontal facade/kitchen/first-floor files are native 1920x1080. ~/.codex/AGENTS.md was modified May 31 21:30 and includes the Wispr Flow voice-input working contract.",
+    "next_action": "Start a fresh PiSignage creative-generation chat so latest AGENTS.md auto-loads, then build a dynamic offer creative generator around closed dimensions: surface, time slot, offer type, hero dish, message role, TV position, aspect/export target, and manual-upload filename/playlist mapping.",
+    "mutation_status": "Read-only context loading only; no PiSignage playlist, group, screen, API, repo, Odoo, WABA, ad, or asset mutation.",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command pisignage",
-    "last_run_at": "2026-05-25T05:44:16+0530"
+    "last_run_at": "2026-05-31T21:43:30+0530",
+    "proof": "/tmp/PISIGNAGE_TRUTH.json generated read-only at 2026-05-31T21:39:52; preview-data.json reports 28 playlists and 113 listed files with zero missing in relocated packet; sips verified portrait source 1080x1935 and rotated upload 1920x1080 samples.",
+    "artifacts": "/tmp/PISIGNAGE_TRUTH.md; /tmp/PISIGNAGE_TRUTH.json",
+    "data_freshness": "2026-05-31 21:30-21:45 IST local file and live PiSignage read-only context pull"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/05-pisignage.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/pisignage.md",
   "writeback_required": true,
-  "recent_events": []
+  "recent_events": [
+    {
+      "id": "20260531214330-pisignage",
+      "at": "2026-05-31T21:43:30+0530",
+      "lane": "pisignage",
+      "task": "Load PiSignage creative-generation context for voice-driven offer workflow",
+      "status": "ready",
+      "summary": "Pulled current PiSignage lane memory, V2 choreography preview data, relocated upload packet, creative asset library, old HE creative-generation scripts, manual upload rules, live read-only PiSignage state, and updated ~/.codex/AGENTS.md timestamp. Confirmed execution scope should exclude PiSignage playlist/group/API mutation; owner will upload manually. Creative-generation truth: V2 choreography has 7 groups, 28 playlists, 113 listed assets, relocated packet under Documents/2026-05_Working-Files/Creative/HamzaExpress_TV_Copies_2026-05-16/_ORGANIZED_BY_TIMESLOT, vertical wall originals are 1080x1935 and must be exported as upload-ready rotated 1920x1080 files, horizontal facade/kitchen/first-floor files are native 1920x1080. ~/.codex/AGENTS.md was modified May 31 21:30 and includes the Wispr Flow voice-input working contract.",
+      "next_action": "Start a fresh PiSignage creative-generation chat so latest AGENTS.md auto-loads, then build a dynamic offer creative generator around closed dimensions: surface, time slot, offer type, hero dish, message role, TV position, aspect/export target, and manual-upload filename/playlist mapping.",
+      "mutation_status": "Read-only context loading only; no PiSignage playlist, group, screen, API, repo, Odoo, WABA, ad, or asset mutation.",
+      "proof": "/tmp/PISIGNAGE_TRUTH.json generated read-only at 2026-05-31T21:39:52; preview-data.json reports 28 playlists and 113 listed files with zero missing in relocated packet; sips verified portrait source 1080x1935 and rotated upload 1920x1080 samples.",
+      "artifacts": "/tmp/PISIGNAGE_TRUTH.md; /tmp/PISIGNAGE_TRUTH.json",
+      "live_ids": "",
+      "rollback": "",
+      "data_freshness": "2026-05-31 21:30-21:45 IST local file and live PiSignage read-only context pull"
+    }
+  ]
 }
