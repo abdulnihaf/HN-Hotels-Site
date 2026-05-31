@@ -42,34 +42,28 @@ export async function onRequest(context) {
         for_date TEXT NOT NULL, qty_received REAL NOT NULL, ordered_qty REAL, variance REAL,
         photo_data TEXT, received_by_pin TEXT, received_by TEXT, received_at TEXT NOT NULL, notes TEXT)`),
     ]);
-    // idempotent seed.
+    // MIGRATE FIRST — older purchase_items table may predate these columns (CREATE IF NOT EXISTS skips them).
+    // Must run before any INSERT that references the new columns.
+    for (const col of [
+      "channel TEXT NOT NULL DEFAULT 'vendor'", 'last_dept_price REAL DEFAULT 0',
+      "last_dept_store TEXT DEFAULT ''", 'last_qcomm_price REAL DEFAULT 0']) {
+      try { await DB.prepare(`ALTER TABLE purchase_items ADD COLUMN ${col}`).run(); } catch (_) { /* already exists */ }
+    }
+    // idempotent seed (now safe — columns guaranteed present).
     await DB.batch([
-      // vendor-WhatsApp items (count-receive)
       DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,pack_qty,pack_rate,pack_label,receive_unit,active,sort) VALUES
         ('BUNS','Buns','NCH','Ganga Bakery','917019547835','🍞','vendor','buns',3,25,'3-piece pack','buns',1,10)`),
       DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,pack_qty,pack_rate,pack_label,receive_unit,active,sort) VALUES
         ('WATER','Bisleri 500ml Water','NCH','Nadeem (Water & Cold Drinks)','919900323484','💧','vendor','cases',1,0,'','cases',1,20)`),
-      // ration items (departmental go-collect / q-comm) — price history from live Odoo (2026-05)
       DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
         ('BUTTER','Amul Butter','NCH','🧈','ration','kg','kg',285,'Ashrafiya',280,1,30)`),
       DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
         ('MILKMAID','Milkmaid (Condensed Milk)','NCH','🥫','ration','kg','kg',324,'Ashrafiya',0,1,40)`),
+      // ensure existing rows carry channel even if they were inserted pre-migration
+      DB.prepare(`UPDATE purchase_items SET channel='vendor' WHERE code IN ('BUNS','WATER') AND (channel IS NULL OR channel='')`),
+      DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=285, last_dept_store='Ashrafiya', last_qcomm_price=280 WHERE code='BUTTER'`),
+      DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=324, last_dept_store='Ashrafiya' WHERE code='MILKMAID'`),
     ]);
-    // Migrate older tables created before these columns existed (CREATE IF NOT EXISTS skips them).
-    for (const col of [
-      "channel TEXT NOT NULL DEFAULT 'vendor'", 'last_dept_price REAL DEFAULT 0',
-      "last_dept_store TEXT DEFAULT ''", 'last_qcomm_price REAL DEFAULT 0']) {
-      try { await DB.prepare(`ALTER TABLE purchase_items ADD COLUMN ${col}`).run(); } catch (_) { /* exists */ }
-    }
-    // re-apply ration seed now that columns exist
-    try {
-      await DB.batch([
-        DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=285, last_dept_store='Ashrafiya', last_qcomm_price=280 WHERE code='BUTTER'`),
-        DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=324, last_dept_store='Ashrafiya' WHERE code='MILKMAID'`),
-        DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES ('BUTTER','Amul Butter','NCH','🧈','ration','kg','kg',285,'Ashrafiya',280,1,30)`),
-        DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,active,sort) VALUES ('MILKMAID','Milkmaid (Condensed Milk)','NCH','🥫','ration','kg','kg',324,'Ashrafiya',1,40)`),
-      ]);
-    } catch (_) {}
   }
 
   try {
