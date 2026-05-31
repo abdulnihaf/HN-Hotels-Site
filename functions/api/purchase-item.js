@@ -55,6 +55,21 @@ export async function onRequest(context) {
       DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
         ('MILKMAID','Milkmaid (Condensed Milk)','NCH','🥫','ration','kg','kg',324,'Ashrafiya',0,1,40)`),
     ]);
+    // Migrate older tables created before these columns existed (CREATE IF NOT EXISTS skips them).
+    for (const col of [
+      "channel TEXT NOT NULL DEFAULT 'vendor'", 'last_dept_price REAL DEFAULT 0',
+      "last_dept_store TEXT DEFAULT ''", 'last_qcomm_price REAL DEFAULT 0']) {
+      try { await DB.prepare(`ALTER TABLE purchase_items ADD COLUMN ${col}`).run(); } catch (_) { /* exists */ }
+    }
+    // re-apply ration seed now that columns exist
+    try {
+      await DB.batch([
+        DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=285, last_dept_store='Ashrafiya', last_qcomm_price=280 WHERE code='BUTTER'`),
+        DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=324, last_dept_store='Ashrafiya' WHERE code='MILKMAID'`),
+        DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES ('BUTTER','Amul Butter','NCH','🧈','ration','kg','kg',285,'Ashrafiya',280,1,30)`),
+        DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,active,sort) VALUES ('MILKMAID','Milkmaid (Condensed Milk)','NCH','🥫','ration','kg','kg',324,'Ashrafiya',1,40)`),
+      ]);
+    } catch (_) {}
   }
 
   try {
