@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Portals · Sauda</title>
+<style>
+  :root{ --gold:#c9a14a; --elev:#15151f; --line:rgba(201,161,74,.22); --ok:#3ba776; --bad:#cf5b4e; --txt:#f3f3f6; --dim:#8a8a99; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(130% 80% at 50% 0%,#13131e,#06060a);color:var(--txt);min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 28px)}
+  .wrap{max-width:480px;margin:0 auto}
+  h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:28px;margin:22px 0 2px}
+  .sub{color:var(--gold);font-size:12.5px;font-style:italic;margin:0 0 18px}
+  .gate{background:var(--elev);border:1px solid var(--line);border-radius:18px;padding:18px}
+  .gate label{display:block;font-size:11.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;margin:0 0 7px}
+  .gate input{width:100%;background:#0b0b13;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:21px;padding:13px;outline:none}
+  .gate button{width:100%;background:var(--gold);color:#1a1408;border:none;border-radius:12px;padding:15px;font-size:16px;font-weight:700;margin-top:12px}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--elev);border:1px solid var(--line);border-radius:13px;margin-bottom:9px}
+  .row .l{display:flex;align-items:center;gap:11px}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.g{background:var(--ok)} .dot.r{background:var(--bad)}
+  .nm{font-size:15px;font-weight:600}.meta{font-size:11px;color:var(--dim);margin-top:2px}
+  .relogin{background:transparent;border:1px solid var(--bad);color:var(--bad);border-radius:9px;padding:8px 12px;font-size:12px;font-weight:600;text-decoration:none}
+  .summary{font-size:13px;color:var(--dim);text-align:center;margin:8px 0 16px}
+  .summary b{color:var(--txt)}
+  .hide{display:none!important}.small{font-size:11.5px;color:var(--dim);text-align:center;margin-top:16px;line-height:1.5}
+  a.back{color:var(--dim);font-size:13px;text-decoration:none;display:inline-block;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Price Portals</h1>
+  <div class="sub">live-price sources · cookie health</div>
+
+  <div id="gate" class="gate">
+    <label>PIN</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+    <button id="pinBtn">Unlock</button>
+    <div id="pinErr" class="small" style="color:var(--bad)"></div>
+  </div>
+
+  <div id="app" class="hide">
+    <div class="summary" id="summary"></div>
+    <div id="list"></div>
+    <div class="small">🟢 = live, prices flow. 🔴 = session expired — tap <b>Re-login</b>, sign in once on that portal, and it goes green. You only ever fix the reds.</div>
+    <a class="back" href="/order/">← Back to order</a>
+  </div>
+</div>
+<script>
+// portal-health is on purchase-control (the price engine). PIN-gated there.
+const HEALTH='/api/purchase-control';const $=id=>document.getElementById(id);let PIN='';
+$('pinBtn').onclick=async()=>{const p=$('pin').value.trim();if(!p)return;
+  const r=await fetch(`${HEALTH}?action=verify-pin&pin=${encodeURIComponent(p)}`).then(r=>r.json()).catch(()=>({}));
+  if(r&&r.success){PIN=p;$('gate').classList.add('hide');$('app').classList.remove('hide');load();}else $('pinErr').textContent='Wrong PIN';};
+$('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
+async function load(){
+  const d=await fetch(`${HEALTH}?action=portal-health&pin=${PIN}`).then(r=>r.json()).catch(()=>({sessions:[]}));
+  const s=d.sessions||[];
+  const ready=s.filter(x=>x.is_ready).length;
+  $('summary').innerHTML=`<b>${ready}</b> of ${s.length} portals live · prices flow from the green ones`;
+  // green first (sorted), then reds needing action
+  s.sort((a,b)=>(b.is_ready?1:0)-(a.is_ready?1:0));
+  $('list').innerHTML=s.map(x=>{
+    const g=x.is_ready;
+    const meta=g?('cookies fresh'+(x.expires_at?' · till '+new Date(x.expires_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'')):(x.issue_detail||'session expired');
+    const action=g?'':`<a class="relogin" href="${x.url||'#'}" target="_blank" rel="noopener">Re-login ↗</a>`;
+    return `<div class="row"><div class="l"><span class="dot ${g?'g':'r'}"></span><div><div class="nm">${x.source_label||x.source_key}</div><div class="meta">${meta}</div></div></div>${action}</div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
