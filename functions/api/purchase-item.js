@@ -228,11 +228,14 @@ export async function onRequest(context) {
           if (!d || d.stock_status === 'ERROR') return { src, ok:false, note: d?.match_notes || 'no match' };
           const paise = d.price_paise || (d.unit_price_paise || 0);
           if (!paise) return { src, ok:false, note: d.match_notes || 'no price' };
-          return { src, ok:true, price: Math.round(paise)/100, sku: d.sku_title || '', url: d.sku_url || '', pack: d.pack_size || '', eta: d.eta_label || '', conf: d.match_confidence || 0 };
+          const pack = d.pack_size || '';
+          const base = parsePackBase(`${pack} ${d.sku_title || ''}`);
+          const unit_paise = base.qty ? Math.round(paise / base.qty) : 0;
+          return { src, ok:true, price: Math.round(paise)/100, unit_price: unit_paise ? Math.round(unit_paise)/100 : null, unit: base.unit || null, sku: d.sku_title || '', url: d.sku_url || '', pack, eta: d.eta_label || '', conf: d.match_confidence || 0 };
         } catch (e) { return { src, ok:false, note: e.message }; }
       };
       const all = await Promise.all(SCRAPEABLE.map(scout));
-      const live = all.filter(r => r.ok).sort((a,b) => a.price - b.price);
+      const live = all.filter(r => r.ok).sort((a,b) => (a.unit_price || a.price) - (b.unit_price || b.price));
       const dead = all.filter(r => !r.ok).map(r => r.src);
       return json({ success:true, item: it.name, query, match_rule: it.match_rule, fetched_at: new Date().toISOString(), results: live, no_result: dead });
     }
