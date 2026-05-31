@@ -120,7 +120,7 @@ $('refreshPrices').onclick=async()=>{
   const d=await fetch(`${API}?action=prices&code=${encodeURIComponent(CODE)}`).then(r=>r.json()).catch(()=>({success:false}));
   b.disabled=false;b.textContent='⚡ Refresh live prices';
   if(!d.success||!(d.results||[]).length){$('liveBox').innerHTML='<div class="hint" style="color:var(--warn)">No live prices right now — '+((d.no_result||[]).length?'portals returned nothing (sessions may be stale)':'try again')+'.</div>';return;}
-  const rows=d.results.map((r,i)=>`<div class="listrow" style="${i===0?'border-color:var(--gold)':''}"><span>${i===0?'⭐ ':''}<b>₹${r.price}</b> · ${r.src}${r.sku?'<br><span style="font-size:11px;color:var(--dim)">'+r.sku.slice(0,38)+'</span>':''}</span><a class="x" style="color:var(--gold);text-decoration:none" href="https://www.google.com/search?q=${encodeURIComponent(ITEM.name+' '+r.src)}" target="_blank">open ↗</a></div>`).join('');
+  const rows=d.results.map((r,i)=>{const up=r.unit_price?` <span style="color:var(--gold);font-size:12px">₹${r.unit_price}/${r.unit}</span>`:'';return `<div class="listrow" style="${i===0?'border-color:var(--gold)':''}"><span>${i===0?'⭐ ':''}<b>₹${r.price}</b>${up} · ${r.src}${r.sku?'<br><span style="font-size:11px;color:var(--dim)">'+r.sku.slice(0,38)+'</span>':''}</span><a class="x" style="color:var(--gold);text-decoration:none" href="https://www.google.com/search?q=${encodeURIComponent(ITEM.name+' '+r.src)}" target="_blank">open ↗</a></div>`;}).join('');
   $('liveBox').innerHTML=rows;
   $('liveStamp').textContent='live · '+new Date(d.fetched_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+(d.no_result&&d.no_result.length?' · '+d.no_result.length+' portals no-match':'');
 };
