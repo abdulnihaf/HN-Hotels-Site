@@ -63,7 +63,11 @@ export async function onRequest(context) {
     for (const col of [
       "channel TEXT NOT NULL DEFAULT 'vendor'", 'last_dept_price REAL DEFAULT 0',
       "last_dept_store TEXT DEFAULT ''", 'last_qcomm_price REAL DEFAULT 0',
-      'receivable INTEGER NOT NULL DEFAULT 1']) {
+      'receivable INTEGER NOT NULL DEFAULT 1',
+      // match_rule: how the price-scout resolves this item across platforms.
+      //   'cheapest' = lowest-priced match for the commodity (default)
+      //   'locked'   = fetch ONLY the exact pinned SKU in locked_sku / locked_query
+      "match_rule TEXT NOT NULL DEFAULT 'cheapest'", "locked_sku TEXT DEFAULT ''", "locked_query TEXT DEFAULT ''"]) {
       try { await DB.prepare(`ALTER TABLE purchase_items ADD COLUMN ${col}`).run(); } catch (_) { /* already exists */ }
     }
     // ── CATALOG: full NCH + HE purchase items (tomorrow's POs), seeded idempotently. ──
@@ -127,6 +131,9 @@ export async function onRequest(context) {
     stmts.push(DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=285, last_dept_store='Ashrafiya', last_qcomm_price=280, receivable=0 WHERE code='BUTTER'`));
     stmts.push(DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=324, last_dept_store='Ashrafiya', receivable=0 WHERE code='MILKMAID'`));
     stmts.push(DB.prepare(`UPDATE purchase_items SET receivable=1 WHERE code IN ('BUNS','WATER')`));
+    // Match rules: most items = cheapest. These have a LOCKED exact SKU (Nihaf, 2026-06-01).
+    stmts.push(DB.prepare(`UPDATE purchase_items SET match_rule='locked', locked_query='Amul unsalted butter 500g' WHERE code IN ('BUTTER','HE_BUTTER')`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET match_rule='locked', locked_query='Nestle Milkmaid 5kg' WHERE code='MILKMAID'`));
     await DB.batch(stmts);
 
     // ── DEMAND seed: tomorrow's PO (2026-06-01), both brands. qty_text keeps the PO's own wording. ──
