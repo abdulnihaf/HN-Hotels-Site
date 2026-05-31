@@ -64,10 +64,12 @@ export async function onRequest(context) {
         ('BUNS','Buns','NCH','Ganga Bakery','917019547835','🍞','vendor','buns',3,25,'3-piece pack','buns',1,10)`),
       DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,pack_qty,pack_rate,pack_label,receive_unit,active,sort) VALUES
         ('WATER','Bisleri 500ml Water','NCH','Nadeem (Water & Cold Drinks)','919900323484','💧','vendor','cases',1,0,'','cases',1,20)`),
-      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
-        ('BUTTER','Amul Butter','NCH','🧈','ration','kg','kg',285,'Ashrafiya',280,1,30)`),
-      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
-        ('MILKMAID','Milkmaid (Condensed Milk)','NCH','🥫','ration','kg','kg',324,'Ashrafiya',0,1,40)`),
+      // ration items carry empty vendor strings — the live table predates nullable vendor cols
+      // (CREATE IF NOT EXISTS won't relax the old NOT NULL), so '' satisfies the constraint.
+      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
+        ('BUTTER','Amul Butter','NCH','','','🧈','ration','kg','kg',285,'Ashrafiya',280,1,30)`),
+      DB.prepare(`INSERT OR IGNORE INTO purchase_items (code,name,brand,vendor,vendor_phone,emoji,channel,order_unit,receive_unit,last_dept_price,last_dept_store,last_qcomm_price,active,sort) VALUES
+        ('MILKMAID','Milkmaid (Condensed Milk)','NCH','','','🥫','ration','kg','kg',324,'Ashrafiya',0,1,40)`),
       // ensure existing rows carry channel even if they were inserted pre-migration
       DB.prepare(`UPDATE purchase_items SET channel='vendor' WHERE code IN ('BUNS','WATER') AND (channel IS NULL OR channel='')`),
       DB.prepare(`UPDATE purchase_items SET channel='ration', last_dept_price=285, last_dept_store='Ashrafiya', last_qcomm_price=280 WHERE code='BUTTER'`),
