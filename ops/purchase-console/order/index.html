@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Order · Sauda</title>
+<style>
+  :root{ --gold:#c9a14a; --bg:#08080d; --elev:#15151f; --line:rgba(201,161,74,.22); --ok:#3ba776; --wa:#25d366; --blue:#5e9eff; --txt:#f3f3f6; --dim:#8a8a99; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(130% 80% at 50% 0%,#13131e,#06060a);color:var(--txt);min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 28px)}
+  .wrap{max-width:520px;margin:0 auto}
+  h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:30px;margin:22px 0 2px;letter-spacing:.4px}
+  .sub{color:var(--gold);font-size:12.5px;font-style:italic;margin:0 0 16px}
+  .brandtog{display:flex;gap:8px;margin-bottom:8px}
+  .brandtog button{flex:1;background:var(--elev);border:1px solid var(--line);color:var(--dim);border-radius:13px;padding:13px 0;font-size:15px;font-weight:700}
+  .brandtog button.on{background:var(--gold);color:#1a1408;border-color:var(--gold)}
+  .datebar{font-size:12.5px;color:var(--dim);text-align:center;margin:6px 0 16px}
+  .grp{margin-bottom:8px}
+  .grp h2{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin:18px 2px 10px;font-weight:700}
+  .grp h2 .ic{margin-right:6px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .card{background:var(--elev);border:1px solid var(--line);border-radius:16px;padding:14px;text-decoration:none;color:var(--txt);position:relative;min-height:92px;display:flex;flex-direction:column;justify-content:space-between}
+  .card .em{font-size:26px}
+  .card .nm{font-size:14px;font-weight:600;line-height:1.25;margin-top:8px}
+  .card .meta{font-size:11px;color:var(--dim);margin-top:3px}
+  .card.done{border-color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
+  .card .badge{position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px}
+  .card .badge.ord{background:rgba(59,167,118,.18);color:var(--ok)}
+  .card .badge.list{background:rgba(94,158,255,.18);color:var(--blue)}
+  .gate{background:var(--elev);border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:30px}
+  .gate label{display:block;font-size:11.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;margin:0 0 7px}
+  .gate input{width:100%;background:#0b0b13;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:21px;padding:13px;outline:none}
+  .gate button{width:100%;background:var(--gold);color:#1a1408;border:none;border-radius:12px;padding:15px;font-size:16px;font-weight:700;margin-top:12px}
+  .hide{display:none!important}.small{font-size:11.5px;color:var(--dim);text-align:center;margin-top:14px}
+  a.back{color:var(--dim);font-size:13px;text-decoration:none;display:inline-block;margin-top:22px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tomorrow's Order</h1>
+  <div class="sub">Sauda · purchase</div>
+
+  <div id="gate" class="gate">
+    <label>PIN</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+    <button id="pinBtn">Unlock</button>
+    <div id="pinErr" class="small" style="color:#cf5b4e"></div>
+  </div>
+
+  <div id="app" class="hide">
+    <div class="brandtog"><button data-b="NCH" class="on">Nawabi</button><button data-b="HE">Hamza Express</button></div>
+    <div class="datebar" id="datebar"></div>
+    <div id="groups"></div>
+    <a class="back" href="/ops/purchase-console/">← Back to Sauda</a>
+  </div>
+</div>
+<script>
+const API='/api/purchase-item';let PIN='',BRAND='NCH';const $=id=>document.getElementById(id);
+$('pinBtn').onclick=async()=>{const p=$('pin').value.trim();if(!p)return;
+  const r=await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(p)}`).then(r=>r.json()).catch(()=>({success:false}));
+  if(r.success){PIN=p;$('gate').classList.add('hide');$('app').classList.remove('hide');load();}else $('pinErr').textContent='Wrong PIN';};
+$('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
+document.querySelectorAll('.brandtog button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.brandtog button').forEach(x=>x.classList.remove('on'));b.classList.add('on');BRAND=b.dataset.b;load();});
+// each item routes to its right flow page, carrying PIN-less (page re-auth) item code
+function hrefFor(it){
+  if(it.channel==='ration') return `/ration/?item=${it.code}`;
+  return `/item/?item=${it.code}`;            // vendor WhatsApp order
+}
+function groupOf(it){
+  if(it.channel==='ration') return 'ration';
+  return 'vendor';
+}
+async function load(){
+  $('datebar').textContent='Loading…';
+  const d=await fetch(`${API}?action=home&brand=${BRAND}`).then(r=>r.json()).catch(()=>({success:false,items:[]}));
+  const dt=new Date(d.date+'T00:00:00');
+  $('datebar').textContent='For '+dt.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
+  const groups={vendor:[],ration:[]};
+  (d.items||[]).forEach(it=>groups[groupOf(it)].push(it));
+  const titles={vendor:['📲','Order from vendor (WhatsApp)'],ration:['🛒','Ration — departmental / quick-commerce']};
+  let html='';
+  for(const g of ['vendor','ration']){
+    if(!groups[g].length)continue;
+    html+=`<div class="grp"><h2><span class="ic">${titles[g][0]}</span>${titles[g][1]}</h2><div class="grid">`;
+    html+=groups[g].map(it=>{
+      const done=it.is_ordered||it.on_pickup_list;
+      const badge=it.is_ordered?'<span class="badge ord">✓ ordered</span>':it.on_pickup_list?'<span class="badge list">on list</span>':'';
+      const meta=it.channel==='ration'?(it.last_dept_store||'departmental'):(it.vendor||'');
+      return `<a class="card ${done?'done':''}" href="${hrefFor(it)}">${badge}<div class="em">${it.emoji||'📦'}</div><div><div class="nm">${it.name}</div><div class="meta">${meta}</div></div></a>`;
+    }).join('');
+    html+=`</div></div>`;
+  }
+  $('groups').innerHTML=html||'<div class="small">No items for this brand yet.</div>';
+}
+</script>
+</body>
+</html>
