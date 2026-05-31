@@ -1,0 +1,12 @@
+{
+  "name": "Milk · Nawabi",
+  "short_name": "Milk",
+  "start_url": "/ops/milk/",
+  "display": "standalone",
+  "background_color": "#08080d",
+  "theme_color": "#08080d",
+  "icons": [
+    { "src": "/ops/purchase-console/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/ops/purchase-console/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
