@@ -537,7 +537,16 @@ function renderRoster() {
   if (S.rosterBrand !== 'all') rows = rows.filter(e => e.brand_label === S.rosterBrand);
   $('rosterSub').textContent = `${rows.length} serving · tap to over-write pay`;
   if (!rows.length) { $('rosterList').innerHTML = '<div class="empty">No one here.</div>'; return; }
-  $('rosterList').innerHTML = rows.map(e => {
+  // Monthly staffing cost = each person's full-month pay (monthly salary, or daily×30),
+  // at 100% attendance, before overtime/extras. Owner-only; recomputes per brand filter.
+  const costOf = e => Number(e.monthly_salary) || (Number(e.daily_rate) || 0) * 30 || 0;
+  const total = rows.reduce((s, e) => s + costOf(e), 0);
+  const missing = rows.filter(e => !costOf(e)).length;
+  const where = S.rosterBrand === 'all' ? 'all outlets' : S.rosterBrand;
+  const costCard = S.fin ? `<div class="card" style="border-color:var(--gold-soft);margin-bottom:10px"><div class="xc-top">
+      <div><b>Monthly staffing cost</b><div class="xc-meta">${where} · ${rows.length} staff · full attendance, before OT${missing ? ` · <span style="color:var(--red)">${missing} missing salary</span>` : ''}</div></div>
+      <div class="num" style="font-weight:800;color:var(--gold);font-size:19px">${inr(total)}</div></div></div>` : '';
+  $('rosterList').innerHTML = costCard + rows.map(e => {
     const pay = S.fin ? (e.monthly_salary ? `${inr(e.monthly_salary)}/mo` : e.daily_rate ? `${inr(e.daily_rate)}/day` : '—') : '';
     const noPin = !e.pin ? '<span class="pill yellow">no pin</span>' : '';
     return `<div class="arow" onclick='overrideSheet(${e.id}, ${JSON.stringify(e.known_as || e.name)})'><div class="top">
