@@ -347,19 +347,44 @@ async function fixPunch(empId, date) {
 }
 
 /* ━━━━━━━━━━━━━━ PAY ━━━━━━━━━━━━━━ */
-function settlementOpen() { return (new Date(Date.now() + 5.5 * 3600e3)).getUTCDate() >= 7; }
+// Active settlement month: salaries for month M are paid by the 10th of M+1.
+// So the 1st→10th you're still CLEARING the previous month — that's the default
+// view. After the 10th the current month becomes active. (You're settling May
+// during June 1–10, not June.) Navigator lets you reach any month — nothing is lost.
+function activeSettlementMonth() {
+  const d = new Date(Date.now() + 5.5 * 3600e3);
+  let y = d.getUTCFullYear(), m = d.getUTCMonth();
+  if (d.getUTCDate() <= 10) { m -= 1; if (m < 0) { m = 11; y -= 1; } }
+  return `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+function monthLabel(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+function payPeriod() { return S.payMonth || (S.payMonth = activeSettlementMonth()); }
+function changePayMonth(delta) {
+  let [y, m] = payPeriod().split('-').map(Number);
+  m += delta; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; }
+  S.payMonth = `${y}-${String(m).padStart(2, '0')}`;
+  loadPay();
+}
 async function loadPay() {
-  const open = settlementOpen();
-  const monthLbl = new Date(Date.now() + 5.5 * 3600e3).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
-  $('settleBanner').innerHTML = `<div class="card"><div class="xc-meta">Pay an advance or <b style="color:var(--gold)">settle anyone, any day</b> — you set the amount, the system records it. ${open ? "Month-end totals are reliable now." : "Mid-month: the “remaining” shown is salary − advance; dock absences at your discretion."}</div></div>`;
-  const month = todayIST().slice(0, 7);
+  const month = payPeriod();
+  const monthLbl = monthLabel(month);
+  const isActive = month === activeSettlementMonth();
+  const hint = isActive ? 'Salary period being cleared now — paid by the 10th' : 'Browsing — ◄ ► to change month';
+  $('settleBanner').innerHTML = `<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <button class="btn ghost-b" style="min-width:48px;font-size:18px" onclick="changePayMonth(-1)">◄</button>
+      <div style="text-align:center"><b style="font-size:17px">${esc(monthLbl)}</b><div class="xc-meta">${hint}</div></div>
+      <button class="btn ghost-b" style="min-width:48px;font-size:18px" onclick="changePayMonth(1)">►</button>
+    </div></div>`;
   $('advMonth').textContent = monthLbl;
-  if (!S.token) { $('advList').innerHTML = '<div class="empty">Enter your PIN to load advances.</div>'; return; }
+  if (!S.token) { $('advList').innerHTML = '<div class="empty">Enter your PIN to load payments.</div>'; return; }
   $('advList').innerHTML = '<div class="skel"></div>';
   try {
     const r = await fetch(`/api/hr-payroll?action=list-advances&month=${month}`, { headers: authHeaders() }).then(x => x.json());
     const adv = r.advances || r.rows || [];
-    if (!adv.length) { $('advList').innerHTML = `<div class="empty">No advances in ${esc(monthLbl)} yet. Tap ＋ to pay one.</div>`; return; }
+    if (!adv.length) { $('advList').innerHTML = `<div class="empty">No payments recorded for ${esc(monthLbl)} yet.</div>`; return; }
     $('advList').innerHTML = adv.map(a => {
       const nm = a.employee_known_as || a.employee_name || a.name || a.known_as || ('Emp #' + a.employee_id);
       const tag = a.source === 'settlement'
@@ -396,7 +421,7 @@ async function doAdvance() {
   try {
     const r = await fetch('/api/hr-payroll?action=record-advance', {
       method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ employee_id: Number($('advEmp').value), amount: amt, advance_date: todayIST(), paid_via: $('advVia').value, reason: $('advNote').value || null, confirmed_phone: ($('advPhone') || {}).value || '' }),
+      body: JSON.stringify({ employee_id: Number($('advEmp').value), amount: amt, advance_date: todayIST(), paid_via: $('advVia').value, reason: $('advNote').value || null, confirmed_phone: ($('advPhone') || {}).value || '', pay_period: payPeriod() }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'failed');
@@ -425,7 +450,7 @@ async function openSettle() {
 async function loadSettle() {
   const sel = $('setEmp'); const id = sel ? sel.value : null;
   if (!id) return;
-  const month = todayIST().slice(0, 7);
+  const month = payPeriod();
   sheet(`<h2>Loading…</h2><div class="skel"></div><div class="skel"></div>`);
   let c;
   try { c = await api(`/api/hr-payroll?action=settle-context&employee_id=${id}&month=${month}`); }
@@ -457,11 +482,11 @@ async function loadSettle() {
 async function doSettle(id) {
   const amt = Number($('setAmt').value);
   if (!amt) return toast('Type what you paid', 'err');
-  const month = todayIST().slice(0, 7);
+  const month = payPeriod();
   try {
     const r = await fetch('/api/hr-payroll?action=record-advance', {
       method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ employee_id: Number(id), amount: amt, advance_date: todayIST(), paid_via: ($('setVia') || {}).value || 'cash', source: 'settlement', reason: 'salary settlement', notes: (($('setNote') || {}).value || ('Settlement ' + month)), confirmed_phone: ($('setPhone') || {}).value || '' }),
+      body: JSON.stringify({ employee_id: Number(id), amount: amt, advance_date: todayIST(), paid_via: ($('setVia') || {}).value || 'cash', source: 'settlement', reason: 'salary settlement', notes: (($('setNote') || {}).value || ('Settlement ' + month)), confirmed_phone: ($('setPhone') || {}).value || '', pay_period: month }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'failed');
@@ -497,7 +522,7 @@ function renderRoster() {
 function overrideSheet(id, name) {
   if (!S.fin) return toast('Pay is owner-only', 'info');
   if (needToken()) return;
-  const period = todayIST().slice(0, 7);
+  const period = payPeriod();
   sheet(`<h2>${esc(name)} — over-write pay</h2><div class="sd">Set the final payable yourself when attendance is gappy. Recorded alongside the computed figure, never silently replacing it.</div>
     <div class="fld"><label>Pay period</label><input id="ovPeriod" type="month" value="${period}"></div>
     <div class="fld"><label>Final payable ₹</label><input id="ovAmt" type="number" inputmode="numeric" placeholder="you type the number"></div>

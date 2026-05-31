@@ -224,18 +224,19 @@ export async function onRequest({ request, env }) {
       paid_via = 'cash', reference = null, reason = null, notes = null,
       source = 'manual', recorded_by = null,
       confirmed_phone = null,   // owner-confirmed number from the settle/advance screen
+      pay_period = null,        // settlement period (YYYY-MM) this belongs to; null => its advance_date month
     } = body;
     if (!employee_id || !advance_date || !amount) {
       return json({ error: 'employee_id, advance_date, amount required' }, 400);
     }
     const r = await db.prepare(`
       INSERT INTO hr_advances
-        (employee_id, advance_date, amount, paid_via, reference, reason, notes, source, recorded_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (employee_id, advance_date, amount, paid_via, reference, reason, notes, source, recorded_by, pay_period)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `).bind(
       employee_id, advance_date, Number(amount),
-      paid_via, reference, reason, notes, source, recorded_by,
+      paid_via, reference, reason, notes, source, recorded_by, pay_period,
     ).first();
     // Best-effort WhatsApp receipt to the worker — never blocks the record.
     // Reuses the EXISTING approved templates (already proven, send cold):
@@ -313,7 +314,7 @@ export async function onRequest({ request, env }) {
     const month = url.searchParams.get('month'); // YYYY-MM
     const where = []; const binds = [];
     if (employeeId) { where.push('a.employee_id = ?'); binds.push(employeeId); }
-    if (month)      { const { start, end } = monthBounds(month); where.push('a.advance_date BETWEEN ? AND ?'); binds.push(start, end); }
+    if (month)      { where.push("COALESCE(a.pay_period, substr(a.advance_date,1,7)) = ?"); binds.push(month); }
     const sql = `
       SELECT a.*, e.name AS employee_name, e.known_as AS employee_known_as, e.brand_label
         FROM hr_advances a
@@ -545,17 +546,17 @@ export async function onRequest({ request, env }) {
     const advRows = await db.prepare(`
       SELECT id, advance_date, amount, paid_via, COALESCE(reason,'') AS reason
         FROM hr_advances
-       WHERE employee_id = ? AND advance_date BETWEEN ? AND ?
+       WHERE employee_id = ? AND COALESCE(pay_period, substr(advance_date,1,7)) = ?
          AND COALESCE(source,'') != 'settlement'
        ORDER BY advance_date DESC
-    `).bind(employeeId, start, end).all();
+    `).bind(employeeId, month).all();
     const advances_total = (advRows.results || []).reduce((s, r) => s + Number(r.amount || 0), 0);
 
     const setRows = await db.prepare(`
       SELECT id, advance_date, amount, paid_via FROM hr_advances
-       WHERE employee_id = ? AND advance_date BETWEEN ? AND ?
+       WHERE employee_id = ? AND COALESCE(pay_period, substr(advance_date,1,7)) = ?
          AND COALESCE(source,'') = 'settlement' ORDER BY advance_date DESC
-    `).bind(employeeId, start, end).all();
+    `).bind(employeeId, month).all();
     const settled_total = (setRows.results || []).reduce((s, r) => s + Number(r.amount || 0), 0);
 
     const monthly = Number(emp.monthly_salary || 0);
