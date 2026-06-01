@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Receive · Sauda</title>
+<style>
+  :root{--gold:#c9a14a;--bg:#08080d;--elev:#15151f;--elev2:#1d1d2a;--line:rgba(201,161,74,.22);--ok:#3ba776;--blue:#5e9eff;--txt:#f3f3f6;--dim:#8a8a99}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(130% 80% at 50% 0%,#13131e,#06060a);color:var(--txt);min-height:100dvh;padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 28px)}
+  .wrap{max-width:520px;margin:0 auto}
+  h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:26px;margin:18px 0 1px}
+  .sub{color:var(--gold);font-size:12.5px;font-style:italic;margin:0 0 16px}
+  .stn{background:var(--elev);border:1px solid var(--line);border-radius:13px;padding:12px 14px;margin-bottom:16px;font-size:14px;font-weight:700;text-align:center}
+  .card{background:var(--elev);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:13px}
+  .card.done{border-color:var(--ok);opacity:.7}
+  .vn{font-size:17px;font-weight:700}
+  .meta{font-size:11.5px;color:var(--dim);margin-top:3px}
+  .it{margin:12px 0}
+  .it .nm{font-size:14px;font-weight:600;margin-bottom:5px}
+  .it .nm small{color:var(--dim);font-weight:400}
+  .mrow{display:flex;align-items:center;gap:8px}
+  .mrow input{flex:1;background:#0b0b13;border:1px solid var(--line);border-radius:10px;color:var(--txt);font-size:18px;font-weight:700;padding:11px;outline:none;text-align:center}
+  .mrow .u{font-size:13px;color:var(--gold);font-weight:700;min-width:54px}
+  .calc{font-size:12px;color:var(--ok);margin-top:5px;font-weight:600}
+  .upp{margin-top:6px}
+  .upp input{font-size:14px;padding:9px}
+  .upp .lbl{font-size:11px;color:var(--gold);margin-bottom:3px}
+  .milk{display:block;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.3);color:#67e29a;border-radius:11px;padding:12px;text-align:center;text-decoration:none;font-weight:700;font-size:13.5px}
+  .shots{display:flex;gap:9px;margin:12px 0}
+  .shot{flex:1}
+  .shot label{display:block;border:1.5px dashed var(--line);border-radius:12px;padding:15px 8px;text-align:center;font-size:12.5px;color:var(--dim);font-weight:600}
+  .shot label.has{border-style:solid;border-color:var(--ok);color:var(--ok)}
+  .shot input{display:none}
+  .shot img{width:100%;border-radius:10px;margin-top:6px;max-height:110px;object-fit:cover}
+  .btn{display:block;width:100%;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;margin-top:6px}
+  .btn.recv{background:var(--ok);color:#06310f}.btn.recv:disabled{opacity:.4}
+  .btn.raise{background:var(--gold);color:#1a1408}
+  .amt{width:100%;background:#0b0b13;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:20px;font-weight:700;padding:13px;outline:none;text-align:center;margin:8px 0}
+  .by{width:100%;background:#0b0b13;border:1px solid var(--line);border-radius:10px;color:var(--txt);font-size:14px;padding:11px;outline:none;margin-bottom:14px}
+  .stage2{display:none;border-top:1px solid var(--line);margin-top:12px;padding-top:12px}.stage2.on{display:block}
+  .done-msg{color:var(--ok);font-size:13px;font-weight:700;text-align:center;margin-top:8px}
+  .empty{text-align:center;color:var(--dim);font-size:13px;margin-top:40px}
+  .picker a{display:block;background:var(--elev);border:1px solid var(--line);border-radius:13px;padding:16px;margin-bottom:10px;color:var(--txt);text-decoration:none;font-weight:700;text-align:center}
+  a.setup{color:var(--dim);font-size:12px;text-decoration:none;display:block;text-align:center;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Receive</h1>
+  <div class="sub">Sauda · check & log what arrived</div>
+  <div id="who"><input id="byname" class="by" placeholder="Your name (who's receiving)"></div>
+  <div id="stnbar"></div>
+  <div id="list"></div>
+</div>
+<script>
+const API='/api/sauda-flow';const $=id=>document.getElementById(id);
+const STATION=new URLSearchParams(location.search).get('station')||'';
+const STN={'NCH-K':'Nawabi — Kitchen','NCH-C':'Nawabi — Cash Counter','HE-K':'Hamza Express — Kitchen','HE-C':'Hamza Express — Cash Counter'};
+let ORDERS=[];const IMG={};
+function by(){return ($('byname').value||'').trim()||'staff';}
+function downscale(file){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{const m=900,s=Math.min(1,m/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=img.width*s;c.height=img.height*s;c.getContext('2d').drawImage(img,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',0.6));};img.src=r.result;};r.readAsDataURL(file);});}
+if(!STATION||!STN[STATION]){
+  $('stnbar').innerHTML='<div class="stn">Pick your station</div><div class="picker">'+Object.entries(STN).map(([k,v])=>`<a href="?station=${k}">${v}</a>`).join('')+'</div>';
+}else{ $('stnbar').innerHTML=`<div class="stn">📍 ${STN[STATION]}</div>`; load(); }
+async function load(){
+  $('list').innerHTML='<div class="empty">Loading…</div>';
+  const d=await fetch(`${API}?action=station-queue&station=${STATION}`).then(r=>r.json()).catch(()=>({}));
+  ORDERS=(d&&d.orders)||[];
+  if(!ORDERS.length){$('list').innerHTML='<div class="empty">Nothing waiting to be received right now.</div>';return;}
+  $('list').innerHTML=ORDERS.map(card).join('');
+  ORDERS.forEach(wire);
+}
+function itemInput(o,i,it){
+  const k=`${o.id}|${i}`;
+  if(it.method==='weigh') return `<div class="it"><div class="nm">${esc(it.name)} <small>· ordered ${it.qty||''} ${esc(it.unit)}</small></div>
+    <div class="mrow"><input data-w="${k}" inputmode="decimal" placeholder="weighed"><span class="u">kg</span></div></div>`;
+  if(it.method==='count_pack'){const upp=(it.params||{}).units_per_pack;const pl=(it.params||{}).pack_label||'box';const ul=(it.params||{}).unit_label||'pieces';
+    return `<div class="it"><div class="nm">${esc(it.name)} <small>· count sealed ${pl}es</small></div>
+      <div class="mrow"><input data-bx="${k}" inputmode="numeric" placeholder="sealed ${pl}es"><span class="u">${pl}es</span></div>
+      ${upp?`<div class="calc" id="cl${k.replace('|','_')}">× ${upp} ${ul}/${pl} = —</div>`
+           :`<div class="upp"><div class="lbl">One-time: how many ${ul} in one ${pl}?</div><div class="mrow"><input data-upp="${k}" inputmode="numeric" placeholder="${ul} per ${pl}"><span class="u">${ul}</span></div></div>`}</div>`;}
+  if(it.method==='weigh_can') return `<div class="it"><div class="nm">${esc(it.name)}</div><a class="milk" href="/milk">🥛 Use milk weigh flow →</a></div>`;
+  const pl=(it.params||{}).pack_label||'packet';
+  return `<div class="it"><div class="nm">${esc(it.name)} <small>· ordered ${it.qty||''} ${esc(it.unit)}</small></div>
+    <div class="mrow"><input data-c="${k}" inputmode="numeric" placeholder="count received"><span class="u">${pl}s</span></div></div>`;
+}
+function card(o){
+  const recv=o.recv||[];const recvd=o.status==='RECEIVED';const exp=o.expected_amount_paise?o.expected_amount_paise/100:'';
+  const allMilk=recv.length&&recv.every(r=>r.method==='weigh_can');
+  return `<div class="card" id="c${o.id}">
+    <div class="vn">${esc(o.vendor_name)}</div>
+    <div class="meta">${recvd?'✓ received — now raise payment':'Check & enter what actually arrived'}</div>
+    <div class="body" ${recvd?'style="display:none"':''}>
+      ${recv.map((it,i)=>itemInput(o,i,it)).join('')||'<div class="meta">No item list — confirm receipt + bill</div>'}
+      ${allMilk?'':`<div class="shots">
+        <div class="shot"><label id="bl${o.id}" for="bf${o.id}">📄 Bill photo</label><input id="bf${o.id}" type="file" accept="image/*" capture="environment"><img id="bi${o.id}" style="display:none"></div>
+        <div class="shot"><label id="gl${o.id}" for="gf${o.id}">📦 Goods photo</label><input id="gf${o.id}" type="file" accept="image/*" capture="environment"><img id="gi${o.id}" style="display:none"></div>
+      </div>
+      <button class="btn recv" id="rb${o.id}" disabled>✓ Confirm received</button>`}
+    </div>
+    <div class="stage2 ${recvd?'on':''}" id="s2${o.id}">
+      <div class="meta">Amount on the bill (₹)</div>
+      <input class="amt" id="am${o.id}" inputmode="decimal" value="${exp}" placeholder="₹">
+      <button class="btn raise" id="rs${o.id}">📲 Raise payment to owner</button>
+    </div>
+    <div class="done-msg" id="dm${o.id}" style="display:none">✓ Sent to owner for payment</div>
+  </div>`;
+}
+function wire(o){
+  const id=o.id;
+  // live calc for count_pack with known per-pack
+  (o.recv||[]).forEach((it,i)=>{const k=`${id}|${i}`;
+    if(it.method==='count_pack'&&(it.params||{}).units_per_pack){const bx=document.querySelector(`[data-bx="${CSS.escape(k)}"]`);const cl=$(`cl${id}_${i}`);
+      if(bx)bx.oninput=()=>{const n=(parseFloat(bx.value)||0)*(it.params.units_per_pack);cl.textContent=`× ${it.params.units_per_pack} = ${n} ${(it.params.unit_label||'pieces')}`;};}});
+  const bf=$(`bf${id}`),gf=$(`gf${id}`),rb=$(`rb${id}`);
+  if(bf)bf.onchange=async()=>{if(!bf.files[0])return;const u=await downscale(bf.files[0]);IMG[id]=IMG[id]||{};IMG[id].bill=u;const im=$(`bi${id}`);im.src=u;im.style.display='block';$(`bl${id}`).classList.add('has');$(`bl${id}`).textContent='📄 Bill ✓';if(rb)rb.disabled=false;};
+  if(gf)gf.onchange=async()=>{if(!gf.files[0])return;const u=await downscale(gf.files[0]);IMG[id]=IMG[id]||{};IMG[id].goods=u;const im=$(`gi${id}`);im.src=u;im.style.display='block';$(`gl${id}`).classList.add('has');$(`gl${id}`).textContent='📦 Goods ✓';};
+  if(rb)rb.onclick=()=>doReceive(o);
+  const rs=$(`rs${id}`);if(rs)rs.onclick=()=>doRaise(id);
+}
+async function doReceive(o){
+  const id=o.id;const recv=[];const savePacks=[];
+  (o.recv||[]).forEach((it,i)=>{const k=`${id}|${i}`;const g=s=>document.querySelector(`[data-${s}="${CSS.escape(k)}"]`);
+    if(it.method==='weigh'){const v=parseFloat((g('w')||{}).value)||0;recv.push({name:it.name,method:'weigh',kg:v});}
+    else if(it.method==='count_pack'){const bx=parseFloat((g('bx')||{}).value)||0;let upp=(it.params||{}).units_per_pack;const ue=g('upp');if(ue&&ue.value){upp=parseFloat(ue.value)||upp;savePacks.push({name:it.name,units_per_pack:upp,params:it.params});}
+      recv.push({name:it.name,method:'count_pack',boxes:bx,units_per_pack:upp,pieces:upp?bx*upp:null});}
+    else if(it.method==='weigh_can'){recv.push({name:it.name,method:'weigh_can',note:'via milk flow'});}
+    else{const v=parseFloat((g('c')||{}).value)||0;recv.push({name:it.name,method:'count',count:v});}});
+  const rb=$(`rb${id}`);if(rb){rb.disabled=true;rb.textContent='Saving…';}
+  // persist any one-time per-pack the staff just set
+  for(const sp of savePacks){await fetch(`${API}?action=set-method`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:'staff','item_key':sp.name,method:'count_pack',params:{...(sp.params||{}),units_per_pack:sp.units_per_pack},display_unit:'pieces',by:by()})}).catch(()=>{});}
+  const body={id,station:STATION,received_by:by(),received_items:recv,bill_image:(IMG[id]||{}).bill,goods_image:(IMG[id]||{}).goods};
+  const r=await fetch(`${API}?action=receive`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(()=>({}));
+  if(r.success){$(`c${id}`).querySelector('.body').style.display='none';$(`s2${id}`).classList.add('on');$(`c${id}`).querySelector('.meta').textContent='✓ received — now raise payment';}
+  else{if(rb){rb.disabled=false;rb.textContent='✓ Confirm received';}alert(r.error||'failed');}
+}
+async function doRaise(id){
+  const amt=parseFloat($(`am${id}`).value)||0;if(!(amt>0)){alert('Enter the bill amount');return;}
+  const rs=$(`rs${id}`);rs.disabled=true;rs.textContent='Sending…';
+  const r=await fetch(`${API}?action=raise-payment`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,amount:amt,by:by()})}).then(r=>r.json()).catch(()=>({}));
+  if(r.success){$(`s2${id}`).style.display='none';$(`dm${id}`).style.display='block';$(`c${id}`).classList.add('done');}
+  else{rs.disabled=false;rs.textContent='📲 Raise payment to owner';alert(r.error||'failed');}
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+</script>
+</body>
+</html>
