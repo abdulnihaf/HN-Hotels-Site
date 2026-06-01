@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Receive setup · Sauda</title>
+<style>
+  :root{--gold:#c9a14a;--elev:#15151f;--elev2:#1d1d2a;--line:rgba(201,161,74,.22);--ok:#3ba776;--txt:#f3f3f6;--dim:#8a8a99}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:radial-gradient(130% 80% at 50% 0%,#13131e,#06060a);color:var(--txt);min-height:100dvh;padding:env(safe-area-inset-top) 14px 40px}
+  .wrap{max-width:520px;margin:0 auto}
+  h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:25px;margin:18px 0 1px}
+  .sub{color:var(--gold);font-size:12px;font-style:italic;margin:0 0 16px}
+  .row{background:var(--elev);border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:10px}
+  .nm{font-size:14.5px;font-weight:700;margin-bottom:8px}
+  .nm .src{font-size:10px;font-weight:600;color:var(--dim);margin-left:6px}
+  select,input{background:#0b0b13;border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:14px;padding:9px;outline:none}
+  select{width:100%;margin-bottom:7px}
+  .pr{display:flex;gap:7px}.pr input{flex:1}
+  .save{background:var(--gold);color:#1a1408;border:none;border-radius:9px;padding:9px 14px;font-weight:700;font-size:13px;margin-top:7px}
+  .saved{color:var(--ok);font-size:12px;font-weight:700;margin-left:8px}
+  .hint{font-size:11px;color:var(--dim);margin-top:4px}
+  .gate{background:var(--elev);border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:32px}
+  .gate input{width:100%;font-size:20px;padding:13px;text-align:center}
+  .gate button{width:100%;background:var(--gold);color:#1a1408;border:none;border-radius:12px;padding:14px;font-weight:700;margin-top:10px}
+  .hide{display:none!important}a.back{color:var(--dim);font-size:13px;text-decoration:none;display:inline-block;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>How items are checked</h1>
+  <div class="sub">Sauda · set once, change anytime</div>
+  <div id="gate" class="gate"><input id="pin" type="password" inputmode="numeric" placeholder="PIN"><button id="go">Unlock</button><div id="err" style="color:#cf5b4e;font-size:12px;text-align:center;margin-top:8px"></div></div>
+  <div id="app" class="hide"><div id="list"></div><a class="back" href="/receive">← Receive</a></div>
+</div>
+<script>
+const API='/api/sauda-flow';let PIN='';const $=i=>document.getElementById(i);
+const METHODS=[['weigh','Weigh (kg) — you pay by weight'],['count_pack','Count sealed packs × per-pack'],['count','Count (packets/units)'],['weigh_can','Milk weigh flow']];
+$('go').onclick=()=>{const p=$('pin').value.trim();if(!p)return;PIN=p;
+  fetch(`${API}?action=get-methods`).then(r=>r.json()).then(d=>{if(d&&d.success){$('gate').classList.add('hide');$('app').classList.remove('hide');render(d.items||[]);}else $('err').textContent='error';}).catch(()=>$('err').textContent='error');};
+$('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('go').click();});
+function render(items){
+  if(!items.length){$('list').innerHTML='<div class="hint">No items seen yet — they appear here after you start ordering.</div>';return;}
+  $('list').innerHTML=items.map((it,i)=>{
+    const p=it.params||{};
+    return `<div class="row" data-name="${esc(it.name)}">
+      <div class="nm">${esc(it.name)}<span class="src">${it.source==='set'?'set':'auto'}</span></div>
+      <select data-m="${i}">${METHODS.map(([v,l])=>`<option value="${v}" ${it.method===v?'selected':''}>${l}</option>`).join('')}</select>
+      <div class="params" data-p="${i}">${paramsHtml(it.method,p)}</div>
+      <button class="save" data-s="${i}">Save</button><span class="saved hide" id="sv${i}">✓ saved</span>
+    </div>`;}).join('');
+  items.forEach((it,i)=>{
+    const sel=document.querySelector(`[data-m="${i}"]`);
+    sel.onchange=()=>{document.querySelector(`[data-p="${i}"]`).innerHTML=paramsHtml(sel.value,it.params||{});};
+    document.querySelector(`[data-s="${i}"]`).onclick=()=>save(i,it.name);
+  });
+}
+function paramsHtml(method,p){
+  if(method==='count_pack')return `<div class="pr"><input data-upp placeholder="units per pack" value="${p.units_per_pack||''}"><input data-pl placeholder="pack name (box)" value="${p.pack_label||'box'}"></div><div class="hint">e.g. buns per sealed box</div>`;
+  if(method==='count')return `<div class="pr"><input data-pl placeholder="unit (packet)" value="${p.pack_label||'packet'}"></div>`;
+  if(method==='weigh')return `<div class="hint">Enter weighed kg at receive.</div>`;
+  return `<div class="hint">Uses the milk weigh flow.</div>`;
+}
+async function save(i,name){
+  const method=document.querySelector(`[data-m="${i}"]`).value;
+  const pp=document.querySelector(`[data-p="${i}"]`);
+  const upp=pp.querySelector('[data-upp]'),pl=pp.querySelector('[data-pl]');
+  const params={};if(upp&&upp.value)params.units_per_pack=parseFloat(upp.value)||null;if(pl&&pl.value)params.pack_label=pl.value;if(method==='count_pack')params.unit_label='pieces';
+  const du=method==='weigh'?'kg':method==='count_pack'?'pieces':method==='weigh_can'?'L':(params.pack_label||'packet');
+  const r=await fetch(`${API}?action=set-method`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,item_key:name,method,params,display_unit:du,by:'owner'})}).then(r=>r.json()).catch(()=>({}));
+  if(r.success){const s=$(`sv${i}`);s.classList.remove('hide');setTimeout(()=>s.classList.add('hide'),1500);}else alert(r.error||'failed');
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+</script>
+</body>
+</html>
