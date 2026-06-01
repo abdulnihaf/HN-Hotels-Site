@@ -85,6 +85,11 @@ async function ensureSchema(DB) {
       sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')),
       UNIQUE(brand, for_date, item_name)
     )`),
+    // self-learning UPI VPA → vendor map (so every UPI payment auto-maps; new ones labeled once)
+    DB.prepare(`CREATE TABLE IF NOT EXISTS sauda_vendor_vpa (
+      vpa TEXT PRIMARY KEY, vendor_name TEXT NOT NULL, vendor_id INTEGER,
+      source TEXT, created_at TEXT DEFAULT (datetime('now'))
+    )`),
   ]);
 }
 
@@ -113,20 +118,25 @@ const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0
 const nowIso = () => new Date().toISOString();
 
 // map a bank counterparty_ref / narration to a vendor name (for reconcile)
-function vendorFromEvent(ev, ordersVendorVpas) {
+// vpaRows = [{vpa, vendor_name, vendor_id}] loaded from DB (self-learning) — falls back to seed.
+function vendorFromEvent(ev, vpaRows) {
   const ref = String(ev.counterparty_ref || '').toLowerCase();
-  if (ref) {
-    for (const [name, vpas] of Object.entries(VENDOR_VPAS)) {
-      if (vpas.some(v => ref === v.toLowerCase() || ref.includes(v.split('@')[0].toLowerCase()))) return name;
-    }
-    // phone-in-vpa: match any 10-digit in the ref against a vendor's saved vpa phone
-    const digs = ref.match(/\d{10}/g) || [];
-    for (const [name, vpas] of Object.entries(VENDOR_VPAS)) {
-      if (vpas.some(v => digs.some(d => v.includes(d)))) return name;
-    }
-    for (const [key, label] of PORTAL_VPA) if (ref.includes(key)) return label;
-  }
+  if (!ref) return null;
+  const rows = vpaRows && vpaRows.length ? vpaRows : Object.entries(VENDOR_VPAS).flatMap(([n, vs]) => vs.map(v => ({ vpa: v, vendor_name: n })));
+  for (const r of rows) { const v = String(r.vpa || '').toLowerCase(); if (v && (ref === v || ref.includes(v.split('@')[0]))) return r.vendor_name; }
+  const digs = ref.match(/\d{10}/g) || [];
+  for (const r of rows) { const v = String(r.vpa || '').toLowerCase(); if (digs.some(d => v.includes(d))) return r.vendor_name; }
+  for (const [key, label] of PORTAL_VPA) if (ref.includes(key)) return label;
   return null;
+}
+async function getVpaRows(DB) {
+  // seed once from the hardcoded harvest, then it's owner-extensible in DB
+  const cnt = await DB.prepare('SELECT COUNT(*) n FROM sauda_vendor_vpa').first().catch(() => ({ n: 0 }));
+  if (!cnt || !cnt.n) {
+    for (const [name, vpas] of Object.entries(VENDOR_VPAS)) for (const v of vpas)
+      await DB.prepare('INSERT OR IGNORE INTO sauda_vendor_vpa (vpa,vendor_name,source) VALUES (?,?,?)').bind(v.toLowerCase(), name, 'seed').run();
+  }
+  return (await DB.prepare('SELECT vpa,vendor_name,vendor_id FROM sauda_vendor_vpa').all()).results || [];
 }
 
 export async function onRequest(context) {
@@ -347,6 +357,55 @@ export async function onRequest(context) {
       return json({ success: true, brand, dates: rows.map(r => r.for_date) });
     }
 
+    // ── VPA→vendor self-learning map ──
+    if (action === 'vpa-map') {
+      const rows = await getVpaRows(DB);
+      return json({ success: true, rows });
+    }
+    if (action === 'label-vpa' && request.method === 'POST') {
+      const b = await request.json();
+      if (!isOwner(b.pin)) return json({ success: false, error: 'owner only' }, 401);
+      if (!b.vpa || !b.vendor_name) return json({ success: false, error: 'vpa + vendor_name required' }, 400);
+      await DB.prepare(`INSERT INTO sauda_vendor_vpa (vpa,vendor_name,vendor_id,source) VALUES (?,?,?,?)
+        ON CONFLICT(vpa) DO UPDATE SET vendor_name=excluded.vendor_name, vendor_id=excluded.vendor_id, source='labeled'`)
+        .bind(String(b.vpa).toLowerCase(), b.vendor_name, b.vendor_id || null, 'labeled').run();
+      return json({ success: true });
+    }
+    // recent UPI debits whose VPA we DON'T recognise yet — label once, auto forever
+    if (action === 'unmapped-upi') {
+      if (!isOwner(url.searchParams.get('pin'))) return json({ success: false, error: 'owner only' }, 401);
+      const vpaRows = await getVpaRows(DB);
+      const days = Math.min(14, parseInt(url.searchParams.get('days') || '5', 10));
+      const evs = (await DB.prepare(
+        `SELECT id, source_ref, counterparty_ref, narration, amount_paise, txn_at FROM money_events
+         WHERE channel='upi' AND direction='debit' AND parse_status='parsed' AND txn_at >= date('now',?) ORDER BY txn_at DESC LIMIT 100`)
+        .bind(`-${days} days`).all()).results || [];
+      const out = [];
+      for (const ev of evs) {
+        if (!ev.counterparty_ref) continue; // P2P/no-VPA handled by request-match, not here
+        if (vendorFromEvent(ev, vpaRows)) continue;
+        const m = /\(([^)]+)\)/.exec(ev.narration || '');
+        out.push({ id: ev.id, vpa: ev.counterparty_ref, name_hint: m ? m[1] : '', amount: ev.amount_paise / 100, date: (ev.txn_at || '').slice(0, 10) });
+      }
+      return json({ success: true, unmapped: out });
+    }
+    // the live order↔payment circle per day (what was ordered vs what was paid by UPI)
+    if (action === 'circle') {
+      if (!isOwner(url.searchParams.get('pin'))) return json({ success: false, error: 'owner only' }, 401);
+      const vpaRows = await getVpaRows(DB);
+      const days = Math.min(14, parseInt(url.searchParams.get('days') || '4', 10));
+      const evs = (await DB.prepare(`SELECT counterparty_ref, narration, amount_paise, txn_at FROM money_events
+        WHERE channel='upi' AND direction='debit' AND parse_status='parsed' AND txn_at >= date('now',?)`).bind(`-${days} days`).all()).results || [];
+      const paid = {};
+      for (const ev of evs) { const d = (ev.txn_at || '').slice(0, 10); const v = vendorFromEvent(ev, vpaRows) || '(unmapped)'; (paid[d] = paid[d] || {})[v] = ((paid[d][v] || 0) + ev.amount_paise); }
+      const po = (await DB.prepare(`SELECT DISTINCT for_date, vendor_name FROM sauda_day_po WHERE vendor_name IS NOT NULL AND for_date >= date('now',?)`).bind(`-${days} days`).all()).results || [];
+      const ordered = {};
+      for (const r of po) { (ordered[r.for_date] = ordered[r.for_date] || new Set()).add(r.vendor_name); }
+      const dates = [...new Set([...Object.keys(paid), ...Object.keys(ordered)])].sort();
+      const result = dates.map(d => ({ date: d, ordered: [...(ordered[d] || [])], paid: Object.fromEntries(Object.entries(paid[d] || {}).map(([k, v]) => [k, v / 100])) }));
+      return json({ success: true, circle: result });
+    }
+
     return json({ success: false, error: 'unknown action' }, 400);
   } catch (e) {
     return json({ success: false, error: e.message }, 500);
@@ -354,7 +413,8 @@ export async function onRequest(context) {
 }
 
 // match one paid/raised order against the bank feed
-async function reconcileOne(DB, id) {
+async function reconcileOne(DB, id, vpaRows) {
+  if (!vpaRows) vpaRows = await getVpaRows(DB);
   const o = await DB.prepare(`SELECT * FROM sauda_purchase WHERE id=?`).bind(id).first();
   if (!o || o.reconciled_at) return false;
   const amt = o.pay_amount_paise || o.expected_amount_paise;
@@ -375,7 +435,7 @@ async function reconcileOne(DB, id) {
   // never guess a bank ref (that was the dangerous fallback).
   let pick = null, confidence = null;
   for (const ev of free) {
-    const v = vendorFromEvent(ev);
+    const v = vendorFromEvent(ev, vpaRows);
     if (v && (v === o.vendor_name || o.vendor_name.includes(v) || v.includes(o.vendor_name.split('(')[0].trim()))) { pick = ev; confidence = 'vpa'; break; }
   }
   if (!pick && free.length === 1) { pick = free[0]; confidence = 'amount_time'; }
@@ -386,8 +446,9 @@ async function reconcileOne(DB, id) {
 }
 
 async function reconcileAll(DB) {
+  const vpaRows = await getVpaRows(DB);
   const open = (await DB.prepare(`SELECT id FROM sauda_purchase WHERE status IN ('RAISED','PAID') AND reconciled_at IS NULL`).all()).results || [];
   let matched = 0;
-  for (const o of open) { if (await reconcileOne(DB, o.id)) matched++; }
+  for (const o of open) { if (await reconcileOne(DB, o.id, vpaRows)) matched++; }
   return { checked: open.length, matched };
 }
