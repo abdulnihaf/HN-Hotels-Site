@@ -1710,7 +1710,7 @@ async function handleGet(request, url, env) {
     }
     // ── CHEAPEST PRICE: join the latest scouted snapshot so the card can show "⚡ cheapest at X ₹Y" ──
     try {
-      const snaps = (await DB.prepare(`SELECT material_id, source_key, price_paise, unit_price_paise, sku_title
+      const snaps = (await env.DB.prepare(`SELECT material_id, source_key, price_paise, unit_price_paise, sku_title
         FROM daily_price_snapshots WHERE stock_status='QUOTED' AND price_paise > 0 AND snapshot_date >= date('now','-3 days')`).all()).results || [];
       const best = {};
       for (const s of snaps) {
