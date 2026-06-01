@@ -98,7 +98,7 @@ document.querySelectorAll('.brandtog button').forEach(b=>b.onclick=()=>{document
 const FULFIL={deliver:'They deliver',collect:'Collect at shop',porter:'Book a porter',bus:'Comes by bus',standing:'Standing order'};
 const PAY={per:'Pay on delivery — cash if you’re there, else UPI',khata_roll:'Khata — clear yesterday’s bill today',khata_periodic:'Standing khata — settle periodically'};
 function daysAgo(d){if(!d)return 9999;const t=istNow();const p=new Date(d.slice(0,10)+'T00:00:00Z');return Math.round((t-p)/86400000);}
-function isRegular(it){return daysAgo(it.last_purchase_date)<=14 || (it.times_ordered||0)>=10;}
+function isRegular(it){return daysAgo(it.last_purchase_date)<=5;} // "actively in rotation" — proxy until day-PO is wired
 function waPhone(p){let d=(p||'').replace(/[^0-9]/g,'');if(d.length===10)d='91'+d;return d;}
 function mid(it){return it.product_code||it.id;}
 function qtyOf(it){const k=mid(it);if(QTY[k]!=null)return QTY[k];const q=Number(it.last_qty||it.suggested_qty||0);return q>0?Math.round(q*100)/100:0;}
