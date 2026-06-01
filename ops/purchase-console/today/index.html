@@ -130,9 +130,11 @@ $('pinBtn').onclick=async()=>{const p=$('pin').value.trim();if(!p)return;
   const r=await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(p)}`).then(r=>r.json()).catch(()=>({}));
   if(r&&r.success){PIN=p;$('gate').classList.add('hide');$('app').classList.remove('hide');tick();load();}else $('pinErr').textContent='Wrong PIN';};
 $('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
-$('addBtn').onclick=openAdd;
-$('oclose').onclick=closeAdd;
-$('osearch').addEventListener('input',e=>renderResults(e.target.value));
+window.addEventListener('DOMContentLoaded',()=>{
+  const a=$('addBtn');if(a)a.onclick=openAdd;
+  const c=$('oclose');if(c)c.onclick=closeAdd;
+  const s=$('osearch');if(s)s.addEventListener('input',e=>renderResults(e.target.value));
+});
 document.querySelectorAll('.brandtog button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.brandtog button').forEach(x=>x.classList.remove('on'));b.classList.add('on');BRAND=b.dataset.b;SHOWALL=false;load();});
 // Today / Tomorrow date selector — which day's order you're placing
 function renderDayPills(){
