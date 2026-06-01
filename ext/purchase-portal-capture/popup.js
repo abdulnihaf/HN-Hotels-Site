@@ -10,6 +10,7 @@ const els = {
   browserQuotesBtn: document.getElementById('browserQuotesBtn'),
   openBtn: document.getElementById('openBtn'),
   healthBtn: document.getElementById('healthBtn'),
+  autoBtn: document.getElementById('autoBtn'),
   status: document.getElementById('status'),
   health: document.getElementById('health'),
 };
@@ -173,6 +174,23 @@ async function checkHealth() {
   }
 }
 
+async function enableAuto() {
+  const payload = formPayload();
+  if (!/^\d{4}$/.test(payload.pin)) { setStatus('Enter your PIN first', 'bad'); return; }
+  els.autoBtn.disabled = true;
+  setStatus('Turning on auto-refresh — capturing all portals silently…', 'warn');
+  try {
+    const data = await send({ type: 'ENABLE_AUTO', ...payload });
+    if (!data.ok) throw new Error(data.error || 'Could not enable');
+    setStatus(`✓ Auto-refresh ON. ${data.ok ?? ''}${data.results ? ` (${data.results.filter(r=>r.ok).length}/${data.results.length} portals captured)` : ''}. It now refreshes itself every 20 min while Chrome is open — no clicks needed.`, 'good');
+  } catch (error) {
+    setStatus(error.message || 'Could not enable auto-refresh', 'bad');
+  } finally {
+    els.autoBtn.disabled = false;
+  }
+}
+
+els.autoBtn.addEventListener('click', enableAuto);
 els.captureBtn.addEventListener('click', captureCurrent);
 els.browserQuotesBtn.addEventListener('click', runBrowserQuotes);
 els.openBtn.addEventListener('click', openPortal);
