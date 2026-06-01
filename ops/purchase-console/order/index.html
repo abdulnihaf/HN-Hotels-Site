@@ -15,6 +15,13 @@
   .brandtog{display:flex;gap:8px;margin-bottom:8px}
   .brandtog button{flex:1;background:var(--elev);border:1px solid var(--line);color:var(--dim);border-radius:13px;padding:13px 0;font-size:15px;font-weight:700}
   .brandtog button.on{background:var(--gold);color:#1a1408;border-color:var(--gold)}
+  .clock{text-align:center;font-size:12.5px;color:var(--dim);margin:8px 0 10px;font-variant-numeric:tabular-nums}
+  .clock b{color:var(--txt);font-weight:600}
+  .daypills{display:flex;gap:8px;justify-content:center;margin:0 0 6px}
+  .daypills button{background:var(--elev);border:1px solid var(--line);color:var(--dim);border-radius:11px;padding:9px 16px;font-size:13px;font-weight:600;min-width:96px}
+  .daypills button.on{background:rgba(201,161,74,.16);border-color:var(--gold);color:var(--gold)}
+  .daypills button small{display:block;font-size:10px;opacity:.7;font-weight:500;margin-top:1px}
+  .draftbar{background:rgba(94,158,255,.1);border:1px solid rgba(94,158,255,.3);color:var(--blue);border-radius:12px;padding:10px 12px;font-size:12px;text-align:center;margin:0 0 14px;line-height:1.4}
   .datebar{font-size:12.5px;color:var(--dim);text-align:center;margin:6px 0 16px}
   .grp{margin-bottom:8px}
   .grp h2{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin:18px 2px 10px;font-weight:700}
@@ -40,7 +47,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Tomorrow's Order</h1>
+  <h1 id="ohead">Order</h1>
   <div class="sub">Sauda · purchase</div>
 
   <div id="gate" class="gate">
@@ -52,7 +59,10 @@
 
   <div id="app" class="hide">
     <div class="brandtog"><button data-b="NCH" class="on">Nawabi</button><button data-b="HE">Hamza Express</button></div>
+    <div class="clock" id="clock"></div>
+    <div class="daypills" id="daypills"></div>
     <div class="datebar" id="datebar"></div>
+    <div id="draftbar"></div>
     <button id="refreshAll" style="width:100%;background:transparent;border:1px solid var(--line);color:var(--gold);border-radius:12px;padding:13px;font-size:14px;font-weight:600;margin-bottom:14px">⚡ Refresh all prices</button>
     <div id="groups"></div>
     <a class="back" href="/portals/">⚙ Portals & cookie health</a>
@@ -60,7 +70,12 @@
   </div>
 </div>
 <script>
-const API='/api/purchase-item';let PIN='',BRAND='NCH';const $=id=>document.getElementById(id);
+const API='/api/purchase-item';let PIN='',BRAND='NCH',VIEWDATE=null;const $=id=>document.getElementById(id);
+// live IST clock — owner always knows the exact moment he's buying in
+function istNow(){return new Date(Date.now()+5.5*3600e3);}
+function tickClock(){const t=istNow();const day=t.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'});const tm=t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true,timeZone:'UTC'});const c=$('clock');if(c)c.innerHTML=`${day} · <b>${tm}</b> IST`;}
+setInterval(tickClock,1000);
+function ymd(d){return d.toISOString().slice(0,10);}
 document.addEventListener('click',async e=>{ if(e.target&&e.target.id==='refreshAll'){
   const b=e.target;b.disabled=true;let total=0;
   for(let i=0;i<12;i++){ b.textContent=`⚡ Scanning portals… (${total} done)`;
@@ -85,17 +100,34 @@ function groupOf(it){
   return 'vendor';
 }
 async function load(){
+  tickClock();
   $('datebar').textContent='Loading…';
-  const d=await fetch(`${API}?action=home&brand=${BRAND}`).then(r=>r.json()).catch(()=>({success:false,items:[]}));
+  const q=VIEWDATE?`&date=${VIEWDATE}`:'';
+  const d=await fetch(`${API}?action=home&brand=${BRAND}${q}`).then(r=>r.json()).catch(()=>({success:false,items:[]}));
+  // Today / Tomorrow pills — stand in either day, place tomorrow's order now
+  const ist=d.ist_today||ymd(istNow());
+  const tmr=ymd(new Date(new Date(ist+'T00:00:00Z').getTime()+86400000));
+  const pills=[['Today',ist,ist.slice(8)+' '+new Date(ist+'T00:00:00Z').toLocaleDateString('en-IN',{month:'short',timeZone:'UTC'})],
+               ['Tomorrow',tmr,tmr.slice(8)+' '+new Date(tmr+'T00:00:00Z').toLocaleDateString('en-IN',{month:'short',timeZone:'UTC'})]];
+  $('daypills').innerHTML=pills.map(([lbl,dd,sub])=>`<button data-d="${dd}" class="${d.date===dd?'on':''}">${lbl}<small>${sub}</small></button>`).join('');
+  $('daypills').querySelectorAll('button').forEach(b=>b.onclick=()=>{VIEWDATE=b.dataset.d;load();});
   // timezone-proof: build from UTC parts + format in UTC so the weekday always matches the calendar date
   const mkUTC=s=>{const[y,m,da]=s.split('-').map(Number);return new Date(Date.UTC(y,m-1,da));};
   const dt=mkUTC(d.date);
   const prep=mkUTC(d.date);prep.setUTCDate(prep.getUTCDate()-1);
   const fmt=x=>x.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
   const tag=d.day_kind==='today'?'TODAY':d.day_kind==='upcoming'?'UPCOMING':'PAST';
+  // headline speaks the same truth as the brain — today/tomorrow/weekday, never hardcoded
+  const todayUTC=mkUTC(new Date(Date.now()+5.5*3600e3).toISOString().slice(0,10));
+  const dayDelta=Math.round((dt-todayUTC)/86400000);
+  const wd=dt.toLocaleDateString('en-IN',{weekday:'long',timeZone:'UTC'});
+  $('ohead').textContent = dayDelta===0?"Today's Order" : dayDelta===1?"Tomorrow's Order" : dayDelta===-1?"Yesterday's Order" : (dayDelta>0?`${wd}'s Order`:`${wd} (past)`);
   $('datebar').innerHTML=`<div style="font-size:11px;letter-spacing:1px;color:var(--gold);font-weight:700">PURCHASE ORDER · ${tag}</div>`+
     `<div style="font-size:17px;font-weight:700;margin-top:2px">For ${fmt(dt)}</div>`+
     `<div style="font-size:11px;color:var(--dim);margin-top:1px">prepared ${fmt(prep)} · ${(d.items||[]).length} items</div>`;
+  // carried-over draft notice — tomorrow seeded from the last order, owner adjusts
+  if(d.is_draft&&d.source_date){const sd=mkUTC(d.source_date);$('draftbar').innerHTML=`📋 Carried over from your ${fmt(sd)} order — adjust quantities or skip what you don't need.`;}
+  else $('draftbar').innerHTML='';
   const groups={vendor:[],ration:[]};
   (d.items||[]).forEach(it=>groups[groupOf(it)].push(it));
   const titles={vendor:['📲','Order from vendor (WhatsApp)'],ration:['🛒','Ration — departmental / quick-commerce']};
