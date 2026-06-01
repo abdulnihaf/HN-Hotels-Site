@@ -357,7 +357,17 @@ export async function onRequest(context) {
         const upcoming = allDates.filter(d => d >= istToday).sort();      // soonest active first
         date = upcoming[0] || allDates[0] || istToday;                     // active, else latest past, else today
       }
-      const demand = (await DB.prepare('SELECT item_code, qty_text, unit, note FROM purchase_demand WHERE brand=? AND for_date=?').bind(brand, date).all()).results || [];
+      let demand = (await DB.prepare('SELECT item_code, qty_text, unit, note FROM purchase_demand WHERE brand=? AND for_date=?').bind(brand, date).all()).results || [];
+      // STANDING-LIST CARRY-FORWARD: a future/today date with no PO yet is seeded from the most
+      // recent prior order — the daily buy repeats, so tomorrow is never an empty screen. Owner trims/adjusts.
+      let is_draft = false, source_date = null;
+      if (!demand.length && date >= istToday) {
+        const prior = await DB.prepare('SELECT for_date FROM purchase_demand WHERE brand=? AND for_date<? ORDER BY for_date DESC LIMIT 1').bind(brand, date).first().catch(() => null);
+        if (prior) {
+          source_date = prior.for_date; is_draft = true;
+          demand = (await DB.prepare('SELECT item_code, qty_text, unit, note FROM purchase_demand WHERE brand=? AND for_date=?').bind(brand, source_date).all()).results || [];
+        }
+      }
       const demandMap = Object.fromEntries(demand.map(d => [d.item_code, d]));
       const codes = demand.map(d => d.item_code);
       let items = [];
@@ -382,7 +392,7 @@ export async function onRequest(context) {
       }
       // is this PO today's, upcoming, or a past one being viewed? + give the date list for the picker.
       const day_kind = date === istToday ? 'today' : (date > istToday ? 'upcoming' : 'past');
-      return json({ success:true, brand, date, ist_today: istToday, day_kind, available_dates: allDates, manager_phone: await managerPhone(), items });
+      return json({ success:true, brand, date, ist_today: istToday, day_kind, is_draft, source_date, available_dates: allDates, manager_phone: await managerPhone(), items });
     }
 
     if (action === 'log-order' && context.request.method === 'POST') {
