@@ -1641,6 +1641,28 @@ async function handleGet(request, url, env) {
     } catch (_) {
       // schema/D1 hiccup — pass through without vendor tags
     }
+    // ── LANE VERDICT (the "where do I buy this" answer, per item, from real data) ──
+    // Two piles, derived honestly: (A) VENDOR = just order from your person — either you set a
+    // vendor link, or the item simply isn't sold on any portal (bakery/spec/relationship items).
+    // (B) MARKET = sold across quick-commerce/retail, so price actually moves → compare & buy cheapest.
+    // This is the ONLY pile the price engine works on. No price-hunting on vendor items.
+    for (const item of (data.items || [])) {
+      const portalable = (item.source_keys || []).filter((k) => k && k !== 'LOCAL_VENDOR');
+      if (item.primary_vendor) {
+        item.lane = 'VENDOR';
+        item.buy_from = String(item.primary_vendor.name || '').split('(')[0].trim();
+        item.lane_reason = 'Your set vendor — just order';
+      } else if (portalable.length === 0) {
+        const hv = (item.vendors || [])[0];
+        item.lane = 'VENDOR';
+        item.buy_from = (hv && hv.name) || item.last_vendor_name || '';
+        item.lane_reason = item.buy_from ? 'Not sold online — order from your vendor' : 'Order from your vendor';
+      } else {
+        item.lane = 'MARKET';
+        item.buy_from = '';
+        item.lane_reason = 'Sold across portals — compare & buy cheapest';
+      }
+    }
     return json({
       success: true,
       ...data,
