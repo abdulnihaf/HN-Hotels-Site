@@ -75,9 +75,10 @@ $('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();}
 document.querySelectorAll('.brandtog button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.brandtog button').forEach(x=>x.classList.remove('on'));b.classList.add('on');BRAND=b.dataset.b;load();});
 // each item routes to its right flow page
 function hrefFor(it){
-  if(it.code==='MILK') return `/milk`;                 // milk has its own weigh/slot flow
-  if(it.channel==='ration') return `/ration/?item=${it.code}`;
-  return `/item/?item=${it.code}`;                     // vendor WhatsApp order
+  const q=encodeURIComponent(it.qty_text||'');
+  if(it.code==='MILK') return `/milk?qty=${q}`;                 // milk has its own weigh/slot flow
+  if(it.channel==='ration') return `/ration/?item=${it.code}&qty=${q}`;
+  return `/item/?item=${it.code}&qty=${q}`;                     // vendor WhatsApp order
 }
 function groupOf(it){
   if(it.channel==='ration') return 'ration';
