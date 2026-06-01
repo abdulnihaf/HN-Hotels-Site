@@ -1641,6 +1641,21 @@ async function handleGet(request, url, env) {
     } catch (_) {
       // schema/D1 hiccup — pass through without vendor tags
     }
+    // ── PHONE ENRICHMENT: pull each PO vendor's phone from Odoo res.partner so vendor
+    // cards (and the bake-in flow) carry contact, not just a name. Additive + safe.
+    try {
+      const creds = getOdooCredentials({ odoo: 'system' }, env);
+      const vidSet = new Set();
+      for (const it of (data.items || [])) for (const v of (it.vendors || [])) if (v && v.id) vidSet.add(v.id);
+      if (creds?.key && vidSet.size) {
+        const parts = await odooCall(creds.uid, creds.key, 'res.partner', 'read',
+          [[...vidSet]], { fields: ['id', 'phone', 'mobile'] });
+        const phoneById = new Map((parts || []).map((p) => [p.id, p.phone || p.mobile || '']));
+        for (const it of (data.items || [])) for (const v of (it.vendors || [])) {
+          if (v && v.id) v.phone = phoneById.get(v.id) || '';
+        }
+      }
+    } catch (_) { /* Odoo hiccup — vendors pass through without phones */ }
     // ── LANE VERDICT (the "where do I buy this" answer, per item, from real data) ──
     // Two piles, derived honestly: (A) VENDOR = just order from your person — either you set a
     // vendor link, or the item simply isn't sold on any portal (bakery/spec/relationship items).
