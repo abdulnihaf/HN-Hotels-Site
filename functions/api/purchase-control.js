@@ -554,6 +554,34 @@ const B2B_BLOCK_NAME_PATTERNS = [
   /\btomato|onion|potato|carrot|capsicum|chili|chilli|garlic|ginger|lemon\b/i,
   /\b(chicken|murgh|mutton|lamb|fish|egg|anda|prawn|seafood)\b/i,
 ];
+// ── VENDOR JOURNEY MAP (backend coordinate, keyed by vendor name) ──
+// fulfil: deliver | porter | collect | bus | standing   pay: per | khata_roll | khata_periodic
+// legs[]: add-on logistics costs beyond the vendor bill (porter/transport)
+// rate: fixed | dynamic | engine   Learned from Nihaf's vendor walk 2026-06-01.
+const VENDOR_JOURNEY = {
+  'Ganga Bakery':                       { fulfil:'porter', pay:'per', legs:['porter'], note:'WhatsApp bun count → pay UPI → book porter (Vasan Nagar)' },
+  'M.N. Broilers (Syed Ahmedulla)':     { fulfil:'deliver', pay:'per', rate:'engine', note:'kg for boneless/shawarma, counts for others; rate via chicken-price engine' },
+  'M. irshad ahmed':                    { fulfil:'deliver', pay:'per', note:'WhatsApp → delivered' },
+  'Mutton Irshad':                      { fulfil:'deliver', pay:'per' },
+  'Deepak Packaging Store':             { fulfil:'deliver', pay:'per', note:'WhatsApp list → delivered' },
+  'Afeefa Impex Agencies':              { fulfil:'bus', pay:'per', legs:['transport','porter'], note:'Intercity: prepaid → bus → bus-station → transport + porter to outlet' },
+  'Jay & Jay Dehydrofoods Pvt Ltd':     { fulfil:'deliver', pay:'per', note:'WhatsApp → delivered → UPI' },
+  'Nisarcha Brother (Hamza/Krispy Eats)':{ fulfil:'deliver', pay:'per' },
+  'Sakthi Textiles':                    { fulfil:'collect', pay:'per', note:'Bought at outlet' },
+  'Sameer Hamza Samosa Vendor':         { fulfil:'collect', pay:'per' },
+  'Abid Cheese Balls Vendor':           { fulfil:'collect', pay:'per' },
+  'tabrez':                             { fulfil:'deliver', pay:'per' },
+  'Sajid':                              { fulfil:'deliver', pay:'per', note:'Mutton brain' },
+  'Mudassir Pasha':                     { fulfil:'deliver', pay:'per' },
+  'Ahmed - Gas Cylinder':               { fulfil:'deliver', pay:'per' },
+  'Gas Cylinder Vendor (NCH)':          { fulfil:'deliver', pay:'per' },
+  'Buffalo Milk Vendor':                { fulfil:'standing', pay:'khata_periodic', note:'Twice-daily standing order, weigh on receipt, settle periodically' },
+  'Ashrafiya Store':                    { fulfil:'collect', pay:'khata_roll', note:'Manager buys in person; clear yesterday today (T+1 khata); pay UPI' },
+  'Shariff Departmental Stores':        { fulfil:'collect', pay:'khata_roll', note:'Departmental, go-collect' },
+  'Manju Veg Supplier':                 { fulfil:'deliver', pay:'per', rate:'dynamic', note:'WhatsApp veg list → delivered; rate moves' },
+  'Nazeer Nadeem':                      { fulfil:'deliver', pay:'per', note:'Water + cold drinks; WhatsApp → delivered' },
+};
+function journeyFor(name) { return VENDOR_JOURNEY[name] || null; }
 function isB2BEligible(material) {
   const name = String(material?.name || '');
   if (B2B_BLOCK_NAME_PATTERNS.some((rx) => rx.test(name))) return false;
@@ -1677,6 +1705,8 @@ async function handleGet(request, url, env) {
         item.buy_from = '';
         item.lane_reason = 'Sold across portals — compare & buy cheapest';
       }
+      // attach the vendor journey (fulfilment + payment + logistics legs) so the order UI reads it
+      item.journey = item.primary_vendor ? journeyFor(item.primary_vendor.name) : null;
     }
     return json({
       success: true,
@@ -2133,7 +2163,8 @@ async function listPurchaseVendors(body, user, env) {
     GROUP BY v.id
     ORDER BY v.name ASC
   `).all();
-  return json({ success: true, vendors: rows.results || [] });
+  const vendors = (rows.results || []).map((v) => ({ ...v, journey: journeyFor(v.name) }));
+  return json({ success: true, vendors });
 }
 
 async function linkMaterialVendor(body, user, env) {
