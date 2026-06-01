@@ -736,12 +736,15 @@ async function handleGet(url, env, auth = null) {
       });
     }
 
+    // Pull by PAY-PERIOD, not cash date: a settlement for May paid on Jun 1 must
+    // appear under May. Settlements (source='settlement') are split from advances.
     const advances = (await db.prepare(
-      `SELECT id, advance_date, amount, paid_via, reason, notes
+      `SELECT id, advance_date, amount, paid_via, reason, notes, source, pay_period
          FROM hr_advances
-        WHERE employee_id = ? AND advance_date BETWEEN ? AND ?
+        WHERE employee_id = ?
+          AND COALESCE(pay_period, substr(advance_date,1,7)) = ?
         ORDER BY advance_date DESC, id DESC`
-    ).bind(empId, monthStart, monthEnd).all()).results || [];
+    ).bind(empId, month).all()).results || [];
 
     let p = 0, h = 0, abs = 0, lv = 0, wo = 0, amb = 0, hrs = 0;
     for (const dd of days) {
@@ -754,7 +757,19 @@ async function handleGet(url, env, auth = null) {
       if (dd.is_single_punch) amb++;
       if (dd.total_hours) hrs += Number(dd.total_hours);
     }
-    const advancesTotal = advances.reduce((s, r) => s + Number(r.amount || 0), 0);
+    const settleRows = advances.filter(r => r.source === 'settlement');
+    const advRows = advances.filter(r => r.source !== 'settlement');
+    const advancesTotal = advRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+    const settledTotal = settleRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+    const totalPaid = advancesTotal + settledTotal;
+    const isSettled = settleRows.length > 0;
+    // Base = monthly salary (or daily rate × days present). Anything paid ABOVE base
+    // is shown as an INCENTIVE (reward); below base, a single adjustment line. Leaves
+    // never cut pay — they're shown as paid.
+    const basePay = Number(emp.monthly_salary) || (Number(emp.daily_rate || 0) * p) || 0;
+    const incentive = isSettled && totalPaid > basePay ? totalPaid - basePay : 0;
+    const adjustment = isSettled && totalPaid < basePay ? basePay - totalPaid : 0;
+    const settledDate = settleRows.length ? settleRows[0].advance_date : null;
 
     return json({
       month,
@@ -788,7 +803,14 @@ async function handleGet(url, env, auth = null) {
         elapsed_total_hours: Math.round(hrs * 10) / 10,
         worked_days: p + 0.5 * h,
         advances_total: advancesTotal,
-        advances_count: advances.length,
+        advances_count: advRows.length,
+        is_settled: isSettled ? 1 : 0,
+        settled_total: settledTotal,
+        settled_date: settledDate,
+        base_pay: basePay,
+        incentive: incentive,
+        adjustment: adjustment,
+        total_earned: isSettled ? totalPaid : null,
       },
     });
   }

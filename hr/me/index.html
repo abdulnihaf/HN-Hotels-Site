@@ -97,6 +97,19 @@
   .pay .t { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
   .pay .d { font-size: 12.5px; color: var(--muted); line-height:1.45; }
 
+  .settled { background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(245,158,11,0.10));
+    border: 1px solid rgba(16,185,129,0.32); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  .settled-h { font-size: 14px; font-weight: 700; color: var(--green); margin-bottom: 10px; }
+  .prow { display: flex; justify-content: space-between; align-items: center; font-size: 14.5px; padding: 7px 0; }
+  .prow span:last-child { font-weight: 700; }
+  .prow.inc, .prow.inc span:last-child { color: var(--green); }
+  .prow.neg, .prow.neg span:last-child { color: var(--rose); }
+  .prow.muted { color: var(--muted); font-size: 13px; }
+  .prow.muted span:last-child { color: var(--blue); font-weight: 600; }
+  .prow.total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 11px; }
+  .prow.settled-amt { border-top: 2px solid rgba(16,185,129,0.40); margin-top: 4px; padding-top: 12px; font-size: 18px; }
+  .prow.settled-amt span { color: var(--green); font-weight: 800; }
+
   .footer { margin-top: 18px; padding: 14px; text-align: center; font-size: 12.5px; color: var(--muted);
     background: var(--surface); border-radius: 12px; border: 1px solid var(--border); }
   .footer .contact { color: var(--green); text-decoration: none; font-weight: 600; }
@@ -198,15 +211,30 @@ function render(data){
   DAYS.forEach((d,i)=>{ const st=dayState(d); const dt=new Date(d.date+'T12:00:00');
     cells += `<button class="cell ${st.k}" id="c${i}" ${(st.k==='future'||st.k==='nodata')?'':`onclick="showDay(${i})"`}>${dt.getDate()}<span class="ic">${ICON[st.k]||''}</span></button>`; });
 
-  const advancesHtml = data.advances.length
-    ? data.advances.map(a=>`<div class="advance-row"><div class="amount">₹${Number(a.amount).toLocaleString('en-IN')}</div>
+  const advList = (data.advances || []).filter(a => a.source !== 'settlement');
+  const advancesHtml = advList.length
+    ? advList.map(a=>`<div class="advance-row"><div class="amount">₹${Number(a.amount).toLocaleString('en-IN')}</div>
         <div class="meta"><div>${esc(a.reason||'Advance')} · ${(a.paid_via||'cash').toUpperCase()}</div>
-        <div class="bot">${new Date(a.advance_date+'T12:00:00').getDate()} ${monthLabel}</div></div></div>`).join('')
+        <div class="bot">${(d=>`${d.getDate()} ${MONTH_FULL[d.getMonth()].slice(0,3)}`)(new Date(a.advance_date+'T12:00:00'))}</div></div></div>`).join('')
     : `<div style="text-align:center;color:var(--muted);font-size:13px;padding:10px 0">No advances in ${monthLabel}.</div>`;
 
-  const salaryLine = e.pay_type === 'Contract' && e.daily_rate
-    ? `Rs.${Number(e.daily_rate).toLocaleString('en-IN')}/day`
-    : e.monthly_salary ? `Rs.${Number(e.monthly_salary).toLocaleString('en-IN')}/month` : '—';
+  const inr = n => '₹' + Number(n||0).toLocaleString('en-IN');
+  const fmtD = iso => { const d=new Date(iso+'T12:00:00'); return `${d.getDate()} ${MONTH_FULL[d.getMonth()].slice(0,3)}`; };
+  const baseLine = e.pay_type==='Contract'&&e.daily_rate ? `Rs.${Number(e.daily_rate).toLocaleString('en-IN')}/day` : e.monthly_salary ? `Rs.${Number(e.monthly_salary).toLocaleString('en-IN')}/month` : '—';
+  // Settled → reward-framed breakdown. Pending → light "settled by the 7th".
+  const payBlock = s.is_settled ? `
+    <div class="settled">
+      <div class="settled-h">✓ ${esc(monthLabel)} settled${s.settled_date?` · paid ${fmtD(s.settled_date)}`:''}</div>
+      <div class="prow"><span>Base pay</span><span>${inr(s.base_pay)}</span></div>
+      ${s.incentive?`<div class="prow inc"><span>＋ Incentive 🎉</span><span>+${inr(s.incentive)}</span></div>`:''}
+      ${s.adjustment?`<div class="prow neg"><span>− Days adjusted</span><span>−${inr(s.adjustment)}</span></div>`:''}
+      ${s.elapsed_leave?`<div class="prow muted"><span>Leaves (${s.elapsed_leave})</span><span>paid · no cut</span></div>`:''}
+      <div class="prow total"><span>Total earned</span><span>${inr(s.total_earned)}</span></div>
+      ${s.advances_total?`<div class="prow"><span>Advance taken earlier</span><span>−${inr(s.advances_total)}</span></div>`:''}
+      <div class="prow settled-amt"><span>Settled now</span><span>${inr(s.settled_total)}</span></div>
+    </div>`
+  : `<div class="pay"><div class="t">Days counted for pay: ${s.worked_days}</div>
+      <div class="d">Base ${baseLine}. Final pay = days you came + incentive − advances. Leaves are paid (no cut). Settled by the 7th of next month.</div></div>`;
 
   document.getElementById('root').innerHTML = `
     <div class="header">
@@ -243,10 +271,7 @@ function render(data){
       </div>
     </div>
 
-    <div class="pay">
-      <div class="t">Days counted for pay: ${s.worked_days}</div>
-      <div class="d">Base ${salaryLine}. Final pay = days you came + leaves − advances, confirmed at month-end and settled by the 7th of next month.</div>
-    </div>
+    ${payBlock}
 
     <div class="section"><div class="section-title">Advances in ${esc(monthLabel)}</div>${advancesHtml}</div>
 
