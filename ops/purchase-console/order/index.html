@@ -87,9 +87,11 @@ function groupOf(it){
 async function load(){
   $('datebar').textContent='Loading…';
   const d=await fetch(`${API}?action=home&brand=${BRAND}`).then(r=>r.json()).catch(()=>({success:false,items:[]}));
-  const dt=new Date(d.date+'T00:00:00');
-  const prep=new Date(d.date+'T00:00:00');prep.setDate(prep.getDate()-1);
-  const fmt=x=>x.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+  // timezone-proof: build from UTC parts + format in UTC so the weekday always matches the calendar date
+  const mkUTC=s=>{const[y,m,da]=s.split('-').map(Number);return new Date(Date.UTC(y,m-1,da));};
+  const dt=mkUTC(d.date);
+  const prep=mkUTC(d.date);prep.setUTCDate(prep.getUTCDate()-1);
+  const fmt=x=>x.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
   const tag=d.day_kind==='today'?'TODAY':d.day_kind==='upcoming'?'UPCOMING':'PAST';
   $('datebar').innerHTML=`<div style="font-size:11px;letter-spacing:1px;color:var(--gold);font-weight:700">PURCHASE ORDER · ${tag}</div>`+
     `<div style="font-size:17px;font-weight:700;margin-top:2px">For ${fmt(dt)}</div>`+
