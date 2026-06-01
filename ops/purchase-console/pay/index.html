@@ -62,16 +62,37 @@
   <div id="app" class="hide">
     <div class="tot" id="tot"></div>
     <button class="recon" id="recon">↻ Reconcile against bank now</button>
+    <div id="maps"></div>
     <div id="list"></div>
   </div>
 </div>
 <div class="modal" id="modal"><img id="mimg"></div>
 <script>
 const API='/api/sauda-flow';let PIN='';const $=id=>document.getElementById(id);
+let VENDORS=[];
 $('pinBtn').onclick=()=>{const p=$('pin').value.trim();if(!p)return;PIN=p;
   fetch(`${API}?action=pay-queue&pin=${encodeURIComponent(p)}`).then(r=>r.json()).then(d=>{
-    if(d&&d.success){$('gate').classList.add('hide');$('app').classList.remove('hide');render(d);}
+    if(d&&d.success){$('gate').classList.add('hide');$('app').classList.remove('hide');render(d);loadMaps();}
     else $('pinErr').textContent='Wrong PIN';}).catch(()=>$('pinErr').textContent='error');};
+async function loadMaps(){
+  const [um,vm]=await Promise.all([
+    fetch(`${API}?action=unmapped-upi&pin=${PIN}&days=5`).then(r=>r.json()).catch(()=>({})),
+    fetch(`${API}?action=vpa-map`).then(r=>r.json()).catch(()=>({}))
+  ]);
+  VENDORS=[...new Set((vm.rows||[]).map(r=>r.vendor_name))].sort();
+  const u=(um.unmapped||[]).filter(x=>x.amount>=20); // ignore tiny/round-offs
+  if(!u.length){$('maps').innerHTML='';return;}
+  $('maps').innerHTML=`<div class="grphd">Unmapped UPI payments — tag once, auto forever (${u.length})</div>`+
+    u.map((x,i)=>`<div class="card"><div class="top"><div><div class="vn">₹${x.amount.toLocaleString('en-IN')}</div>
+      <div class="meta">${esc(x.name_hint||x.vpa)} · ${x.date}</div></div></div>
+      <div class="pays"><select id="vs${i}" style="flex:1;background:#0b0b13;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px">
+        <option value="">— which vendor? —</option>${VENDORS.map(v=>`<option>${esc(v)}</option>`).join('')}<option value="__office">Office / not a vendor</option></select>
+      <button class="pay upi" id="mb${i}" style="flex:none;padding:11px 16px">Tag</button></div></div>`).join('');
+  u.forEach((x,i)=>{$(`mb${i}`).onclick=async()=>{const v=$(`vs${i}`).value;if(!v)return;
+    if(v!=='__office'){await fetch(`${API}?action=label-vpa`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,vpa:x.vpa,vendor_name:v})});}
+    else {await fetch(`${API}?action=label-vpa`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,vpa:x.vpa,vendor_name:'(office/non-vendor)'})});}
+    loadMaps();};});
+}
 $('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
 $('recon').onclick=async()=>{$('recon').textContent='Reconciling…';const r=await fetch(`${API}?action=reconcile&pin=${PIN}`).then(r=>r.json()).catch(()=>({}));$('recon').textContent=`↻ Reconcile (matched ${r.matched||0})`;load();};
 $('modal').onclick=()=>$('modal').classList.remove('on');
