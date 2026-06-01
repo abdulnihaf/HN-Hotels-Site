@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "HN Sauda Portal Capture",
-  "version": "1.8.0",
-  "description": "Captures logged-in purchase portal sessions and runs live quote jobs for Sauda, the HN Hotels purchase console. v1.8 adds explicit business.amazon.in host access for Amazon Business cookie capture.",
+  "version": "1.9.0",
+  "description": "Captures logged-in purchase portal sessions for Sauda. v1.9 adds hands-free AUTO-REFRESH (silent background-tab capture on a 20-min timer).",
   "permissions": [
     "activeTab",
     "cookies",
     "scripting",
     "storage",
-    "tabs"
+    "tabs",
+    "alarms"
   ],
   "host_permissions": [
     "https://hnhotels.in/*",
@@ -55,7 +56,9 @@
         "https://hnhotels.in/ops/purchase-console/*",
         "https://www.hnhotels.in/ops/purchase-console/*"
       ],
-      "js": ["console-bridge.js"],
+      "js": [
+        "console-bridge.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
