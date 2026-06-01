@@ -75,6 +75,16 @@ async function ensureSchema(DB) {
       display_unit TEXT,
       updated_by TEXT, updated_at TEXT DEFAULT (datetime('now'))
     )`),
+    // the actual day Purchase Order (what Nihaf prepares each night) — the REAL demand,
+    // not a guess. Vendor resolved best-effort at import time.
+    DB.prepare(`CREATE TABLE IF NOT EXISTS sauda_day_po (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      brand TEXT NOT NULL, for_date TEXT NOT NULL,
+      item_name TEXT NOT NULL, qty TEXT, unit TEXT, category TEXT,
+      vendor_name TEXT, vendor_id INTEGER, fulfilment TEXT, pay_timing TEXT,
+      sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(brand, for_date, item_name)
+    )`),
   ]);
 }
 
@@ -303,6 +313,38 @@ export async function onRequest(context) {
                 has_bill, has_goods, pay_amount_paise, pay_requested_at, paid_at, pay_method, bank_ref, reconciled_at
          FROM sauda_purchase WHERE for_date=? ORDER BY updated_at DESC`).bind(date).all()).results || [];
       return json({ success: true, date, rows });
+    }
+
+    // ── DAY-PO: ingest the real prepared order for a date (vendor pre-resolved by caller) ──
+    if (action === 'import-po' && request.method === 'POST') {
+      const b = await request.json();
+      if (!isOwner(b.pin)) return json({ success: false, error: 'owner only' }, 401);
+      const brand = b.brand, date = b.for_date, items = Array.isArray(b.items) ? b.items : [];
+      if (!brand || !date) return json({ success: false, error: 'brand + for_date required' }, 400);
+      if (b.replace) await DB.prepare('DELETE FROM sauda_day_po WHERE brand=? AND for_date=?').bind(brand, date).run();
+      let n = 0;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (!it.item) continue;
+        await DB.prepare(`INSERT INTO sauda_day_po (brand,for_date,item_name,qty,unit,category,vendor_name,vendor_id,fulfilment,pay_timing,sort)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(brand,for_date,item_name) DO UPDATE SET qty=excluded.qty,unit=excluded.unit,category=excluded.category,
+          vendor_name=excluded.vendor_name,vendor_id=excluded.vendor_id,fulfilment=excluded.fulfilment,pay_timing=excluded.pay_timing,sort=excluded.sort`)
+          .bind(brand, date, it.item, String(it.qty ?? ''), it.unit || '', it.cat || '', it.vendor_name || null, it.vendor_id || null, it.fulfilment || null, it.pay_timing || null, i).run();
+        n++;
+      }
+      return json({ success: true, brand, for_date: date, imported: n });
+    }
+    if (action === 'day-po') {
+      const brand = url.searchParams.get('brand') || 'NCH';
+      const date = url.searchParams.get('date') || istToday();
+      const rows = (await DB.prepare(`SELECT item_name,qty,unit,category,vendor_name,vendor_id,fulfilment,pay_timing FROM sauda_day_po WHERE brand=? AND for_date=? ORDER BY sort`).bind(brand, date).all()).results || [];
+      return json({ success: true, brand, date, items: rows });
+    }
+    if (action === 'po-dates') {
+      const brand = url.searchParams.get('brand') || 'NCH';
+      const rows = (await DB.prepare(`SELECT DISTINCT for_date FROM sauda_day_po WHERE brand=? ORDER BY for_date DESC`).bind(brand).all()).results || [];
+      return json({ success: true, brand, dates: rows.map(r => r.for_date) });
     }
 
     return json({ success: false, error: 'unknown action' }, 400);
