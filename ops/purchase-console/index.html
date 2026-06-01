@@ -376,6 +376,16 @@
     .mat-card.has-best { box-shadow: inset 0 0 0 1px rgba(212,162,76,0.20); }
     .mat-card.in-plan { box-shadow: inset 0 0 0 1.5px rgba(94,158,255,0.40); }
     .mat-card.custom { background: linear-gradient(180deg, rgba(167,139,250,0.07) 0%, var(--bg-elev-1) 100%); }
+    /* LANE VERDICT — the clear "where do I buy this" banner at the top of each card */
+    .lane-banner { display: flex; align-items: center; gap: 10px; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; line-height: 1.25; }
+    .lane-banner .lane-ic { font-size: 18px; flex: none; }
+    .lane-banner .lane-txt { display: flex; flex-direction: column; }
+    .lane-banner .lane-txt small { font-weight: 500; font-size: 11px; opacity: 0.72; margin-top: 1px; }
+    .lane-banner.lane-vendor { background: rgba(59,167,118,0.13); color: #6bd6a3; box-shadow: inset 0 0 0 1px rgba(59,167,118,0.28); }
+    .lane-banner.lane-market { background: rgba(212,162,76,0.13); color: #e3bd72; box-shadow: inset 0 0 0 1px rgba(212,162,76,0.28); }
+    .lane-banner b { font-weight: 800; }
+    /* vendor-lane cards: dim the portal compare clutter so the verdict reads first */
+    .mat-card.lane-vendor .best-deal, .mat-card.lane-vendor .tier-stack { opacity: 0.5; }
 
     .mat-head {
       display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center;
@@ -2591,8 +2601,15 @@
           </div>`;
       }).filter(Boolean).join('');
 
+      // ── LANE VERDICT banner — the one clear "where do I buy this" line, per card ──
+      const lane = mat.lane || ((mat.source_keys || []).filter((k) => k && k !== 'LOCAL_VENDOR').length ? 'MARKET' : 'VENDOR');
+      const buyFrom = mat.buy_from || (mat.primary_vendor ? mat.primary_vendor.name.split('(')[0].trim() : (mat.last_vendor_name || ''));
+      const laneHtml = lane === 'VENDOR'
+        ? `<div class="lane-banner lane-vendor"><span class="lane-ic">✅</span><span class="lane-txt">Just order${buyFrom ? ' from <b>' + escapeHtml(buyFrom) + '</b>' : ''}<small>Vendor item — no price-hunting</small></span></div>`
+        : `<div class="lane-banner lane-market"><span class="lane-ic">⚡</span><span class="lane-txt">Compare &amp; buy cheapest<small>Sold across portals — price moves</small></span></div>`;
+
       return `
-        <div class="${cardCls}" data-mat-id="${escapeAttr(mid)}">
+        <div class="${cardCls} lane-${lane.toLowerCase()}" data-mat-id="${escapeAttr(mid)}">
           <div class="mat-head">
             <div class="mat-thumb">${thumbHtml}</div>
             <div>
@@ -2615,6 +2632,7 @@
               ${mat.is_custom ? `<button class="icon-btn danger" type="button" data-del-mat="${escapeAttr(mid)}" title="Delete">🗑️</button>` : ''}
             </div>
           </div>
+          ${laneHtml}
           ${baselineHtml}
           ${vendorHtml}
           ${bestHtml}
