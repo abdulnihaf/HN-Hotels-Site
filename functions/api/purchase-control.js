@@ -1708,6 +1708,21 @@ async function handleGet(request, url, env) {
       // attach the vendor journey (fulfilment + payment + logistics legs) so the order UI reads it
       item.journey = item.primary_vendor ? journeyFor(item.primary_vendor.name) : null;
     }
+    // ── CHEAPEST PRICE: join the latest scouted snapshot so the card can show "⚡ cheapest at X ₹Y" ──
+    try {
+      const snaps = (await DB.prepare(`SELECT material_id, source_key, price_paise, unit_price_paise, sku_title
+        FROM daily_price_snapshots WHERE stock_status='QUOTED' AND price_paise > 0 AND snapshot_date >= date('now','-3 days')`).all()).results || [];
+      const best = {};
+      for (const s of snaps) {
+        const up = s.unit_price_paise || s.price_paise;
+        const cur = best[s.material_id];
+        if (!cur || up < cur._up) best[s.material_id] = { _up: up, src: s.source_key, price: s.price_paise / 100, unit_price: (s.unit_price_paise || 0) / 100, sku: s.sku_title };
+      }
+      for (const item of (data.items || [])) {
+        const b = best[item.product_code] || best[item.id];
+        if (b) { item.best_src = b.src; item.best_price = Math.round(b.price); item.best_unit_price = b.unit_price ? Math.round(b.unit_price) : null; item.best_sku = b.sku; }
+      }
+    } catch (_) {}
     return json({
       success: true,
       ...data,
