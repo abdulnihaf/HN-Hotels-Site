@@ -155,6 +155,9 @@ export async function onRequest(context) {
     if (action === 'pay-queue') {
       if (!isOwner(url.searchParams.get('pin'))) return json({ success: false, error: 'owner only' }, 401);
       const date = url.searchParams.get('date') || istToday();
+      // self-heal: every time the owner opens the queue, match any new bank debits
+      // to open payments — so bank refs fill in with NO manual reconcile step.
+      try { await reconcileAll(DB); } catch (_) {}
       const raised = (await DB.prepare(
         `SELECT id, brand, vendor_name, vendor_vpa, fulfilment, pay_timing, items_json,
                 pay_amount_paise, pay_requested_at, has_bill, has_goods, status, received_station
