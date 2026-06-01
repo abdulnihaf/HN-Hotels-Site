@@ -99,6 +99,7 @@ $('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');['buy','list'].forEach(t=>$('t-'+t).classList.toggle('hide',t!==b.dataset.t));if(b.dataset.t==='list')loadList();});
 async function loadItem(){const r=await fetch(`${API}?action=item&code=${encodeURIComponent(CODE)}`).then(r=>r.json());ITEM=r.item;
   $('glyph').textContent=ITEM.emoji||'🧈';$('title').textContent=ITEM.name;$('qtyLabel').textContent=ITEM.order_unit.charAt(0).toUpperCase()+ITEM.order_unit.slice(1);
+  if(PREQTY)$('qty').value=PREQTY;   // prefill from the PO
   const dept=ITEM.last_dept_price||0,q=ITEM.last_qcomm_price||0;
   const deptBest=q===0||(dept>0&&dept<=q);
   $('cmp').innerHTML=`
