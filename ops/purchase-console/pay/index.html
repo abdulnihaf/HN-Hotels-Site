@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Pay Queue · Sauda</title>
+<style>
+  :root{--gold:#c9a14a;--bg:#08080d;--elev:#15151f;--elev2:#1d1d2a;--line:rgba(201,161,74,.22);--ok:#3ba776;--wa:#25d366;--blue:#5e9eff;--txt:#f3f3f6;--dim:#8a8a99}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(130% 80% at 50% 0%,#13131e,#06060a);color:var(--txt);min-height:100dvh;padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 28px)}
+  .wrap{max-width:520px;margin:0 auto}
+  h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:26px;margin:18px 0 1px}
+  .sub{color:var(--gold);font-size:12.5px;font-style:italic;margin:0 0 14px}
+  .tot{text-align:center;font-size:12.5px;color:var(--dim);margin-bottom:14px}
+  .tot b{color:var(--txt)}
+  .card{background:var(--elev);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:13px}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .vn{font-size:17px;font-weight:700}
+  .meta{font-size:11.5px;color:var(--dim);margin-top:3px}
+  .amt{font-size:22px;font-weight:800;color:var(--gold);white-space:nowrap}
+  .items{font-size:12px;color:var(--dim);margin:9px 0;line-height:1.5}
+  .proof{display:flex;gap:8px;margin:10px 0}
+  .proof a{flex:1;text-align:center;background:var(--elev2);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:12px;color:var(--blue);text-decoration:none;font-weight:600}
+  .pays{display:flex;gap:8px;margin-top:6px}
+  .pay{flex:1;border:none;border-radius:12px;padding:14px;font-size:14.5px;font-weight:700;text-align:center;text-decoration:none}
+  .pay.upi{background:var(--wa);color:#06310f}
+  .pay.cash{background:var(--elev2);color:var(--txt);border:1px solid var(--line)}
+  .paid{border-color:var(--ok)!important;box-shadow:inset 0 0 0 1px var(--ok)}
+  .badge{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:7px;background:rgba(59,167,118,.16);color:#6bd6a3}
+  .ref{font-size:11px;color:var(--dim);margin-top:6px}
+  .grphd{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin:18px 2px 10px;font-weight:700}
+  .recon{width:100%;background:transparent;border:1px solid var(--line);color:var(--gold);border-radius:12px;padding:12px;font-size:13.5px;font-weight:600;margin-bottom:14px}
+  .gate{background:var(--elev);border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:32px}
+  .gate label{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;margin:0 0 7px}
+  .gate input{width:100%;background:#0b0b13;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:21px;padding:13px;outline:none}
+  .gate button{width:100%;background:var(--gold);color:#1a1408;border:none;border-radius:12px;padding:15px;font-size:16px;font-weight:700;margin-top:12px}
+  .hide{display:none!important}.empty{text-align:center;color:var(--dim);font-size:13px;margin-top:30px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;padding:20px;z-index:9}
+  .modal.on{display:flex}.modal img{max-width:100%;max-height:85vh;border-radius:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Pay Queue</h1>
+  <div class="sub">Sauda · raised by staff, paid by you</div>
+  <div id="gate" class="gate">
+    <label>PIN</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+    <button id="pinBtn">Unlock</button>
+    <div id="pinErr" class="empty" style="color:#cf5b4e"></div>
+  </div>
+  <div id="app" class="hide">
+    <div class="tot" id="tot"></div>
+    <button class="recon" id="recon">↻ Reconcile against bank now</button>
+    <div id="list"></div>
+  </div>
+</div>
+<div class="modal" id="modal"><img id="mimg"></div>
+<script>
+const API='/api/sauda-flow';let PIN='';const $=id=>document.getElementById(id);
+$('pinBtn').onclick=()=>{const p=$('pin').value.trim();if(!p)return;PIN=p;
+  fetch(`${API}?action=pay-queue&pin=${encodeURIComponent(p)}`).then(r=>r.json()).then(d=>{
+    if(d&&d.success){$('gate').classList.add('hide');$('app').classList.remove('hide');render(d);}
+    else $('pinErr').textContent='Wrong PIN';}).catch(()=>$('pinErr').textContent='error');};
+$('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinBtn').click();});
+$('recon').onclick=async()=>{$('recon').textContent='Reconciling…';const r=await fetch(`${API}?action=reconcile&pin=${PIN}`).then(r=>r.json()).catch(()=>({}));$('recon').textContent=`↻ Reconcile (matched ${r.matched||0})`;load();};
+$('modal').onclick=()=>$('modal').classList.remove('on');
+async function load(){const d=await fetch(`${API}?action=pay-queue&pin=${PIN}`).then(r=>r.json()).catch(()=>({}));if(d&&d.success)render(d);}
+function render(d){
+  const raised=d.raised||[],paid=d.paid||[];
+  const due=raised.reduce((s,r)=>s+(r.pay_amount_paise||0),0);
+  $('tot').innerHTML=`<b>${raised.length}</b> to pay · <b>₹${(due/100).toLocaleString('en-IN')}</b> due`;
+  let h='';
+  if(raised.length){h+='<div class="grphd">To pay now</div>'+raised.map(rcard).join('');}
+  if(paid.length){h+='<div class="grphd">Paid today</div>'+paid.map(pcard).join('');}
+  $('list').innerHTML=h||'<div class="empty">Nothing waiting. All clear.</div>';
+  raised.forEach(r=>{
+    const u=$(`upi${r.id}`);if(u)u.onclick=()=>payUpi(r);
+    const c=$(`cash${r.id}`);if(c)c.onclick=()=>payCash(r.id);
+    ['bill','goods'].forEach(k=>{const b=$(`${k}${r.id}`);if(b)b.onclick=e=>{e.preventDefault();viewMedia(r.id,k);};});
+  });
+}
+function rcard(r){
+  const items=r.items_json?JSON.parse(r.items_json):[];
+  const amt=(r.pay_amount_paise||0)/100;
+  const vpa=r.vendor_vpa||'';
+  return `<div class="card" id="row${r.id}">
+    <div class="top"><div><div class="vn">${esc(r.vendor_name.split('(')[0].trim())}</div>
+      <div class="meta">${r.brand} · ${r.fulfilment||''} · raised ${tm(r.pay_requested_at)}</div></div>
+      <div class="amt">₹${amt.toLocaleString('en-IN')}</div></div>
+    ${items.length?`<div class="items">${items.map(i=>`${esc(i.name)} ×${i.qty}`).join(' · ')}</div>`:''}
+    <div class="proof">
+      <a href="#" id="bill${r.id}">📄 Bill</a>
+      <a href="#" id="goods${r.id}">📦 Goods</a>
+    </div>
+    <div class="pays">
+      <a class="pay upi" id="upi${r.id}" href="#">Pay ₹${amt.toLocaleString('en-IN')} · UPI</a>
+      <button class="pay cash" id="cash${r.id}">Cash</button>
+    </div>
+    ${vpa?`<div class="ref">to ${esc(vpa)}</div>`:`<div class="ref">no saved UPI — opens chooser</div>`}
+  </div>`;
+}
+function pcard(p){
+  return `<div class="card paid"><div class="top"><div><div class="vn">${esc(p.vendor_name.split('(')[0].trim())}</div>
+    <div class="meta">${p.pay_method||'upi'} · ${tm(p.paid_at)}</div></div>
+    <div><span class="badge">${p.reconciled_at?'✓ bank-matched':'✓ paid'}</span><div class="amt" style="font-size:16px;margin-top:4px">₹${((p.pay_amount_paise||0)/100).toLocaleString('en-IN')}</div></div></div>
+    ${p.bank_ref?`<div class="ref">bank ref ${esc(p.bank_ref)}</div>`:''}</div>`;
+}
+function payUpi(r){
+  const amt=((r.pay_amount_paise||0)/100).toFixed(2);
+  const vpa=r.vendor_vpa||'';
+  const note=`${r.vendor_name.split('(')[0].trim()} Sauda`;
+  const link=vpa?`upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(r.vendor_name.split('(')[0].trim())}&am=${amt}&cu=INR&tn=${encodeURIComponent(note)}`:`upi://pay?am=${amt}&cu=INR&tn=${encodeURIComponent(note)}`;
+  // mark as paid (upi) — bank reconcile will stamp the ref
+  fetch(`${API}?action=mark-paid`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,id:r.id,method:'upi'})});
+  window.location.href=link;
+  setTimeout(load,1500);
+}
+async function payCash(id){
+  if(!confirm('Mark this as paid in CASH?'))return;
+  await fetch(`${API}?action=mark-paid`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,id,method:'cash'})});
+  load();
+}
+async function viewMedia(id,kind){
+  const d=await fetch(`${API}?action=media&pin=${PIN}&id=${id}&kind=${kind}`).then(r=>r.json()).catch(()=>({}));
+  if(d&&d.data_url){$('mimg').src=d.data_url;$('modal').classList.add('on');}else alert('No '+kind+' photo');
+}
+function tm(s){if(!s)return'';try{return new Date(s).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}catch(e){return''}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+</script>
+</body>
+</html>
