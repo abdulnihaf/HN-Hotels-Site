@@ -105,7 +105,7 @@
   </div>
 </div>
 <script>
-const API='/api/purchase-control';let PIN='',BRAND='NCH',SHOWALL=false,DATA=[];const $=id=>document.getElementById(id);
+const API='/api/purchase-control';const FLOW='/api/sauda-flow';let PIN='',BRAND='NCH',DATA=[],CATALOG=[],PODATES=[];const $=id=>document.getElementById(id);
 const QTY={};
 // the order is YOURS to build: added items + removed items, saved per day+brand so it survives a reload
 let ADDED=new Set(), REMOVED=new Set();
@@ -116,8 +116,8 @@ function istNow(){return new Date(Date.now()+5.5*3600e3);}
 function istDate(){return istNow().toISOString().slice(0,10);}
 function ymd(d){return d.toISOString().slice(0,10);}
 function addDays(base,n){const d=new Date(base.getTime()+n*86400000);return d;}
-// Night-before rhythm: the order you place now is for TOMORROW. Default there.
-let VIEWDATE=ymd(addDays(istNow(),1));
+// open on TODAY (populated with the real order); tap Tomorrow to build the next day
+let VIEWDATE=istDate();
 function fmtDate(s){const d=new Date(s+'T00:00:00Z');return d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});}
 function tick(){const t=istNow();const c=$('clock');if(c)c.innerHTML=t.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'})+' · <b>'+t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'UTC'})+'</b> IST';}
 setInterval(tick,30000);
@@ -136,16 +136,19 @@ window.addEventListener('DOMContentLoaded',()=>{
   const s=$('osearch');if(s)s.addEventListener('input',e=>renderResults(e.target.value));
 });
 document.querySelectorAll('.brandtog button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.brandtog button').forEach(x=>x.classList.remove('on'));b.classList.add('on');BRAND=b.dataset.b;SHOWALL=false;load();});
-// Today / Tomorrow date selector — which day's order you're placing
-function renderDayPills(){
+// Date strip — your real PO days (ingested) + today + tomorrow to build
+function renderDateStrip(){
   const today=istDate(), tmr=ymd(addDays(istNow(),1));
-  const pills=[['Today',today],['Tomorrow',tmr]];
-  $('daypills').innerHTML=pills.map(([lbl,d])=>`<button data-d="${d}" class="${VIEWDATE===d?'on':''}">${lbl}<small>${fmtDate(d)}</small></button>`).join('');
-  $('daypills').querySelectorAll('button').forEach(b=>b.onclick=()=>{VIEWDATE=b.dataset.d;setHead();render();});
+  const set=[...new Set([...PODATES, today, tmr])].sort(); // oldest→newest
+  $('daypills').innerHTML=set.map(d=>{
+    const lbl = d===today?'Today' : d===tmr?'Tomorrow' : d===ymd(addDays(istNow(),-1))?'Yesterday' : new Date(d+'T00:00:00Z').toLocaleDateString('en-IN',{weekday:'short',timeZone:'UTC'});
+    return `<button data-d="${d}" class="${VIEWDATE===d?'on':''}">${lbl}<small>${d.slice(8)} ${new Date(d+'T00:00:00Z').toLocaleDateString('en-IN',{month:'short',timeZone:'UTC'})}</small></button>`;
+  }).join('');
+  $('daypills').querySelectorAll('button').forEach(b=>b.onclick=()=>{VIEWDATE=b.dataset.d;load();});
 }
 function setHead(){
-  const today=istDate(), tmr=ymd(addDays(istNow(),1));
-  $('ohead').textContent = VIEWDATE===today?"Today's Order" : VIEWDATE===tmr?"Tomorrow's Order" : "Order";
+  const today=istDate(), tmr=ymd(addDays(istNow(),1)), yst=ymd(addDays(istNow(),-1));
+  $('ohead').textContent = VIEWDATE===today?"Today's Order" : VIEWDATE===tmr?"Tomorrow's Order" : VIEWDATE===yst?"Yesterday's Order" : "Order — "+fmtDate(VIEWDATE);
 }
 
 const FULFIL={deliver:'They deliver',collect:'Collect at shop',porter:'Book a porter',bus:'Comes by bus',standing:'Standing order'};
@@ -158,32 +161,63 @@ function qtyOf(it){const k=mid(it);if(QTY[k]!=null)return QTY[k];const q=Number(
 function isMilk(v,it){return /buffalo milk|^milk$/i.test(v)||/^milk$|buffalo milk/i.test(it.name||'');}
 function isChicken(v){return /broiler/i.test(v);}
 
+// turn a day-PO line into the item shape the cards use
+function lineToItem(l){return {name:l.item_name,product_code:l.item_name,id:l.item_name,uom:l.unit||'',
+  last_qty:parseFloat(l.qty)||0,suggested_qty:parseFloat(l.qty)||0,
+  primary_vendor:l.vendor_name?{name:l.vendor_name,vendor_id:l.vendor_id}:null,
+  journey:l.fulfilment?{fulfil:l.fulfilment,pay:l.pay_timing}:{fulfil:'collect',pay:'per'},
+  category:l.category,lane:l.vendor_name?'VENDOR':'MARKET'};}
 async function load(){
   $('groups').innerHTML='<div class="small">Loading your order…</div>';
-  const d=await fetch(`${API}?action=materials&brand=${BRAND}&days=120&pin=${encodeURIComponent(PIN)}`).then(r=>r.json()).catch(()=>({}));
-  DATA=(d&&d.items)||[];
+  const [po,cat,pd]=await Promise.all([
+    fetch(`${FLOW}?action=day-po&brand=${BRAND}&date=${VIEWDATE}`).then(r=>r.json()).catch(()=>({})),
+    fetch(`${API}?action=materials&brand=${BRAND}&days=120&pin=${encodeURIComponent(PIN)}`).then(r=>r.json()).catch(()=>({})),
+    fetch(`${FLOW}?action=po-dates&brand=${BRAND}`).then(r=>r.json()).catch(()=>({}))
+  ]);
+  CATALOG=(cat&&cat.items)||[];
+  PODATES=(pd&&pd.dates)||[];
+  DATA=((po&&po.items)||[]).map(lineToItem);
   loadOrderState();
   render();
 }
-// an item is IN the order if you added it, or it's a daily-recurring item you haven't removed
-function inOrder(it){const k=mid(it);if(REMOVED.has(k))return false;if(ADDED.has(k))return true;return isRegular(it);}
 function render(){
-  setHead(); renderDayPills();
-  const byVendor={};
-  for(const it of DATA){
-    if(!inOrder(it))continue;
-    const v=it.primary_vendor;if(!v)continue;
-    (byVendor[v.name]=byVendor[v.name]||{v,j:it.journey,items:[]}).items.push(it);
+  setHead(); renderDateStrip();
+  // working order = your PO items (minus removed) + items you added from the catalog
+  const work=[];
+  for(const it of DATA){ if(!REMOVED.has(mid(it))) work.push(it); }
+  for(const code of ADDED){ if(REMOVED.has(code))continue; if(work.find(w=>mid(w)===code))continue; const c=CATALOG.find(x=>mid(x)===code); if(c)work.push(c); }
+  const byVendor={}, collect=[];
+  for(const it of work){ const v=it.primary_vendor; if(v){(byVendor[v.name]=byVendor[v.name]||{v,j:it.journey,items:[]}).items.push(it);} else collect.push(it); }
+  const cards=Object.values(byVendor);
+  let html=cards.map(c=>vendorCard(c,c.items)).join('');
+  if(collect.length) html+=collectCard(collect);
+  $('tally').textContent=`${cards.length+(collect.length?1:0)} groups · ${work.length} items · ${fmtDate(VIEWDATE)}`;
+  if(html) $('groups').innerHTML=html;
+  else {
+    const last=PODATES.filter(d=>d!==VIEWDATE)[0];
+    $('groups').innerHTML = last
+      ? `<div class="small" style="margin-bottom:12px">No order for this day yet.</div><button class="addbtn" id="copyBtn">⧉ Copy ${fmtDate(last)} order into this day</button>`
+      : '<div class="small">No order yet — tap “＋ Add item” to build it.</div>';
+    const cb=$('copyBtn'); if(cb)cb.onclick=()=>copyFrom(last);
   }
-  const cards=Object.values(byVendor).sort((a,b)=>{
-    const ar=Math.min(...a.items.map(i=>daysAgo(i.last_purchase_date))),br=Math.min(...b.items.map(i=>daysAgo(i.last_purchase_date)));
-    return ar-br;
-  });
-  const totalItems=cards.reduce((n,c)=>n+c.items.length,0);
-  $('tally').textContent=`${cards.length} vendors · ${totalItems} items · for ${fmtDate(VIEWDATE)}`;
-  const html=cards.map(c=>vendorCard(c,c.items)).join('');
-  $('groups').innerHTML=html||'<div class="small">Empty order — tap “＋ Add item” to build it.</div>';
   bind();
+}
+async function copyFrom(date){
+  const po=await fetch(`${FLOW}?action=day-po&brand=${BRAND}&date=${date}`).then(r=>r.json()).catch(()=>({}));
+  const items=(po.items||[]).map(l=>({item:l.item_name,qty:l.qty,unit:l.unit,cat:l.category,vendor_name:l.vendor_name,vendor_id:l.vendor_id,fulfilment:l.fulfilment,pay_timing:l.pay_timing}));
+  if(!items.length)return;
+  await fetch(`${FLOW}?action=import-po`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,brand:BRAND,for_date:VIEWDATE,replace:true,items})}).catch(()=>{});
+  ADDED=new Set();REMOVED=new Set();saveOrderState();load();
+}
+// commodity / departmental items with no delivery vendor = a buy-at-shop checklist
+function collectCard(items){
+  const rows=items.map(it=>{const k=mid(it);const q=qtyOf(it);
+    return `<div class="row"><div class="nm">${esc(it.name)}${it.category?`<small style="color:var(--dim)">${esc(it.category)}</small>`:''}</div>
+      <div class="step"><button data-dec="${k}">−</button><input data-q="${k}" inputmode="decimal" value="${q}"><span class="u">${esc(it.uom||'')}</span><button data-inc="${k}">+</button></div><button class="rm" data-rm="${k}">×</button></div>`;}).join('');
+  return `<div class="vcard"><div class="vhead"><div><div class="vname">🛒 Buy / collect</div>
+    <div class="badges"><span class="b collect">Departmental & market</span></div></div></div>
+    <div class="vnote">Commodities — buy at Ashrafiya / market, compare where cheaper.</div>
+    <div class="items">${rows}</div></div>`;
 }
 function vendorCard(c, items){
   const j=c.j||{fulfil:'deliver',pay:'per'};
@@ -227,14 +261,15 @@ function removeItem(k){ADDED.delete(k);REMOVED.add(k);saveOrderState();render();
 // ── Add item: search your catalog, tap to add it (with its vendor) to the order ──
 function openAdd(){$('ovl').classList.add('on');$('osearch').value='';renderResults('');setTimeout(()=>$('osearch').focus(),100);}
 function closeAdd(){$('ovl').classList.remove('on');}
+function inThisOrder(code){ if(REMOVED.has(code))return false; if(ADDED.has(code))return true; return DATA.some(it=>mid(it)===code); }
 function renderResults(q){
   q=(q||'').toLowerCase().trim();
-  const pool=DATA.filter(it=>it.primary_vendor && !inOrder(it));
-  const list=(q?pool.filter(it=>(it.name+' '+(it.primary_vendor.name||'')).toLowerCase().includes(q)):pool).slice(0,60);
+  const pool=CATALOG.filter(it=>!inThisOrder(mid(it)));
+  const list=(q?pool.filter(it=>(it.name+' '+((it.primary_vendor&&it.primary_vendor.name)||'')).toLowerCase().includes(q)):pool).slice(0,60);
   $('oresults').innerHTML=list.map(it=>{
-    const k=mid(it);const v=it.primary_vendor.name.split('(')[0].trim();
+    const k=mid(it);const v=it.primary_vendor?it.primary_vendor.name.split('(')[0].trim():'Buy / collect';
     return `<div class="ores"><div><div class="on">${esc(it.name)}</div><div class="om">${esc(v)} · ${esc(it.uom||'')}</div></div><button class="add" data-addk="${esc(k)}">＋ Add</button></div>`;
-  }).join('')||'<div class="small">No matching item. (All catalog items already in your order, or no match.)</div>';
+  }).join('')||'<div class="small">No match. Try another word.</div>';
   $('oresults').querySelectorAll('[data-addk]').forEach(b=>b.onclick=()=>{ADDED.add(b.dataset.addk);REMOVED.delete(b.dataset.addk);saveOrderState();renderResults($('osearch').value);render();});
 }
 function nudge(k,dir){const i=document.querySelector(`[data-q="${CSS.escape(k)}"]`);if(!i)return;let v=Math.max(0,Math.round(((Number(i.value)||0)+dir)*100)/100);i.value=v;QTY[k]=v;}
