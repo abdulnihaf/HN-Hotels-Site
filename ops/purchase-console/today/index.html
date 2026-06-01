@@ -187,6 +187,13 @@ function sendWa(vendor,phone){
   const date=istNow().toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:'UTC'});
   const msg=`${brand} — order for ${date}\n\n${lines.join('\n')}\n\nKindly confirm. — via Sauda`;
   if(!phone){alert('No WhatsApp number saved for this vendor yet.');return;}
+  // log the order server-side so it flows into the receive queue (zero manual entry)
+  const items=[];
+  card.querySelectorAll('.row').forEach(r=>{const nm=r.querySelector('.nm');const q=r.querySelector('[data-q]');
+    if(nm&&q){const qty=Number(q.value)||0;if(qty>0){const u=r.querySelector('.u');items.push({name:nm.childNodes[0].textContent.trim(),qty,unit:u?u.textContent.trim():''});}}});
+  const j=(DATA.find(it=>it.primary_vendor&&it.primary_vendor.name===vendor)||{}).journey||{};
+  fetch('/api/sauda-flow?action=order-create',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pin:PIN,brand:BRAND,vendor_name:vendor,items,fulfilment:j.fulfil||null,pay_timing:j.pay||null,by:'owner'})}).catch(()=>{});
   setDone(vendor,true);
   window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,'_blank');
   setTimeout(render,400);
