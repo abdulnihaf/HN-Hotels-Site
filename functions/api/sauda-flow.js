@@ -90,6 +90,14 @@ async function ensureSchema(DB) {
       vpa TEXT PRIMARY KEY, vendor_name TEXT NOT NULL, vendor_id INTEGER,
       source TEXT, created_at TEXT DEFAULT (datetime('now'))
     )`),
+    // vendor running balance ledger. delta_paise SIGN from OUR books:
+    //  + = we overpaid → vendor owes us (advance/credit with them, adjust next order or refund)
+    //  − = we owe the vendor (pending). balance = SUM(delta_paise).
+    DB.prepare(`CREATE TABLE IF NOT EXISTS sauda_vendor_ledger (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor_name TEXT NOT NULL, delta_paise INTEGER NOT NULL,
+      reason TEXT, kind TEXT, on_date TEXT, by TEXT, created_at TEXT DEFAULT (datetime('now'))
+    )`),
   ]);
 }
 
@@ -355,6 +363,29 @@ export async function onRequest(context) {
       const brand = url.searchParams.get('brand') || 'NCH';
       const rows = (await DB.prepare(`SELECT DISTINCT for_date FROM sauda_day_po WHERE brand=? ORDER BY for_date DESC`).bind(brand).all()).results || [];
       return json({ success: true, brand, dates: rows.map(r => r.for_date) });
+    }
+
+    // ── VENDOR BALANCE LEDGER (overpaid / we-owe; credit carried to next order or refund) ──
+    if (action === 'vendor-adjust' && request.method === 'POST') {
+      const b = await request.json();
+      if (!isOwner(b.pin)) return json({ success: false, error: 'owner only' }, 401);
+      const v = String(b.vendor_name || '').trim();
+      const amt = Math.round(Number(b.amount || 0) * 100);
+      if (!v || !amt) return json({ success: false, error: 'vendor_name + amount required' }, 400);
+      // kind: overpaid (+, they owe us) | we_owe (−) | settled (reduces our credit, −) | repaid (we paid down what we owe, +)
+      const sign = (b.kind === 'we_owe' || b.kind === 'settled') ? -1 : 1;
+      await DB.prepare(`INSERT INTO sauda_vendor_ledger (vendor_name,delta_paise,reason,kind,on_date,by) VALUES (?,?,?,?,?,?)`)
+        .bind(v, sign * Math.abs(amt), b.reason || '', b.kind || 'overpaid', b.on_date || istToday(), b.by || 'owner').run();
+      return json({ success: true });
+    }
+    if (action === 'vendor-balances') {
+      const rows = (await DB.prepare(`SELECT vendor_name, SUM(delta_paise) bal FROM sauda_vendor_ledger GROUP BY vendor_name HAVING bal != 0 ORDER BY ABS(bal) DESC`).all()).results || [];
+      return json({ success: true, balances: rows.map(r => ({ vendor_name: r.vendor_name, balance: r.bal / 100 })) });
+    }
+    if (action === 'vendor-ledger') {
+      const v = url.searchParams.get('vendor');
+      const rows = (await DB.prepare(`SELECT delta_paise,reason,kind,on_date FROM sauda_vendor_ledger WHERE vendor_name=? ORDER BY id DESC`).bind(v).all()).results || [];
+      return json({ success: true, vendor: v, entries: rows.map(r => ({ amount: r.delta_paise / 100, reason: r.reason, kind: r.kind, date: r.on_date })) });
     }
 
     // ── VPA→vendor self-learning map ──
