@@ -79,6 +79,7 @@
 <script>
 const API='/api/purchase-item';
 const CODE=new URLSearchParams(location.search).get('item')||'BUNS';
+const PREQTY=(new URLSearchParams(location.search).get('qty')||'').replace(/[^\d.]/g,''); // qty carried from the PO
 let PIN='',NAME='',ITEM=null;const $=id=>document.getElementById(id);
 $('pinBtn').onclick=async()=>{const pin=$('pin').value.trim();if(!pin)return;
   const r=await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(pin)}`).then(r=>r.json()).catch(()=>({success:false}));
@@ -89,6 +90,7 @@ async function loadItem(){const r=await fetch(`${API}?action=item&code=${encodeU
   $('glyph').textContent=ITEM.emoji||'📦';$('title').textContent=ITEM.name;$('sub').textContent='Nawabi · '+ITEM.vendor;
   $('vname').textContent=ITEM.vendor;$('vph').textContent='+'+ITEM.vendor_phone.replace(/^(\d{2})(\d{5})(\d{5})$/,'$1 $2 $3');
   $('qtyLabel').textContent=ITEM.order_unit.charAt(0).toUpperCase()+ITEM.order_unit.slice(1);$('qty').placeholder='100';
+  if(PREQTY){$('qty').value=PREQTY;buildMsg();}   // prefill from the PO — owner confirms, doesn't retype
   $('msgVendorLabel').textContent='Message to '+ITEM.vendor;}
 function initOrder(){const sel=$('forDate'),dn=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   for(let i=0;i<3;i++){const d=new Date();d.setDate(d.getDate()+i);const iso=d.toISOString().slice(0,10);const o=document.createElement('option');o.value=iso;o.textContent=(i===0?'Today':i===1?'Tomorrow':'')+' · '+dn[(d.getDay()+6)%7]+' '+d.getDate()+' '+mn[d.getMonth()];o.dataset.disp=d.getDate()+' '+mn[d.getMonth()];sel.appendChild(o);}sel.selectedIndex=1;
