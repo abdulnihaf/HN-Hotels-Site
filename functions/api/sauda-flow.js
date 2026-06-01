@@ -252,15 +252,23 @@ async function reconcileOne(DB, id) {
      FROM money_events WHERE direction='debit' AND parse_status='parsed' AND amount_paise=?
        AND txn_at >= date('now','-3 days') ORDER BY txn_at DESC LIMIT 20`).bind(amt).all()).results || [];
   if (!evs.length) return false;
-  // prefer a VPA-confident match; else fall back to amount+time (blind P2P)
-  let pick = null;
-  for (const ev of evs) {
+  // never double-spend a bank debit across two orders
+  const usedRows = (await DB.prepare(`SELECT bank_event_id FROM sauda_purchase WHERE bank_event_id IS NOT NULL`).all()).results || [];
+  const used = new Set(usedRows.map(r => r.bank_event_id));
+  const free = evs.filter(e => !used.has(e.id));
+  if (!free.length) return false;
+  // (1) VPA-confident match wins. (2) else only auto-confirm if the amount+time
+  // candidate is UNAMBIGUOUS (exactly one). Ambiguous → leave for owner's glance,
+  // never guess a bank ref (that was the dangerous fallback).
+  let pick = null, confidence = null;
+  for (const ev of free) {
     const v = vendorFromEvent(ev);
-    if (v && (v === o.vendor_name || o.vendor_name.includes(v) || v.includes(o.vendor_name.split('(')[0].trim()))) { pick = ev; break; }
+    if (v && (v === o.vendor_name || o.vendor_name.includes(v) || v.includes(o.vendor_name.split('(')[0].trim()))) { pick = ev; confidence = 'vpa'; break; }
   }
-  if (!pick) pick = evs[0]; // amount+time fallback
-  await DB.prepare(`UPDATE sauda_purchase SET status='PAID', bank_event_id=?, bank_ref=?, reconciled_at=?, paid_at=COALESCE(paid_at,?), updated_at=datetime('now') WHERE id=?`)
-    .bind(pick.id, pick.source_ref || null, nowIso(), pick.txn_at, id).run();
+  if (!pick && free.length === 1) { pick = free[0]; confidence = 'amount_time'; }
+  if (!pick) return false; // multiple same-amount candidates, no VPA → tentative, don't stamp
+  await DB.prepare(`UPDATE sauda_purchase SET status='PAID', bank_event_id=?, bank_ref=?, pay_method=COALESCE(pay_method,?), reconciled_at=?, receive_note=COALESCE(receive_note,?)||'', paid_at=COALESCE(paid_at,?), updated_at=datetime('now') WHERE id=?`)
+    .bind(pick.id, pick.source_ref || null, 'upi', nowIso(), `[reconcile:${confidence}]`, pick.txn_at, id).run();
   return true;
 }
 
