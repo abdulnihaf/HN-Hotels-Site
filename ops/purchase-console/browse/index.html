@@ -1,0 +1,3872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sauda">
+  <title>Sauda · HN Hotels</title>
+  <meta name="theme-color" content="#0a0a10">
+  <link rel="manifest" href="/ops/purchase-console/manifest.json">
+  <style id="seed-styles">
+    /* Morning auto-seed — Sauda's pre-sectioned read of the day.
+       A read-only suggestion layer above the manual plan. */
+    .seed-wrap { margin: 0 0 18px; }
+    .seed-intro {
+      font-size: 12.5px; line-height: 1.45; color: #98989f;
+      background: rgba(212,162,76,0.10); border: 1px solid rgba(212,162,76,0.28);
+      border-radius: 12px; padding: 10px 12px; margin: 0 0 12px;
+    }
+    .seed-section {
+      background: #14141c; border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px; margin: 0 0 10px; overflow: hidden;
+    }
+    .seed-summary {
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+      padding: 13px 14px; min-height: 48px; list-style: none;
+      font-weight: 700; -webkit-user-select: none; user-select: none;
+    }
+    .seed-summary::-webkit-details-marker { display: none; }
+    .seed-summary-glyph { font-size: 19px; }
+    .seed-summary-title { flex: 1; font-size: 14.5px; color: #f8f8fa; letter-spacing: 0.2px; }
+    .seed-summary-meta { font-size: 11.5px; font-weight: 600; color: #98989f; white-space: nowrap; }
+    .seed-section[open] > .seed-summary { border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .seed-section-body { padding: 4px 0; }
+    .seed-nch_morning > .seed-summary { box-shadow: inset 3px 0 0 #34d399; }
+    .seed-he_evening > .seed-summary { box-shadow: inset 3px 0 0 #d4a24c; }
+    .seed-vendor_calls > .seed-summary { box-shadow: inset 3px 0 0 #a78bfa; }
+    .seed-other > .seed-summary { box-shadow: inset 3px 0 0 rgba(255,255,255,0.18); }
+    .seed-line {
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 14px; border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .seed-line:first-child { border-top: none; }
+    .seed-emoji { font-size: 17px; width: 22px; text-align: center; flex: 0 0 auto; }
+    .seed-name { flex: 1; font-size: 13.5px; color: #f8f8fa; }
+    .seed-rec { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+    .seed-rec-src { font-size: 12px; font-weight: 600; color: #5e9eff; }
+    .seed-rec-price { font-size: 13px; font-weight: 700; color: #f8f8fa; }
+    .seed-rec-vendor .seed-rec-src { color: #a78bfa; }
+    .seed-rec-none { font-size: 11.5px; font-style: italic; color: #5c5c66; }
+    .seed-empty { padding: 14px; font-size: 12.5px; color: #98989f; font-style: italic; text-align: center; }
+  </style>
+  <link rel="apple-touch-icon" sizes="180x180" href="/ops/purchase-console/icon-180.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/ops/purchase-console/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="/ops/purchase-console/icon-512.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/ops/purchase-console/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       iPhone-app-feel design tokens
+       ============================================================ */
+    :root {
+      --bg: #000;
+      --bg-elev-1: #14141c;
+      --bg-elev-2: #1c1c26;
+      --bg-elev-3: #26262f;
+      --line: rgba(255,255,255,0.10);
+      --line-soft: rgba(255,255,255,0.05);
+      --text: #f8f8fa;
+      --text-dim: #98989f;
+      --text-mute: #5c5c66;
+      --hn-gold: #d4a24c;
+      --hn-gold-soft: rgba(212,162,76,0.18);
+      --hn-gold-border: rgba(212,162,76,0.45);
+      --hn-gold-deep: #b8893a;
+      --pc-green: #34d399;
+      --pc-green-soft: rgba(52,211,153,0.14);
+      --pc-blue: #5e9eff;
+      --pc-yellow: #fbbf24;
+      --pc-red: #ff5c5c;
+      --pc-purple: #a78bfa;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bot: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --tab-bar-h: 76px;
+      --nav-bar-h: 44px;
+      --spring: cubic-bezier(.34, 1.56, .64, 1);
+      --ease: cubic-bezier(.22, .61, .36, 1);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+    html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Inter', sans-serif;
+      font-size: 15px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior-y: contain;
+      overflow: hidden;
+      width: 100vw; height: 100vh; height: 100dvh;
+    }
+    /* iOS large title typographic feel */
+    h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, 'Inter', sans-serif; letter-spacing: -0.02em; }
+    button, input, select { font-family: inherit; color: inherit; }
+    button { background: none; border: none; cursor: pointer; padding: 0; font-size: inherit; }
+    input { -webkit-appearance: none; appearance: none; }
+    a { color: inherit; text-decoration: none; }
+
+    /* ============================================================
+       App shell — tab-based scaffold
+       ============================================================ */
+    #app {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg);
+    }
+    .tab-pane {
+      flex: 1; min-height: 0;
+      overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      padding-bottom: calc(var(--tab-bar-h) + var(--safe-bot) + 8px);
+    }
+    .tab-pane.hide { display: none; }
+
+    /* ============================================================
+       Status bar haze (iOS translucent under the notch)
+       ============================================================ */
+    .status-bar-haze {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: calc(var(--safe-top) + 4px);
+      background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+      z-index: 60; pointer-events: none;
+    }
+
+    /* ============================================================
+       Top nav (compact title bar — appears when large title scrolls out)
+       ============================================================ */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      height: calc(var(--safe-top) + var(--nav-bar-h));
+      padding: var(--safe-top) 16px 0;
+      background: rgba(10,10,16,0.0);
+      backdrop-filter: blur(0px);
+      -webkit-backdrop-filter: blur(0px);
+      display: grid; grid-template-columns: 60px 1fr 60px; align-items: center;
+      transition: background .25s var(--ease), backdrop-filter .25s var(--ease);
+      border-bottom: 1px solid transparent;
+    }
+    .top-nav.condensed {
+      background: rgba(20,20,28,0.78);
+      backdrop-filter: saturate(180%) blur(22px);
+      -webkit-backdrop-filter: saturate(180%) blur(22px);
+      border-bottom-color: var(--line);
+    }
+    .top-nav .nav-title {
+      grid-column: 2;
+      text-align: center;
+      font: 700 17px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      opacity: 0;
+      transition: opacity .2s var(--ease);
+    }
+    .top-nav.condensed .nav-title { opacity: 1; }
+    .top-nav .nav-action {
+      width: 44px; height: 44px;
+      display: grid; place-items: center;
+      color: var(--hn-gold);
+      font: 700 15px/1 sans-serif;
+      border-radius: 22px;
+      transition: transform .12s var(--ease), background .12s ease;
+    }
+    .top-nav .nav-action:active {
+      transform: scale(0.92);
+      background: rgba(212,162,76,0.12);
+    }
+    .top-nav .nav-action.right { grid-column: 3; justify-self: end; }
+    .top-nav .nav-action.left { grid-column: 1; }
+
+    /* ============================================================
+       Large title (iOS pattern)
+       ============================================================ */
+    .large-title-wrap {
+      padding: 0 16px 14px;
+      display: grid; gap: 4px;
+    }
+    .large-title {
+      margin: 0;
+      font: 800 34px/1.05 -apple-system, sans-serif;
+      letter-spacing: -0.025em;
+      color: var(--text);
+    }
+    .large-title .accent {
+      font-family: 'Cormorant Garamond', serif;
+      color: var(--hn-gold);
+      font-weight: 600;
+      font-style: italic;
+      letter-spacing: 0;
+      font-size: 22px;
+      vertical-align: 4px;
+    }
+    .large-subtitle {
+      font: 500 13px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+    }
+    .large-subtitle b { color: var(--hn-gold); font-weight: 600; }
+
+    /* ============================================================
+       Search bar (iOS spotlight feel)
+       ============================================================ */
+    .search-section { padding: 0 16px 12px; }
+    .search-pill {
+      position: relative;
+      background: var(--bg-elev-2);
+      border-radius: 12px;
+      transition: transform .15s var(--ease);
+    }
+    .search-pill input {
+      width: 100%; height: 40px;
+      border: none; background: transparent;
+      padding: 0 14px 0 38px;
+      color: var(--text);
+      font: 500 15px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      border-radius: 12px;
+    }
+    .search-pill input::placeholder { color: var(--text-mute); font-weight: 500; }
+    .search-pill input:focus { outline: none; }
+    .search-pill .icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-mute);
+      pointer-events: none;
+      width: 18px; height: 18px;
+    }
+    .search-pill:focus-within { transform: scale(1.005); background: var(--bg-elev-3); }
+
+    /* ============================================================
+       Brand segmented control (iOS UISegmentedControl)
+       ============================================================ */
+    .segmented {
+      margin: 0 16px 12px;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
+      padding: 2px;
+      background: var(--bg-elev-2);
+      border-radius: 10px;
+    }
+    .segmented button {
+      height: 32px;
+      color: var(--text-dim);
+      font: 600 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      border-radius: 8px;
+      transition: all .18s var(--ease);
+    }
+    .segmented button.on {
+      background: var(--bg-elev-3);
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .segmented button:active { transform: scale(0.97); }
+    /* Tier segmented control — 4 columns, slightly smaller text */
+    .tier-segmented {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .tier-segmented button { font-size: 12px; }
+    .tier-segmented button[data-tier="b2b"] .b2b-star {
+      color: var(--hn-gold);
+      margin-left: 2px;
+      font-size: 11px;
+    }
+    .tier-segmented button[data-tier="b2b"].on { box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 0 0 1px var(--hn-gold-border); }
+
+    /* ============================================================
+       Category chip rail
+       ============================================================ */
+    .chip-rail-wrap {
+      padding: 0 0 12px;
+      mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+      -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    }
+    .chip-rail {
+      display: flex; gap: 6px;
+      padding: 0 16px;
+      overflow-x: auto; overflow-y: hidden;
+      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    }
+    .chip-rail::-webkit-scrollbar { display: none; }
+    .chip {
+      flex-shrink: 0;
+      padding: 7px 14px; min-height: 32px;
+      background: var(--bg-elev-2);
+      color: var(--text-dim);
+      border-radius: 999px;
+      font: 600 12.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      transition: transform .12s var(--ease);
+      white-space: nowrap;
+      display: inline-flex; align-items: center;
+    }
+    .chip.on {
+      background: var(--hn-gold-soft);
+      color: var(--hn-gold);
+      border: 1px solid var(--hn-gold-border);
+    }
+    .chip:active { transform: scale(0.93); }
+
+    .filter-meta {
+      padding: 4px 16px 14px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .filter-stat {
+      font: 600 11.5px/1 -apple-system, sans-serif;
+      color: var(--text-mute);
+      letter-spacing: -0.01em;
+    }
+    .add-btn-small {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 12px;
+      background: var(--bg-elev-2);
+      color: var(--hn-gold);
+      border-radius: 999px;
+      font: 700 11.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      transition: transform .12s var(--ease);
+    }
+    .add-btn-small:active { transform: scale(0.94); }
+
+    /* ============================================================
+       Material list — iOS group table cell style
+       ============================================================ */
+    .stream { padding: 0 12px; display: grid; gap: 10px; }
+    .stream:last-child { padding-bottom: 24px; }
+
+    .section-header {
+      position: sticky;
+      top: calc(var(--safe-top) + var(--nav-bar-h));
+      z-index: 12;
+      margin: 14px 4px 6px;
+      padding: 4px 10px;
+      display: flex; justify-content: space-between; align-items: center;
+      font: 800 11px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 6px;
+    }
+    .section-header .count {
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--text-mute); font-weight: 600;
+    }
+
+    .mat-card {
+      background: var(--bg-elev-1);
+      border-radius: 18px;
+      padding: 14px;
+      display: grid; gap: 12px;
+      transition: transform .12s var(--ease);
+      will-change: transform;
+    }
+    .mat-card:active { transform: scale(0.985); }
+    .mat-card.has-best { box-shadow: inset 0 0 0 1px rgba(212,162,76,0.20); }
+    .mat-card.in-plan { box-shadow: inset 0 0 0 1.5px rgba(94,158,255,0.40); }
+    .mat-card.custom { background: linear-gradient(180deg, rgba(167,139,250,0.07) 0%, var(--bg-elev-1) 100%); }
+    /* LANE VERDICT — the clear "where do I buy this" banner at the top of each card */
+    .lane-banner { display: flex; align-items: center; gap: 10px; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; line-height: 1.25; }
+    .lane-banner .lane-ic { font-size: 18px; flex: none; }
+    .lane-banner .lane-txt { display: flex; flex-direction: column; }
+    .lane-banner .lane-txt small { font-weight: 500; font-size: 11px; opacity: 0.72; margin-top: 1px; }
+    .lane-banner.lane-vendor { background: rgba(59,167,118,0.13); color: #6bd6a3; box-shadow: inset 0 0 0 1px rgba(59,167,118,0.28); }
+    .lane-banner.lane-market { background: rgba(212,162,76,0.13); color: #e3bd72; box-shadow: inset 0 0 0 1px rgba(212,162,76,0.28); }
+    .lane-banner b { font-weight: 800; }
+    /* vendor-lane cards: dim the portal compare clutter so the verdict reads first */
+    .mat-card.lane-vendor .best-deal, .mat-card.lane-vendor .tier-stack { opacity: 0.5; }
+
+    .mat-head {
+      display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center;
+    }
+    .mat-thumb {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: var(--bg-elev-2);
+      display: grid; place-items: center;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+      flex-shrink: 0;
+    }
+    .mat-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .mat-thumb .emoji { font-size: 30px; line-height: 1; }
+
+    .mat-name {
+      font: 700 16px/1.2 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .mat-meta {
+      margin-top: 3px;
+      display: flex; align-items: center; gap: 6px;
+      font: 500 12px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+      flex-wrap: wrap;
+    }
+    .mat-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-mute); }
+    .pill-custom {
+      padding: 2px 7px; border-radius: 5px;
+      background: rgba(167,139,250,0.18); color: var(--pc-purple);
+      font: 800 9px/1 sans-serif; letter-spacing: 0.05em;
+    }
+    .pill-vendor {
+      padding: 2px 7px; border-radius: 5px;
+      background: rgba(37,211,102,0.18); color: #25d366;
+      font: 800 9px/1 sans-serif; letter-spacing: 0.04em;
+    }
+    /* Vendor-direct block on material cards (green WhatsApp accent) */
+    .vendor-deal {
+      padding: 12px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(37,211,102,0.12) 0%, rgba(37,211,102,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(37,211,102,0.30);
+      margin-bottom: 8px;
+    }
+    .vendor-row {
+      display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center;
+    }
+    .vendor-icon {
+      font-size: 24px;
+      width: 36px; height: 36px;
+      display: grid; place-items: center;
+      background: #25d366;
+      border-radius: 9px;
+      box-shadow: 0 4px 10px rgba(37,211,102,0.32);
+    }
+    .vendor-info { min-width: 0; }
+    .vendor-line {
+      display: flex; align-items: center; gap: 6px;
+      font: 800 13px/1 -apple-system, sans-serif; letter-spacing: -0.01em; color: var(--text);
+    }
+    .vendor-tag {
+      font: 800 9px/1 -apple-system, sans-serif;
+      letter-spacing: 0.06em;
+      background: #25d366; color: #0a0a10;
+      padding: 3px 7px; border-radius: 4px;
+    }
+    .vendor-sub {
+      margin-top: 3px;
+      font: 600 11px/1 -apple-system, sans-serif;
+      color: var(--text-dim); letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+    .add-vendor-btn {
+      min-height: 40px; padding: 0 14px;
+      background: #25d366;
+      color: #0a0a10;
+      border-radius: 11px;
+      font: 800 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 4px 12px rgba(37,211,102,0.28);
+      transition: transform .1s var(--ease);
+    }
+    .add-vendor-btn:active { transform: scale(0.96); }
+    .add-vendor-btn.in-plan {
+      background: rgba(37,211,102,0.18);
+      color: #25d366;
+      box-shadow: inset 0 0 0 1px rgba(37,211,102,0.45);
+    }
+    /* Plan-tab vendor block — green WhatsApp accent variant */
+    .portal-block.vendor-block {
+      box-shadow: inset 0 0 0 1px rgba(37,211,102,0.32);
+    }
+    .portal-block.vendor-block .portal-block-title { color: #25d366; }
+    .whatsapp-send-btn {
+      min-height: 46px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 0 16px;
+      background: #25d366;
+      color: #0a0a10;
+      border-radius: 13px;
+      font: 800 14px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      box-shadow: 0 6px 14px rgba(37,211,102,0.28), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+    .whatsapp-send-btn:active { transform: scale(0.97); }
+    .plan-tier-section.tier-vendor .plan-tier-title { color: #25d366; }
+    .plan-tier-section.tier-vendor .plan-tier-title::before { content: '📲 '; opacity: 0.9; }
+    .plan-tier-section.tier-manual .plan-tier-title { color: var(--text-dim); }
+    .plan-tier-section.tier-manual .plan-tier-title::before { content: '🔍 '; opacity: 0.9; }
+
+    .mat-tools {
+      display: grid; grid-auto-flow: column; gap: 6px; align-items: center;
+    }
+    .qty-stepper {
+      display: inline-flex; align-items: center;
+      background: var(--bg-elev-2);
+      border-radius: 10px;
+      padding: 2px;
+      height: 32px;
+    }
+    .qty-stepper button {
+      width: 28px; height: 28px; border-radius: 7px;
+      color: var(--text);
+      font: 800 17px/1 -apple-system, sans-serif;
+      transition: transform .1s var(--ease), background .1s ease;
+    }
+    .qty-stepper button:active { transform: scale(0.92); background: var(--bg-elev-3); }
+    .qty-stepper input {
+      width: 40px; height: 28px;
+      background: transparent; border: none; color: var(--text);
+      text-align: center;
+      font: 700 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+    .qty-stepper input::-webkit-outer-spin-button,
+    .qty-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .qty-stepper .uom {
+      padding: 0 6px 0 2px;
+      font: 700 9.5px/1 -apple-system, sans-serif;
+      color: var(--text-mute);
+      text-transform: lowercase;
+      letter-spacing: 0.02em;
+    }
+    .icon-btn {
+      width: 32px; height: 32px;
+      background: var(--bg-elev-2);
+      color: var(--text-dim);
+      border-radius: 9px;
+      display: grid; place-items: center;
+      font-size: 14px;
+      transition: transform .1s var(--ease), background .1s ease;
+    }
+    .icon-btn:active { transform: scale(0.9); background: var(--bg-elev-3); }
+    .icon-btn[disabled] { opacity: 0.4; animation: rot 1s linear infinite; }
+    .icon-btn.danger { color: var(--pc-red); }
+    @keyframes rot { to { transform: rotate(360deg); } }
+
+    .baseline-strip {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-elev-2);
+      border-radius: 11px;
+      font: 500 12px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+    }
+    .baseline-strip .price {
+      font-weight: 800; color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .baseline-strip .vendor {
+      margin-left: auto; color: var(--text-mute); font-size: 10.5px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 50%;
+    }
+
+    /* ============================================================
+       Best-deal block — the hero of each card
+       ============================================================ */
+    .best-deal {
+      position: relative;
+      padding: 14px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(212,162,76,0.13) 0%, rgba(212,162,76,0.04) 60%, rgba(212,162,76,0.07) 100%);
+      box-shadow: inset 0 0 0 1px rgba(212,162,76,0.32);
+      display: grid; gap: 12px;
+    }
+    .best-deal.no-best {
+      background: var(--bg-elev-2);
+      box-shadow: inset 0 0 0 1px var(--line);
+    }
+    .best-row {
+      display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center;
+    }
+    .portal-favicon {
+      width: 40px; height: 40px; border-radius: 11px;
+      background: #fff;
+      display: grid; place-items: center;
+      overflow: hidden;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(0,0,0,0.04);
+    }
+    .portal-favicon img { width: 100%; height: 100%; object-fit: contain; padding: 5px; }
+    .portal-favicon.letter {
+      background: var(--bg-elev-3);
+      color: var(--text);
+      font: 800 14px/1 -apple-system, sans-serif;
+    }
+    .best-info { min-width: 0; }
+    .best-portal-line {
+      display: flex; align-items: center; gap: 6px;
+      font: 800 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .cheap-tag {
+      font: 800 9px/1 -apple-system, sans-serif;
+      letter-spacing: 0.06em;
+      background: var(--hn-gold);
+      color: #1a1206;
+      padding: 3px 7px;
+      border-radius: 4px;
+    }
+    .best-sku {
+      margin-top: 3px;
+      font: 500 12px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .best-eta {
+      margin-top: 5px;
+      font: 600 10.5px/1 -apple-system, sans-serif;
+      color: var(--text-mute);
+      letter-spacing: -0.01em;
+      display: inline-flex; align-items: center; gap: 3px;
+    }
+    .best-price-block { text-align: right; }
+    .best-price {
+      font: 800 20px/1 -apple-system, sans-serif;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .best-rate {
+      margin-top: 4px;
+      font: 600 10.5px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+    .best-delta {
+      display: inline-block; margin-left: 4px;
+      padding: 2px 6px; border-radius: 5px;
+      font: 800 10px/1 -apple-system, sans-serif; letter-spacing: 0;
+    }
+    .best-delta.down { background: var(--pc-green-soft); color: var(--pc-green); }
+    .best-delta.up { background: rgba(255,92,92,0.16); color: var(--pc-red); }
+    .best-delta.flat { background: var(--line-soft); color: var(--text-mute); }
+
+    .cta-row {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px;
+    }
+    .open-app-btn {
+      min-height: 46px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 0 16px;
+      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
+      color: #1a1206;
+      border-radius: 13px;
+      font: 800 14px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 6px 16px rgba(212,162,76,0.22), inset 0 1px 0 rgba(255,255,255,0.25);
+      transition: transform .1s var(--ease), filter .1s ease;
+    }
+    .open-app-btn:active { transform: scale(0.97); filter: brightness(0.92); }
+    .open-app-btn .portal-favicon {
+      width: 22px; height: 22px; border-radius: 6px;
+      box-shadow: none;
+    }
+    .open-app-btn .portal-favicon img { padding: 2px; }
+    .open-app-btn .arrow { opacity: 0.75; font-size: 11px; }
+    .add-plan-btn {
+      min-width: 56px; min-height: 46px; padding: 0 14px;
+      background: var(--bg-elev-2);
+      color: var(--text);
+      border-radius: 13px;
+      font: 800 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      transition: transform .1s var(--ease), background .15s ease;
+    }
+    .add-plan-btn:active { transform: scale(0.95); }
+    .add-plan-btn.in-plan {
+      background: rgba(94,158,255,0.16);
+      color: var(--pc-blue);
+      box-shadow: inset 0 0 0 1px rgba(94,158,255,0.34);
+    }
+
+    /* ============================================================
+       Alt portal chip strip
+       ============================================================ */
+    .tier-stack {
+      display: grid; gap: 6px;
+      margin-top: 2px;
+    }
+    .tier-row {
+      display: grid; gap: 4px;
+    }
+    .tier-row-label {
+      font: 800 9px/1 -apple-system, sans-serif;
+      letter-spacing: 0.09em;
+      color: var(--text-mute);
+      text-transform: uppercase;
+      padding: 2px 4px 0;
+    }
+    .tier-row.tier-b2b .tier-row-label { color: var(--hn-gold); }
+    .tier-row.tier-qcomm .tier-row-label::before { content: '⚡ '; opacity: 0.7; }
+    .tier-row.tier-retail .tier-row-label::before { content: '🛒 '; opacity: 0.7; }
+    .alt-strip {
+      display: flex; gap: 6px; overflow-x: auto;
+      margin: 0 -14px;
+      padding: 0 14px 2px;
+      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    }
+    .alt-strip::-webkit-scrollbar { display: none; }
+    .alt-chip {
+      flex-shrink: 0;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px 6px 6px;
+      background: var(--bg-elev-2);
+      border-radius: 999px;
+      font: 600 11.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      min-height: 32px;
+      transition: transform .1s var(--ease);
+    }
+    .alt-chip:active { transform: scale(0.93); }
+    .alt-chip.disabled { opacity: 0.55; }
+    .alt-chip .chip-favicon {
+      width: 20px; height: 20px; border-radius: 6px;
+      background: #fff;
+      overflow: hidden;
+      display: grid; place-items: center;
+    }
+    .alt-chip .chip-favicon img { width: 100%; height: 100%; object-fit: contain; padding: 2px; }
+    .alt-chip .chip-favicon.letter { background: var(--bg-elev-3); color: var(--text); font: 800 8px/1 -apple-system, sans-serif; }
+    .alt-chip .chip-name { font-weight: 700; }
+    .alt-chip .chip-price {
+      color: var(--text-dim); font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .alt-chip .warn { color: var(--pc-yellow); margin-right: 1px; }
+    /* Passive session-health — per-chip badge + Shop banner */
+    .alt-chip { position: relative; }
+    .alt-chip .chip-health {
+      position: absolute; top: 3px; left: 3px;
+      width: 8px; height: 8px; border-radius: 50%;
+      box-shadow: 0 0 0 1.5px var(--bg-elev-2); pointer-events: none;
+    }
+    .alt-chip.health-good   .chip-health { background: #1a7f37; }
+    .alt-chip.health-warn   .chip-health { background: #d4a24c; }
+    .alt-chip.health-bad    .chip-health { background: #ff5c5c; }
+    .alt-chip.health-neutral .chip-health { background: #6e7781; }
+    .alt-chip.scrape-dead {
+      opacity: 0.5; cursor: not-allowed;
+      border: none; -webkit-appearance: none; appearance: none;
+      font: 600 11.5px/1 -apple-system, sans-serif;
+      text-decoration: line-through; text-decoration-color: rgba(255,92,92,0.55);
+    }
+    .alt-chip.scrape-dead .chip-price { color: #ff5c5c; }
+    .portal-banner {
+      display: flex; align-items: center; gap: 9px;
+      margin: 0 14px 10px; padding: 11px 13px; border-radius: 12px;
+      background: rgba(255,92,92,0.10); border: 1px solid rgba(255,92,92,0.32);
+      color: #ffb3b3; font: 600 12.5px/1.35 -apple-system, sans-serif; letter-spacing: -0.01em;
+    }
+    .portal-banner.tone-warn { background: rgba(212,162,76,0.10); border-color: rgba(212,162,76,0.34); color: #e9c989; }
+    .portal-banner .pb-text { flex: 1; min-width: 0; }
+    .portal-banner .pb-act {
+      flex: none; min-height: 34px; padding: 0 12px;
+      background: rgba(255,255,255,0.10); color: inherit; border-radius: 8px;
+      font: 800 12px/1 -apple-system, sans-serif; letter-spacing: -0.01em; cursor: pointer;
+    }
+    .portal-banner .pb-act:active { transform: scale(0.95); }
+    .portal-banner[hidden] { display: none; }
+    /* Vendors pane (You tab) */
+    .vendor-list { display: flex; flex-direction: column; }
+    .vendor-list-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 2px; border-bottom: 0.5px solid var(--line);
+      font: 600 13px/1.3 -apple-system, sans-serif;
+    }
+    .vendor-list-row .v-icon { font-size: 17px; flex: none; }
+    .vendor-list-row .v-main { flex: 1; min-width: 0; }
+    .vendor-list-row .v-name { color: var(--text); font-weight: 700; }
+    .vendor-list-row .v-meta { color: var(--text-dim); font: 600 11px/1.3 -apple-system, sans-serif; }
+    .vendor-list-row .v-count {
+      flex: none; font: 700 11px/1 -apple-system, sans-serif; color: var(--text-mute);
+      padding: 4px 8px; background: var(--bg-elev-2); border-radius: 999px;
+    }
+    .vendor-list .vendor-empty { color: var(--text-dim); font-size: 12.5px; padding: 10px 2px; }
+    .vendor-add { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .vendor-add input {
+      flex: 1; min-width: 120px; min-height: 44px; padding: 9px 12px;
+      border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elev-1);
+      color: var(--text); font: 600 14px/1 -apple-system, sans-serif;
+    }
+    .vendor-add input::placeholder { color: var(--text-mute); }
+    .btn-vendor-add {
+      flex: none; min-height: 44px; padding: 0 18px;
+      background: linear-gradient(135deg, #25d366 0%, #1da851 100%); color: #fff;
+      border-radius: 10px; font: 800 13px/1 -apple-system, sans-serif; letter-spacing: -0.01em; cursor: pointer;
+    }
+    .btn-vendor-add:active { transform: scale(0.96); }
+    /* ============================================================
+       Handoff expectation indicators (step 2)
+       ============================================================ */
+    .chip-handoff {
+      font-size: 10px;
+      line-height: 1;
+      margin-left: 3px;
+      opacity: 0.85;
+    }
+    .alt-chip.handoff-safari {
+      background: rgba(94,158,255,0.06);
+      box-shadow: inset 0 0 0 0.5px rgba(94,158,255,0.18);
+    }
+    .alt-chip.handoff-safari .chip-handoff { opacity: 0.7; }
+    .alt-chip.handoff-app-search-unverified {
+      background: rgba(251,191,36,0.06);
+      box-shadow: inset 0 0 0 0.5px rgba(251,191,36,0.18);
+    }
+    .open-app-btn.handoff-safari {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+      color: #f9fafb;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+    .open-app-btn.handoff-app-search-unverified {
+      background: linear-gradient(135deg, #d4a24c 0%, #a07320 100%);
+      box-shadow: 0 6px 14px rgba(212,162,76,0.18), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+
+    /* ============================================================
+       Skeleton + empty
+       ============================================================ */
+    .skel-card {
+      background: var(--bg-elev-1);
+      border-radius: 18px;
+      padding: 14px;
+      display: grid; gap: 10px;
+    }
+    .skel-line {
+      height: 12px; border-radius: 6px;
+      background: linear-gradient(90deg, var(--bg-elev-2) 0%, var(--bg-elev-3) 50%, var(--bg-elev-2) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s ease-in-out infinite;
+    }
+    .skel-line.short { width: 55%; }
+    .skel-line.med { width: 78%; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    .empty-state {
+      text-align: center; padding: 60px 24px;
+      color: var(--text-dim);
+    }
+    .empty-state .big {
+      font-size: 56px; opacity: 0.4; margin-bottom: 12px;
+    }
+    .empty-state .title {
+      font: 700 18px/1.3 -apple-system, sans-serif;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .empty-state .body {
+      font-size: 13.5px; line-height: 1.5;
+      max-width: 280px; margin: 0 auto;
+    }
+
+    /* ============================================================
+       Pull-to-refresh indicator
+       ============================================================ */
+    .ptr {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: height .2s var(--ease);
+      pointer-events: none;
+    }
+    .ptr-spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid var(--bg-elev-3);
+      border-top-color: var(--hn-gold);
+      border-radius: 50%;
+      animation: rot 0.8s linear infinite;
+      opacity: 0;
+    }
+    .ptr.active .ptr-spinner { opacity: 1; }
+
+    /* ============================================================
+       Bottom tab bar (iOS UITabBar)
+       ============================================================ */
+    .tab-bar {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      height: calc(var(--tab-bar-h) + var(--safe-bot));
+      padding-bottom: var(--safe-bot);
+      background: rgba(20,20,28,0.78);
+      backdrop-filter: saturate(180%) blur(28px);
+      -webkit-backdrop-filter: saturate(180%) blur(28px);
+      border-top: 0.5px solid var(--line);
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      z-index: 40;
+    }
+    .tab-btn {
+      display: grid; place-items: center; gap: 3px;
+      padding: 8px 4px;
+      color: var(--text-mute);
+      transition: color .15s var(--ease);
+      position: relative;
+    }
+    .tab-btn .glyph {
+      width: 28px; height: 28px;
+      display: grid; place-items: center;
+    }
+    .tab-btn svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .tab-btn .label {
+      font: 700 10.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .tab-btn.on {
+      color: var(--hn-gold);
+    }
+    .tab-btn.on svg {
+      fill: var(--hn-gold-soft);
+      stroke: var(--hn-gold);
+      stroke-width: 2.1;
+    }
+    .tab-btn:active .glyph { transform: scale(0.86); transition: transform .1s var(--ease); }
+    .tab-btn .badge {
+      position: absolute;
+      top: 4px; left: 50%;
+      transform: translate(8px, 0);
+      min-width: 18px; height: 18px;
+      padding: 0 5px;
+      background: var(--pc-red);
+      color: #fff;
+      border-radius: 9px;
+      font: 800 11px/18px -apple-system, sans-serif;
+      text-align: center;
+      box-shadow: 0 0 0 2px rgba(20,20,28,1);
+    }
+    .tab-btn .badge.hide { display: none; }
+
+    /* ============================================================
+       Plan tab (shopping plan view)
+       ============================================================ */
+    .plan-honesty {
+      margin: 0 16px 16px;
+      padding: 12px 14px;
+      background: rgba(94,158,255,0.10);
+      border-radius: 13px;
+      font: 500 12.5px/1.45 -apple-system, sans-serif;
+      color: #b8d4f5;
+      letter-spacing: -0.01em;
+      box-shadow: inset 0 0 0 1px rgba(94,158,255,0.18);
+    }
+    .plan-honesty b { color: #d2e4fa; font-weight: 700; }
+
+    .portal-block {
+      margin: 0 12px 14px;
+      background: var(--bg-elev-1);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .portal-block-head {
+      display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center;
+      padding: 14px;
+    }
+    .portal-block-title {
+      font: 800 15px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .portal-block-meta {
+      margin-top: 3px;
+      font: 500 11.5px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+    }
+    .portal-block-total {
+      font: 800 17px/1 -apple-system, sans-serif;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .portal-cta-row {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px;
+      padding: 0 14px 14px;
+    }
+    .portal-cta-row .portal-share-btn {
+      min-width: 50px; height: 46px; padding: 0 12px;
+      background: var(--bg-elev-2);
+      color: var(--text);
+      border-radius: 13px;
+      font: 700 12px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      display: inline-flex; align-items: center; gap: 4px; justify-content: center;
+      transition: transform .1s var(--ease);
+    }
+    .portal-cta-row .portal-share-btn:active { transform: scale(0.95); }
+
+    .plan-line-wrap {
+      position: relative; overflow: hidden;
+      border-top: 0.5px solid var(--line);
+    }
+    .plan-line {
+      display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: start;
+      padding: 12px 14px;
+      background: var(--bg-elev-1);
+      transition: transform .2s var(--ease);
+      will-change: transform;
+    }
+    .plan-line .mat-thumb {
+      width: 40px; height: 40px; border-radius: 10px;
+    }
+    .plan-line .mat-thumb .emoji { font-size: 22px; }
+    .plan-line-info { min-width: 0; }
+    .plan-line-name {
+      font: 700 14px/1.25 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .plan-line-sku {
+      margin-top: 2px;
+      font: 500 11px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .plan-line-controls {
+      margin-top: 8px;
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .plan-line-controls .qty-stepper { height: 28px; padding: 1px; }
+    .plan-line-controls .qty-stepper button { width: 24px; height: 24px; font-size: 14px; }
+    .plan-line-controls .qty-stepper input { width: 36px; height: 24px; font-size: 12px; }
+    .open-product-mini {
+      padding: 6px 10px; min-height: 28px;
+      background: var(--bg-elev-2);
+      color: var(--text);
+      border-radius: 8px;
+      font: 700 11px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      display: inline-flex; align-items: center; gap: 3px;
+      transition: transform .1s var(--ease);
+    }
+    .open-product-mini:active { transform: scale(0.94); }
+    .plan-line-price {
+      font: 800 14px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .plan-line-right {
+      display: grid; gap: 8px; align-items: center; justify-items: end;
+    }
+    /* iOS Reminders-style checkbox circle */
+    .plan-line-check {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: transparent;
+      box-shadow: inset 0 0 0 2px var(--text-mute);
+      color: transparent;
+      font: 800 16px/1 -apple-system, sans-serif;
+      display: grid; place-items: center;
+      cursor: pointer;
+      transition: all .2s var(--ease);
+    }
+    .plan-line-check:active { transform: scale(0.88); }
+    .plan-line-check.is-checked {
+      background: var(--pc-green);
+      box-shadow: inset 0 0 0 2px var(--pc-green), 0 4px 12px rgba(52,211,153,0.28);
+      color: #0a0a10;
+    }
+    .plan-line-wrap.is-done .plan-line-name {
+      text-decoration: line-through;
+      color: var(--text-mute);
+    }
+    .plan-line-wrap.is-done .plan-line-sku,
+    .plan-line-wrap.is-done .plan-line-price,
+    .plan-line-wrap.is-done .mat-thumb {
+      opacity: 0.45;
+    }
+    /* Portal progress bar */
+    .portal-progress {
+      height: 3px;
+      background: var(--bg-elev-3);
+      margin: 0 14px;
+    }
+    .portal-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--pc-green) 0%, var(--hn-gold) 100%);
+      transition: width .35s var(--ease);
+    }
+    .portal-block.portal-all-done {
+      box-shadow: inset 0 0 0 1px rgba(52,211,153,0.32);
+    }
+    .portal-block.portal-all-done .portal-block-title { color: var(--pc-green); }
+    .portal-block.portal-all-done .portal-progress-fill { background: var(--pc-green); }
+    .plan-hidden-line {
+      padding: 8px 14px;
+      font: 600 11.5px/1 -apple-system, sans-serif;
+      color: var(--text-mute);
+      text-align: center;
+      font-style: italic;
+      border-top: 0.5px dashed var(--line);
+    }
+    /* Hide-done toggle bar */
+    .plan-toggle-bar {
+      padding: 0 16px 8px;
+    }
+    .plan-toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; min-height: 36px;
+      background: var(--bg-elev-1);
+      color: var(--text-dim);
+      border-radius: 999px;
+      font: 700 12px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: all .15s var(--ease);
+    }
+    .plan-toggle .plan-toggle-glyph {
+      font-size: 14px; line-height: 1;
+    }
+    .plan-toggle.on {
+      background: var(--hn-gold-soft);
+      color: var(--hn-gold);
+      box-shadow: inset 0 0 0 0.5px var(--hn-gold-border);
+    }
+    /* "All done" celebration banner */
+    .all-done-banner {
+      display: inline-block;
+      padding: 5px 12px;
+      background: rgba(52,211,153,0.16);
+      color: var(--pc-green);
+      border-radius: 999px;
+      font: 800 12.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    /* Grand card layout extension (2-col now: label+progress | value) */
+    .grand-progress-line {
+      margin-top: 4px;
+      font: 600 11.5px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+    .grand-progress-line b { color: var(--text); font-weight: 800; }
+    /* Plan-tab tier sections */
+    .plan-tier-section {
+      margin: 0 0 18px;
+    }
+    .plan-tier-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 14px 18px 8px;
+    }
+    .plan-tier-title {
+      font: 800 11px/1 -apple-system, sans-serif;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+    }
+    .plan-tier-section.tier-b2b .plan-tier-title { color: var(--hn-gold); }
+    .plan-tier-section.tier-qcomm .plan-tier-title::before { content: '⚡ '; opacity: 0.7; }
+    .plan-tier-section.tier-retail .plan-tier-title::before { content: '🛒 '; opacity: 0.7; }
+    .plan-tier-stats {
+      font: 600 11px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .plan-tier-stats b { color: var(--text); font-weight: 800; }
+    /* Return-from-app prompt (visibility change) */
+    .return-prompt {
+      position: fixed; left: 12px; right: 12px;
+      bottom: calc(var(--tab-bar-h) + var(--safe-bot) + 14px);
+      z-index: 65;
+      padding: 12px 14px;
+      background: linear-gradient(135deg, rgba(212,162,76,0.92) 0%, rgba(184,137,58,0.92) 100%);
+      color: #1a1206;
+      border-radius: 14px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.18);
+      display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+      animation: returnPromptIn .3s var(--spring);
+      max-width: 540px; margin: 0 auto;
+    }
+    .return-prompt-text {
+      font: 700 13px/1.3 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .return-prompt-text small {
+      display: block;
+      font: 600 11px/1.2 -apple-system, sans-serif;
+      opacity: 0.7;
+      margin-top: 2px;
+    }
+    .return-prompt button {
+      height: 32px; padding: 0 12px;
+      background: rgba(26,18,6,0.18);
+      color: #1a1206;
+      border-radius: 8px;
+      font: 800 11.5px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+    }
+    .return-prompt button.dismiss {
+      background: transparent;
+      color: rgba(26,18,6,0.6);
+    }
+    @keyframes returnPromptIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    /* Swipe-reveal Remove */
+    .plan-line-reveal {
+      position: absolute; top: 0; right: 0; bottom: 0;
+      width: 80px;
+      background: var(--pc-red);
+      display: grid; place-items: center;
+      color: #fff;
+      font: 800 13px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      transform: translateX(80px);
+    }
+    .plan-line-wrap.revealed .plan-line { transform: translateX(-80px); }
+    .plan-line-wrap.revealed .plan-line-reveal { transform: translateX(0); }
+
+    .grand-card {
+      margin: 4px 12px 24px;
+      padding: 18px;
+      background: linear-gradient(135deg, rgba(212,162,76,0.10) 0%, rgba(212,162,76,0.03) 100%);
+      border-radius: 18px;
+      box-shadow: inset 0 0 0 1px rgba(212,162,76,0.30);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .grand-label {
+      font: 700 12px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .grand-value {
+      font: 800 28px/1 -apple-system, sans-serif;
+      color: var(--hn-gold);
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ============================================================
+       You tab (account / settings)
+       ============================================================ */
+    .you-row-group {
+      margin: 0 16px 16px;
+      background: var(--bg-elev-1);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .you-row {
+      display: grid; grid-template-columns: 30px 1fr auto; gap: 12px;
+      align-items: center;
+      padding: 14px 16px;
+      transition: background .15s ease;
+    }
+    .you-row + .you-row {
+      border-top: 0.5px solid var(--line);
+    }
+    .you-row:active { background: var(--bg-elev-2); }
+    .you-row .row-icon {
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      display: grid; place-items: center;
+      font-size: 15px;
+    }
+    .you-row .row-label {
+      font: 600 14.5px/1.2 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .you-row .row-sub {
+      font: 500 12px/1.3 -apple-system, sans-serif;
+      color: var(--text-dim);
+      letter-spacing: -0.01em;
+      margin-top: 2px;
+    }
+    .you-row .row-value {
+      font: 600 13px/1.2 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .you-row .row-value.ok { color: var(--pc-green); }
+    .you-row .row-value.bad { color: var(--pc-red); }
+    .you-row .row-value.warn { color: var(--pc-yellow); }
+    .you-row .row-value.dim { color: var(--text-dim); }
+    .you-row .row-chev { color: var(--text-mute); font-size: 12px; margin-left: 4px; }
+
+    .you-group-title {
+      padding: 0 28px 8px;
+      font: 700 11.5px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+    .you-footer {
+      text-align: center; padding: 32px 24px 12px;
+      font: 500 11px/1.45 -apple-system, sans-serif;
+      color: var(--text-mute);
+    }
+    .you-footer .accent {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic; color: var(--hn-gold);
+    }
+
+    /* ============================================================
+       PIN gate (full-screen splash)
+       ============================================================ */
+    /* ---- LOCKED PIN SHELL (mirrors Figma "Sauda — PIN Shell") ----
+       8 elements, top→bottom: icon tile · name (white serif) · tagline
+       (gold italic) · 4 dots · 3×4 keypad · auto-submit · footer · frame.
+       Per-chamber vars: --chamber-accent (Sauda = HN gold). */
+    .pin-gate {
+      --chamber-accent: var(--hn-gold);
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center;
+      padding: calc(28px + var(--safe-top)) 24px calc(20px + var(--safe-bot));
+      /* base #020205, centre vignette to #0e0e16 */
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 38%, #0e0e16 0%, #020205 78%);
+      z-index: 100;
+    }
+    /* hairline gold inset frame */
+    .pin-gate::before {
+      content: ''; position: absolute;
+      inset: calc(8px + var(--safe-top)) 8px calc(8px + var(--safe-bot));
+      border: 1px solid rgba(212,162,76,0.18);
+      border-radius: 22px; pointer-events: none;
+    }
+    .pin-card {
+      width: min(340px, 100%);
+      display: flex; flex-direction: column; align-items: center;
+      animation: fadeUp .6s var(--spring);
+      margin-top: auto;
+    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    /* 1. icon tile — 72×72, r16, dark fill, accent border @50%, gold serif glyph */
+    .pin-mark {
+      width: 72px; height: 72px;
+      border-radius: 16px;
+      background: #1c1c26;
+      border: 1px solid rgba(212,162,76,0.5);
+      display: grid; place-items: center;
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 700; font-size: 38px;
+      color: var(--chamber-accent);
+      line-height: 1;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    /* 2. chamber name — Cormorant Bold 56, WHITE */
+    .pin-card h1 {
+      margin: 26px 0 0;
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 700; font-size: 56px; line-height: 1;
+      color: #f8f8fa;
+      letter-spacing: 0.01em;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+    /* 3. tagline — Cormorant Italic 15, gold, one line */
+    .pin-card .tagline {
+      margin-top: 8px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 15px; font-style: italic; font-weight: 500;
+      color: var(--hn-gold);
+      letter-spacing: 0.03em;
+    }
+    /* 4. PIN dots — 4 × 12px, gold outline @60%, fill accent on entry */
+    .pin-dots {
+      display: flex; gap: 18px;
+      margin-top: 30px;
+    }
+    .pin-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 1.5px solid rgba(212,162,76,0.6);
+      background: transparent;
+      transition: background .15s var(--ease), transform .15s var(--spring);
+    }
+    .pin-dot.filled {
+      background: var(--chamber-accent);
+      border-color: var(--chamber-accent);
+      transform: scale(1.05);
+    }
+    .pin-gate.error .pin-dot {
+      border-color: var(--pc-red);
+      animation: pinShake .4s var(--ease);
+    }
+    @keyframes pinShake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-7px); }
+      40%,80% { transform: translateX(7px); }
+    }
+    /* 5. numeric keypad — 3×4, 68px circles, fill #1c1c26, white digits 28 Inter */
+    .pin-keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 68px);
+      gap: 22px;
+      margin-top: 34px;
+    }
+    .pin-key {
+      width: 68px; height: 68px; border-radius: 50%;
+      background: #1c1c26;
+      color: #f8f8fa;
+      font: 400 28px/1 'Inter', -apple-system, sans-serif;
+      display: grid; place-items: center;
+      transition: background .12s ease, transform .1s var(--ease);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pin-key:active { background: #2a2a36; transform: scale(0.94); }
+    .pin-key.empty { background: transparent; pointer-events: none; }
+    .pin-key.back {
+      background: transparent; color: var(--text-dim); font-size: 24px;
+    }
+    .pin-key.back:active { background: rgba(255,255,255,0.04); }
+    /* 7. footer — Cormorant Italic 11, gold @50%, bottom-safe */
+    .pin-footer {
+      margin-top: auto;
+      padding-top: 28px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 11px; font-style: italic;
+      color: rgba(212,162,76,0.5);
+      letter-spacing: 0.06em;
+    }
+
+    /* ============================================================
+       Modal (Add material — iOS sheet)
+       ============================================================ */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 70;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s var(--ease);
+      display: grid; place-items: end center;
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+    .modal-card {
+      width: 100%; max-width: 480px;
+      background: var(--bg-elev-1);
+      border-top-left-radius: 22px; border-top-right-radius: 22px;
+      padding: 14px 20px calc(20px + var(--safe-bot));
+      transform: translateY(100%);
+      transition: transform .35s var(--spring);
+      max-height: 88vh; overflow-y: auto;
+    }
+    .modal-backdrop.open .modal-card { transform: translateY(0); }
+    .modal-handle {
+      width: 36px; height: 5px;
+      background: var(--text-mute);
+      border-radius: 3px;
+      margin: 0 auto 12px;
+      opacity: 0.4;
+    }
+    .modal-head {
+      display: grid; grid-template-columns: 1fr auto;
+      align-items: center; padding-bottom: 12px;
+      border-bottom: 0.5px solid var(--line);
+      margin-bottom: 16px;
+    }
+    .modal-head h2 {
+      margin: 0;
+      font: 800 19px/1 -apple-system, sans-serif;
+      letter-spacing: -0.02em;
+    }
+    .modal-close {
+      width: 30px; height: 30px;
+      background: var(--bg-elev-3);
+      color: var(--text-dim);
+      border-radius: 15px;
+      display: grid; place-items: center;
+      font-size: 15px;
+    }
+    .modal-form { display: grid; gap: 14px; }
+    .modal-form label {
+      display: grid; gap: 6px;
+      font: 700 11px/1 -apple-system, sans-serif;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .modal-form input, .modal-form select {
+      width: 100%; height: 48px;
+      background: var(--bg-elev-2);
+      border: 0.5px solid var(--line);
+      color: var(--text);
+      border-radius: 11px;
+      padding: 0 14px;
+      font: 600 15px -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .modal-form input:focus, .modal-form select:focus { outline: none; border-color: var(--hn-gold-border); }
+    .modal-form .submit {
+      height: 52px;
+      background: linear-gradient(135deg, var(--hn-gold) 0%, var(--hn-gold-deep) 100%);
+      color: #1a1206;
+      border-radius: 13px;
+      font: 800 15px/1 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 6px 16px rgba(212,162,76,0.25);
+      margin-top: 4px;
+      transition: transform .1s var(--ease);
+    }
+    .modal-form .submit:active { transform: scale(0.97); }
+
+    /* ============================================================
+       Toast
+       ============================================================ */
+    .toast {
+      position: fixed; left: 50%; transform: translate(-50%, 0);
+      bottom: calc(var(--tab-bar-h) + var(--safe-bot) + 16px);
+      z-index: 80;
+      padding: 12px 18px;
+      background: rgba(30,30,38,0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: var(--text);
+      border-radius: 13px;
+      font: 700 13px/1.3 -apple-system, sans-serif;
+      letter-spacing: -0.01em;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 0 0.5px var(--line);
+      animation: toastIn .35s var(--spring);
+      max-width: calc(100vw - 32px);
+      text-align: center;
+    }
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 18px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+    .hide { display: none !important; }
+
+    @media (min-width: 720px) {
+      .tab-pane { max-width: 540px; margin: 0 auto; }
+      .tab-bar { max-width: 540px; margin: 0 auto; border-left: 0.5px solid var(--line); border-right: 0.5px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       PIN gate
+       ============================================================ -->
+  <section id="pinGate" class="pin-gate">
+    <div class="pin-card">
+      <div class="pin-mark">s</div>
+      <h1>Sauda</h1>
+      <div class="tagline">every deal struck to source the realm</div>
+      <div class="pin-dots" id="pinDots">
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+      </div>
+      <div class="pin-keypad" id="pinKeypad">
+        <button class="pin-key" type="button" data-d="1">1</button>
+        <button class="pin-key" type="button" data-d="2">2</button>
+        <button class="pin-key" type="button" data-d="3">3</button>
+        <button class="pin-key" type="button" data-d="4">4</button>
+        <button class="pin-key" type="button" data-d="5">5</button>
+        <button class="pin-key" type="button" data-d="6">6</button>
+        <button class="pin-key" type="button" data-d="7">7</button>
+        <button class="pin-key" type="button" data-d="8">8</button>
+        <button class="pin-key" type="button" data-d="9">9</button>
+        <span class="pin-key empty"></span>
+        <button class="pin-key" type="button" data-d="0">0</button>
+        <button class="pin-key back" type="button" data-back="1" aria-label="Delete">⌫</button>
+      </div>
+    </div>
+    <div class="pin-footer">HN Hotels · since 1918</div>
+    <!-- hidden input retained as the PIN value store for verifyPin() -->
+    <input id="pinInput" type="hidden" value="">
+    <button id="unlockBtn" type="button" hidden></button>
+    <div id="pinError" class="hide" hidden></div>
+  </section>
+
+  <!-- ============================================================
+       App
+       ============================================================ -->
+  <div id="app" class="hide">
+    <div class="status-bar-haze"></div>
+
+    <!-- ─────── SHOP TAB ─────── -->
+    <main class="tab-pane" id="tab-shop" data-tab="shop">
+      <div class="ptr" id="ptrShop"><div class="ptr-spinner"></div></div>
+      <div class="top-nav" id="navShop">
+        <button class="nav-action left" id="navRefreshBtn" type="button" title="Refresh data">↻</button>
+        <div class="nav-title">Sauda</div>
+        <button class="nav-action right" id="navAddBtn" type="button" title="Add material">+ Add</button>
+      </div>
+      <div class="large-title-wrap">
+        <h1 class="large-title">Sauda <span class="accent">since 1918</span></h1>
+        <div class="large-subtitle" id="shopSubtitle">Loading materials…</div>
+      </div>
+      <div class="portal-banner" id="portalHealthBanner" hidden></div>
+      <div class="search-section">
+        <div class="search-pill">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="searchInput" type="search" placeholder="Search materials, SKUs, vendors" autocomplete="off">
+        </div>
+      </div>
+      <div class="segmented" id="brandToggle">
+        <button data-brand="BOTH" class="on" type="button">HE + NCH</button>
+        <button data-brand="HE" type="button">Hamza Express</button>
+        <button data-brand="NCH" type="button">Nawabi Chai</button>
+      </div>
+      <div class="segmented tier-segmented" id="tierToggle">
+        <button data-tier="all" class="on" type="button">All</button>
+        <button data-tier="qcomm" type="button">Q-Comm</button>
+        <button data-tier="retail" type="button">Retail</button>
+        <button data-tier="b2b" type="button">B2B <span class="b2b-star">★</span></button>
+      </div>
+      <div class="chip-rail-wrap">
+        <div class="chip-rail" id="catChips"></div>
+      </div>
+      <div class="filter-meta">
+        <span class="filter-stat" id="filterStat">— materials</span>
+        <button class="add-btn-small" id="addMatBtn" type="button">+ Material</button>
+      </div>
+      <div id="listGrid" class="stream"></div>
+    </main>
+
+    <!-- ─────── PLAN TAB ─────── -->
+    <main class="tab-pane hide" id="tab-plan" data-tab="plan">
+      <div class="top-nav" id="navPlan">
+        <div></div>
+        <div class="nav-title">Shopping Plan</div>
+        <div></div>
+      </div>
+      <div class="large-title-wrap">
+        <h1 class="large-title">Shopping Plan</h1>
+        <div class="large-subtitle" id="planSubtitle">Organised by portal. Tap a product to add it in the app.</div>
+      </div>
+      <div id="planBody"></div>
+    </main>
+
+    <!-- ─────── YOU TAB ─────── -->
+    <main class="tab-pane hide" id="tab-you" data-tab="you">
+      <div class="top-nav" id="navYou">
+        <div></div>
+        <div class="nav-title">Account</div>
+        <div></div>
+      </div>
+      <div class="large-title-wrap">
+        <h1 class="large-title">Account</h1>
+        <div class="large-subtitle" id="youSubtitle">PIN · session · portal health</div>
+      </div>
+
+      <div class="you-group-title">SIGNED IN AS</div>
+      <div class="you-row-group">
+        <div class="you-row">
+          <div class="row-icon" style="background:var(--hn-gold-soft); color:var(--hn-gold);">👤</div>
+          <div>
+            <div class="row-label" id="youName">—</div>
+            <div class="row-sub" id="youRole">—</div>
+          </div>
+          <button class="row-value dim" id="youSignOutBtn" type="button" style="background:var(--bg-elev-2); padding:8px 14px; border-radius:10px;">Sign out</button>
+        </div>
+      </div>
+
+      <div class="you-group-title">CHIP INDICATORS</div>
+      <div class="you-row-group">
+        <div class="you-row">
+          <div class="row-icon" style="background:transparent; color:var(--text); font-size:14px;">·</div>
+          <div>
+            <div class="row-label">No glyph</div>
+            <div class="row-sub">Tap opens the portal app to search results</div>
+          </div>
+          <div></div>
+        </div>
+        <div class="you-row">
+          <div class="row-icon" style="background:rgba(251,191,36,0.18); color:var(--pc-yellow); font-size:14px;">⚠️</div>
+          <div>
+            <div class="row-label">App opens, search unverified</div>
+            <div class="row-sub">App opens but may not auto-search. Paste the material name in the app's search bar after it opens.</div>
+          </div>
+          <div></div>
+        </div>
+        <div class="you-row">
+          <div class="row-icon" style="background:rgba(94,158,255,0.18); color:var(--pc-blue); font-size:14px;">🌐</div>
+          <div>
+            <div class="row-label">Safari only</div>
+            <div class="row-sub">No app handoff configured by the portal. Opens Safari with the web search page.</div>
+          </div>
+          <div></div>
+        </div>
+      </div>
+
+      <div class="you-group-title">PORTAL HEALTH</div>
+      <div class="you-row-group" id="portalHealthGroup">
+        <div class="empty-state" style="padding:24px 12px;">
+          <div class="body">Tap refresh to check portal sessions.</div>
+        </div>
+      </div>
+
+      <div class="you-group-title">VENDORS</div>
+      <div class="you-row-group" style="padding:12px;">
+        <div class="row-sub" style="margin-bottom:8px;">Your direct suppliers. Link one to a material and its VENDOR DIRECT card lights up on Shop — glance, tap, WhatsApp.</div>
+        <div class="vendor-list" id="vendorList"></div>
+        <div class="vendor-add">
+          <input id="vendorNameInput" type="text" inputmode="text" placeholder="Vendor name" autocomplete="off" />
+          <input id="vendorPhoneInput" type="tel" inputmode="tel" placeholder="WhatsApp number" autocomplete="off" />
+          <button type="button" class="btn-vendor-add" id="vendorAddBtn">Add vendor</button>
+        </div>
+      </div>
+
+      <div class="you-group-title">PREFERENCES</div>
+      <div class="you-row-group">
+        <a class="you-row" href="/ops/purchase/" id="poLedgerRow">
+          <div class="row-icon" style="background:rgba(94,158,255,0.18); color:var(--pc-blue);">📒</div>
+          <div>
+            <div class="row-label">PO Ledger</div>
+            <div class="row-sub">Last 30d Odoo purchase orders</div>
+          </div>
+          <div class="row-chev">›</div>
+        </a>
+        <button class="you-row" id="refreshHealthRow" type="button" style="text-align:left;">
+          <div class="row-icon" style="background:rgba(52,211,153,0.18); color:var(--pc-green);">🩺</div>
+          <div>
+            <div class="row-label">Check portal sessions</div>
+            <div class="row-sub">Hyperpure / BB / Blinkit / Zepto / FK / Amazon / JioMart</div>
+          </div>
+          <div class="row-chev">›</div>
+        </button>
+        <button class="you-row" id="hardReloadRow" type="button" style="text-align:left;">
+          <div class="row-icon" style="background:rgba(252,165,165,0.18); color:var(--pc-red);">🔄</div>
+          <div>
+            <div class="row-label">Hard reload (clear cache)</div>
+            <div class="row-sub">Force download latest Sauda code. Use after a deploy when soft refresh doesn't pick up changes.</div>
+          </div>
+          <div class="row-chev">›</div>
+        </button>
+        <button class="you-row" id="installPwaRow" type="button" style="text-align:left;">
+          <div class="row-icon" style="background:rgba(167,139,250,0.18); color:var(--pc-purple);">📲</div>
+          <div>
+            <div class="row-label">Install on home screen</div>
+            <div class="row-sub">Add Sauda icon to your iPhone home screen</div>
+          </div>
+          <div class="row-chev">›</div>
+        </button>
+      </div>
+
+      <div class="you-footer">
+        Sauda · HN Hotels Pvt Ltd<br>
+        <span class="accent">Hamza family in Bangalore food trade since 1918</span><br>
+        v2.0 · 7 portals wired
+      </div>
+    </main>
+
+    <!-- ─────── TAB BAR ─────── -->
+    <nav class="tab-bar">
+      <button class="tab-btn on" data-tab-target="shop" type="button">
+        <span class="glyph">
+          <svg viewBox="0 0 24 24"><path d="M3 8.5l9-5 9 5v10l-9 5-9-5v-10z"/><path d="M3 8.5l9 5 9-5"/><path d="M12 13.5v10"/></svg>
+        </span>
+        <span class="label">Shop</span>
+      </button>
+      <button class="tab-btn" data-tab-target="plan" type="button">
+        <span class="glyph">
+          <svg viewBox="0 0 24 24"><path d="M6 3h12l1 4H5l1-4z"/><path d="M5 7v12c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V7"/><path d="M9 11v6M15 11v6M12 11v6"/></svg>
+        </span>
+        <span class="label">Plan</span>
+        <span class="badge hide" id="planBadge">0</span>
+      </button>
+      <button class="tab-btn" data-tab-target="you" type="button">
+        <span class="glyph">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+        </span>
+        <span class="label">You</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ─────── ADD MATERIAL MODAL ─────── -->
+  <div id="addMatModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-handle"></div>
+      <div class="modal-head">
+        <h2>Add material</h2>
+        <button id="addMatClose" class="modal-close" type="button">✕</button>
+      </div>
+      <form id="addMatForm" class="modal-form" autocomplete="off">
+        <label>Name<input name="name" required placeholder="e.g. Whole Chicken with skin"></label>
+        <label>Category
+          <select name="category" id="addMatCategorySelect" required>
+            <option value="">— choose or add new —</option>
+          </select>
+        </label>
+        <label id="addMatNewCatWrap" class="hide">New category<input name="new_category" id="addMatNewCat" placeholder="e.g. Frozen Items"></label>
+        <label>Unit<input name="uom" placeholder="kg, litre, pack…" value="unit"></label>
+        <label>Brand
+          <select name="brand">
+            <option value="BOTH">Both (HE + NCH)</option>
+            <option value="HE">Hamza Express only</option>
+            <option value="NCH">Nawabi Chai House only</option>
+          </select>
+        </label>
+        <button type="submit" class="submit">Add to Sauda</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // Portals & URL handoff (lifted from PR #250 baseline)
+    // ============================================================
+    const PORTAL_ORDER = [
+      'HYPERPURE', 'BIGBASKET', 'BLINKIT', 'ZEPTO', 'FLIPKART_MINUTES',
+      'AMAZON_NOW', 'AMAZON_FRESH', 'AMAZON_BUSINESS',
+      'JIOMART', 'INSTAMART', 'METRO', 'INDIAMART', 'DMART',
+    ];
+    const PORTAL_SOURCE_KEYS = PORTAL_ORDER.slice();
+    // Portals shown only when material is B2B-eligible (server-tagged
+    // `mat.b2b_eligible`). For non-eligible materials (fresh produce,
+    // poultry, eggs) these chips are hidden — wrong channel entirely.
+    // IndiaMART is a B2B directory/RFQ marketplace — launcher-only, never
+    // scouted, never feeds the cheapest-source engine (indicative prices).
+    const B2B_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO', 'INDIAMART']);
+
+    // ============================================================
+    // Tier architecture — three procurement modes
+    // ============================================================
+    // Q-Commerce = fast delivery, small consumer packs (Blinkit, Zepto...)
+    // Retail = scheduled / same-day, consumer grocery pricing (BB, JM...)
+    // B2B = bulk packs + GST input credit + restaurant supply (Hyperpure,
+    //       Amazon Business, Metro). Hyperpure sits in B2B not retail
+    //       because it IS Zomato's restaurant supply arm — bulk packs,
+    //       B2B pricing, GST invoice — even though it feels like a
+    //       grocery app in UX.
+    const PORTAL_TIER = {
+      BLINKIT: 'qcomm', ZEPTO: 'qcomm', FLIPKART_MINUTES: 'qcomm',
+      AMAZON_NOW: 'qcomm', INSTAMART: 'qcomm',
+      BIGBASKET: 'retail', JIOMART: 'retail',
+      AMAZON_FRESH: 'retail', DMART: 'retail',
+      HYPERPURE: 'b2b', AMAZON_BUSINESS: 'b2b', METRO: 'b2b', INDIAMART: 'b2b',
+    };
+    const TIER_ORDER = ['vendor', 'manual', 'qcomm', 'retail', 'b2b'];
+    const TIER_LABELS = {
+      vendor: 'VENDOR DIRECT',
+      manual: 'NO SCOUT YET',
+      qcomm: 'Q-COMMERCE',
+      retail: 'RETAIL',
+      b2b: 'B2B BULK ★ GST',
+    };
+    const TIER_SUBTITLES = {
+      vendor: 'Direct vendor WhatsApp · established relationship',
+      manual: 'No portal quote yet · search in any portal app',
+      qcomm: 'Fast delivery · small packs',
+      retail: 'Scheduled · consumer packs',
+      b2b: 'Bulk packs · GST input credit',
+    };
+    function tierFor(sk) {
+      if (String(sk).startsWith('vendor:')) return 'vendor';
+      if (sk === 'manual') return 'manual';
+      return PORTAL_TIER[sk] || 'retail';
+    }
+
+    // ============================================================
+    // Order windows — the morning auto-seed coordinate
+    // ============================================================
+    // Every material is placed in exactly one ORDER WINDOW: the
+    // session in which Sauda expects it to be bought. This is a closed,
+    // finite dimension (COA: a coordinate, not free text). It is DERIVED
+    // at read-time from existing material fields (brand · category ·
+    // name · vendor link) — no schema change, no Odoo write — exactly
+    // like the price-trust ladder. A material that fits none of the
+    // clock windows still lands somewhere ('OTHER') so nothing is ever
+    // silently dropped from the morning view.
+    //
+    //   NCH_MORNING   NCH chai/snacks inputs consumed at 7am open
+    //                 (milk, tea/dust, butter, buns, badam, sugar …)
+    //   HE_EVENING    HE hero-dish inputs prepped for the dinner rush
+    //                 (ghee, rice, chicken, mutton, kabab masala, oil …)
+    //   VENDOR_CALLS  anything with an established vendor relationship —
+    //                 bought off-platform by phone/WhatsApp, needs a
+    //                 day's lead (call today → arrives tomorrow)
+    //   OTHER         everything else — a quiet catch-all, still shown
+    const ORDER_WINDOWS = ['NCH_MORNING', 'HE_EVENING', 'VENDOR_CALLS', 'OTHER'];
+    const ORDER_WINDOW_LABELS = {
+      NCH_MORNING: 'Today · NCH morning order',
+      HE_EVENING: 'Today · HE evening order',
+      VENDOR_CALLS: 'Tomorrow · vendor-direct calls',
+      OTHER: 'Also on the list',
+    };
+    const ORDER_WINDOW_GLYPH = {
+      NCH_MORNING: '🍵',
+      HE_EVENING: '🍚',
+      VENDOR_CALLS: '📲',
+      OTHER: '🛒',
+    };
+    const ORDER_WINDOW_EMPTY = {
+      NCH_MORNING: 'Mandi quiet — no fresh chai-counter prices yet.',
+      HE_EVENING: 'Mandi quiet — no fresh kitchen prices yet.',
+      VENDOR_CALLS: 'No vendor relationships linked yet — link a vendor to a material to fill this call list.',
+      OTHER: 'Mandi quiet — no fresh prices yet.',
+    };
+    // Name-pattern signals for the two clock windows. Anchored on the
+    // verified top-sellers (NCH = 58.7% chai + 18% haleem · HE heroes =
+    // ghee-rice/chicken-kabab/mutton-biryani) — never invented dishes.
+    const NCH_MORNING_NAME = /\b(milk|dahi|curd|tea|chai|dust|butter|makkhan|bun|paav|pav|badam|almond|sugar|osmania|biscuit|rusk|khari|coffee|malai|maska|haleem|wheat|gandum|dalia)\b/i;
+    const HE_EVENING_NAME = /\b(ghee|rice|basmati|biryani|chicken|murgh|kebab|kabab|tandoori|tangdi|mutton|lamb|goat|gravy cut|brain|bheja|masala|oil|tel)\b/i;
+    function materialBrand(mat) {
+      return String(mat?.brand || mat?.brand_scope || '').toUpperCase();
+    }
+    function hasVendorLink(mat) {
+      if (mat?.primary_vendor) return true;
+      const links = mat?.vendor_links;
+      return Array.isArray(links) && links.length > 0;
+    }
+    // Pure derivation — checked vendor-first, then brand+name, then a
+    // category lean, then the catch-all. Never throws.
+    function deriveOrderWindow(mat) {
+      try {
+        if (!mat) return 'OTHER';
+        if (hasVendorLink(mat)) return 'VENDOR_CALLS';
+        const brand = materialBrand(mat);
+        const name = String(mat.name || '');
+        const cat = String(mat.category || '');
+        const isNchName = NCH_MORNING_NAME.test(name);
+        const isHeName = HE_EVENING_NAME.test(name);
+        // Brand scope is the strongest signal when present.
+        if (brand.includes('NCH')) {
+          if (isHeName && !isNchName) return 'HE_EVENING';
+          return 'NCH_MORNING';
+        }
+        if (brand.includes('HE') || brand.includes('HAMZA')) {
+          if (isNchName && !isHeName) return 'NCH_MORNING';
+          return 'HE_EVENING';
+        }
+        // No brand (HQ / shared) — fall back to the name signal.
+        if (isNchName && !isHeName) return 'NCH_MORNING';
+        if (isHeName && !isNchName) return 'HE_EVENING';
+        // Last lean on category for unbranded staples.
+        if (/beverage|chai|snack|bakery|dairy/i.test(cat)) return 'NCH_MORNING';
+        if (/meat|poultry|staple|spice|oil|fat/i.test(cat)) return 'HE_EVENING';
+        return 'OTHER';
+      } catch (_) { return 'OTHER'; }
+    }
+
+    // Vendor-direct support — materials with an established vendor
+    // relationship (chicken → MN Broilers, buns → Ganga Bakery, etc.)
+    // bypass the portal flow. Cart key for these is `vendor:<slug>`
+    // and Plan tab renders a dedicated VENDOR DIRECT section above the
+    // portal tiers with a "📲 Send via WhatsApp" CTA per vendor.
+    function vendorCartKey(vendor) { return `vendor:${vendor?.slug || vendor?.vendor_id || 'unknown'}`; }
+    function vendorFromCartKey(sk) {
+      if (!sk || !String(sk).startsWith('vendor:')) return null;
+      const slug = String(sk).slice('vendor:'.length);
+      // Look up the vendor metadata from the linked materials in state
+      for (const m of state.materials) {
+        const links = m.vendor_links || [];
+        const found = links.find((v) => v.slug === slug);
+        if (found) return found;
+      }
+      return null;
+    }
+    function formatWhatsAppMessage(vendor, lines) {
+      const date = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+      const outlet = vendor?.outlet_label || 'Hamza Express';
+      const itemsList = lines.map((l) => `- ${l.name} × ${l.qty}${l.uom || ''}`).join('\n');
+      const template = vendor?.message_template ||
+        'Date: {date}\nOutlet: {outlet}\nOrder:\n{items_list}\n\n— sent via Sauda';
+      return template
+        .replace(/\{date\}/g, date)
+        .replace(/\{outlet\}/g, outlet)
+        .replace(/\{items_list\}/g, itemsList);
+    }
+    function whatsAppLinkFor(vendor, lines) {
+      const phone = (vendor?.whatsapp_phone || vendor?.phone || '').replace(/[^\d]/g, '');
+      if (!phone) return '';
+      const msg = formatWhatsAppMessage(vendor, lines);
+      return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    }
+
+    // ============================================================
+    // Handoff status — what happens when you tap a portal chip
+    // ============================================================
+    // Backed by empirical AASA probe 2026-05-29 + owner-reported in-app
+    // behaviour. Three states:
+    //   'app'                       Universal Link configured + verified
+    //                               app opens to search results
+    //   'app-search-unverified'     UL configured, app opens, but URL-
+    //                               to-search behaviour not yet
+    //                               confirmed (owner has to paste the
+    //                               material name in the app's search
+    //                               bar). Hyperpure case.
+    //   'safari'                    No AASA anywhere → always Safari
+    const HANDOFF_STATUS = {
+      HYPERPURE: 'app-search-unverified',
+      BIGBASKET: 'app',
+      BLINKIT: 'app',
+      ZEPTO: 'app',
+      FLIPKART_MINUTES: 'app',
+      AMAZON_NOW: 'app',
+      AMAZON_FRESH: 'app',
+      // amazon.in AASA lists both Amazon Shopping AND Amazon Business
+      // app bundles. iOS picks one based on install order — we cannot
+      // guarantee Business app opens vs regular Amazon. Until we wire
+      // business.amazon.in/abredir/* URLs, this is best-effort.
+      AMAZON_BUSINESS: 'app-search-unverified',
+      JIOMART: 'app',
+      INSTAMART: 'app',
+      METRO: 'safari',
+      INDIAMART: 'app-search-unverified',
+      DMART: 'safari',
+    };
+    const HANDOFF_GLYPH = {
+      app: '',
+      'app-search-unverified': '⚠️',
+      safari: '🌐',
+    };
+    const HANDOFF_TITLE = {
+      app: 'Opens the portal app to search results',
+      'app-search-unverified': 'App opens but may not auto-search — paste the material name in the app\'s search bar',
+      safari: 'No app handoff configured — opens Safari with the search page',
+    };
+    function handoffStatusFor(sk) { return HANDOFF_STATUS[sk] || 'app'; }
+    const SOURCE_LABELS = {
+      HYPERPURE: 'Hyperpure', BIGBASKET: 'BigBasket', BLINKIT: 'Blinkit',
+      ZEPTO: 'Zepto', FLIPKART_MINUTES: 'Flipkart Minutes',
+      AMAZON_NOW: 'Amazon Now', AMAZON_FRESH: 'Amazon Fresh', AMAZON_BUSINESS: 'Amazon Business',
+      JIOMART: 'JioMart', INSTAMART: 'Instamart',
+      METRO: 'Metro', INDIAMART: 'IndiaMART', DMART: 'DMart',
+    };
+    const SOURCE_SHORT = {
+      HYPERPURE: 'HP', BIGBASKET: 'BB', BLINKIT: 'Blinkit',
+      ZEPTO: 'Zepto', FLIPKART_MINUTES: 'FK',
+      AMAZON_NOW: 'Amazon Now', AMAZON_FRESH: 'Amazon Fresh', AMAZON_BUSINESS: 'Amz Business',
+      JIOMART: 'JioMart', INSTAMART: 'Instamart',
+      METRO: 'Metro', INDIAMART: 'IndiaMART', DMART: 'DMart',
+    };
+    const PORTAL_DOMAIN = {
+      HYPERPURE: 'hyperpure.com', BIGBASKET: 'bigbasket.com', BLINKIT: 'blinkit.com',
+      ZEPTO: 'zepto.com', FLIPKART_MINUTES: 'flipkart.com',
+      AMAZON_NOW: 'amazon.in', AMAZON_FRESH: 'amazon.in', AMAZON_BUSINESS: 'amazon.in',
+      JIOMART: 'jiomart.com', INSTAMART: 'swiggy.com',
+      METRO: 'metro.co.in', INDIAMART: 'indiamart.com', DMART: 'dmart.in',
+    };
+    const PORTAL_LETTER = {
+      HYPERPURE: 'H', BIGBASKET: 'BB', BLINKIT: 'B', ZEPTO: 'Z',
+      FLIPKART_MINUTES: 'FK', AMAZON_NOW: 'A', AMAZON_FRESH: 'AF', AMAZON_BUSINESS: 'AB',
+      JIOMART: 'JM', INSTAMART: 'IM', METRO: 'M', INDIAMART: 'IMt', DMART: 'D',
+    };
+    function portalFavicon(sk, size = 48, cls = 'portal-favicon') {
+      const d = PORTAL_DOMAIN[sk];
+      if (!d) return `<div class="${cls} letter">${PORTAL_LETTER[sk] || '?'}</div>`;
+      return `<div class="${cls}"><img src="https://www.google.com/s2/favicons?domain=${d}&sz=${size}" alt="${SOURCE_LABELS[sk] || sk}" onerror="this.parentNode.classList.add('letter');this.parentNode.textContent='${PORTAL_LETTER[sk] || '?'}'"></div>`;
+    }
+    function cleanUrl(url) {
+      if (!url) return '';
+      return String(url).replace(/&amp;/g, '&').replace(/&#38;/g, '&').trim();
+    }
+    const PORTAL_SEARCH_URL = {
+      // Hyperpure — iterative URL fix history (owner-verified):
+      //  v1 /in/search/<slug>?type=SEARCH&query=<q>  → BROKEN qty=100 prompt
+      //  v2 /in/                                     → Spotlight Offers ✓
+      //  v3 /in/search                               → Spotlight Offers
+      //  v4 hyperpure.app.link?$deeplink_path=...    → Spotlight Offers
+      //
+      // All non-broken variants land on the same Spotlight Offers screen.
+      // The Hyperpure iOS app's URL handler ignores path/query/Branch
+      // params — only pre-registered Branch link keys (which only
+      // Hyperpure can generate from their Branch dashboard) deeplink to
+      // specific in-app destinations.
+      //
+      // Settled state: `/in/` (simplest URL that opens app cleanly).
+      // Copy-on-tap (PR #259) puts material name in clipboard so the
+      // owner's flow is: tap chip → app opens → tap 🔍 → long-press
+      // search field → Paste.
+      HYPERPURE: (q) => `https://www.hyperpure.com/in/`,
+      // BigBasket — empirical AASA probe 2026-05-29: `/ps/` is NOT in
+      // the BB iOS app's path-claim list (which includes /sh/*, /sp/*,
+      // /pd/*, /cl/*, /store/c/*). `/ps/?q=` returns 200 on web but iOS
+      // UL handoff won't fire → falls to Safari. `/cl/<query>` IS in
+      // the claim list and returns 200. Final shape pending iPhone
+      // share-URL ground truth from owner.
+      BIGBASKET: (q) => `https://www.bigbasket.com/cl/${encodeURIComponent(q)}`,
+      BLINKIT: (q) => `https://blinkit.com/s/?q=${encodeURIComponent(q)}`,
+      // Flipkart Minutes = `marketplace=HYPERLOCAL` filter on search.
+      // Without it the app deeplink lands in regular Flipkart search,
+      // not the Minutes flow. Same wrong-assumption fix as Amazon's
+      // `i=nowstore` — iOS UL routing is path-based, not query-based.
+      FLIPKART_MINUTES: (q) => `https://www.flipkart.com/search?q=${encodeURIComponent(q)}&marketplace=HYPERLOCAL`,
+      // Amazon Now = `i=nowstore` filter on the search path. Without it
+      // you land in regular Amazon search, NOT the Now flow. iOS
+      // Universal-Link routing is path-based not query-based, so adding
+      // this param doesn't block the app handoff — I dropped it earlier
+      // on a wrong assumption. Captured product URLs already carry the
+      // sibling flag `almBrandId=ctnow` which routes inside the Amazon
+      // app to the Now product detail.
+      AMAZON_NOW: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}&i=nowstore`,
+      // Amazon Fresh = `i=amazonfresh` store filter on same amazon.in
+      // search path. Lands in the Fresh tile inside the Amazon iOS app.
+      // (Filter value best-guess; if iPhone test shows wrong tile, swap
+      // to `i=amazon-fresh` or `i=freshgrocery`.)
+      AMAZON_FRESH: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}&i=amazonfresh`,
+      // Amazon Business — same amazon.in domain (verified from owner's
+      // live account screenshot 2026-05-29: URL = amazon.in/b?...). No
+      // sub-store filter; Business context comes from the signed-in
+      // account inside the Amazon Shopping iOS app. Owner needs to be
+      // signed in as the HN HOTELS PVT LTD business account on iPhone.
+      AMAZON_BUSINESS: (q) => `https://www.amazon.in/s?k=${encodeURIComponent(q)}`,
+      // Metro Cash & Carry — B2B wholesale. NO AASA on metro.co.in
+      // (verified 2026-05-29), so iOS taps open Safari with the search
+      // page. Owner can browse on web or manually switch to the Metro
+      // India app.
+      METRO: (q) => `https://www.metro.co.in/search?q=${encodeURIComponent(q)}`,
+      // IndiaMART — B2B directory search. `?ss=` is the IndiaMART search
+      // param (NOT ?q=); byte-identical to the extension's searchUrl.
+      INDIAMART: (q) => `https://dir.indiamart.com/search.mp?ss=${encodeURIComponent(q)}`,
+      // DMart — Avenue Supermarts retail. Also no AASA → Safari
+      // fallback. Search URL verified to return 200.
+      DMART: (q) => `https://www.dmart.in/search?q=${encodeURIComponent(q)}`,
+      ZEPTO: (q) => `https://www.zepto.com/search?query=${encodeURIComponent(q)}`,
+      // JioMart — empirical AASA probe 2026-05-29: `/search/` is NOT in
+      // the JM iOS app's path-claim list (which includes /catalogsearch/*,
+      // /c/*, /cn/*). Switched to `/catalogsearch/result?q=` which
+      // matches `/catalogsearch/*` claim. Final shape pending iPhone
+      // share-URL ground truth.
+      JIOMART: (q) => `https://www.jiomart.com/catalogsearch/result?q=${encodeURIComponent(q)}`,
+      INSTAMART: (q) => `https://www.swiggy.com/instamart/search?custom_back=true&query=${encodeURIComponent(q)}`,
+    };
+    function portalSearchUrlFor(sk, q) {
+      const fn = PORTAL_SEARCH_URL[sk];
+      return fn ? fn(q || '') : '';
+    }
+    // Always-search policy: tap any portal button → search the portal's
+    // app for the raw material name, strictly. Scout-captured product
+    // URLs are kept as informational metadata on the card (price + SKU
+    // title + image) but are not the tap target, because a captured URL
+    // can be a wrong match (butter → butter paper). Search lets the
+    // owner see the portal's actual options for the material and pick.
+    // Source argument kept for forward-compat (callers pass it).
+    function bestUrlFor(source, materialQuery) {
+      return portalSearchUrlFor(source?.source_key, materialQuery);
+    }
+
+    // ============================================================
+    // Emoji thumbnail rules
+    // ============================================================
+    const MAT_EMOJI = [
+      [/\b(boneless|tandoori|kebab|tangdi|drumstick|lollipop|wing|chicken|murgh)\b/i, '🍗'],
+      [/\b(mutton|lamb|goat|gravy cut|chops|brain|bheja|paya)\b/i, '🥩'],
+      [/\bfish\b/i, '🐟'],
+      [/\b(egg|omelette|anda)\b/i, '🥚'],
+      [/\b(butter|makkhan|ghee)\b/i, '🧈'],
+      [/\b(cheese|paneer|mozzarella)\b/i, '🧀'],
+      [/\b(milk|dahi|curd|yogurt|cream|condensed|milkmaid)\b/i, '🥛'],
+      [/\b(rice|basmati|biryani)\b/i, '🍚'],
+      [/\b(maida|atta|flour|wheat|besan|gram flour|sooji|rava|corn)\b/i, '🌾'],
+      [/\b(oil|tel|olive|sunflower|palm|sesame)\b/i, '🫗'],
+      [/\b(tomato|tamatar)\b/i, '🍅'],
+      [/\b(onion|pyaaz|kanda)\b/i, '🧅'],
+      [/\b(potato|aloo|batata)\b/i, '🥔'],
+      [/\b(carrot|gajar)\b/i, '🥕'],
+      [/\b(capsicum|bell pepper|shimla)\b/i, '🫑'],
+      [/\b(lemon|nimbu|lime)\b/i, '🍋'],
+      [/\b(chili|chilli|mirchi|mirch)\b/i, '🌶️'],
+      [/\b(ginger|adrak)\b/i, '🫚'],
+      [/\b(garlic|lasun|lehsun)\b/i, '🧄'],
+      [/\b(coriander|kothimir|dhania|mint|pudina|curry leaf|leaves)\b/i, '🌿'],
+      [/\b(beans|french|fava|peas|matar)\b/i, '🫛'],
+      [/\b(cucumber|kheera)\b/i, '🥒'],
+      [/\b(cauliflower|gobi|broccoli|cabbage|patta)\b/i, '🥬'],
+      [/\b(tea|chai)\b/i, '🍵'],
+      [/\b(coffee|cappuccino)\b/i, '☕'],
+      [/\b(sugar|jaggery|gud|gur|stevia)\b/i, '🍬'],
+      [/\b(salt|namak)\b/i, '🧂'],
+      [/\b(bread|bun|paav|pav|rumali|naan|roti|chapati)\b/i, '🍞'],
+      [/\b(biscuit|cookie|osmania|cake|muffin|brownie)\b/i, '🍪'],
+      [/\b(honey|shahad|jam)\b/i, '🍯'],
+      [/\b(water|jal|pani)\b/i, '💧'],
+      [/\b(ice)\b/i, '🧊'],
+      [/\b(cashew|kaju|almond|badam|nut|kismis|raisin|pistach)\b/i, '🥜'],
+      [/\b(spice|masala|powder|seed|saunf|jeera|cumin|kalonji|elaichi|cardamom|clove|laung|cinnamon|dalchini|tej patta|bay leaf|ajwain|mace|javitri|nutmeg|jaiphal)\b/i, '🫙'],
+      [/\b(lentil|dal|toor|moong|chana|urad|masoor|rajma|chickpea)\b/i, '🫘'],
+      [/\b(sauce|chutney|ketchup|mayo|vinegar)\b/i, '🥫'],
+      [/\b(tamarind|imli)\b/i, '🥥'],
+      [/\b(packaging|box|carton|bag|wrap|paper|cup|plate|spoon|fork|napkin|tissue|foil|cling|disposable)\b/i, '📦'],
+      [/\b(cleaning|detergent|soap|sanitizer|bleach|dishwash|broom|mop|brush|scrub)\b/i, '🧽'],
+      [/\b(gas|fuel|lpg|charcoal|coal)\b/i, '🔥'],
+      [/\b(food colour|color|essence|flavour|flavor|baking soda|baking powder|yeast|starch|gelatin)\b/i, '🍰'],
+      [/\b(haleem|biryani|kabab)\b/i, '🍛'],
+    ];
+    const CAT_EMOJI = {
+      'Meat & Poultry': '🥩', 'Dairy & Eggs': '🥛', 'Fresh Vegetables & Produce': '🥬',
+      'Dry Goods & Staples': '🌾', 'Spices & Seasoning': '🌶️', 'Oils & Fats': '🫗',
+      'Beverage Inputs': '☕', 'Lentils & Pulses': '🫘', 'Bakery': '🍞',
+      'Cleaning & Non-Food': '🧽', 'Packaging & Disposables': '📦',
+      'Dry Fruits & Nuts': '🥜', 'Ready-Made & Snacks': '🍿',
+      'Sauces & Condiments': '🥫', 'Water': '💧', 'Fuel & Production': '🔥', 'Custom': '🛒',
+    };
+    function materialEmoji(mat) {
+      const name = String(mat?.name || '');
+      for (const [rx, e] of MAT_EMOJI) if (rx.test(name)) return e;
+      return CAT_EMOJI[mat?.category] || '🛒';
+    }
+
+    // ============================================================
+    // State + DOM cache
+    // ============================================================
+    const state = {
+      pin: localStorage.getItem('purchaseConsolePin') || '',
+      user: null,
+      materials: [],
+      snapshotMap: {},
+      query: '',
+      category: localStorage.getItem('purchaseConsoleCategory') || 'ALL',
+      brand: localStorage.getItem('purchaseConsoleBrand') || 'BOTH',
+      tier: localStorage.getItem('purchaseConsoleTier') || 'all',
+      hideDone: localStorage.getItem('purchaseConsoleHideDone') === '1',
+      refreshing: new Set(),
+      cart: JSON.parse(localStorage.getItem('purchaseConsoleCart') || '{}'),
+      activeTab: 'shop',
+      portalHealth: [],
+      portalHealthMap: {},
+      vendors: [],
+      loading: false,
+      deferredInstallPrompt: null,
+    };
+    const els = {
+      pinGate: document.getElementById('pinGate'),
+      pinInput: document.getElementById('pinInput'),
+      pinError: document.getElementById('pinError'),
+      unlockBtn: document.getElementById('unlockBtn'),
+      pinDots: document.getElementById('pinDots'),
+      pinKeypad: document.getElementById('pinKeypad'),
+      app: document.getElementById('app'),
+      tabShop: document.getElementById('tab-shop'),
+      tabPlan: document.getElementById('tab-plan'),
+      tabYou: document.getElementById('tab-you'),
+      navShop: document.getElementById('navShop'),
+      navPlan: document.getElementById('navPlan'),
+      navYou: document.getElementById('navYou'),
+      navAddBtn: document.getElementById('navAddBtn'),
+      navRefreshBtn: document.getElementById('navRefreshBtn'),
+      hardReloadRow: document.getElementById('hardReloadRow'),
+      searchInput: document.getElementById('searchInput'),
+      brandToggle: document.getElementById('brandToggle'),
+      tierToggle: document.getElementById('tierToggle'),
+      catChips: document.getElementById('catChips'),
+      filterStat: document.getElementById('filterStat'),
+      addMatBtn: document.getElementById('addMatBtn'),
+      listGrid: document.getElementById('listGrid'),
+      portalHealthBanner: document.getElementById('portalHealthBanner'),
+      vendorList: document.getElementById('vendorList'),
+      vendorNameInput: document.getElementById('vendorNameInput'),
+      vendorPhoneInput: document.getElementById('vendorPhoneInput'),
+      vendorAddBtn: document.getElementById('vendorAddBtn'),
+      shopSubtitle: document.getElementById('shopSubtitle'),
+      planSubtitle: document.getElementById('planSubtitle'),
+      planBody: document.getElementById('planBody'),
+      planBadge: document.getElementById('planBadge'),
+      youSubtitle: document.getElementById('youSubtitle'),
+      youName: document.getElementById('youName'),
+      youRole: document.getElementById('youRole'),
+      youSignOutBtn: document.getElementById('youSignOutBtn'),
+      portalHealthGroup: document.getElementById('portalHealthGroup'),
+      refreshHealthRow: document.getElementById('refreshHealthRow'),
+      installPwaRow: document.getElementById('installPwaRow'),
+      ptrShop: document.getElementById('ptrShop'),
+      addMatModal: document.getElementById('addMatModal'),
+      addMatClose: document.getElementById('addMatClose'),
+      addMatForm: document.getElementById('addMatForm'),
+      addMatCategorySelect: document.getElementById('addMatCategorySelect'),
+      addMatNewCatWrap: document.getElementById('addMatNewCatWrap'),
+      addMatNewCat: document.getElementById('addMatNewCat'),
+    };
+
+    // ============================================================
+    // Helpers
+    // ============================================================
+    function escapeHtml(v) {
+      return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+    function escapeAttr(v) { return escapeHtml(v).replace(/`/g, '&#096;'); }
+    function money(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v) || v <= 0) return '—';
+      return '₹' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: v >= 100 ? 0 : 2, maximumFractionDigits: v >= 100 ? 0 : 2 }).format(v);
+    }
+    function moneyPaise(p) { return money(Number(p || 0) / 100); }
+    function toast(msg, ms = 2400) {
+      const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+      document.body.appendChild(el); setTimeout(() => el.remove(), ms);
+    }
+    async function fetchJson(path, opts) {
+      const res = await fetch(path, opts);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      return data;
+    }
+    function persistCart() { localStorage.setItem('purchaseConsoleCart', JSON.stringify(state.cart)); }
+    function materialId(mat) { return mat.product_code || mat.item_id || mat.id || ''; }
+    function isPortalSourceQuoted(s) {
+      return s && s.stock_status === 'QUOTED' && (Number(s.unit_price_paise) || Number(s.price_paise) || 0) > 0;
+    }
+    function sourcePrice(s) { return Number(s?.unit_price_paise || s?.price_paise || 0); }
+    function sourcesFor(mat) {
+      const mid = materialId(mat);
+      const snap = state.snapshotMap[mid] || {};
+      const arr = [];
+      for (const sk of PORTAL_SOURCE_KEYS) {
+        const row = snap[sk];
+        if (row) arr.push({ ...row, source_key: sk });
+      }
+      return arr;
+    }
+    function baselineFor(mat) {
+      if (Number(mat.local_price) > 0) return { paise: Math.round(Number(mat.local_price) * 100), name: mat.last_vendor_name || 'Local Vendor' };
+      return null;
+    }
+    function isSanePortalPrice(source, mat) {
+      const price = sourcePrice(source);
+      if (!Number.isFinite(price) || price <= 0) return false;
+      const baseline = baselineFor(mat);
+      if (!baseline || !baseline.paise) return true;
+      if (price < baseline.paise * 0.3) return false;
+      if (price > baseline.paise * 8) return false;
+      return true;
+    }
+    function portalMatchesActiveTier(sk) {
+      if (state.tier === 'all') return true;
+      return tierFor(sk) === state.tier;
+    }
+    function bestSourceFor(mat) {
+      const portals = sourcesFor(mat)
+        .filter((s) => isPortalSourceQuoted(s) && isSanePortalPrice(s, mat))
+        // Tier filter: when a tier is active, cheapest is computed
+        // WITHIN that tier so the headline best-deal block shows the
+        // best option for the owner's current procurement intent.
+        .filter((s) => portalMatchesActiveTier(s.source_key));
+      portals.sort((a, b) => sourcePrice(a) - sourcePrice(b));
+      return portals[0] || null;
+    }
+    function deltaVsBase(price, base) {
+      if (!base || !base.paise) return '';
+      const d = Math.round(((price - base.paise) / base.paise) * 100);
+      if (!Number.isFinite(d)) return '';
+      const sign = d > 0 ? '+' : '';
+      const cls = d > 2 ? 'up' : d < -2 ? 'down' : 'flat';
+      return `<span class="best-delta ${cls}">${sign}${d}%</span>`;
+    }
+    function etaText(s) {
+      const m = Number(s?.eta_minutes || 0);
+      const lbl = (s?.eta_label || '').trim();
+      if (lbl) return lbl;
+      if (m && m < 90) return `${m} min`;
+      if (m && m < 1440) return `${Math.round(m / 60)} hr`;
+      if (m >= 1440) return 'Next day';
+      return '';
+    }
+
+    // ============================================================
+    // Cart / Plan
+    // ============================================================
+    function cartItemIndex(sk, mid) {
+      const lines = state.cart[sk] || [];
+      return lines.findIndex((l) => l.material_id === mid);
+    }
+    function isInCart(sk, mid) { return cartItemIndex(sk, mid) >= 0; }
+    function addToCart(mat, source, qty) {
+      const sk = source.source_key;
+      if (!state.cart[sk]) state.cart[sk] = [];
+      const mid = materialId(mat);
+      const line = {
+        material_id: mid, name: mat.name, qty: Number(qty) || 1, uom: mat.uom || 'unit',
+        price_paise: Number(source.unit_price_paise || source.price_paise || 0),
+        sku_url: bestUrlFor(source, mat.name),
+        sku_title: source.sku_title || mat.name,
+        image_url: source.image_url || mat.image_url || '',
+        portal_label: SOURCE_LABELS[sk] || sk,
+        added_at: new Date().toISOString(),
+      };
+      const idx = cartItemIndex(sk, mid);
+      if (idx >= 0) state.cart[sk][idx] = line; else state.cart[sk].push(line);
+      persistCart();
+      updatePlanBadge();
+      renderList();
+      renderPlan();
+      toast(`Added · ${line.portal_label}`);
+    }
+    function removeFromCart(sk, mid) {
+      const lines = state.cart[sk] || [];
+      state.cart[sk] = lines.filter((l) => l.material_id !== mid);
+      if (!state.cart[sk].length) delete state.cart[sk];
+      persistCart();
+      updatePlanBadge();
+      renderList();
+      renderPlan();
+    }
+    function setCartQty(sk, mid, qty) {
+      const line = (state.cart[sk] || []).find((l) => l.material_id === mid);
+      if (line) { line.qty = Math.max(0.01, Number(qty) || 1); persistCart(); updatePlanBadge(); }
+    }
+    function cartTotals() {
+      const byPortal = {}; let grand = 0; let grandDone = 0;
+      let totalCount = 0; let doneCount = 0;
+      for (const [sk, lines] of Object.entries(state.cart)) {
+        let pt = 0; let ptDone = 0; let doneN = 0;
+        for (const l of lines) {
+          const lineTotal = (l.price_paise / 100) * (l.qty || 1);
+          pt += lineTotal;
+          if (l.done_at) { ptDone += lineTotal; doneN += 1; }
+        }
+        byPortal[sk] = { count: lines.length, total: pt, doneCount: doneN, doneTotal: ptDone };
+        grand += pt; grandDone += ptDone;
+        totalCount += lines.length; doneCount += doneN;
+      }
+      return { byPortal, grand, grandDone, totalCount, doneCount };
+    }
+    function toggleLineDone(sk, mid) {
+      const line = (state.cart[sk] || []).find((l) => l.material_id === mid);
+      if (!line) return;
+      line.done_at = line.done_at ? null : new Date().toISOString();
+      persistCart();
+      updatePlanBadge();
+      renderPlan();
+      renderList();
+    }
+    function updatePlanBadge() {
+      const { totalCount } = cartTotals();
+      els.planBadge.textContent = String(totalCount);
+      els.planBadge.classList.toggle('hide', totalCount === 0);
+    }
+
+    // ============================================================
+    // Shop tab — material list
+    // ============================================================
+    function renderMaterialCard(mat) {
+      const mid = materialId(mat);
+      const sources = sourcesFor(mat);
+      const best = bestSourceFor(mat);
+      const baseline = baselineFor(mat);
+      const qty = (mat._qty == null ? Math.max(1, Number(mat.suggested_qty || 1)) : mat._qty);
+      const uom = mat.uom || 'unit';
+      const inCartAnywhere = Object.entries(state.cart).some(([sk, lines]) => lines.some((l) => l.material_id === mid));
+      const cardCls = `mat-card ${best ? 'has-best' : ''} ${inCartAnywhere ? 'in-plan' : ''} ${mat.is_custom ? 'custom' : ''} ${mat.primary_vendor ? 'has-vendor' : ''}`;
+      const thumbImg = best?.image_url || mat.image_url || '';
+      const emoji = materialEmoji(mat);
+      const thumbHtml = thumbImg
+        ? `<img src="${escapeAttr(thumbImg)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'emoji',textContent:'${emoji}'}))">`
+        : `<span class="emoji">${emoji}</span>`;
+      const customPill = mat.is_custom ? `<span class="pill-custom">CUSTOM</span>` : '';
+      const vendorPill = mat.primary_vendor ? `<span class="pill-vendor">📲 ${escapeHtml(mat.primary_vendor.name.split('(')[0].trim())}</span>` : '';
+
+      // Vendor-direct block — renders ABOVE the portal best-deal when
+      // this material has an established vendor. Owner can either:
+      // (a) tap "+ <Vendor>" to add under vendor:<slug> cart key, OR
+      // (b) tap "+ Plan" on the portal best-deal to add under portal key
+      //     (for compare / scout-cycle confirmation).
+      let vendorHtml = '';
+      if (mat.primary_vendor) {
+        const v = mat.primary_vendor;
+        const vKey = `vendor:${v.slug}`;
+        const inVendorCart = isInCart(vKey, mid);
+        const vendorName = v.name.split('(')[0].trim();
+        vendorHtml = `
+          <div class="vendor-deal">
+            <div class="vendor-row">
+              <div class="vendor-icon">📲</div>
+              <div class="vendor-info">
+                <div class="vendor-line"><span class="vendor-tag">VENDOR DIRECT</span>${escapeHtml(vendorName)}</div>
+                <div class="vendor-sub">${escapeHtml(v.whatsapp_phone || v.phone || 'no phone')}</div>
+              </div>
+              <button class="add-vendor-btn ${inVendorCart ? 'in-plan' : ''}" type="button" data-add-vendor="${escapeAttr(mid)}" data-vendor-slug="${escapeAttr(v.slug)}">${inVendorCart ? '✓ In Plan' : '+ ' + escapeHtml(vendorName)}</button>
+            </div>
+          </div>`;
+      }
+      const refreshDisabled = state.refreshing.has(mid);
+
+      const baselineHtml = baseline ? `
+        <div class="baseline-strip">
+          <span>📍 Local</span>
+          <span class="price">${moneyPaise(baseline.paise)}/${escapeHtml(uom)}</span>
+          <span class="vendor">${escapeHtml(baseline.name || '')}</span>
+        </div>` : '';
+
+      let bestHtml;
+      if (best) {
+        const price = sourcePrice(best);
+        const sk = best.source_key;
+        const sku = (best.sku_title || '').slice(0, 80);
+        const delta = baseline ? deltaVsBase(price, baseline) : '';
+        const openHref = bestUrlFor(best, mat.name);
+        const inCart = isInCart(sk, mid);
+        const actionLabel = inCart ? '✓' : '+';
+        const eta = etaText(best);
+        bestHtml = `
+          <div class="best-deal">
+            <div class="best-row">
+              ${portalFavicon(sk, 64)}
+              <div class="best-info">
+                <div class="best-portal-line"><span class="cheap-tag">CHEAPEST</span>${escapeHtml(SOURCE_LABELS[sk] || sk)}</div>
+                <div class="best-sku">${escapeHtml(sku)}</div>
+                ${eta ? `<div class="best-eta">🕒 ${escapeHtml(eta)}</div>` : ''}
+              </div>
+              <div class="best-price-block">
+                <div class="best-price">${moneyPaise(price)}</div>
+                <div class="best-rate">per ${escapeHtml(uom)} ${delta}</div>
+              </div>
+            </div>
+            <div class="cta-row">
+              <a class="open-app-btn handoff-${handoffStatusFor(sk)}" href="${escapeAttr(openHref)}" target="_blank" rel="noopener" title="${escapeAttr(HANDOFF_TITLE[handoffStatusFor(sk)])}" data-handoff="${handoffStatusFor(sk)}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">
+                ${portalFavicon(sk, 32, 'portal-favicon')}
+                <span>Open in ${escapeHtml(SOURCE_LABELS[sk] || sk)}${HANDOFF_GLYPH[handoffStatusFor(sk)] ? ' ' + HANDOFF_GLYPH[handoffStatusFor(sk)] : ''}</span>
+                <span class="arrow">↗</span>
+              </a>
+              <button class="add-plan-btn ${inCart ? 'in-plan' : ''}" type="button" data-add-mat="${escapeAttr(mid)}" data-add-source="${escapeAttr(sk)}">${actionLabel} Plan</button>
+            </div>
+          </div>`;
+      } else {
+        // Tier-aware fallback message: when a tier filter is active and
+        // no scout has captured a price in that tier yet, tell the
+        // owner to tap any chip below to search the portal app directly.
+        const tierTxt = state.tier === 'all' ? 'any portal' : TIER_LABELS[state.tier].split(' ')[0].toLowerCase();
+        const noBody = state.tier === 'all'
+          ? 'Pull down to refresh, or tap 🔄 to scout this item.'
+          : `No ${tierTxt} price scouted yet. Tap any chip below to open the portal app directly.`;
+        // CRITICAL UX FIX 2026-05-29: even without a portal quote, the
+        // owner can still ADD TO PLAN — Lemon-not-on-quick-commerce
+        // shouldn't strip his ability to put it in today's list. He'll
+        // search the portal app directly or use a vendor relationship.
+        // Cart slot for these items: source_key='manual' so they end up
+        // in a "Manual / no scout" Plan section instead of being lost.
+        const inManualCart = isInCart('manual', mid);
+        const manualActionLabel = inManualCart ? '✓ In Plan' : '+ Add to Plan';
+        bestHtml = `
+          <div class="best-deal no-best">
+            <div class="best-row">
+              <div class="portal-favicon letter">?</div>
+              <div class="best-info">
+                <div class="best-portal-line" style="color:var(--text-dim);">No ${escapeHtml(tierTxt)} price yet</div>
+                <div class="best-sku">${escapeHtml(noBody)} Add to Plan and search in any portal app below.</div>
+              </div>
+              <div></div>
+            </div>
+            <div class="cta-row" style="grid-template-columns: 1fr;">
+              <button class="add-plan-btn ${inManualCart ? 'in-plan' : ''}" type="button" data-add-manual="${escapeAttr(mid)}" style="min-height:46px;font-size:14px;">${manualActionLabel}</button>
+            </div>
+          </div>`;
+      }
+
+      // ─── Tier-grouped alt-chip rendering ───
+      // Build one chip per portal, then group by tier and emit a
+      // labelled micro-row per tier. If state.tier !== 'all', collapse
+      // to just that tier.
+      function renderOneChip(sk) {
+        if (best && sk === best.source_key) return '';
+        if (B2B_ONLY_PORTALS.has(sk) && !mat.b2b_eligible) return '';
+        const ho = handoffStatusFor(sk);
+        const hoGlyph = HANDOFF_GLYPH[ho] ? `<span class="chip-handoff" aria-hidden="true">${HANDOFF_GLYPH[ho]}</span>` : '';
+        const hoTitle = HANDOFF_TITLE[ho];
+        const s = sources.find((x) => x.source_key === sk);
+        const effStatus = effectivePortalStatus(sk);
+        const healthCls = ` health-${portalHealthTone(effStatus)}`;
+        const healthDot = portalHealthDot();
+        const healthTitle = ` · ${portalHealthLabel(effStatus)}`;
+        const dead = isScrapeDead(sk, effStatus);
+        if (!s) {
+          const url = portalSearchUrlFor(sk, mat.name);
+          // B2B/launcher chips with no scout: chip itself is the value-add
+          // (tap launches portal search in app). Never dead — no session.
+          const isB2B = tierFor(sk) === 'b2b';
+          const chipCls = isB2B ? 'alt-chip' : 'alt-chip disabled';
+          const priceTxt = isB2B ? '↗' : '—';
+          return url ? `<a class="${chipCls}${healthCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle + healthTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span>${hoGlyph}</a>` : '';
+        }
+        const quoted = isPortalSourceQuoted(s);
+        const sane = quoted && isSanePortalPrice(s, mat);
+        const url = bestUrlFor(s, mat.name);
+        const priceTxt = quoted ? moneyPaise(sourcePrice(s)) : (s.stock_status === 'ERROR' ? 'err' : '—');
+        const warn = quoted && !sane ? '<span class="warn">⚠️</span>' : '';
+        const chipCls = quoted ? 'alt-chip' : 'alt-chip disabled';
+        if (dead) {
+          return `<button type="button" class="${chipCls}${healthCls} scrape-dead" title="${escapeAttr((SOURCE_LABELS[sk] || sk) + healthTitle + ' — re-login to price')}" data-dead-portal="${escapeAttr(sk)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${escapeHtml(priceTxt)}</span></button>`;
+        }
+        return `<a class="${chipCls}${healthCls} handoff-${ho}" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(hoTitle + healthTitle)}" data-handoff="${ho}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-material-name="${escapeAttr(mat.name)}">${healthDot}${portalFavicon(sk, 24, 'chip-favicon')}<span class="chip-name">${escapeHtml(SOURCE_SHORT[sk])}</span><span class="chip-price">${warn}${escapeHtml(priceTxt)}</span>${hoGlyph}</a>`;
+      }
+      const tiersToRender = state.tier === 'all'
+        ? TIER_ORDER
+        : TIER_ORDER.filter((t) => t === state.tier);
+      const altsHtml = tiersToRender.map((tier) => {
+        const tierPortals = PORTAL_SOURCE_KEYS.filter((sk) => tierFor(sk) === tier);
+        const chips = tierPortals.map(renderOneChip).filter(Boolean).join('');
+        if (!chips) return '';
+        return `
+          <div class="tier-row tier-${tier}">
+            <div class="tier-row-label">${escapeHtml(TIER_LABELS[tier])}</div>
+            <div class="alt-strip">${chips}</div>
+          </div>`;
+      }).filter(Boolean).join('');
+
+      // ── LANE VERDICT banner — the one clear "where do I buy this" line, per card ──
+      const lane = mat.lane || ((mat.source_keys || []).filter((k) => k && k !== 'LOCAL_VENDOR').length ? 'MARKET' : 'VENDOR');
+      const buyFrom = mat.buy_from || (mat.primary_vendor ? mat.primary_vendor.name.split('(')[0].trim() : (mat.last_vendor_name || ''));
+      const laneHtml = lane === 'VENDOR'
+        ? `<div class="lane-banner lane-vendor"><span class="lane-ic">✅</span><span class="lane-txt">Just order${buyFrom ? ' from <b>' + escapeHtml(buyFrom) + '</b>' : ''}<small>Vendor item — no price-hunting</small></span></div>`
+        : `<div class="lane-banner lane-market"><span class="lane-ic">⚡</span><span class="lane-txt">Compare &amp; buy cheapest<small>Sold across portals — price moves</small></span></div>`;
+
+      return `
+        <div class="${cardCls} lane-${lane.toLowerCase()}" data-mat-id="${escapeAttr(mid)}">
+          <div class="mat-head">
+            <div class="mat-thumb">${thumbHtml}</div>
+            <div>
+              <div class="mat-name">${escapeHtml(mat.name)}${customPill ? ' ' + customPill : ''}</div>
+              <div class="mat-meta">
+                <span>${escapeHtml(mat.category || '—')}</span>
+                <span class="dot"></span>
+                <span>${escapeHtml(uom)}</span>
+                ${mat.times_ordered ? `<span class="dot"></span><span>${mat.times_ordered} POs</span>` : ''}
+              </div>
+            </div>
+            <div class="mat-tools">
+              <div class="qty-stepper">
+                <button type="button" data-mat-qty-dec="${escapeAttr(mid)}">−</button>
+                <input type="number" min="0.25" step="0.25" value="${escapeAttr(qty)}" data-mat-qty-input="${escapeAttr(mid)}">
+                <span class="uom">${escapeHtml(uom)}</span>
+                <button type="button" data-mat-qty-inc="${escapeAttr(mid)}">+</button>
+              </div>
+              <button class="icon-btn" type="button" data-row-refresh="${escapeAttr(mid)}" title="Rescout" ${refreshDisabled ? 'disabled' : ''}>${refreshDisabled ? '⟳' : '🔄'}</button>
+              ${mat.is_custom ? `<button class="icon-btn danger" type="button" data-del-mat="${escapeAttr(mid)}" title="Delete">🗑️</button>` : ''}
+            </div>
+          </div>
+          ${laneHtml}
+          ${baselineHtml}
+          ${vendorHtml}
+          ${bestHtml}
+          ${altsHtml ? `<div class="tier-stack">${altsHtml}</div>` : ''}
+        </div>`;
+    }
+
+    function renderList() {
+      const mats = state.materials;
+      const q = (state.query || '').trim().toLowerCase();
+      const filtered = mats.filter((m) => {
+        if (state.category !== 'ALL' && (m.category || '—') !== state.category) return false;
+        if (!q) return true;
+        const hay = (m.name + ' ' + (m.category || '') + ' ' + (m.product_code || '') + ' ' + (m.last_vendor_name || '')).toLowerCase();
+        if (hay.includes(q)) return true;
+        const sources = sourcesFor(m);
+        for (const s of sources) if ((s.sku_title || '').toLowerCase().includes(q)) return true;
+        return false;
+      });
+      const totalQuotes = filtered.reduce((acc, m) => acc + sourcesFor(m).filter(isPortalSourceQuoted).length, 0);
+      const tierTxt = state.tier === 'all' ? '' : ` · ${TIER_LABELS[state.tier].split(' ')[0]} only`;
+      els.filterStat.textContent = `${filtered.length} of ${mats.length} · ${totalQuotes} quotes today${tierTxt}`;
+      els.shopSubtitle.textContent = mats.length
+        ? `${mats.length} materials · ${totalQuotes} live quotes${state.tier !== 'all' ? ' · filtered to ' + TIER_LABELS[state.tier].split(' ')[0].toLowerCase() : ''}`
+        : 'Loading materials…';
+
+      if (!filtered.length) {
+        els.listGrid.innerHTML = `<div class="empty-state"><div class="big">🔍</div><div class="title">${q ? 'No matches' : 'No materials yet'}</div><div class="body">${q ? `Nothing matches "${escapeHtml(q)}"` : 'Pull to refresh, or add a material.'}</div></div>`;
+        return;
+      }
+      const groups = new Map();
+      for (const m of filtered) {
+        const c = m.category || '—';
+        if (!groups.has(c)) groups.set(c, []);
+        groups.get(c).push(m);
+      }
+      const ordered = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      els.listGrid.innerHTML = ordered.map(([cat, items]) => {
+        items.sort((a, b) => {
+          if ((a.is_custom ? 1 : 0) !== (b.is_custom ? 1 : 0)) return (b.is_custom ? 1 : 0) - (a.is_custom ? 1 : 0);
+          if ((b.times_ordered || 0) !== (a.times_ordered || 0)) return (b.times_ordered || 0) - (a.times_ordered || 0);
+          return a.name.localeCompare(b.name);
+        });
+        const rows = items.map(renderMaterialCard).join('');
+        return `<div class="section-header"><span>${escapeHtml(cat)}</span><span class="count">${items.length}</span></div>${rows}`;
+      }).join('');
+    }
+
+    function rebuildCategoryChips() {
+      const cats = [...new Set(state.materials.map((m) => m.category || '—'))].sort();
+      els.catChips.innerHTML = [
+        `<button class="chip ${state.category === 'ALL' ? 'on' : ''}" data-cat="ALL" type="button">All</button>`,
+        ...cats.map((c) => `<button class="chip ${state.category === c ? 'on' : ''}" data-cat="${escapeAttr(c)}" type="button">${escapeHtml(CAT_EMOJI[c] || '')} ${escapeHtml(c)}</button>`)
+      ].join('');
+      els.addMatCategorySelect.innerHTML = ['<option value="">— choose or add new —</option>',
+        ...cats.map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`),
+        '<option value="__new__">+ Add new category</option>'].join('');
+    }
+
+    // ============================================================
+    // Plan tab
+    // ============================================================
+    // ============================================================
+    // Morning auto-seed — Sauda's pre-sectioned suggestion view
+    // ============================================================
+    // A READ-ONLY layer that sits ATOP the manual plan/cart. It groups
+    // the day's materials into the three order windows and, per item,
+    // names the recommended source (cheapest verified, live-session
+    // price). It NEVER mutates state.cart — the owner still builds and
+    // edits his plan below as before. Brand toggle composes: NCH mode
+    // hides HE_EVENING, HE mode hides NCH_MORNING; VENDOR_CALLS + OTHER
+    // always show. Empty sections render a quiet state, never a throw.
+    function brandShowsWindow(win) {
+      const b = String(state.brand || 'BOTH').toUpperCase();
+      if (b === 'NCH' && win === 'HE_EVENING') return false;
+      if ((b === 'HE' || b === 'HAMZA') && win === 'NCH_MORNING') return false;
+      return true;
+    }
+    // For a material, find the recommended (cheapest verified) source
+    // for the morning view. Reuses bestSourceFor (already ladder-aware,
+    // excludes price=0 sentinels + insane prices). Returns null when no
+    // trustable live price exists yet.
+    function seedRecommendation(mat) {
+      try {
+        const best = bestSourceFor(mat);
+        if (best && isPortalSourceQuoted(best)) {
+          return {
+            kind: 'portal',
+            sk: best.source_key,
+            label: SOURCE_LABELS[best.source_key] || best.source_key,
+            price_paise: sourcePrice(best),
+            uom: mat.uom || 'unit',
+          };
+        }
+        // Vendor-direct materials show their vendor as the recommendation
+        // even without a portal quote — the call list is the point.
+        if (hasVendorLink(mat)) {
+          const v = mat.primary_vendor || (mat.vendor_links || [])[0] || null;
+          if (v) {
+            return {
+              kind: 'vendor',
+              label: String(v.name || 'Vendor').split('(')[0].trim(),
+              price_paise: 0,
+              uom: mat.uom || 'unit',
+            };
+          }
+        }
+      } catch (_) { /* fall through to no-recommendation */ }
+      return null;
+    }
+    function renderMorningSeed() {
+      const mats = Array.isArray(state.materials) ? state.materials : [];
+      // Bucket every in-scope material into exactly one window so the
+      // count reconciles (COA: no data missed).
+      const buckets = { NCH_MORNING: [], HE_EVENING: [], VENDOR_CALLS: [], OTHER: [] };
+      for (const mat of mats) {
+        const win = deriveOrderWindow(mat);
+        (buckets[win] || buckets.OTHER).push(mat);
+      }
+      const sectionFor = (win) => {
+        if (!brandShowsWindow(win)) return '';
+        const items = buckets[win] || [];
+        // Sort: items with a live recommendation first (cheapest
+        // verified up top), then the rest by name — so it's literally
+        // top-to-bottom tap order.
+        const rows = items
+          .map((mat) => ({ mat, rec: seedRecommendation(mat) }))
+          .sort((a, b) => {
+            const aHas = a.rec && a.rec.kind === 'portal' ? 0 : 1;
+            const bHas = b.rec && b.rec.kind === 'portal' ? 0 : 1;
+            if (aHas !== bHas) return aHas - bHas;
+            if (aHas === 0) {
+              const ap = a.rec.price_paise || 0; const bp = b.rec.price_paise || 0;
+              if (ap !== bp) return ap - bp;
+            }
+            return String(a.mat.name || '').localeCompare(String(b.mat.name || ''));
+          });
+        const priced = rows.filter((r) => r.rec && r.rec.kind === 'portal').length;
+        const lineHtml = rows.map(({ mat, rec }) => {
+          const emoji = materialEmoji(mat);
+          let recHtml;
+          if (rec && rec.kind === 'portal') {
+            recHtml = `<span class="seed-rec"><span class="seed-rec-src">${escapeHtml(rec.label)}</span><span class="seed-rec-price">${moneyPaise(rec.price_paise)}/${escapeHtml(rec.uom)}</span></span>`;
+          } else if (rec && rec.kind === 'vendor') {
+            recHtml = `<span class="seed-rec seed-rec-vendor"><span class="seed-rec-src">📲 ${escapeHtml(rec.label)}</span></span>`;
+          } else {
+            recHtml = `<span class="seed-rec seed-rec-none">awaiting price</span>`;
+          }
+          return `
+            <div class="seed-line">
+              <span class="seed-emoji">${emoji}</span>
+              <span class="seed-name">${escapeHtml(mat.name || '')}</span>
+              ${recHtml}
+            </div>`;
+        }).join('');
+        const visibleCount = rows.length;
+        const body = visibleCount > 0
+          ? lineHtml
+          : `<div class="seed-empty">${escapeHtml(ORDER_WINDOW_EMPTY[win] || ORDER_WINDOW_EMPTY.OTHER)}</div>`;
+        const meta = visibleCount > 0
+          ? `${visibleCount} item${visibleCount === 1 ? '' : 's'}${priced > 0 ? ` · ${priced} priced` : ''}`
+          : 'quiet';
+        // OTHER opens collapsed by default to keep the head clean; the
+        // two clock windows + vendor calls open expanded so the morning
+        // list is glanceable at a tap.
+        const openAttr = win === 'OTHER' ? '' : ' open';
+        return `
+          <details class="seed-section seed-${win.toLowerCase()}"${openAttr}>
+            <summary class="seed-summary">
+              <span class="seed-summary-glyph">${ORDER_WINDOW_GLYPH[win] || '🛒'}</span>
+              <span class="seed-summary-title">${escapeHtml(ORDER_WINDOW_LABELS[win] || win)}</span>
+              <span class="seed-summary-meta">${escapeHtml(meta)}</span>
+            </summary>
+            <div class="seed-section-body">${body}</div>
+          </details>`;
+      };
+      const sections = ORDER_WINDOWS.map(sectionFor).join('');
+      return `
+        <div class="seed-wrap">
+          <div class="seed-intro">ⓘ Sauda's read of the day — sourced by order window, cheapest verified source per item. Your plan below stays yours to build.</div>
+          ${sections}
+        </div>`;
+    }
+
+    function renderPlan() {
+      const { byPortal, grand, grandDone, totalCount, doneCount } = cartTotals();
+      // Sauda's morning auto-seed — a read-only suggestion layer rendered
+      // ABOVE the manual plan. Computed even when the cart is empty so the
+      // owner opens to a pre-sectioned view, not a blank slate.
+      let seedHtml = '';
+      try { seedHtml = renderMorningSeed(); } catch (_) { seedHtml = ''; }
+      if (totalCount === 0) {
+        els.planSubtitle.textContent = 'Sauda struck — your read of the day is below.';
+        els.planBody.innerHTML = seedHtml + `<div class="empty-state"><div class="big">🧾</div><div class="title">Plan not built yet</div><div class="body">Tap any deal in Shop to add it to today's plan — or use Sauda's read above as your guide.</div></div>`;
+        return;
+      }
+      const portals = Object.keys(byPortal).length;
+      const allDone = doneCount === totalCount;
+      els.planSubtitle.innerHTML = allDone
+        ? `<span class="all-done-banner">✓ All ${totalCount} items added · ${money(grandDone)}</span>`
+        : `<b>${doneCount} of ${totalCount}</b> added · ${money(grandDone)} of ${money(grand)} · ${portals} portal${portals === 1 ? '' : 's'}`;
+
+      const honesty = `
+        <div class="plan-honesty">
+          ⓘ For each portal: tap <b>Open</b>, find each material in the portal app, add to that portal's cart, then come back and ✓ check each one off as you go.
+        </div>`;
+
+      // Hide-done toggle bar
+      const hideDoneOn = state.hideDone;
+      const toggleBar = doneCount > 0 ? `
+        <div class="plan-toggle-bar">
+          <button class="plan-toggle ${hideDoneOn ? 'on' : ''}" type="button" id="hideDoneToggle">
+            <span class="plan-toggle-glyph">${hideDoneOn ? '☑' : '☐'}</span>
+            <span>Hide ${doneCount} added</span>
+          </button>
+        </div>` : '';
+
+      const allKeys = Object.keys(byPortal);
+      // Group portal blocks by tier so the Plan tab mirrors the Shop
+      // tab's tier-based decision tree (Q-Comm / Retail / B2B). Within
+      // a tier, pending portals bubble up; ties broken by total desc.
+      const sortInsideTier = (a, b) => {
+        const aDone = byPortal[a].doneCount === byPortal[a].count ? 1 : 0;
+        const bDone = byPortal[b].doneCount === byPortal[b].count ? 1 : 0;
+        if (aDone !== bDone) return aDone - bDone;
+        return byPortal[b].total - byPortal[a].total;
+      };
+      const tierKeyGroups = TIER_ORDER
+        .map((tier) => ({
+          tier,
+          keys: allKeys.filter((k) => tierFor(k) === tier).sort(sortInsideTier),
+        }))
+        .filter((g) => g.keys.length > 0);
+      const renderPortalBlock = (sk) => {
+        const lines = state.cart[sk] || [];
+        const t = byPortal[sk];
+        const portalAllDone = t.doneCount === t.count;
+        const isVendorBlock = String(sk).startsWith('vendor:');
+        const vendor = isVendorBlock ? vendorFromCartKey(sk) : null;
+        const appHref = isVendorBlock
+          ? (vendor ? whatsAppLinkFor(vendor, lines) : '#')
+          : portalSearchUrlFor(sk, '');
+        const progressPct = t.count > 0 ? Math.round((t.doneCount / t.count) * 100) : 0;
+        const visibleLines = hideDoneOn ? lines.filter((l) => !l.done_at) : lines;
+        const lineRows = visibleLines.map((l) => {
+          const emoji = materialEmoji({ name: l.name });
+          const thumb = l.image_url
+            ? `<div class="mat-thumb"><img src="${escapeAttr(l.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'emoji',textContent:'${emoji}'}))"></div>`
+            : `<div class="mat-thumb"><span class="emoji">${emoji}</span></div>`;
+          const isDone = !!l.done_at;
+          return `
+          <div class="plan-line-wrap ${isDone ? 'is-done' : ''}" data-line-wrap="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
+            <div class="plan-line">
+              ${thumb}
+              <div class="plan-line-info">
+                <div class="plan-line-name">${escapeHtml(l.name)}</div>
+                <div class="plan-line-sku">${escapeHtml((l.sku_title || '').slice(0, 60))}</div>
+                <div class="plan-line-controls">
+                  <div class="qty-stepper">
+                    <button type="button" data-qty-dec="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">−</button>
+                    <input type="number" min="0.01" step="0.25" value="${escapeAttr(l.qty)}" data-qty-input="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">
+                    <span class="uom">${escapeHtml(l.uom)}</span>
+                    <button type="button" data-qty-inc="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">+</button>
+                  </div>
+                  ${l.sku_url ? `<a class="open-product-mini" href="${escapeAttr(cleanUrl(l.sku_url))}" target="_blank" rel="noopener">Product ↗</a>` : ''}
+                </div>
+              </div>
+              <div class="plan-line-right">
+                <div class="plan-line-price">${moneyPaise(l.price_paise * (l.qty || 1))}</div>
+                <button class="plan-line-check ${isDone ? 'is-checked' : ''}" type="button" data-line-done="${escapeAttr(sk)}|${escapeAttr(l.material_id)}" title="${isDone ? 'Mark not added' : 'Mark as added in app'}" aria-label="${isDone ? 'Mark not added' : 'Mark as added in app'}">${isDone ? '✓' : ''}</button>
+              </div>
+            </div>
+            <div class="plan-line-reveal" data-cart-remove="${escapeAttr(sk)}|${escapeAttr(l.material_id)}">Remove</div>
+          </div>`;
+        }).join('');
+        const hiddenCount = hideDoneOn ? t.doneCount : 0;
+        const hiddenLine = hiddenCount > 0 ? `<div class="plan-hidden-line">${hiddenCount} added item${hiddenCount === 1 ? '' : 's'} hidden</div>` : '';
+        // Vendor blocks render with a WhatsApp accent + Send button. The
+        // wa.me URL embeds today's order template; tap opens WhatsApp
+        // with the message pre-filled to the vendor's number.
+        const blockClasses = `portal-block ${portalAllDone ? 'portal-all-done' : ''} ${isVendorBlock ? 'vendor-block' : ''}`;
+        const blockHeadIcon = isVendorBlock
+          ? `<div class="vendor-icon" style="width:48px;height:48px;border-radius:11px;font-size:28px;">📲</div>`
+          : portalFavicon(sk, 64);
+        const blockTitle = isVendorBlock && vendor
+          ? `${escapeHtml(vendor.name.split('(')[0].trim())}${portalAllDone ? ' ✓' : ''}`
+          : `${escapeHtml(SOURCE_LABELS[sk] || sk)}${portalAllDone ? ' ✓' : ''}`;
+        const blockMeta = isVendorBlock && vendor
+          ? `<b>${t.doneCount} of ${t.count}</b> items · ${escapeHtml(vendor.whatsapp_phone || vendor.phone || '')}`
+          : `<b>${t.doneCount} of ${t.count}</b> added · ${money(t.doneTotal)} of ${money(t.total)}`;
+        const ctaButton = isVendorBlock
+          ? `<a class="whatsapp-send-btn" href="${escapeAttr(appHref)}" target="_blank" rel="noopener">
+               <span style="font-size:18px;">📲</span>
+               <span>Send via WhatsApp</span>
+               <span class="arrow">↗</span>
+             </a>`
+          : `<a class="open-app-btn handoff-${handoffStatusFor(sk)}" href="${escapeAttr(appHref)}" target="_blank" rel="noopener" title="${escapeAttr(HANDOFF_TITLE[handoffStatusFor(sk)])}" data-handoff="${handoffStatusFor(sk)}" data-portal-name="${escapeAttr(SOURCE_LABELS[sk] || sk)}" data-plan-portal="${escapeAttr(sk)}">
+               ${portalFavicon(sk, 32, 'portal-favicon')}
+               <span>Open ${escapeHtml(SOURCE_LABELS[sk] || sk)}${HANDOFF_GLYPH[handoffStatusFor(sk)] ? ' ' + HANDOFF_GLYPH[handoffStatusFor(sk)] : ''}</span>
+               <span class="arrow">↗</span>
+             </a>`;
+        return `
+          <div class="${blockClasses}">
+            <div class="portal-block-head">
+              ${blockHeadIcon}
+              <div>
+                <div class="portal-block-title">${blockTitle}</div>
+                <div class="portal-block-meta">${blockMeta}</div>
+              </div>
+              <div class="portal-block-total">${money(t.total)}</div>
+            </div>
+            <div class="portal-progress">
+              <div class="portal-progress-fill" style="width:${progressPct}%"></div>
+            </div>
+            <div class="portal-cta-row">
+              ${ctaButton}
+              <button class="portal-share-btn" type="button" data-share-portal="${escapeAttr(sk)}" title="Copy as text">📤</button>
+            </div>
+            ${lineRows}
+            ${hiddenLine}
+          </div>`;
+      };
+      const blocks = tierKeyGroups.map(({ tier, keys: tierKeys }) => {
+        // Per-tier subtotal across the keys in this group
+        let tierTotal = 0; let tierDone = 0; let tierItemCount = 0; let tierDoneCount = 0;
+        for (const k of tierKeys) {
+          tierTotal += byPortal[k].total;
+          tierDone += byPortal[k].doneTotal;
+          tierItemCount += byPortal[k].count;
+          tierDoneCount += byPortal[k].doneCount;
+        }
+        const portalBlocks = tierKeys.map(renderPortalBlock).join('');
+        return `
+          <div class="plan-tier-section tier-${tier}">
+            <div class="plan-tier-header">
+              <div class="plan-tier-title">${escapeHtml(TIER_LABELS[tier])}</div>
+              <div class="plan-tier-stats">
+                <span><b>${tierDoneCount} of ${tierItemCount}</b> · ${money(tierDone)} of ${money(tierTotal)}</span>
+              </div>
+            </div>
+            ${portalBlocks}
+          </div>`;
+      }).join('');
+      const grandHtml = `
+        <div class="grand-card">
+          <div>
+            <div class="grand-label">Grand total</div>
+            <div class="grand-progress-line"><b>${doneCount} of ${totalCount}</b> items · ${money(grandDone)} of ${money(grand)} done</div>
+          </div>
+          <span class="grand-value">${money(grand)}</span>
+        </div>`;
+      els.planBody.innerHTML = seedHtml + honesty + toggleBar + blocks + grandHtml;
+      attachSwipeHandlers();
+
+      // Wire hide-done toggle
+      const tBtn = document.getElementById('hideDoneToggle');
+      if (tBtn) tBtn.addEventListener('click', () => {
+        state.hideDone = !state.hideDone;
+        localStorage.setItem('purchaseConsoleHideDone', state.hideDone ? '1' : '');
+        renderPlan();
+      });
+    }
+
+    // ============================================================
+    // Swipe-to-reveal on plan lines
+    // ============================================================
+    function attachSwipeHandlers() {
+      const wraps = document.querySelectorAll('.plan-line-wrap');
+      wraps.forEach((w) => {
+        let startX = 0, currentX = 0, dragging = false;
+        const line = w.querySelector('.plan-line');
+        if (!line) return;
+        const onStart = (e) => {
+          const t = (e.touches && e.touches[0]) || e;
+          startX = t.clientX; currentX = startX; dragging = true;
+          line.style.transition = 'none';
+        };
+        const onMove = (e) => {
+          if (!dragging) return;
+          const t = (e.touches && e.touches[0]) || e;
+          currentX = t.clientX;
+          const delta = Math.min(0, currentX - startX);
+          if (delta < -8) {
+            line.style.transform = `translateX(${Math.max(-80, delta)}px)`;
+          }
+        };
+        const onEnd = () => {
+          if (!dragging) return; dragging = false;
+          line.style.transition = '';
+          const delta = currentX - startX;
+          if (delta < -40) w.classList.add('revealed');
+          else w.classList.remove('revealed');
+          line.style.transform = '';
+        };
+        line.addEventListener('touchstart', onStart, { passive: true });
+        line.addEventListener('touchmove', onMove, { passive: true });
+        line.addEventListener('touchend', onEnd);
+        line.addEventListener('touchcancel', onEnd);
+      });
+    }
+
+    // ============================================================
+    // Passive session-health derivation (shared by chips + You pane)
+    // ============================================================
+    // The portal-health payload knows READY / EXPIRED / NOT_CONNECTED /
+    // BROKEN / LAUNCHER_ONLY. The amber "stale" tier is computed
+    // client-side from last_captured_at (when cookies were grabbed), so a
+    // working-but-not-recently-recaptured portal reads amber, not red.
+    // Launcher-only portals (Amazon Business, Metro, IndiaMART, DMart)
+    // have no session lifecycle, so they are always neutral.
+    const PORTAL_HEALTH_STALE_MS = 24 * 60 * 60 * 1000;
+    const LAUNCHER_ONLY_PORTALS = new Set(['AMAZON_BUSINESS', 'METRO', 'INDIAMART', 'DMART']);
+    function derivePortalStatus(row) {
+      if (!row) return 'NOT_CONNECTED';
+      const s = (row.status || 'NOT_CONNECTED').toUpperCase();
+      if (s === 'LAUNCHER_ONLY') return 'LAUNCHER_ONLY';
+      if (s === 'READY') {
+        const cap = row.last_captured_at ? Date.parse(row.last_captured_at) : NaN;
+        if (!isNaN(cap) && (Date.now() - cap) > PORTAL_HEALTH_STALE_MS) return 'READY_STALE';
+        return 'READY';
+      }
+      return s;
+    }
+    function effectivePortalStatus(sk) {
+      const map = state.portalHealthMap || {};
+      if (map[sk]) return map[sk];
+      if (LAUNCHER_ONLY_PORTALS.has(sk)) return 'LAUNCHER_ONLY';
+      return 'UNKNOWN';
+    }
+    function portalHealthTone(status) {
+      if (status === 'READY') return 'good';
+      if (status === 'READY_STALE') return 'warn';
+      if (status === 'EXPIRED' || status === 'NOT_CONNECTED' || status === 'BROKEN') return 'bad';
+      return 'neutral';
+    }
+    function portalHealthLabel(status) {
+      return ({ READY: 'Ready', READY_STALE: 'Stale (24h+)', EXPIRED: 'Expired', NOT_CONNECTED: 'Not connected', BROKEN: 'Broken', LAUNCHER_ONLY: 'Launcher', UNKNOWN: 'Checking…' })[status] || status;
+    }
+    function portalHealthDot() { return '<span class="chip-health" aria-hidden="true"></span>'; }
+    function isScrapeDead(sk, status) {
+      return portalHealthTone(status) === 'bad' && !LAUNCHER_ONLY_PORTALS.has(sk) && sk !== 'manual';
+    }
+    function onPortalChipDead(sk) {
+      const name = SOURCE_LABELS[sk] || sk;
+      toast(`${name} session needs a re-login — sign in on the ${name} desktop / winpc Chrome, then re-capture.`, 3200);
+    }
+    function renderPortalHealthBanner() {
+      const el = els.portalHealthBanner;
+      if (!el) return;
+      const rows = state.portalHealth || [];
+      const scored = rows
+        .filter((r) => { const sk = r.source_key || r.key; return !LAUNCHER_ONLY_PORTALS.has(sk); })
+        .map((r) => ({ sk: r.source_key || r.key, st: derivePortalStatus(r) }));
+      const rank = { NOT_CONNECTED: 3, EXPIRED: 3, BROKEN: 3, READY_STALE: 2, READY: 0, LAUNCHER_ONLY: 0, UNKNOWN: 0 };
+      let worst = null;
+      for (const it of scored) {
+        const sc = rank[it.st] || 0;
+        if (sc > 0 && (!worst || sc > worst.sc)) worst = { ...it, sc };
+      }
+      if (!worst) { el.hidden = true; el.innerHTML = ''; return; }
+      const name = SOURCE_LABELS[worst.sk] || worst.sk;
+      const isBad = worst.sc >= 3;
+      el.classList.toggle('tone-warn', !isBad);
+      const msg = isBad
+        ? `⚠️ ${name} session ${worst.st === 'EXPIRED' ? 'expired' : 'down'} — re-login to price it.`
+        : `⏳ ${name} session is stale (24h+) — re-login for fresh prices.`;
+      el.innerHTML = `<span class="pb-text">${escapeHtml(msg)}</span><button type="button" class="pb-act" data-fix-portal="${escapeAttr(worst.sk)}">Fix</button>`;
+      el.hidden = false;
+    }
+    // ============================================================
+    // Vendors (You tab) — manage the direct-supplier surface
+    // ============================================================
+    async function loadVendors() {
+      if (!els.vendorList) return;
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=list-vendors&brand=${state.brand}&pin=${encodeURIComponent(state.pin)}`);
+        state.vendors = d.vendors || d.results || [];
+        renderVendorList();
+      } catch (e) {
+        els.vendorList.innerHTML = `<div class="vendor-empty">Couldn't load vendors — ${escapeHtml(e.message || 'error')}</div>`;
+      }
+    }
+    function renderVendorList() {
+      if (!els.vendorList) return;
+      const rows = state.vendors || [];
+      if (!rows.length) {
+        els.vendorList.innerHTML = `<div class="vendor-empty">No vendors yet. Add one below — then link it to a material to light up its VENDOR DIRECT card.</div>`;
+        return;
+      }
+      els.vendorList.innerHTML = rows.map((v) => {
+        const name = String(v.name || '').split('(')[0].trim() || v.slug || 'Vendor';
+        const phone = v.whatsapp_phone || v.phone || 'no number';
+        const n = Number(v.material_count || 0);
+        const countTxt = n ? `${n} linked` : 'unlinked';
+        return `
+          <div class="vendor-list-row">
+            <div class="v-icon">📲</div>
+            <div class="v-main">
+              <div class="v-name">${escapeHtml(name)}</div>
+              <div class="v-meta">${escapeHtml(phone)}</div>
+            </div>
+            <div class="v-count">${escapeHtml(countTxt)}</div>
+          </div>`;
+      }).join('');
+    }
+    async function addVendor() {
+      const nameEl = els.vendorNameInput;
+      const phoneEl = els.vendorPhoneInput;
+      const name = (nameEl ? nameEl.value : '').trim();
+      const phone = (phoneEl ? phoneEl.value : '').replace(/[^0-9]/g, '');
+      if (!name) { toast('Name the vendor first.'); return; }
+      if (phone && phone.length < 10) { toast('Enter a full WhatsApp number.'); return; }
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=upsert-vendor&pin=${encodeURIComponent(state.pin)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: state.pin, name, phone, whatsapp_phone: phone, brand: state.brand }),
+        });
+        if (d && (d.success || d.slug || d.id)) {
+          if (nameEl) nameEl.value = '';
+          if (phoneEl) phoneEl.value = '';
+          toast('Vendor saved.');
+          loadVendors();
+        } else {
+          toast('Could not save vendor — try again.');
+        }
+      } catch (e) {
+        toast('Save failed: ' + (e.message || 'error'), 3000);
+      }
+    }
+
+    // ============================================================
+    // You tab — portal health
+    // ============================================================
+    async function refreshPortalHealth() {
+      els.portalHealthGroup.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="body">Checking…</div></div>`;
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=portal-health&pin=${encodeURIComponent(state.pin)}`);
+        state.portalHealth = d.sessions || d.portals || [];
+        const map = {};
+        for (const row of state.portalHealth) { map[row.source_key || row.key] = derivePortalStatus(row); }
+        state.portalHealthMap = map;
+        renderPortalHealth();
+        renderPortalHealthBanner();
+        if (state.activeTab === 'shop') renderList();
+      } catch (e) {
+        els.portalHealthGroup.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="body">Couldn't fetch — ${escapeHtml(e.message)}</div></div>`;
+      }
+    }
+    function renderPortalHealth() {
+      const list = state.portalHealth.filter((s) => PORTAL_SOURCE_KEYS.includes(s.source_key || s.key));
+      if (!list.length) {
+        els.portalHealthGroup.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="body">No portal session rows yet.</div></div>`;
+        return;
+      }
+      els.portalHealthGroup.innerHTML = list.map((s) => {
+        const sk = s.source_key || s.key;
+        const eff = derivePortalStatus(s);
+        const tone = portalHealthTone(eff);
+        const cls = tone === 'good' ? 'ok' : tone === 'bad' ? 'bad' : 'warn';
+        const status = portalHealthLabel(eff);
+        const last = s.last_validated_at ? new Date(s.last_validated_at).toLocaleString('en-IN', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }) : '—';
+        return `
+          <div class="you-row">
+            ${portalFavicon(sk, 48, 'row-icon')}
+            <div>
+              <div class="row-label">${escapeHtml(SOURCE_LABELS[sk] || sk)}</div>
+              <div class="row-sub">${escapeHtml(s.issue_detail || s.issue_code || last)}</div>
+            </div>
+            <div class="row-value ${cls}">${escapeHtml(status)}</div>
+          </div>`;
+      }).join('');
+    }
+
+    // ============================================================
+    // Tab navigation
+    // ============================================================
+    function switchTab(target) {
+      state.activeTab = target;
+      ['shop', 'plan', 'you'].forEach((t) => {
+        document.getElementById(`tab-${t}`).classList.toggle('hide', t !== target);
+      });
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        b.classList.toggle('on', b.dataset.tabTarget === target);
+      });
+      if (target === 'plan') renderPlan();
+      if (target === 'you') {
+        if (!state.portalHealth.length) refreshPortalHealth();
+        loadVendors();
+      }
+      // Reset scroll to top of new tab pane (iOS app behaviour)
+      const pane = document.getElementById(`tab-${target}`);
+      pane.scrollTop = 0;
+      // Reset condensed nav state on switch
+      document.querySelectorAll('.top-nav').forEach((n) => n.classList.remove('condensed'));
+    }
+
+    // ============================================================
+    // Scroll-driven nav condense (large title → compact title)
+    // ============================================================
+    function attachScrollNav(paneId, navId) {
+      const pane = document.getElementById(paneId);
+      const nav = document.getElementById(navId);
+      pane.addEventListener('scroll', () => {
+        const condensed = pane.scrollTop > 30;
+        if (nav.classList.contains('condensed') !== condensed) {
+          nav.classList.toggle('condensed', condensed);
+        }
+      }, { passive: true });
+    }
+
+    // ============================================================
+    // Pull-to-refresh (Shop tab only)
+    // ============================================================
+    function attachPullToRefresh() {
+      const pane = els.tabShop;
+      const ptr = els.ptrShop;
+      let startY = 0, currentY = 0, pulling = false, triggered = false;
+      pane.addEventListener('touchstart', (e) => {
+        if (pane.scrollTop <= 0) {
+          startY = e.touches[0].clientY; pulling = true; triggered = false;
+        }
+      }, { passive: true });
+      pane.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        currentY = e.touches[0].clientY;
+        const delta = currentY - startY;
+        if (delta > 0) {
+          const h = Math.min(80, delta * 0.5);
+          ptr.style.height = h + 'px';
+          if (h > 50 && !triggered) {
+            ptr.classList.add('active');
+          }
+        }
+      }, { passive: true });
+      pane.addEventListener('touchend', async () => {
+        if (!pulling) return;
+        pulling = false;
+        const h = parseInt(ptr.style.height || '0', 10);
+        if (h > 50) {
+          triggered = true;
+          ptr.style.height = '50px';
+          ptr.classList.add('active');
+          try { await loadAll(); } catch (_) {}
+          ptr.classList.remove('active');
+          ptr.style.height = '0';
+        } else {
+          ptr.style.height = '0';
+          ptr.classList.remove('active');
+        }
+      });
+    }
+
+    // ============================================================
+    // Data load + auth
+    // ============================================================
+    // ---- LOCKED PIN SHELL keypad: append/backspace, fill dots, auto-submit on 4th ----
+    let pinEntry = '';
+    let pinBusy = false;
+    function renderPinDots() {
+      const dots = els.pinDots ? els.pinDots.querySelectorAll('.pin-dot') : [];
+      dots.forEach((d, i) => d.classList.toggle('filled', i < pinEntry.length));
+    }
+    function pinPush(digit) {
+      if (pinBusy || pinEntry.length >= 4) return;
+      els.pinGate.classList.remove('error');
+      pinEntry += digit;
+      renderPinDots();
+      if (pinEntry.length === 4) {
+        els.pinInput.value = pinEntry;
+        verifyPin(); // auto-submit — no Enter button
+      }
+    }
+    function pinBack() {
+      if (pinBusy || !pinEntry.length) return;
+      els.pinGate.classList.remove('error');
+      pinEntry = pinEntry.slice(0, -1);
+      renderPinDots();
+    }
+    function pinReject() {
+      els.pinGate.classList.add('error');
+      setTimeout(() => { pinEntry = ''; renderPinDots(); els.pinGate.classList.remove('error'); }, 600);
+    }
+
+    async function verifyPin() {
+      const pin = (els.pinInput.value || pinEntry || state.pin).trim();
+      if (!pin || pin.length !== 4) { pinReject(); return; }
+      pinBusy = true;
+      try {
+        const d = await fetchJson(`/api/purchase-control?action=verify-pin&pin=${encodeURIComponent(pin)}`);
+        state.pin = pin; state.user = d.user;
+        localStorage.setItem('purchaseConsolePin', pin);
+        els.pinGate.style.opacity = '0';
+        setTimeout(() => {
+          els.pinGate.classList.add('hide');
+          els.app.classList.remove('hide');
+        }, 300);
+        els.youName.textContent = d.user.name;
+        els.youRole.textContent = d.user.role + (d.user.can_create_po ? ' · can create POs' : '');
+        [...els.brandToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b.dataset.brand === state.brand));
+        [...els.tierToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b.dataset.tier === state.tier));
+        await loadAll();
+        updatePlanBadge();
+      } catch (e) {
+        pinReject();
+      } finally { pinBusy = false; }
+    }
+    function skeletonRows(n) {
+      return Array.from({ length: n }, () => `<div class="skel-card"><div class="skel-line med"></div><div class="skel-line short"></div><div class="skel-line"></div></div>`).join('');
+    }
+    async function loadAll() {
+      state.loading = true;
+      if (!state.materials.length) els.listGrid.innerHTML = skeletonRows(6);
+      try {
+        const m = await fetchJson(`/api/purchase-control?action=materials&pin=${encodeURIComponent(state.pin)}&brand=${state.brand}&days=1095`);
+        state.materials = m.items || [];
+        const s = await fetchJson(`/api/purchase-control?action=daily-snapshot&pin=${encodeURIComponent(state.pin)}&brand=BOTH`);
+        const snap = {};
+        for (const mat of (s.materials || [])) {
+          snap[mat.material_id] = {};
+          for (const src of (mat.sources || [])) snap[mat.material_id][src.source_key] = src;
+        }
+        state.snapshotMap = snap;
+        rebuildCategoryChips();
+      } catch (err) { toast(err.message || 'Load failed'); }
+      finally { state.loading = false; renderList(); refreshPortalHealth(); }
+    }
+    async function refreshOneMaterial(mid) {
+      if (!state.pin || state.refreshing.has(mid)) return;
+      const mat = state.materials.find((m) => materialId(m) === mid);
+      if (!mat) return;
+      state.refreshing.add(mid); renderList();
+      try {
+        const payload = { pin: state.pin, material_id: mid, sources: PORTAL_SOURCE_KEYS };
+        if (mat.is_custom || String(mid).startsWith('custom:')) {
+          payload.name = mat.name; payload.category = mat.category; payload.uom = mat.uom;
+          payload.brand = (mat.brands_seen || [])[0] || 'BOTH';
+        }
+        const d = await fetchJson('/api/purchase-control?action=refresh-material', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        const updated = d.snapshot || [];
+        const snapForMat = {};
+        for (const row of updated) snapForMat[row.source_key] = row;
+        state.snapshotMap[mid] = snapForMat;
+        const c = d.counts || {};
+        toast(`${d.material_name}: ${c.ok || 0} ok · ${c.error || 0} err`);
+      } catch (err) { toast(err.message || 'Refresh failed'); }
+      finally { state.refreshing.delete(mid); renderList(); }
+    }
+    async function deleteCustomMaterial(mid) {
+      if (!confirm('Delete this custom material?')) return;
+      try {
+        const slug = String(mid).replace(/^custom:/, '');
+        await fetchJson('/api/purchase-control?action=delete-custom-material', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: state.pin, slug }),
+        });
+        state.materials = state.materials.filter((m) => materialId(m) !== mid);
+        delete state.snapshotMap[mid];
+        renderList(); toast('Deleted');
+      } catch (e) { toast(e.message || 'Delete failed'); }
+    }
+
+    // ============================================================
+    // Share per-portal plan
+    // ============================================================
+    async function sharePortalPlan(sk) {
+      const lines = state.cart[sk] || [];
+      if (!lines.length) return;
+      const total = lines.reduce((a, l) => a + (l.price_paise / 100) * (l.qty || 1), 0);
+      const title = `🛒 ${SOURCE_LABELS[sk] || sk} — HN Hotels Sauda`;
+      const body = lines.map((l, i) => `${i + 1}. ${l.name} × ${l.qty}${l.uom} — ${moneyPaise(l.price_paise * (l.qty || 1))}`).join('\n');
+      const text = `${title}\n\n${body}\n\nTotal: ${money(total)}`;
+      if (navigator.share) { try { await navigator.share({ title, text }); return; } catch (_) {} }
+      try { await navigator.clipboard.writeText(text); toast('Plan copied'); } catch (_) { toast('Could not share'); }
+    }
+
+    // ============================================================
+    // Add material modal
+    // ============================================================
+    function openAddMatModal(prefillCategory) {
+      els.addMatForm.reset();
+      els.addMatNewCatWrap.classList.add('hide');
+      if (prefillCategory) {
+        const opt = [...els.addMatCategorySelect.options].find((o) => o.value === prefillCategory);
+        if (opt) els.addMatCategorySelect.value = prefillCategory;
+      }
+      els.addMatModal.classList.add('open');
+      setTimeout(() => els.addMatForm.querySelector('[name="name"]').focus(), 200);
+    }
+    function closeAddMatModal() { els.addMatModal.classList.remove('open'); }
+
+    // ============================================================
+    // PWA install prompt
+    // ============================================================
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      state.deferredInstallPrompt = e;
+    });
+
+    // ============================================================
+    // Wire-up
+    // ============================================================
+    // Locked PIN shell — keypad taps + hardware-keyboard fallback (desktop)
+    els.pinKeypad.addEventListener('click', (e) => {
+      const key = e.target.closest('.pin-key');
+      if (!key) return;
+      if (key.dataset.back) { pinBack(); return; }
+      if (key.dataset.d) pinPush(key.dataset.d);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (els.pinGate.classList.contains('hide')) return;
+      if (e.key >= '0' && e.key <= '9') { pinPush(e.key); }
+      else if (e.key === 'Backspace') { pinBack(); }
+    });
+
+    els.brandToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-brand]');
+      if (!btn) return;
+      [...els.brandToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b === btn));
+      state.brand = btn.dataset.brand;
+      localStorage.setItem('purchaseConsoleBrand', state.brand);
+      loadAll();
+    });
+    els.tierToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tier]');
+      if (!btn) return;
+      [...els.tierToggle.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b === btn));
+      state.tier = btn.dataset.tier;
+      localStorage.setItem('purchaseConsoleTier', state.tier);
+      renderList();
+    });
+    els.catChips.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-cat]');
+      if (!btn) return;
+      state.category = btn.dataset.cat;
+      localStorage.setItem('purchaseConsoleCategory', state.category);
+      rebuildCategoryChips();
+      renderList();
+    });
+    let searchTimer;
+    els.searchInput.addEventListener('input', (e) => {
+      state.query = e.target.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(renderList, 180);
+    });
+
+    document.querySelectorAll('.tab-btn').forEach((b) => {
+      b.addEventListener('click', () => switchTab(b.dataset.tabTarget));
+    });
+    attachScrollNav('tab-shop', 'navShop');
+    attachScrollNav('tab-plan', 'navPlan');
+    attachScrollNav('tab-you', 'navYou');
+    attachPullToRefresh();
+
+    els.navAddBtn.addEventListener('click', () => openAddMatModal());
+
+    // Soft refresh — re-fetch materials + snapshot + portal health.
+    // Visible in the PWA standalone mode where there's no browser
+    // address bar reload icon.
+    els.navRefreshBtn.addEventListener('click', async () => {
+      const btn = els.navRefreshBtn;
+      btn.style.animation = 'rot 0.8s linear infinite';
+      try {
+        await loadAll();
+        try { await refreshPortalHealth(); } catch (_) {}
+        renderList(); renderPlan(); updatePlanBadge();
+        toast('Refreshed ✓', 1500);
+      } catch (e) {
+        toast('Refresh failed: ' + (e.message || 'unknown'), 3000);
+      } finally {
+        btn.style.animation = '';
+      }
+    });
+
+    // Hard reload — unregister service workers + clear caches + reload
+    // with a cache-busting query param. For when the PWA holds onto a
+    // stale HTML/JS snapshot after I ship a new Sauda version.
+    els.hardReloadRow.addEventListener('click', async () => {
+      if (!confirm('Hard reload?\\n\\nThis clears the cached app version and downloads the latest from server. Your Plan + PIN survive (they live in localStorage, not cache).')) return;
+      toast('Clearing cache + reloading…', 2000);
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) { try { await r.unregister(); } catch (_) {} }
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const k of keys) { try { await caches.delete(k); } catch (_) {} }
+        }
+      } catch (_) {}
+      const u = location.origin + location.pathname + '?_v=' + Date.now();
+      location.replace(u);
+    });
+    els.addMatBtn.addEventListener('click', () => openAddMatModal());
+    els.addMatClose.addEventListener('click', closeAddMatModal);
+    els.addMatModal.addEventListener('click', (e) => { if (e.target === els.addMatModal) closeAddMatModal(); });
+    els.addMatCategorySelect.addEventListener('change', (e) => {
+      if (e.target.value === '__new__') {
+        els.addMatNewCatWrap.classList.remove('hide');
+        setTimeout(() => els.addMatNewCat.focus(), 80);
+      } else { els.addMatNewCatWrap.classList.add('hide'); }
+    });
+    els.addMatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(els.addMatForm);
+      let category = fd.get('category');
+      if (category === '__new__') category = (fd.get('new_category') || '').trim();
+      const payload = {
+        pin: state.pin, name: (fd.get('name') || '').trim(), category,
+        uom: (fd.get('uom') || 'unit').trim() || 'unit',
+        brand: fd.get('brand') || 'BOTH',
+      };
+      if (!payload.name) { toast('Name required'); return; }
+      if (!payload.category) { toast('Category required'); return; }
+      try {
+        const d = await fetchJson('/api/purchase-control?action=add-custom-material', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        const m = d.material;
+        state.materials.push({
+          id: m.material_id, product_code: m.material_id, item_id: m.material_id,
+          name: m.name, category: m.category, uom: m.uom,
+          brands_seen: [m.brand || 'BOTH'], product_ids_by_brand: {}, vendors: [],
+          times_ordered: 0, total_qty: 0, last_purchase_date: '', last_qty: 0,
+          suggested_qty: 1, po_count: 0, raw_name_variants: [],
+          priority_hint: 'Manual', source_keys: PORTAL_SOURCE_KEYS,
+          last_vendor_id: null, last_vendor_name: '',
+          is_custom: true, image_url: '', local_price: 0,
+        });
+        rebuildCategoryChips();
+        state.category = m.category;
+        renderList(); closeAddMatModal();
+        toast(`Added ${m.name} · scouting now`);
+        refreshOneMaterial(m.material_id);
+      } catch (err) { toast(err.message || 'Add failed'); }
+    });
+
+    els.youSignOutBtn.addEventListener('click', () => {
+      if (!confirm('Sign out of Sauda?')) return;
+      localStorage.removeItem('purchaseConsolePin');
+      location.reload();
+    });
+    els.refreshHealthRow.addEventListener('click', refreshPortalHealth);
+    if (els.vendorAddBtn) els.vendorAddBtn.addEventListener('click', addVendor);
+    if (els.vendorPhoneInput) els.vendorPhoneInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addVendor(); });
+    if (els.portalHealthBanner) els.portalHealthBanner.addEventListener('click', (e) => {
+      const fix = e.target.closest('[data-fix-portal]');
+      if (fix) onPortalChipDead(fix.dataset.fixPortal);
+    });
+    els.installPwaRow.addEventListener('click', async () => {
+      if (state.deferredInstallPrompt) {
+        state.deferredInstallPrompt.prompt();
+        const c = await state.deferredInstallPrompt.userChoice;
+        toast(c.outcome === 'accepted' ? 'Installed' : 'Cancelled');
+        state.deferredInstallPrompt = null;
+      } else {
+        toast('On iPhone: tap Share → Add to Home Screen');
+      }
+    });
+
+    // ============================================================
+    // Copy-on-tap fallback for handoff=app-search-unverified / safari
+    // ============================================================
+    // For portals where (a) the app opens but doesn't auto-search
+    // (Hyperpure case — verified broken on iPhone 2026-05-29) or
+    // (b) there's no app handoff at all (Metro, DMart — Safari only),
+    // copy the material name to the clipboard at tap-time so the
+    // owner only has to tap-paste in the app's search bar.
+    // Touches `pointerdown` so the copy completes before iOS hands off
+    // to the URL — clipboard writes in the click handler often arrive
+    // too late on iOS.
+    document.addEventListener('pointerdown', (event) => {
+      const link = event.target.closest('a[data-handoff]');
+      if (!link) return;
+      const handoff = link.dataset.handoff;
+      const portalName = link.dataset.portalName || 'portal';
+      const planPortalKey = link.dataset.planPortal;
+
+      // Plan-tab "Open [Portal]" — copy the entire portal plan as text
+      // so the owner can paste it into a portal app's chat / paste
+      // each line into search, or share via WhatsApp.
+      if (planPortalKey) {
+        const lines = state.cart[planPortalKey] || [];
+        if (lines.length) {
+          const total = lines.reduce((a, l) => a + (l.price_paise / 100) * (l.qty || 1), 0);
+          const body = lines.map((l, i) => `${i + 1}. ${l.name} × ${l.qty}${l.uom}`).join('\n');
+          const text = `${SOURCE_LABELS[planPortalKey] || planPortalKey} plan (${lines.length} items, est ${money(total)}):\n${body}`;
+          try {
+            navigator.clipboard.writeText(text);
+            toast(`📋 ${lines.length}-item plan copied — paste in ${portalName}`, 3000);
+          } catch (_) {}
+        }
+        return;
+      }
+
+      // Shop-tab single chip/CTA — copy the single material name for
+      // portals whose URL handoff lands wrong (Hyperpure) or where
+      // there's no app handoff (Metro, DMart, Safari fallback).
+      if (handoff !== 'app-search-unverified' && handoff !== 'safari') return;
+      const matName = link.dataset.materialName;
+      if (!matName) return;
+      try {
+        navigator.clipboard.writeText(matName);
+        toast(`📋 "${matName}" copied — paste in ${portalName} search`, 3000);
+      } catch (_) {}
+    });
+
+    // Delegated handlers (list + plan)
+    document.addEventListener('click', (event) => {
+      const t = event.target;
+      const deadChip = t.closest('[data-dead-portal]');
+      if (deadChip) { event.preventDefault(); onPortalChipDead(deadChip.dataset.deadPortal); return; }
+      const addBtn = t.closest('[data-add-mat]');
+      if (addBtn) {
+        const mid = addBtn.dataset.addMat;
+        const sk = addBtn.dataset.addSource;
+        const mat = state.materials.find((m) => materialId(m) === mid);
+        const src = (sourcesFor(mat) || []).find((s) => s.source_key === sk);
+        if (!mat || !src) return;
+        const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
+        if (isInCart(sk, mid)) { removeFromCart(sk, mid); toast(`Removed ${mat.name}`); }
+        else addToCart(mat, src, qty);
+        return;
+      }
+      // Manual add — material has no scout quote yet, but owner still
+      // wants it in today's Plan. Stores under cart key 'manual' with
+      // local Odoo price as line estimate. Owner searches in any portal
+      // app to actually buy it.
+      const addManualBtn = t.closest('[data-add-manual]');
+      if (addManualBtn) {
+        const mid = addManualBtn.dataset.addManual;
+        const mat = state.materials.find((m) => materialId(m) === mid);
+        if (!mat) return;
+        const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
+        const sk = 'manual';
+        if (isInCart(sk, mid)) {
+          removeFromCart(sk, mid);
+          toast(`Removed ${mat.name}`);
+        } else {
+          const baseline = baselineFor(mat);
+          const pricePaise = baseline?.paise || 0;
+          const manualSource = {
+            source_key: sk,
+            unit_price_paise: pricePaise,
+            price_paise: pricePaise,
+            sku_title: 'No scout quote yet — search in portal app',
+            sku_url: '',
+            image_url: mat.image_url || '',
+          };
+          if (!SOURCE_LABELS[sk]) SOURCE_LABELS[sk] = 'No scout yet';
+          addToCart(mat, manualSource, qty);
+        }
+        return;
+      }
+      // Vendor-direct add — stores under cart key `vendor:<slug>` instead
+      // of a portal source key. baseline (local Odoo) price is used as the
+      // line price since vendors don't have a portal scout.
+      const addVendorBtn = t.closest('[data-add-vendor]');
+      if (addVendorBtn) {
+        const mid = addVendorBtn.dataset.addVendor;
+        const slug = addVendorBtn.dataset.vendorSlug;
+        const mat = state.materials.find((m) => materialId(m) === mid);
+        const vendor = mat && (mat.vendor_links || []).find((v) => v.slug === slug);
+        if (!mat || !vendor) return;
+        const vKey = `vendor:${slug}`;
+        const qty = parseFloat(document.querySelector(`[data-mat-qty-input="${mid}"]`)?.value || '1') || 1;
+        if (isInCart(vKey, mid)) {
+          removeFromCart(vKey, mid);
+          toast(`Removed ${mat.name}`);
+        } else {
+          // Synthesise a "source" object for addToCart with vendor metadata
+          const baseline = baselineFor(mat);
+          const pricePaise = baseline?.paise || 0;
+          const vSource = {
+            source_key: vKey,
+            unit_price_paise: pricePaise,
+            price_paise: pricePaise,
+            sku_title: `Vendor direct: ${vendor.name}`,
+            sku_url: '',
+            image_url: mat.image_url || '',
+          };
+          // Temporarily override SOURCE_LABELS for toast clarity
+          if (!SOURCE_LABELS[vKey]) SOURCE_LABELS[vKey] = vendor.name.split('(')[0].trim();
+          addToCart(mat, vSource, qty);
+        }
+        return;
+      }
+      const refBtn = t.closest('[data-row-refresh]');
+      if (refBtn) { refreshOneMaterial(refBtn.dataset.rowRefresh); return; }
+      const delBtn = t.closest('[data-del-mat]');
+      if (delBtn) { deleteCustomMaterial(delBtn.dataset.delMat); return; }
+      const inc = t.closest('[data-mat-qty-inc]');
+      if (inc) {
+        const id = inc.dataset.matQtyInc;
+        const input = document.querySelector(`[data-mat-qty-input="${id}"]`);
+        if (input) { input.value = (parseFloat(input.value) || 0) + 1; input.dispatchEvent(new Event('change', { bubbles: true })); }
+        return;
+      }
+      const dec = t.closest('[data-mat-qty-dec]');
+      if (dec) {
+        const id = dec.dataset.matQtyDec;
+        const input = document.querySelector(`[data-mat-qty-input="${id}"]`);
+        if (input) { input.value = Math.max(0.25, (parseFloat(input.value) || 0) - 1); input.dispatchEvent(new Event('change', { bubbles: true })); }
+        return;
+      }
+      const cInc = t.closest('[data-qty-inc]');
+      if (cInc) {
+        const [sk, mid] = cInc.dataset.qtyInc.split('|');
+        const input = document.querySelector(`[data-qty-input="${sk}|${mid}"]`);
+        if (input) { const v = (parseFloat(input.value) || 0) + 1; input.value = v; setCartQty(sk, mid, v); renderPlan(); }
+        return;
+      }
+      const cDec = t.closest('[data-qty-dec]');
+      if (cDec) {
+        const [sk, mid] = cDec.dataset.qtyDec.split('|');
+        const input = document.querySelector(`[data-qty-input="${sk}|${mid}"]`);
+        if (input) { const v = Math.max(0.25, (parseFloat(input.value) || 0) - 1); input.value = v; setCartQty(sk, mid, v); renderPlan(); }
+        return;
+      }
+      const cRm = t.closest('[data-cart-remove]');
+      if (cRm) { const [sk, mid] = cRm.dataset.cartRemove.split('|'); removeFromCart(sk, mid); return; }
+      const shareBtn = t.closest('[data-share-portal]');
+      if (shareBtn) { sharePortalPlan(shareBtn.dataset.sharePortal); return; }
+      const doneBtn = t.closest('[data-line-done]');
+      if (doneBtn) {
+        const [sk, mid] = doneBtn.dataset.lineDone.split('|');
+        toggleLineDone(sk, mid);
+        // Brief haptic-feel toast confirms the action
+        const line = (state.cart[sk] || []).find((l) => l.material_id === mid);
+        if (line) toast(line.done_at ? `✓ Added: ${line.name}` : `Pending: ${line.name}`, 1400);
+        return;
+      }
+    });
+    document.addEventListener('change', (event) => {
+      const inp = event.target.closest('[data-mat-qty-input]');
+      if (inp) {
+        const id = inp.dataset.matQtyInput;
+        const v = Math.max(0.25, parseFloat(inp.value) || 1);
+        inp.value = v;
+        const mat = state.materials.find((m) => materialId(m) === id);
+        if (mat) mat._qty = v;
+        return;
+      }
+      const cInp = event.target.closest('[data-qty-input]');
+      if (cInp) {
+        const [sk, mid] = cInp.dataset.qtyInput.split('|');
+        const v = Math.max(0.25, parseFloat(cInp.value) || 1);
+        setCartQty(sk, mid, v);
+        return;
+      }
+    });
+
+    // ============================================================
+    // Return-from-portal-app prompt
+    // ============================================================
+    // When user taps a portal CTA we record (portal, ts). When the
+    // page becomes visible again (user has switched back from the
+    // portal app or Safari), if the gap is reasonable and there's a
+    // recent tap, show a banner: "Just visited X? Tap ✓ on items
+    // you added." Auto-dismisses after 10s or on tab switch.
+    let lastPortalTap = null; // { portalKey, portalName, planMode, at }
+    document.addEventListener('pointerdown', (event) => {
+      const link = event.target.closest('a[data-portal-name]');
+      if (!link) return;
+      lastPortalTap = {
+        portalKey: link.dataset.planPortal || '',
+        portalName: link.dataset.portalName,
+        planMode: !!link.dataset.planPortal,
+        at: Date.now(),
+      };
+    }, { capture: true });
+
+    function dismissReturnPrompt() {
+      const el = document.getElementById('returnPrompt');
+      if (el) el.remove();
+    }
+    function showReturnPrompt() {
+      dismissReturnPrompt();
+      if (!lastPortalTap) return;
+      const { portalKey, portalName, planMode } = lastPortalTap;
+      // Auto-jump to Plan tab if we came from a Plan-tab Open and have
+      // items pending — owner needs to check them off.
+      if (planMode && state.activeTab !== 'plan') {
+        switchTab('plan');
+      }
+      const el = document.createElement('div');
+      el.id = 'returnPrompt';
+      el.className = 'return-prompt';
+      const portalLabel = portalName || 'the portal';
+      const pendingForPortal = portalKey ? (state.cart[portalKey] || []).filter((l) => !l.done_at).length : 0;
+      const msg = planMode
+        ? (pendingForPortal > 0
+            ? `Back from ${portalLabel}?<small>${pendingForPortal} item${pendingForPortal === 1 ? '' : 's'} pending — tap ✓ on each you added</small>`
+            : `Back from ${portalLabel}?<small>All items already checked off ✓</small>`)
+        : `Back from ${portalLabel}?<small>Tap + Plan on items you actually want to buy</small>`;
+      el.innerHTML = `
+        <div class="return-prompt-text">${msg}</div>
+        ${planMode && pendingForPortal > 0 ? `<button type="button" id="returnAllDoneBtn">All added</button>` : ''}
+        <button type="button" class="dismiss" id="returnDismissBtn">✕</button>`;
+      document.body.appendChild(el);
+      document.getElementById('returnDismissBtn').addEventListener('click', dismissReturnPrompt);
+      const allBtn = document.getElementById('returnAllDoneBtn');
+      if (allBtn) allBtn.addEventListener('click', () => {
+        // One-tap mark-all-added for the portal that was just opened
+        const lines = state.cart[portalKey] || [];
+        const now = new Date().toISOString();
+        for (const l of lines) if (!l.done_at) l.done_at = now;
+        persistCart();
+        updatePlanBadge();
+        renderPlan();
+        renderList();
+        toast(`✓ Marked all ${portalLabel} items added`);
+        dismissReturnPrompt();
+      });
+      // Auto-dismiss after 12s
+      setTimeout(dismissReturnPrompt, 12000);
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') {
+        dismissReturnPrompt();
+        return;
+      }
+      // Only prompt if the last portal tap was 3s-30min ago — too soon
+      // = browser jitter, too long = unrelated return.
+      if (!lastPortalTap) return;
+      const gap = Date.now() - lastPortalTap.at;
+      if (gap < 3000 || gap > 30 * 60 * 1000) return;
+      setTimeout(showReturnPrompt, 250);
+    });
+
+    // Auto-unlock if PIN cached
+    if (state.pin) { pinEntry = state.pin; els.pinInput.value = state.pin; renderPinDots(); verifyPin(); }
+  </script>
+</body>
+</html>
