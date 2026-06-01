@@ -1,0 +1,11 @@
+[Unit]
+Description=Run NVR channel-health probe every 30 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30min
+AccuracySec=30s
+Unit=nvr-health.service
+
+[Install]
+WantedBy=timers.target
