@@ -162,20 +162,27 @@ function isMilk(v,it){return /buffalo milk|^milk$/i.test(v)||/^milk$|buffalo mil
 function isChicken(v){return /broiler/i.test(v);}
 
 // turn a day-PO line into the item shape the cards use
-function lineToItem(l){return {name:l.item_name,product_code:l.item_name,id:l.item_name,uom:l.unit||'',
+let PHONES={};
+function lineToItem(l){const ph=PHONES[l.vendor_name]||{};
+  return {name:l.item_name,product_code:l.item_name,id:l.item_name,uom:l.unit||'',
   last_qty:parseFloat(l.qty)||0,suggested_qty:parseFloat(l.qty)||0,
-  primary_vendor:l.vendor_name?{name:l.vendor_name,vendor_id:l.vendor_id}:null,
+  primary_vendor:l.vendor_name?{name:l.vendor_name,vendor_id:l.vendor_id||ph.id,whatsapp_phone:ph.phone||''}:null,
   journey:l.fulfilment?{fulfil:l.fulfilment,pay:l.pay_timing}:{fulfil:'collect',pay:'per'},
   category:l.category,lane:l.vendor_name?'VENDOR':'MARKET'};}
 async function load(){
   $('groups').innerHTML='<div class="small">Loading your order…</div>';
-  const [po,cat,pd]=await Promise.all([
+  const [po,cat,pd,vn]=await Promise.all([
     fetch(`${FLOW}?action=day-po&brand=${BRAND}&date=${VIEWDATE}`).then(r=>r.json()).catch(()=>({})),
     fetch(`${API}?action=materials&brand=${BRAND}&days=120&pin=${encodeURIComponent(PIN)}`).then(r=>r.json()).catch(()=>({})),
-    fetch(`${FLOW}?action=po-dates&brand=${BRAND}`).then(r=>r.json()).catch(()=>({}))
+    fetch(`${FLOW}?action=po-dates&brand=${BRAND}`).then(r=>r.json()).catch(()=>({})),
+    fetch(`${API}?action=list-vendors&pin=${encodeURIComponent(PIN)}`).then(r=>r.json()).catch(()=>({}))
   ]);
   CATALOG=(cat&&cat.items)||[];
   PODATES=(pd&&pd.dates)||[];
+  // vendor → phone map (so Send works) — from vendor records + catalog fallback
+  PHONES={};
+  for(const v of (vn.vendors||[])) PHONES[v.name]={phone:v.whatsapp_phone||v.phone||'',id:v.id};
+  for(const it of CATALOG){const pv=it.primary_vendor; if(pv&&pv.whatsapp_phone&&!PHONES[pv.name])PHONES[pv.name]={phone:pv.whatsapp_phone,id:pv.vendor_id};}
   DATA=((po&&po.items)||[]).map(lineToItem);
   loadOrderState();
   render();
