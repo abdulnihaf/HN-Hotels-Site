@@ -807,7 +807,7 @@ async function handleGet(url, env, auth = null) {
         is_settled: isSettled ? 1 : 0,
         settled_total: settledTotal,
         settled_date: settledDate,
-        base_pay: basePay,
+        base_pay: isSettled ? basePay : null,   // never expose base/remaining pre-settlement
         incentive: incentive,
         adjustment: adjustment,
         total_earned: isSettled ? totalPaid : null,

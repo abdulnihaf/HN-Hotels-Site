@@ -220,8 +220,8 @@ function render(data){
 
   const inr = n => '₹' + Number(n||0).toLocaleString('en-IN');
   const fmtD = iso => { const d=new Date(iso+'T12:00:00'); return `${d.getDate()} ${MONTH_FULL[d.getMonth()].slice(0,3)}`; };
-  const baseLine = e.pay_type==='Contract'&&e.daily_rate ? `Rs.${Number(e.daily_rate).toLocaleString('en-IN')}/day` : e.monthly_salary ? `Rs.${Number(e.monthly_salary).toLocaleString('en-IN')}/month` : '—';
-  // Settled → reward-framed breakdown. Pending → light "settled by the 7th".
+  // Settled → reward-framed breakdown. NOT settled → attendance + advances only;
+  // NEVER show base pay, the formula, or what's-left (that's revealed only once settled).
   const payBlock = s.is_settled ? `
     <div class="settled">
       <div class="settled-h">✓ ${esc(monthLabel)} settled${s.settled_date?` · paid ${fmtD(s.settled_date)}`:''}</div>
@@ -233,8 +233,8 @@ function render(data){
       ${s.advances_total?`<div class="prow"><span>Advance taken earlier</span><span>−${inr(s.advances_total)}</span></div>`:''}
       <div class="prow settled-amt"><span>Settled now</span><span>${inr(s.settled_total)}</span></div>
     </div>`
-  : `<div class="pay"><div class="t">Days counted for pay: ${s.worked_days}</div>
-      <div class="d">Base ${baseLine}. Final pay = days you came + incentive − advances. Leaves are paid (no cut). Settled by the 7th of next month.</div></div>`;
+  : `<div class="pay"><div class="t">Salary settlement</div>
+      <div class="d">Your ${esc(monthLabel)} salary is settled after month-end (by the 7th of next month). Your full pay breakdown will appear right here once it's done.</div></div>`;
 
   document.getElementById('root').innerHTML = `
     <div class="header">
