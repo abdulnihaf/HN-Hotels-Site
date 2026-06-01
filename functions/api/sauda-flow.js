@@ -68,7 +68,34 @@ async function ensureSchema(DB) {
       kind TEXT NOT NULL, data_url TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now'))
     )`),
     DB.prepare(`CREATE INDEX IF NOT EXISTS idx_sp_status ON sauda_purchase(brand, for_date, status)`),
+    DB.prepare(`CREATE TABLE IF NOT EXISTS sauda_receive_config (
+      item_key TEXT PRIMARY KEY,          -- normalized item name
+      method TEXT NOT NULL,               -- weigh | count_pack | count | weigh_can
+      params_json TEXT,                   -- {units_per_pack, pack_label, unit_label, bag_kg, ...}
+      display_unit TEXT,
+      updated_by TEXT, updated_at TEXT DEFAULT (datetime('now'))
+    )`),
   ]);
+}
+
+const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+// Default receive method inferred from the item name (owner can override in Sauda).
+// weight is what you pay for → meat weighs; bread is sealed-box count; rest count.
+function defaultMethod(name) {
+  const n = norm(name);
+  if (/\bmilk\b|buffalo/.test(n)) return { method: 'weigh_can', params: {}, display_unit: 'L' };
+  if (/chicken|broiler|mutton|kebab|tandoori|tangdi|lollipop|grill|chaap|chapash|kurma|korma|brain|bheja|boneless|shawarma|keema|leg|liver/.test(n))
+    return { method: 'weigh', params: {}, display_unit: 'kg' };
+  if (/\bbun\b|buns|bread|rusk|osmania|biscuit/.test(n))
+    return { method: 'count_pack', params: { pack_label: 'box', unit_label: 'pieces', units_per_pack: null }, display_unit: 'pieces' };
+  return { method: 'count', params: { pack_label: 'packet' }, display_unit: 'packet' };
+}
+
+async function receiveConfigFor(DB, name) {
+  const row = await DB.prepare('SELECT method, params_json, display_unit FROM sauda_receive_config WHERE item_key=?').bind(norm(name)).first().catch(() => null);
+  if (row) return { method: row.method, params: row.params_json ? JSON.parse(row.params_json) : {}, display_unit: row.display_unit, source: 'set' };
+  return { ...defaultMethod(name), source: 'default' };
 }
 
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
@@ -113,6 +140,15 @@ export async function onRequest(context) {
          FROM sauda_purchase WHERE brand=? AND for_date=? AND status IN ('ORDERED','RECEIVED')
          ORDER BY status DESC, vendor_name`).bind(st.brand, date).all()
       ).results || [];
+      // enrich each item with its receive method (how to verify it) — editable per item
+      for (const o of rows) {
+        const items = o.items_json ? JSON.parse(o.items_json) : [];
+        o.recv = [];
+        for (const it of items) {
+          const cfg = await receiveConfigFor(DB, it.name);
+          o.recv.push({ name: it.name, qty: it.qty, unit: it.unit || '', ...cfg });
+        }
+      }
       return json({ success: true, station, brand: st.brand, label: st.label, date, orders: rows });
     }
 
@@ -218,6 +254,29 @@ export async function onRequest(context) {
          VALUES (?,?,?,?,?,?,?,?,?, 'ORDERED', ?, ?)`
       ).bind(brand, b.vendor_id || null, vendor, vpa, date, b.fulfilment || null, b.pay_timing || null, items, amt, nowIso(), b.by || 'owner').run();
       return json({ success: true, id: r.meta?.last_row_id, status: 'ORDERED' });
+    }
+
+    // ── RECEIVE-METHOD CONFIG (owner-editable from Sauda; no coming back here) ──
+    if (action === 'get-methods') {
+      // returns every configured item + every item seen in orders (with its effective method)
+      const cfgs = (await DB.prepare('SELECT item_key, method, params_json, display_unit, updated_at FROM sauda_receive_config ORDER BY item_key').all()).results || [];
+      const seen = (await DB.prepare(`SELECT DISTINCT items_json FROM sauda_purchase WHERE items_json IS NOT NULL ORDER BY id DESC LIMIT 400`).all()).results || [];
+      const names = new Set();
+      for (const r of seen) { try { for (const it of JSON.parse(r.items_json)) names.add(it.name); } catch (_) {} }
+      const items = [];
+      for (const name of names) items.push({ name, ...(await receiveConfigFor(DB, name)) });
+      return json({ success: true, configured: cfgs, items: items.sort((a, b) => a.name.localeCompare(b.name)) });
+    }
+    if (action === 'set-method' && request.method === 'POST') {
+      const b = await request.json();
+      if (!isOwner(b.pin)) return json({ success: false, error: 'owner only' }, 401);
+      const key = norm(b.item_key || b.name);
+      if (!key || !b.method) return json({ success: false, error: 'item + method required' }, 400);
+      await DB.prepare(`INSERT INTO sauda_receive_config (item_key,method,params_json,display_unit,updated_by,updated_at)
+        VALUES (?,?,?,?,?,datetime('now'))
+        ON CONFLICT(item_key) DO UPDATE SET method=excluded.method, params_json=excluded.params_json, display_unit=excluded.display_unit, updated_by=excluded.updated_by, updated_at=datetime('now')`)
+        .bind(key, b.method, JSON.stringify(b.params || {}), b.display_unit || null, b.by || 'owner').run();
+      return json({ success: true, item_key: key });
     }
 
     // ── RECONCILE: match RAISED/PAID-unreconciled orders to bank debits ──
