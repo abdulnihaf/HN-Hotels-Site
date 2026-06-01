@@ -139,6 +139,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse(await runBrowserQuotesAll(message, consoleTabId));
       return;
     }
+    if (message.type === 'ENABLE_AUTO') { sendResponse(await enableAuto(message)); return; }
+    if (message.type === 'DISABLE_AUTO') { sendResponse(await disableAuto()); return; }
+    if (message.type === 'GET_AUTO_STATUS') { sendResponse(await getAutoStatus()); return; }
     sendResponse({ ok: false, error: 'Unknown message' });
   })().catch((error) => {
     sendResponse({ ok: false, error: error.message || 'Unknown extension error' });
@@ -247,7 +250,12 @@ async function captureCurrent(message) {
     pincode: body.pincode,
     expiryHours: Number(message.expiryHours || 6),
     [`lastCapture_${sourceKey}`]: new Date().toISOString(),
+    // bootstrap auto-refresh from the first manual capture: save the PIN +
+    // turn the timer on so all portals self-refresh from here on.
+    pin,
+    autoEnabled: true,
   });
+  await ensureAutoAlarm().catch(() => {});
 
   return {
     ok: true,
@@ -1288,3 +1296,106 @@ function genericScrapeSearchResults(query, sourceKey, sourceLabel) {
     },
   };
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// AUTO-CAPTURE — silent background-tab refresh on a timer.
+// The extension itself opens each portal in a hidden (inactive) tab, reads
+// the live session (cookies + page tokens), pushes it to the vault, and
+// closes the tab. Owner never opens an app or a tab. Enabled once (first
+// manual capture, or the popup's "Enable auto-refresh"); runs every 20 min
+// while Chrome is open.
+// ════════════════════════════════════════════════════════════════════════
+const AUTO_ALARM = 'hn-auto-capture';
+const AUTO_PERIOD_MIN = 20;
+const AUTO_PORTALS = ['HYPERPURE', 'ZEPTO', 'INSTAMART', 'BLINKIT', 'BIGBASKET', 'JIOMART'];
+
+async function ensureAutoAlarm() {
+  const existing = await chrome.alarms.get(AUTO_ALARM);
+  if (!existing) await chrome.alarms.create(AUTO_ALARM, { periodInMinutes: AUTO_PERIOD_MIN, delayInMinutes: 1 });
+}
+
+async function enableAuto(message) {
+  const pin = String(message.pin || '').trim();
+  if (!/^\d{4}$/.test(pin)) throw new Error('Enter the purchase console PIN to enable auto-refresh');
+  const patch = { pin, autoEnabled: true };
+  if (message.accountLabel) patch.accountLabel = String(message.accountLabel).trim();
+  if (message.locationLabel) patch.locationLabel = String(message.locationLabel).trim();
+  if (message.pincode) patch.pincode = String(message.pincode).trim();
+  if (message.expiryHours) patch.expiryHours = Number(message.expiryHours);
+  await chrome.storage.local.set(patch);
+  await ensureAutoAlarm();
+  const res = await autoCaptureAll();      // run immediately so it's live now
+  return { ok: true, autoEnabled: true, ...res };
+}
+
+async function disableAuto() {
+  await chrome.storage.local.set({ autoEnabled: false });
+  await chrome.alarms.clear(AUTO_ALARM);
+  return { ok: true, autoEnabled: false };
+}
+
+async function getAutoStatus() {
+  const s = await chrome.storage.local.get(['autoEnabled', 'pin', 'lastAutoRun', 'lastAutoSummary']);
+  return { ok: true, autoEnabled: !!s.autoEnabled, hasPin: /^\d{4}$/.test(String(s.pin || '')), lastAutoRun: s.lastAutoRun || null, lastAutoSummary: s.lastAutoSummary || null };
+}
+
+async function capturePortalHeadless(sourceKey, pin, settings) {
+  const portal = PORTALS[sourceKey];
+  if (!portal || !portal.startUrl) return { sourceKey, ok: false, error: 'no start url' };
+  let tab = null;
+  try {
+    tab = await chrome.tabs.create({ url: portal.startUrl, active: false });
+    await waitForTabLoad(tab.id, 30000);
+    await new Promise((r) => setTimeout(r, 1800)); // let the SPA hydrate tokens into storage
+    const fresh = await chrome.tabs.get(tab.id);
+    const pageState = await readPageState(tab.id);
+    const cookies = await readCookies(fresh.url || portal.startUrl, portal.domains);
+    const expiresAt = expiryFromCookies(cookies, Number(settings.expiryHours || 6));
+    const session = {
+      capture_version: 'auto-1.0', source_key: sourceKey,
+      captured_url: fresh.url || portal.startUrl, captured_title: fresh.title || pageState.title || '',
+      user_agent: pageState.userAgent || '', cookies,
+      local_storage: pageState.localStorage, session_storage: pageState.sessionStorage,
+      visible_cookie_names: pageState.cookieNames, visible_cookies: pageState.visibleCookies,
+      storage_limits: pageState.limits,
+    };
+    const body = {
+      action: 'upsert-portal-session', pin, source_key: sourceKey,
+      account_label: settings.accountLabel || '', location_label: settings.locationLabel || '',
+      pincode: settings.pincode || '', user_agent: pageState.userAgent || '', expires_at: expiresAt, session,
+    };
+    const resp = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { sourceKey, ok: false, error: data.error || ('vault ' + resp.status) };
+    return { sourceKey, ok: true, cookieCount: cookies.length, lsCount: Object.keys(pageState.localStorage || {}).length };
+  } catch (e) {
+    return { sourceKey, ok: false, error: e.message };
+  } finally {
+    if (tab) { try { await chrome.tabs.remove(tab.id); } catch (_) {} }
+  }
+}
+
+let AUTO_RUNNING = false;
+async function autoCaptureAll() {
+  if (AUTO_RUNNING) return { ran: 0, skipped: 'already running' };
+  AUTO_RUNNING = true;
+  try {
+    const s = await chrome.storage.local.get(['pin', 'autoEnabled', 'accountLabel', 'locationLabel', 'pincode', 'expiryHours']);
+    if (!s.autoEnabled || !/^\d{4}$/.test(String(s.pin || ''))) return { ran: 0, skipped: 'not enabled / no pin' };
+    const settings = { accountLabel: s.accountLabel || '', locationLabel: s.locationLabel || 'Shivajinagar', pincode: s.pincode || '560051', expiryHours: s.expiryHours || 6 };
+    const results = [];
+    for (const key of AUTO_PORTALS) {
+      results.push(await capturePortalHeadless(key, s.pin, settings));
+      await new Promise((r) => setTimeout(r, 900)); // stagger so we never hold many tabs at once
+    }
+    const ok = results.filter((r) => r.ok).length;
+    await chrome.storage.local.set({ lastAutoRun: new Date().toISOString(), lastAutoSummary: `${ok}/${results.length} refreshed` });
+    return { ran: results.length, ok, results };
+  } finally {
+    AUTO_RUNNING = false;
+  }
+}
+
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === AUTO_ALARM) autoCaptureAll().catch(() => {}); });
+chrome.runtime.onStartup.addListener(() => { ensureAutoAlarm().then(() => autoCaptureAll()).catch(() => {}); });
+chrome.runtime.onInstalled.addListener(() => { ensureAutoAlarm().catch(() => {}); });
