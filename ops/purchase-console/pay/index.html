@@ -62,6 +62,7 @@
   <div id="app" class="hide">
     <div class="tot" id="tot"></div>
     <button class="recon" id="recon">↻ Reconcile against bank now</button>
+    <div id="bal"></div>
     <div id="maps"></div>
     <div id="list"></div>
   </div>
@@ -72,8 +73,32 @@ const API='/api/sauda-flow';let PIN='';const $=id=>document.getElementById(id);
 let VENDORS=[];
 $('pinBtn').onclick=()=>{const p=$('pin').value.trim();if(!p)return;PIN=p;
   fetch(`${API}?action=pay-queue&pin=${encodeURIComponent(p)}`).then(r=>r.json()).then(d=>{
-    if(d&&d.success){$('gate').classList.add('hide');$('app').classList.remove('hide');render(d);loadMaps();}
+    if(d&&d.success){$('gate').classList.add('hide');$('app').classList.remove('hide');render(d);loadMaps();loadBalances();}
     else $('pinErr').textContent='Wrong PIN';}).catch(()=>$('pinErr').textContent='error');};
+async function loadBalances(){
+  const d=await fetch(`${API}?action=vendor-balances`).then(r=>r.json()).catch(()=>({}));
+  const bals=(d.balances||[]);
+  const list=bals.map(b=>{
+    const us=b.balance>0; const amt=Math.abs(b.balance).toLocaleString('en-IN');
+    return `<div class="card"><div class="top"><div><div class="vn">${esc(b.vendor_name.split('(')[0].trim())}</div>
+      <div class="meta">${us?'they owe us — overpaid, adjust next order / refund':'we owe them — pending'}</div></div>
+      <div class="amt" style="color:${us?'#6bd6a3':'#e08b80'}">${us?'+':'−'}₹${amt}</div></div></div>`;}).join('');
+  $('bal').innerHTML=`<div class="grphd">Vendor balances</div>${list||'<div class="empty" style="margin:0 0 8px">No open balances.</div>'}`+
+    `<button class="recon" id="adjBtn" style="margin-top:8px">＋ Record a vendor adjustment</button>
+     <div id="adjForm" style="display:none;margin-bottom:14px">
+       <input id="avn" list="vlist" placeholder="Vendor" style="width:100%;background:#0b0b13;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px;margin-bottom:7px">
+       <datalist id="vlist">${VENDORS.map(v=>`<option>${esc(v)}</option>`).join('')}</datalist>
+       <div style="display:flex;gap:7px;margin-bottom:7px"><input id="aamt" inputmode="decimal" placeholder="₹ amount" style="flex:1;background:#0b0b13;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px">
+       <select id="akind" style="flex:1;background:#0b0b13;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px"><option value="overpaid">We overpaid (they owe us)</option><option value="we_owe">We owe them</option><option value="settled">Used/refunded (clear our credit)</option><option value="repaid">We paid down what we owe</option></select></div>
+       <input id="arsn" placeholder="Reason (e.g. paid Ganga 2× by mistake)" style="width:100%;background:#0b0b13;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px;margin-bottom:7px">
+       <button class="pay upi" id="asave" style="width:100%">Save adjustment</button>
+     </div>`;
+  const ab=$('adjBtn');if(ab)ab.onclick=()=>{const f=$('adjForm');f.style.display=f.style.display==='none'?'block':'none';};
+  const sv=$('asave');if(sv)sv.onclick=async()=>{const vn=$('avn').value.trim(),amt=parseFloat($('aamt').value)||0,kind=$('akind').value,rsn=$('arsn').value.trim();
+    if(!vn||!amt)return alert('Vendor + amount needed');
+    await fetch(`${API}?action=vendor-adjust`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN,vendor_name:vn,amount:amt,kind,reason:rsn})});
+    loadBalances();};
+}
 async function loadMaps(){
   const [um,vm]=await Promise.all([
     fetch(`${API}?action=unmapped-upi&pin=${PIN}&days=5`).then(r=>r.json()).catch(()=>({})),
