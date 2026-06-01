@@ -87,7 +87,12 @@ async function load(){
   $('datebar').textContent='Loading…';
   const d=await fetch(`${API}?action=home&brand=${BRAND}`).then(r=>r.json()).catch(()=>({success:false,items:[]}));
   const dt=new Date(d.date+'T00:00:00');
-  $('datebar').textContent='For '+dt.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
+  const prep=new Date(d.date+'T00:00:00');prep.setDate(prep.getDate()-1);
+  const fmt=x=>x.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+  const tag=d.day_kind==='today'?'TODAY':d.day_kind==='upcoming'?'UPCOMING':'PAST';
+  $('datebar').innerHTML=`<div style="font-size:11px;letter-spacing:1px;color:var(--gold);font-weight:700">PURCHASE ORDER · ${tag}</div>`+
+    `<div style="font-size:17px;font-weight:700;margin-top:2px">For ${fmt(dt)}</div>`+
+    `<div style="font-size:11px;color:var(--dim);margin-top:1px">prepared ${fmt(prep)} · ${(d.items||[]).length} items</div>`;
   const groups={vendor:[],ration:[]};
   (d.items||[]).forEach(it=>groups[groupOf(it)].push(it));
   const titles={vendor:['📲','Order from vendor (WhatsApp)'],ration:['🛒','Ration — departmental / quick-commerce']};
