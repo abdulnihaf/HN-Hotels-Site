@@ -88,6 +88,18 @@ export async function onRequestGet({ request, env }) {
   const action = url.searchParams.get('action') || 'list';
   const db = env.DB;
 
+  if (action === 'raw') {
+    // Admin inspection: return the stored raw HDFC email for one event so we can
+    // see whether a payee identifier exists in the source (P2P-transfer blind spot).
+    const ref = url.searchParams.get('source_ref');
+    const id = url.searchParams.get('id');
+    const cols = 'id, source_ref, amount_paise, txn_at, channel, counterparty, counterparty_ref, narration, raw_subject, raw_body';
+    let row = null;
+    if (id) row = await db.prepare(`SELECT ${cols} FROM money_events WHERE id=?`).bind(parseInt(id, 10)).first();
+    else if (ref) row = await db.prepare(`SELECT ${cols} FROM money_events WHERE source_ref=?`).bind(ref).first();
+    return json({ ok: true, row }, 200, origin);
+  }
+
   if (action === 'list') {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 5000);
     const since = url.searchParams.get('since');
