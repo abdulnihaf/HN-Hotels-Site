@@ -84,7 +84,8 @@ const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 // weight is what you pay for → meat weighs; bread is sealed-box count; rest count.
 function defaultMethod(name) {
   const n = norm(name);
-  if (/\bmilk\b|buffalo/.test(n)) return { method: 'weigh_can', params: {}, display_unit: 'L' };
+  if (/powder/.test(n)) return { method: 'count', params: { pack_label: 'bag', bag_kg: 1 }, display_unit: 'bag' }; // SMP etc = bags, NOT liquid milk
+  if (/(\bmilk\b|buffalo)/.test(n)) return { method: 'weigh_can', params: {}, display_unit: 'L' };
   if (/chicken|broiler|mutton|kebab|tandoori|tangdi|lollipop|grill|chaap|chapash|kurma|korma|brain|bheja|boneless|shawarma|keema|leg|liver/.test(n))
     return { method: 'weigh', params: {}, display_unit: 'kg' };
   if (/\bbun\b|buns|bread|rusk|osmania|biscuit/.test(n))
@@ -254,6 +255,14 @@ export async function onRequest(context) {
          VALUES (?,?,?,?,?,?,?,?,?, 'ORDERED', ?, ?)`
       ).bind(brand, b.vendor_id || null, vendor, vpa, date, b.fulfilment || null, b.pay_timing || null, items, amt, nowIso(), b.by || 'owner').run();
       return json({ success: true, id: r.meta?.last_row_id, status: 'ORDERED' });
+    }
+
+    // ── cancel an order (cleanup / wrong entry) ──
+    if (action === 'cancel' && request.method === 'POST') {
+      const b = await request.json();
+      if (!isOwner(b.pin)) return json({ success: false, error: 'owner only' }, 401);
+      await DB.prepare(`UPDATE sauda_purchase SET status='CANCELLED', updated_at=datetime('now') WHERE id=?`).bind(Number(b.id || 0)).run();
+      return json({ success: true });
     }
 
     // ── RECEIVE-METHOD CONFIG (owner-editable from Sauda; no coming back here) ──
