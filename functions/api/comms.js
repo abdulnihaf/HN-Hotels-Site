@@ -117,6 +117,24 @@ const DARBAR_TEMPLATES = [
       example: { body_text: [['Faizan', '6800', 'salary settlement']] },
     }],
   },
+  {
+    // The monthly attendance "kundali" — visual per-staff report card. MARKETING with
+    // a dynamic URL button that opens each person's private /hr/me/ link.
+    name: 'monthly_attendance_report_v1', language: 'en', category: 'MARKETING',
+    components: [
+      {
+        type: 'BODY',
+        text: 'Hi {{1}}, your {{2}} attendance summary is ready. See the days you came, your pay, and anything to fix — tap below to open your personal card. - HN Hotels',
+        example: { body_text: [['Faizan', 'May 2026']] },
+      },
+      {
+        type: 'BUTTONS',
+        buttons: [
+          { type: 'URL', text: 'View my report', url: 'https://hnhotels.in/hr/me/{{1}}', example: ['https://hnhotels.in/hr/me/?id=15&t=05f7408b5c1c03a8&month=2026-05'] },
+        ],
+      },
+    ],
+  },
 ];
 
 function authOk(request, env, body) {
@@ -302,6 +320,17 @@ export async function onRequest(context) {
       template: AGGREGATOR_DAILY_REPORT_TEMPLATE.name,
       results,
     }, results.every(r => r.ok) ? 200 : 500);
+  }
+
+  if (action === 'darbar-template-status') {
+    const name = body.name || 'monthly_attendance_report_v1';
+    const cfg = wabaConfigForBrand(env, 'sparksol');
+    const r = await graphJson(
+      `https://graph.facebook.com/${META_GRAPH_VERSION}/${cfg.wabaId}/message_templates?name=${encodeURIComponent(name)}`,
+      cfg.token
+    );
+    const templates = (r.data || []).map(t => ({ name: t.name, status: t.status, category: t.category, language: t.language }));
+    return json({ ok: true, templates });
   }
 
   if (action === 'send') {
