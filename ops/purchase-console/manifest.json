@@ -1,15 +1,19 @@
 {
-  "name": "Sauda · HN Hotels",
+  "name": "Sauda",
   "short_name": "Sauda",
-  "description": "Sauda — every deal struck to source what HN Hotels needs. The cheapest verified source across every portal, ready before dawn.",
-  "start_url": "/ops/purchase-console/",
+  "description": "Sauda \u2014 every deal struck to source what HN Hotels needs. The cheapest verified source across every portal, ready before dawn.",
+  "start_url": "/ops/purchase-console/today/",
   "scope": "/ops/purchase-console/",
   "display": "standalone",
   "background_color": "#0a0a10",
   "theme_color": "#0a0a10",
   "orientation": "portrait",
   "lang": "en-IN",
-  "categories": ["business", "productivity", "shopping"],
+  "categories": [
+    "business",
+    "productivity",
+    "shopping"
+  ],
   "icons": [
     {
       "src": "icon-192.png",
