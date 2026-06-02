@@ -174,7 +174,7 @@ const COMPARABLE = [
     accept: /(refined|sunflower|palmolein|rice ?bran|soya|groundnut)/, reject: /(mustard|coconut|olive|sesame|gingelly|til|engine|essential|castor|hair)/ },
   { codes: ['HN-RM-092'], re: /\b(curd|dahi)\b/, q: 'Nandini curd 1kg',
     accept: /(curd|dahi|yogurt|yoghurt)/, reject: /(greek ?flavou|fruit|smoothie|lassi|raita)/ },
-  { codes: ['HN-RM-047'], re: /\bfresh cream\b/, q: 'Amul fresh cream 250ml',
+  { codes: ['HN-RM-047'], re: /\b(amul )?(fresh )?cream\b/, q: 'Amul fresh cream 250ml',
     accept: /cream/, reject: /(ice ?cream|sour|face|body|whipping ?spray|tartar|biscuit)/ },
 ];
 function comparableFor(item) {
@@ -1823,9 +1823,39 @@ async function handleGet(request, url, env) {
         }
       }
     } catch (_) {}
+    // ── PRICE INDEX: cheapest quote per comparable GROUP + its name-regex, so any
+    // client (the day-PO order screen) can match its own item names with the SAME
+    // rule the server uses — one source of truth for "is this comparable + price".
+    let price_index = [];
+    try {
+      const snaps = (await env.DB.prepare(`SELECT material_id, source_key, price_paise, sku_title
+        FROM daily_price_snapshots WHERE stock_status='QUOTED' AND price_paise > 0 AND snapshot_date >= date('now','-5 days')`).all()).results || [];
+      const byMat = {};
+      for (const s of snaps) { (byMat[s.material_id] = byMat[s.material_id] || []).push(s); }
+      for (const e of COMPARABLE) {
+        let best = null;
+        for (const code of (e.codes || [])) {
+          for (const s of (byMat[code] || [])) {
+            const t = String(s.sku_title || '').toLowerCase();
+            if (e.accept && !e.accept.test(t)) continue;
+            if (e.reject && e.reject.test(t)) continue;
+            if (!(s.price_paise > 0)) continue;
+            const pack = parsePackBase(s.sku_title);
+            const perUnit = pack && pack.base > 0 ? s.price_paise / pack.base : Number.MAX_SAFE_INTEGER;
+            if (!best || perUnit < best._pu || (perUnit === best._pu && s.price_paise < best._pp)) {
+              best = { _pu: perUnit, _pp: s.price_paise, src: s.source_key, price: Math.round(s.price_paise / 100),
+                unit_price: pack && pack.base > 0 ? Math.round(s.price_paise / pack.base / 100) : null,
+                unit: pack ? pack.unit : null, pack: pack ? pack.label : null, sku: s.sku_title };
+            }
+          }
+        }
+        if (best) price_index.push({ re: e.re.source, src: best.src, price: best.price, unit_price: best.unit_price, unit: best.unit, pack: best.pack, sku: best.sku });
+      }
+    } catch (_) {}
     return json({
       success: true,
       ...data,
+      price_index,
       user: { name: user.name, role: user.role, can_create_po: canCreate(user) },
     });
   }
