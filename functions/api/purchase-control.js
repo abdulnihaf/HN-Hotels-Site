@@ -189,17 +189,17 @@ function comparableFor(item) {
 // per-pack — otherwise a 100g pack looks "cheaper" than a 1kg pack.
 function parsePackBase(title) {
   const t = String(title || '').toLowerCase();
-  let mult = 1;
-  const pm = t.match(/pack of\s*(\d+)/) || t.match(/\(set of\s*(\d+)\)/) || t.match(/(\d+)\s*x\s*\d/);
-  if (pm) mult = parseInt(pm[1], 10) || 1;
+  // Single-pack assumption: ignore "pack of N" / "Nx" multipliers. For kirana
+  // commodities a multipack should look EXPENSIVE per unit (it won't win), not
+  // get its per-unit divided down — that produced absurd ₹8/kg fennel before.
   let m = t.match(/(\d+(?:\.\d+)?)\s*(kg|kilogram|kgs)\b/);
-  if (m) return { base: parseFloat(m[1]) * mult, unit: 'kg', label: `${m[1]}kg` };
+  if (m) return { base: parseFloat(m[1]), unit: 'kg', label: `${m[1]}kg` };
   m = t.match(/(\d+(?:\.\d+)?)\s*(g|gm|gms|gram|grams)\b/);
-  if (m) return { base: (parseFloat(m[1]) / 1000) * mult, unit: 'kg', label: `${m[1]}g` };
+  if (m) return { base: parseFloat(m[1]) / 1000, unit: 'kg', label: `${m[1]}g` };
   m = t.match(/(\d+(?:\.\d+)?)\s*(l|ltr|litre|liter|lt)\b/);
-  if (m) return { base: parseFloat(m[1]) * mult, unit: 'L', label: `${m[1]}L` };
+  if (m) return { base: parseFloat(m[1]), unit: 'L', label: `${m[1]}L` };
   m = t.match(/(\d+(?:\.\d+)?)\s*ml\b/);
-  if (m) return { base: (parseFloat(m[1]) / 1000) * mult, unit: 'L', label: `${m[1]}ml` };
+  if (m) return { base: parseFloat(m[1]) / 1000, unit: 'L', label: `${m[1]}ml` };
   return null;
 }
 
