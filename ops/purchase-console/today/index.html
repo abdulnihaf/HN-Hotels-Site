@@ -166,7 +166,12 @@ let PHONES={};
 // price intelligence: normalized name → cheapest-online quote (from materials feed)
 let BEST={};
 const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-function lineToItem(l){const ph=PHONES[l.vendor_name]||{};const b=BEST[norm(l.item_name)]||{};
+// strip "(3 kg total)" / "200 gm" qualifiers so "Butter (3 kg total)" matches "Butter",
+// but keep it EXACT after stripping so "Butter Paper" never grabs a butter price.
+const stripQ=s=>String(s||'').replace(/\([^)]*\)/g,' ').replace(/\b\d+(?:\.\d+)?\s*(?:kg|g|gm|gms|ml|l|ltr|pcs?|pkt|packets?|grams?|total)\b/gi,' ');
+const BEST_ALIAS={milkmaid:'condensedmilk',dalda:'vanaspatigheedalda',saunf:'fennelseedssaunf',kaju:'cashewnutskaju',sooji:'semolinasoojirawa',rava:'semolinasoojirawa'};
+function bestFor(name){const n=norm(stripQ(name)); if(BEST[n])return BEST[n]; if(BEST_ALIAS[n]&&BEST[BEST_ALIAS[n]])return BEST[BEST_ALIAS[n]]; const n2=norm(name); return BEST[n2]||null;}
+function lineToItem(l){const ph=PHONES[l.vendor_name]||{};const b=bestFor(l.item_name)||{};
   return {name:l.item_name,product_code:l.item_name,id:l.item_name,uom:l.unit||'',
   last_qty:parseFloat(l.qty)||0,suggested_qty:parseFloat(l.qty)||0,
   primary_vendor:l.vendor_name?{name:l.vendor_name,vendor_id:l.vendor_id||ph.id,whatsapp_phone:ph.phone||''}:null,
