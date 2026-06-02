@@ -133,6 +133,58 @@ const QUOTE_STOCK_STATUSES = ['QUOTED', 'PENDING_ADAPTER', 'OUT_OF_STOCK', 'UNAV
 const SOURCE_BY_KEY = Object.fromEntries(SOURCES.map((source) => [source.key, source]));
 const PORTAL_SESSION_STATUSES = ['READY', 'NOT_CONNECTED', 'EXPIRED', 'OTP_REQUIRED', 'CAPTCHA_REQUIRED', 'LOCATION_MISMATCH', 'RATE_LIMITED', 'BROKEN'];
 
+// ━━━ COMPARABLE BASKET — the deliberately-enumerated open-market commodities ━━━
+// COA principle: close the space. ONLY these branded kirana staples (the ones
+// Nihaf buys from Ashrafiya / Shariff Departmental and COULD buy cheaper on
+// Zepto/BigBasket/Hyperpure) ever show a "⚡ cheaper online" price. Everything
+// else — veg, meat, milk, bakery, packaging, gas, specialty vendors — is fixed
+// and NEVER shows a market price, so the screen can never surface a wrong match
+// (popcorn-butter for dairy butter, baby-potato for kaju, etc.).
+//   q      = the precise portal search query (brand + pack) so the scout finds
+//            the RIGHT product, not the cheapest unrelated thing.
+//   accept = sku_title MUST match this to count as a real match.
+//   reject = sku_title matching this is thrown out even if it's cheapest.
+// Matched by HN-RM code first, then by name regex (covers free-text duplicates).
+const COMPARABLE = [
+  { codes: ['HN-RM-213', 'HN-RM-046'], re: /\bbutter\b/, q: 'Amul butter 500g',
+    accept: /butter/, reject: /(popcorn|act ?ii|act ?2|buttermilk|butter ?milk|masti|spiced|paneer|garlic|peanut|cocoa|chocolate|body|lip|cookie|biscuit|naan|paper)/ },
+  { codes: ['HN-RM-029'], re: /\bsugar\b/, q: 'sugar 5kg',
+    accept: /sugar/, reject: /(brown|jaggery|gud|candy|cube|powder|icing|sugarcane|free|stevia|date|cinnamon|vanilla)/ },
+  { codes: ['HN-RM-033'], re: /\b(maida|all-?purpose flour)\b/, q: 'maida refined wheat flour 1kg',
+    accept: /(maida|refined wheat flour)/, reject: /(corn|rice|gram|besan|atta|multigrain|ragi|bajra|jowar)/ },
+  { codes: ['HN-RM-099'], re: /\b(sooji|suji|rava|rawa|semolina)\b/, q: 'sooji rava bombay 1kg',
+    accept: /(sooji|suji|rava|rawa|semolina)/, reject: /(idli ?mix|upma ?mix|roasted vermic|halwa ?mix)/ },
+  { codes: ['HN-RM-009'], re: /\b(fennel|saunf|sauf)\b/, q: 'fennel saunf seeds 100g',
+    accept: /(fennel|saunf|sauf)/, reject: /(mukhwas|candy|mouth ?fresh|coated|sugar)/ },
+  { codes: ['HN-RM-110'], re: /\bcustard\b/, q: 'custard powder vanilla',
+    accept: /custard/, reject: /(cake|pudding ?mix)/ },
+  { codes: ['HN-RM-215'], re: /\bhoney\b/, q: 'Dabur honey 250g',
+    accept: /honey/, reject: /(soap|shampoo|face|cornflakes|oats|nut|chyawan|cough|lozenge|wax)/ },
+  { codes: ['HN-RM-044'], re: /\b(vanaspati|dalda)\b/, q: 'vanaspati 1kg',
+    accept: /(vanaspati|dalda|gold winner)/, reject: /(pure ?ghee|cow|desi|buffalo)/ },
+  { codes: ['HN-RM-036'], re: /\b(cashew|kaju)\b/, q: 'cashew kaju W320 1kg',
+    accept: /(cashew|kaju)/, reject: /(masala|roasted|salted|flavou?red|chikki|barfi|cake|cookie|butter|katli|peri|pepper)/ },
+  { codes: ['HN-RM-209'], re: /\bcondensed milk\b/, q: 'Milkmaid condensed milk 400g',
+    accept: /(condensed|milkmaid|mithai ?mate)/, reject: /(powder|evaporated|coconut)/ },
+  { codes: ['HN-RM-045'], re: /\b(cow ghee|desi ghee)\b/, q: 'cow ghee 1L',
+    accept: /ghee/, reject: /(vanaspati|dalda)/ },
+  { codes: ['HN-RM-041'], re: /\bmustard oil\b/, q: 'mustard oil 1L',
+    accept: /mustard/, reject: /(pickle|hair|massage|sarso ?ka ?saag|kasundi)/ },
+  { codes: ['HN-RM-042', 'HN-RM-211'], re: /\b(refined oil|frying oil|refine oil|sunflower oil)\b/, q: 'refined sunflower oil 1L',
+    accept: /(refined|sunflower|palmolein|rice ?bran|soya|groundnut)/, reject: /(mustard|coconut|olive|sesame|gingelly|til|engine|essential|castor|hair)/ },
+  { codes: ['HN-RM-092'], re: /\b(curd|dahi)\b/, q: 'Nandini curd 1kg',
+    accept: /(curd|dahi|yogurt|yoghurt)/, reject: /(greek ?flavou|fruit|smoothie|lassi|raita)/ },
+  { codes: ['HN-RM-047'], re: /\bfresh cream\b/, q: 'Amul fresh cream 250ml',
+    accept: /cream/, reject: /(ice ?cream|sour|face|body|whipping ?spray|tartar|biscuit)/ },
+];
+function comparableFor(item) {
+  const code = String(item.product_code || item.id || '');
+  const nm = String(item.name || '').toLowerCase();
+  return COMPARABLE.find((e) =>
+    (e.codes && e.codes.includes(code)) || (e.re && e.re.test(nm))
+  ) || null;
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -1708,19 +1760,38 @@ async function handleGet(request, url, env) {
       // attach the vendor journey (fulfilment + payment + logistics legs) so the order UI reads it
       item.journey = item.primary_vendor ? journeyFor(item.primary_vendor.name) : null;
     }
-    // ── CHEAPEST PRICE: join the latest scouted snapshot so the card can show "⚡ cheapest at X ₹Y" ──
+    // ── CHEAPEST PRICE (comparable basket only) ──────────────────────────
+    // Only the deliberately-enumerated COMPARABLE commodities ever get a price
+    // chip, and only when the matched SKU passes that item's accept/reject
+    // guard. This closes the space: a fixed-vendor item can never show a market
+    // price, and a comparable item can never show a wrong-product match.
     try {
       const snaps = (await env.DB.prepare(`SELECT material_id, source_key, price_paise, unit_price_paise, sku_title
-        FROM daily_price_snapshots WHERE stock_status='QUOTED' AND price_paise > 0 AND snapshot_date >= date('now','-3 days')`).all()).results || [];
-      const best = {};
-      for (const s of snaps) {
-        const up = s.unit_price_paise || s.price_paise;
-        const cur = best[s.material_id];
-        if (!cur || up < cur._up) best[s.material_id] = { _up: up, src: s.source_key, price: s.price_paise / 100, unit_price: (s.unit_price_paise || 0) / 100, sku: s.sku_title };
-      }
+        FROM daily_price_snapshots WHERE stock_status='QUOTED' AND price_paise > 0 AND snapshot_date >= date('now','-5 days')`).all()).results || [];
+      const byMat = {};
+      for (const s of snaps) { (byMat[s.material_id] = byMat[s.material_id] || []).push(s); }
       for (const item of (data.items || [])) {
-        const b = best[item.product_code] || best[item.id];
-        if (b) { item.best_src = b.src; item.best_price = Math.round(b.price); item.best_unit_price = b.unit_price ? Math.round(b.unit_price) : null; item.best_sku = b.sku; }
+        const cmp = comparableFor(item);
+        if (!cmp) continue;
+        item.comparable = true; // UI: this item is shoppable online
+        const code = String(item.product_code || item.id || '');
+        const rows = byMat[code] || [];
+        let best = null;
+        for (const s of rows) {
+          const t = String(s.sku_title || '').toLowerCase();
+          if (cmp.accept && !cmp.accept.test(t)) continue;
+          if (cmp.reject && cmp.reject.test(t)) continue;
+          const up = s.unit_price_paise || s.price_paise;
+          if (up > 0 && (!best || up < best._up)) {
+            best = { _up: up, src: s.source_key, price: s.price_paise / 100, unit_price: (s.unit_price_paise || 0) / 100, sku: s.sku_title };
+          }
+        }
+        if (best) {
+          item.best_src = best.src;
+          item.best_price = Math.round(best.price);
+          item.best_unit_price = best.unit_price ? Math.round(best.unit_price) : null;
+          item.best_sku = best.sku;
+        }
       }
     } catch (_) {}
     return json({
@@ -3884,6 +3955,11 @@ async function refreshMaterialSnapshot(body, user, env) {
     `manual:${user.name}`, 1, startedAt, '{}'
   ).run();
 
+  // Use the curated comparable query (brand + pack) when this material is in
+  // the comparable basket, so the scout searches for the RIGHT product instead
+  // of the bare material name (which returns popcorn-butter for "Butter" etc.).
+  const cmp = comparableFor({ product_code: material.product_code || materialId, name: material.name });
+  const searchQuery = (body.search_query && String(body.search_query).trim()) || (cmp && cmp.q) || material.name;
   const materialContext = {
     material_id: material.product_code || materialId,
     item_id: material.item_id || `code:${material.product_code || materialId}`,
@@ -3892,7 +3968,7 @@ async function refreshMaterialSnapshot(body, user, env) {
     uom: material.uom || '',
     brand: material.brand || '',
     required_qty: 0,
-    search_query: material.name,
+    search_query: searchQuery,
     match_rule: material.match_rule || 'COMMODITY_EQUIVALENT',
     product_code: material.product_code || materialId,
   };
