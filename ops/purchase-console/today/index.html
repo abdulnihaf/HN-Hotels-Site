@@ -163,11 +163,15 @@ function isChicken(v){return /broiler/i.test(v);}
 
 // turn a day-PO line into the item shape the cards use
 let PHONES={};
-function lineToItem(l){const ph=PHONES[l.vendor_name]||{};
+// price intelligence: normalized name → cheapest-online quote (from materials feed)
+let BEST={};
+const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function lineToItem(l){const ph=PHONES[l.vendor_name]||{};const b=BEST[norm(l.item_name)]||{};
   return {name:l.item_name,product_code:l.item_name,id:l.item_name,uom:l.unit||'',
   last_qty:parseFloat(l.qty)||0,suggested_qty:parseFloat(l.qty)||0,
   primary_vendor:l.vendor_name?{name:l.vendor_name,vendor_id:l.vendor_id||ph.id,whatsapp_phone:ph.phone||''}:null,
   journey:l.fulfilment?{fulfil:l.fulfilment,pay:l.pay_timing}:{fulfil:'collect',pay:'per'},
+  best_src:b.src||null,best_price:b.price||null,best_unit_price:b.unit_price||null,best_unit:b.unit||null,best_pack:b.pack||null,best_sku:b.sku||null,comparable:!!b.src,
   category:l.category,lane:l.vendor_name?'VENDOR':'MARKET'};}
 async function load(){
   $('groups').innerHTML='<div class="small">Loading your order…</div>';
@@ -183,6 +187,9 @@ async function load(){
   PHONES={};
   for(const v of (vn.vendors||[])) PHONES[v.name]={phone:v.whatsapp_phone||v.phone||'',id:v.id};
   for(const it of CATALOG){const pv=it.primary_vendor; if(pv&&pv.whatsapp_phone&&!PHONES[pv.name])PHONES[pv.name]={phone:pv.whatsapp_phone,id:pv.vendor_id};}
+  // build cheapest-online map from the materials feed (only comparable items carry best_src)
+  BEST={};
+  for(const it of CATALOG){ if(it.best_src){ BEST[norm(it.name)]={src:it.best_src,price:it.best_price,unit_price:it.best_unit_price,unit:it.best_unit,pack:it.best_pack,sku:it.best_sku}; } }
   DATA=((po&&po.items)||[]).map(lineToItem);
   loadOrderState();
   render();
@@ -235,7 +242,7 @@ function vendorCard(c, items){
   const legs=(j.legs||[]).length?`<span class="b legs">+ ${j.legs.join(' + ')}</span>`:'';
   const itemsHtml=items.map(it=>{
     const k=mid(it);const q=qtyOf(it);const unit=it.uom||'';
-    const cheap=(it.lane==='MARKET'&&it.best_src)?`<small>⚡ cheaper: ${it.best_src} ₹${it.best_price}</small>`:'';
+    const cheap=it.best_src?`<small class="cheap">⚡ ${it.best_src.replace(/_/g,' ').toLowerCase()} · ₹${it.best_unit_price||it.best_price}${it.best_unit?'/'+it.best_unit:''}${it.best_pack?` (${it.best_pack})`:''}</small>`:'';
     return `<div class="row"><div class="nm">${esc(it.name)}${cheap}</div>
       <div class="step"><button data-dec="${k}">−</button><input data-q="${k}" inputmode="decimal" value="${q}"><span class="u">${esc(unit)}</span><button data-inc="${k}">+</button></div><button class="rm" data-rm="${k}" title="remove">×</button></div>`;
   }).join('');
