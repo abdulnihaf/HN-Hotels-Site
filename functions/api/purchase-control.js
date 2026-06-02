@@ -184,6 +184,24 @@ function comparableFor(item) {
     (e.codes && e.codes.includes(code)) || (e.re && e.re.test(nm))
   ) || null;
 }
+// Parse the pack size out of a portal SKU title and convert to a base unit
+// (kg for solids, L for liquids) so prices are compared per-kg/per-L, never
+// per-pack — otherwise a 100g pack looks "cheaper" than a 1kg pack.
+function parsePackBase(title) {
+  const t = String(title || '').toLowerCase();
+  let mult = 1;
+  const pm = t.match(/pack of\s*(\d+)/) || t.match(/\(set of\s*(\d+)\)/) || t.match(/(\d+)\s*x\s*\d/);
+  if (pm) mult = parseInt(pm[1], 10) || 1;
+  let m = t.match(/(\d+(?:\.\d+)?)\s*(kg|kilogram|kgs)\b/);
+  if (m) return { base: parseFloat(m[1]) * mult, unit: 'kg', label: `${m[1]}kg` };
+  m = t.match(/(\d+(?:\.\d+)?)\s*(g|gm|gms|gram|grams)\b/);
+  if (m) return { base: (parseFloat(m[1]) / 1000) * mult, unit: 'kg', label: `${m[1]}g` };
+  m = t.match(/(\d+(?:\.\d+)?)\s*(l|ltr|litre|liter|lt)\b/);
+  if (m) return { base: parseFloat(m[1]) * mult, unit: 'L', label: `${m[1]}L` };
+  m = t.match(/(\d+(?:\.\d+)?)\s*ml\b/);
+  if (m) return { base: (parseFloat(m[1]) / 1000) * mult, unit: 'L', label: `${m[1]}ml` };
+  return null;
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -1781,15 +1799,26 @@ async function handleGet(request, url, env) {
           const t = String(s.sku_title || '').toLowerCase();
           if (cmp.accept && !cmp.accept.test(t)) continue;
           if (cmp.reject && cmp.reject.test(t)) continue;
-          const up = s.unit_price_paise || s.price_paise;
-          if (up > 0 && (!best || up < best._up)) {
-            best = { _up: up, src: s.source_key, price: s.price_paise / 100, unit_price: (s.unit_price_paise || 0) / 100, sku: s.sku_title };
+          if (!(s.price_paise > 0)) continue;
+          const pack = parsePackBase(s.sku_title);
+          // per-base-unit paise (₹/kg or ₹/L). Unparseable packs rank last.
+          const perUnit = pack && pack.base > 0 ? s.price_paise / pack.base : Number.MAX_SAFE_INTEGER;
+          if (!best || perUnit < best._pu || (perUnit === best._pu && s.price_paise < best._pp)) {
+            best = {
+              _pu: perUnit, _pp: s.price_paise,
+              src: s.source_key, price: s.price_paise / 100,
+              unit_price: pack && pack.base > 0 ? Math.round(s.price_paise / pack.base / 100) : null,
+              unit: pack ? pack.unit : null, pack: pack ? pack.label : null,
+              sku: s.sku_title,
+            };
           }
         }
         if (best) {
           item.best_src = best.src;
           item.best_price = Math.round(best.price);
-          item.best_unit_price = best.unit_price ? Math.round(best.unit_price) : null;
+          item.best_unit_price = best.unit_price;
+          item.best_unit = best.unit;
+          item.best_pack = best.pack;
           item.best_sku = best.sku;
         }
       }
