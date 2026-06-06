@@ -145,8 +145,9 @@ function renderBoard(){
     const byV={}; lines.forEach(l=>(byV[l.vendor]=byV[l.vendor]||[]).push(l));
     for(const v in byV) b.appendChild(vendorCard(v,byV[v],chan));
   }
-  const add=document.createElement('button');add.className='add';add.textContent='+ add an off-list item';
-  add.onclick=addLine; b.appendChild(add);
+  const slot=document.createElement('div');slot.id='addslot';
+  slot.innerHTML=`<button class="add" onclick="showAddForm()">+ add a purchase that's not listed</button>`;
+  b.appendChild(slot);
 }
 function vendorCard(vendor,lines,chan){
   const card=document.createElement('div');card.className='vgroup';
@@ -175,7 +176,8 @@ function vendorCard(vendor,lines,chan){
           ${VENDORS.map(v=>`<option ${v===l.vendor?'selected':''}>${v}</option>`).join('')}</select></div>
         ${isDef?`<div class="f"><label>Brand</label><input ${reqd?'disabled':''} value="${(sku.brand||'').replace(/"/g,'&quot;')}" onchange="setSkuField(${l.id},'brand',this.value)"></div>
         <div class="f"><label>Product</label><input ${reqd?'disabled':''} value="${(sku.product||'').replace(/"/g,'&quot;')}" onchange="setSkuField(${l.id},'product',this.value)"></div>
-        <div class="f"><label>Pack size (g/ml)</label><input inputmode="decimal" ${reqd?'disabled':''} value="${sku.pack_g||''}" onchange="setSkuField(${l.id},'pack_g',this.value)"></div>`:''}
+        <div class="f"><label>Pack size (g/ml)</label><input inputmode="decimal" ${reqd?'disabled':''} value="${sku.pack_g||''}" onchange="setSkuField(${l.id},'pack_g',this.value)"></div>
+        <div class="f"><label>Link (optional)</label><input ${reqd?'disabled':''} value="${(sku.source_url||'').replace(/"/g,'&quot;')}" onchange="setSkuField(${l.id},'source_url',this.value)" placeholder="product link"></div>`:''}
         <div class="f"><label>${recLabel}</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.qty_received||''}" onchange="edit(${l.id},'qty_received',this.value)"></div>
         <div class="f"><label>${priceLabel}</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.unit_cost_paise?(l.unit_cost_paise/100):''}" onchange="edit(${l.id},'price',this.value)"></div>
         <div class="f"><label>Channel</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'channel',this.value)">
@@ -196,12 +198,19 @@ function vendorCard(vendor,lines,chan){
 window.edit=async(id,field,value)=>{ const r=await api('save',{body:{id,field,value}}); if(r.ok){toast('saved');load();}else toast(r.error||'err');};
 window.askPay=async(vendor,brand)=>{ const r=await api('request-pay',{body:{date:DATA.date,vendor,brand}});
   if(r.ok){toast('Payment requested: '+money(r.amount_paise));load();}else toast(r.error||'err');};
-async function addLine(){
-  const item=prompt('Item name?');if(!item)return; const vendor=prompt('Vendor? ('+VENDORS.join(', ')+')','Ashrafia');
-  const qty=prompt('Qty?','1');
-  const r=await api('add-line',{body:{date:DATA.date,brand:'NCH',vendor,channel:'go',item,uom:'',qty}});
-  if(r.ok){toast('added');load();}
-}
+window.showAddForm=()=>{el('#addslot').innerHTML=`<div class="vgroup" style="border-color:var(--gold)">
+  <div class="vhead"><span class="vn">+ Add a missed purchase</span></div>
+  <div class="ln"><div class="fields">
+    <div class="f"><label>Vendor</label><select id="ax_vendor">${VENDORS.map(v=>`<option>${v}</option>`).join('')}</select></div>
+    <div class="f"><label>Outlet</label><select id="ax_brand"><option>NCH</option><option>HE</option></select></div>
+    <div class="f"><label>Item</label><input id="ax_item" list="ax_cat" placeholder="type or pick"><datalist id="ax_cat">${(DATA.catalog||[]).map(i=>`<option>${(i||'').replace(/"/g,'&quot;')}</option>`).join('')}</datalist></div>
+    <div class="f"><label>Qty</label><input id="ax_qty" inputmode="decimal"></div>
+    <div class="f"><label>Unit</label><input id="ax_uom" placeholder="kg / pcs / pkt"></div>
+    <div class="f"><label>Type</label><select id="ax_kind"><option value="loose">Loose (by weight)</option><option value="defined">Defined SKU (branded)</option></select></div>
+    <div class="f"><label>How bought</label><select id="ax_channel"><option value="go">collect</option><option value="delivered">delivered</option></select></div>
+    <button class="ask" style="grid-column:1/-1" onclick="submitAdd()">Add to today's list</button>
+  </div></div></div>`;};
+window.submitAdd=async()=>{const item=el('#ax_item').value.trim();if(!item){toast('item name?');return;}const body={date:DATA.date,brand:el('#ax_brand').value,vendor:el('#ax_vendor').value,channel:el('#ax_channel').value,item,uom:el('#ax_uom').value,qty:el('#ax_qty').value,sku:{kind:el('#ax_kind').value}};const r=await api('add-line',{body});if(r.ok){toast('added ✓');load();}else toast(r.error||'err');};
 
 // ---------- OWNER PAY QUEUE ----------
 async function renderPay(){
