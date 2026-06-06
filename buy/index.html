@@ -125,14 +125,15 @@ async function load(){
   render();
 }
 function render(){
+  const vtab=`<div class="tab ${TAB==='vendors'?'on':''}" onclick="go('vendors')">Vendors</div>`;
   const tabs=ME.role==='owner'
-    ? `<div class="tabs"><div class="tab ${TAB==='pay'?'on':''}" onclick="go('pay')">To Pay</div>
-        <div class="tab ${TAB==='board'?'on':''}" onclick="go('board')">Board</div></div>`
-    : `<div class="tabs"><div class="tab on">Purchase — for ${fmtD(DATA.date)}</div></div>`;
+    ? `<div class="tabs"><div class="tab ${TAB==='pay'?'on':''}" onclick="go('pay')">To Pay</div><div class="tab ${TAB==='board'?'on':''}" onclick="go('board')">Board</div>${vtab}</div>`
+    : `<div class="tabs"><div class="tab ${TAB==='board'?'on':''}" onclick="go('board')">Purchase — for ${fmtD(DATA.date)}</div>${vtab}</div>`;
   el('#app').innerHTML=`<header><b>SAUDA</b><span class="who">${ME.name} · for ${fmtD(DATA.date)}${DATA.placed?' · placed '+fmtD(DATA.placed):''}</span></header>${tabs}<div class="wrap" id="body"></div>`;
-  if(TAB==='pay')renderPay(); else renderBoard();
+  const dl=document.createElement('datalist');dl.id='vendorlist';dl.innerHTML=(DATA.vendors||[]).map(v=>`<option>${(v||'').replace(/"/g,'&quot;')}</option>`).join('');el('#app').appendChild(dl);
+  if(TAB==='pay')renderPay(); else if(TAB==='vendors')renderVendors(); else renderBoard();
 }
-window.go=t=>{TAB=t; if(t==='pay')api('today').then(d=>{DATA=d;render();}); else load();};
+window.go=t=>{TAB=t; load();};
 
 function renderBoard(){
   const b=el('#body'); b.innerHTML='';
@@ -172,8 +173,7 @@ function vendorCard(vendor,lines,chan){
           <option value="">— loose or SKU? —</option>
           <option value="loose" ${sku.kind==='loose'?'selected':''}>Loose (by weight)</option>
           <option value="defined" ${sku.kind==='defined'?'selected':''}>Defined SKU (branded)</option></select></div>
-        <div class="f"><label>Vendor</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'vendor',this.value)">
-          ${VENDORS.map(v=>`<option ${v===l.vendor?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="f"><label>Vendor</label><input ${reqd?'disabled':''} list="vendorlist" value="${(l.vendor||'').replace(/"/g,'&quot;')}" onchange="edit(${l.id},'vendor',this.value)"></div>
         ${isDef?`<div class="f"><label>Brand</label><input ${reqd?'disabled':''} value="${(sku.brand||'').replace(/"/g,'&quot;')}" onchange="setSkuField(${l.id},'brand',this.value)"></div>
         <div class="f"><label>Product</label><input ${reqd?'disabled':''} value="${(sku.product||'').replace(/"/g,'&quot;')}" onchange="setSkuField(${l.id},'product',this.value)"></div>
         <div class="f"><label>Pack size (g/ml)</label><input inputmode="decimal" ${reqd?'disabled':''} value="${sku.pack_g||''}" onchange="setSkuField(${l.id},'pack_g',this.value)"></div>
@@ -201,7 +201,7 @@ window.askPay=async(vendor,brand)=>{ const r=await api('request-pay',{body:{date
 window.showAddForm=()=>{el('#addslot').innerHTML=`<div class="vgroup" style="border-color:var(--gold)">
   <div class="vhead"><span class="vn">+ Add a missed purchase</span></div>
   <div class="ln"><div class="fields">
-    <div class="f"><label>Vendor</label><select id="ax_vendor">${VENDORS.map(v=>`<option>${v}</option>`).join('')}</select></div>
+    <div class="f"><label>Vendor</label><input id="ax_vendor" list="vendorlist" placeholder="search vendor"></div>
     <div class="f"><label>Outlet</label><select id="ax_brand"><option>NCH</option><option>HE</option></select></div>
     <div class="f"><label>Item</label><input id="ax_item" list="ax_cat" placeholder="type or pick"><datalist id="ax_cat">${(DATA.catalog||[]).map(i=>`<option>${(i||'').replace(/"/g,'&quot;')}</option>`).join('')}</datalist></div>
     <div class="f"><label>Qty</label><input id="ax_qty" inputmode="decimal"></div>
@@ -211,6 +211,32 @@ window.showAddForm=()=>{el('#addslot').innerHTML=`<div class="vgroup" style="bor
     <button class="ask" style="grid-column:1/-1" onclick="submitAdd()">Add to today's list</button>
   </div></div></div>`;};
 window.submitAdd=async()=>{const item=el('#ax_item').value.trim();if(!item){toast('item name?');return;}const body={date:DATA.date,brand:el('#ax_brand').value,vendor:el('#ax_vendor').value,channel:el('#ax_channel').value,item,uom:el('#ax_uom').value,qty:el('#ax_qty').value,sku:{kind:el('#ax_kind').value}};const r=await api('add-line',{body});if(r.ok){toast('added ✓');load();}else toast(r.error||'err');};
+
+// ---------- VENDORS (registry: phone · UPI id · what they supply) ----------
+function renderVendors(){
+  const b=el('#body');b.innerHTML='';
+  const add=document.createElement('div');add.className='vgroup';add.style.borderColor='var(--gold)';
+  add.innerHTML=`<div class="vhead"><span class="vn">+ New vendor</span></div><div class="ln"><div class="fields">
+    <div class="f"><label>Name</label><input id="nv_name"></div>
+    <div class="f"><label>Phone</label><input id="nv_phone" inputmode="tel"></div>
+    <div class="f"><label>UPI ID (for payment)</label><input id="nv_vpa" placeholder="name@bank"></div>
+    <div class="f"><label>Supplies (raw materials)</label><input id="nv_mat"></div>
+    <button class="ask" style="grid-column:1/-1" onclick="addVendor()">Add vendor</button>
+  </div></div>`;
+  b.appendChild(add);
+  (DATA.registry||[]).forEach(v=>{
+    const c=document.createElement('div');c.className='vgroup';
+    c.innerHTML=`<div class="vhead"><span class="vn">${v.name}</span>${v.vpa?'<span class="skuchip">UPI ✓</span>':'<span class="skuchip loose">no UPI</span>'}</div>
+      <div class="ln"><div class="fields">
+        <div class="f"><label>Phone</label><input inputmode="tel" value="${(v.phone||'').replace(/"/g,'&quot;')}" onchange="updVendor(${v.id},'phone',this.value)"></div>
+        <div class="f"><label>UPI ID</label><input value="${(v.vpa||'').replace(/"/g,'&quot;')}" onchange="updVendor(${v.id},'vpa',this.value)"></div>
+        <div class="f" style="grid-column:1/-1"><label>Supplies</label><input value="${(v.materials||'').replace(/"/g,'&quot;')}" onchange="updVendor(${v.id},'materials',this.value)"></div>
+      </div></div>`;
+    b.appendChild(c);
+  });
+}
+window.addVendor=async()=>{const name=el('#nv_name').value.trim();if(!name){toast('vendor name?');return;}const r=await api('add-vendor',{body:{name,phone:el('#nv_phone').value,vpa:el('#nv_vpa').value,materials:el('#nv_mat').value}});if(r.ok){toast('vendor added ✓');load();}else toast(r.error||'err');};
+window.updVendor=async(id,field,value)=>{const v=(DATA.registry||[]).find(x=>x.id==id);if(!v)return;v[field]=value;const r=await api('update-vendor',{body:{id,phone:v.phone||'',vpa:v.vpa||'',materials:v.materials||''}});toast(r.ok?'saved':'err');};
 
 // ---------- OWNER PAY QUEUE ----------
 async function renderPay(){
