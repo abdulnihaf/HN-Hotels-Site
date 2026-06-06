@@ -13,7 +13,7 @@
 //
 // Auth: callers must send CRON_TOKEN as ?token= or x-cron-token header (except action=status).
 
-import { sendWaba, sendSms, sendVoice } from './_lib/comms-core.js';
+import { sendAndLog } from './_lib/comms-core.js';
 
 const PAGES_BASE = 'https://hnhotels.in';
 const SUPPRESS_MIN = 30;
@@ -198,10 +198,14 @@ async function fireAlert(env, { platformKey, message, severity = 'warn' }) {
   const phone = alertPhone(env);
   if (!phone) return { sent: false, reason: 'no alert phone configured' };
   const results = {};
+  const alertId = `aggregator-health-${platformKey}-${Date.now()}`;
   const platformLabel = platformKey.replace(/^delivery_/, '').replace(/^dine_/, '').replace(/_/g, ' ').toUpperCase();
   const action = 'Open https://hnhotels.in/ops/aggregator/ and refresh the partner API session/cURL.';
   try {
-    results.waba = await sendWaba(env, {
+    results.waba = await sendAndLog(env, {
+      channel: 'waba',
+      tier: severity,
+      alert_id: alertId,
       brand: WABA_ALERT_BRAND,
       phone,
       template: WABA_AGGREGATOR_TEMPLATE,
@@ -213,7 +217,10 @@ async function fireAlert(env, { platformKey, message, severity = 'warn' }) {
   }
   if (!results.waba?.ok) {
     try {
-      results.waba_fallback = await sendWaba(env, {
+      results.waba_fallback = await sendAndLog(env, {
+        channel: 'waba',
+        tier: severity,
+        alert_id: `${alertId}-fallback`,
         brand: WABA_ALERT_BRAND,
         phone,
         template: WABA_FALLBACK_TEMPLATE,
@@ -231,9 +238,9 @@ async function fireAlert(env, { platformKey, message, severity = 'warn' }) {
   }
   const wabaOk = results.waba?.ok || results.waba_fallback?.ok;
   if (!wabaOk) {
-    try { results.sms = await sendSms(env, { phone, message }); }
+    try { results.sms = await sendAndLog(env, { channel: 'sms', tier: severity, alert_id: `${alertId}-sms`, brand: WABA_ALERT_BRAND, phone, message }); }
     catch (e) { results.sms_error = e.message; }
-    try { results.voice = await sendVoice(env, { phone, message_text: message, alert_id: `health-${platformKey}-${Date.now()}` }); }
+    try { results.voice = await sendAndLog(env, { channel: 'voice', tier: severity, alert_id: `${alertId}-voice`, brand: WABA_ALERT_BRAND, phone, message_text: message }); }
     catch (e) { results.voice_error = e.message; }
   }
   await recordSuppression(env, platformKey, severity);
