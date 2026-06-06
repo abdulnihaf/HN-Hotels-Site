@@ -121,6 +121,8 @@ async function ensureTables(db) {
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, phone TEXT DEFAULT '', vpa TEXT DEFAULT '',
     materials TEXT DEFAULT '', brand TEXT DEFAULT 'both', channel TEXT DEFAULT 'delivered',
     active INTEGER DEFAULT 1, created_by TEXT DEFAULT '', created_at TEXT DEFAULT '')`).run();
+  // vpas: JSON array of ALL a vendor's UPI handles (one vendor can pay-in under several). vpa = primary (for the pay link).
+  try { await db.prepare("ALTER TABLE buy_vendors ADD COLUMN vpas TEXT DEFAULT ''").run(); } catch (e) {}
   await seedVendors(db);
 }
 
@@ -183,7 +185,7 @@ export async function onRequest(context) {
 
     // ── meta: vendor registry for searchable dropdown ─────────────
     if (action === 'vendors') {
-      const reg = (await db.prepare('SELECT id,name,phone,vpa,materials,brand,channel FROM buy_vendors WHERE active=1 ORDER BY name').all()).results || [];
+      const reg = (await db.prepare('SELECT id,name,phone,vpa,vpas,materials,brand,channel FROM buy_vendors WHERE active=1 ORDER BY name').all()).results || [];
       return json({ ok: true, vendors: reg.map(v => v.name), registry: reg });
     }
 
@@ -203,7 +205,7 @@ export async function onRequest(context) {
       // known-item catalog (every item ever seen) — powers the add-a-purchase picker
       const catRows = (await db.prepare('SELECT DISTINCT item FROM buy_lines ORDER BY item').all()).results || [];
       const catalog = catRows.map(r => r.item).filter(Boolean);
-      const vreg = (await db.prepare('SELECT id,name,phone,vpa,materials,brand,channel FROM buy_vendors WHERE active=1 ORDER BY name').all()).results || [];
+      const vreg = (await db.prepare('SELECT id,name,phone,vpa,vpas,materials,brand,channel FROM buy_vendors WHERE active=1 ORDER BY name').all()).results || [];
       return json({ ok: true, date, placed, lines, requests: reqs, vendors: vreg.map(v => v.name), registry: vreg, vpa: VENDOR_VPA, catalog });
     }
 
@@ -285,21 +287,23 @@ export async function onRequest(context) {
       // add a new vendor (name + phone + UPI id + what they supply) — self-serve
       if (action === 'add-vendor') {
         if (!user) return json({ ok: false, error: 'PIN required' }, 401);
-        const { name, phone, vpa, materials, brand, channel } = body;
+        const { name, phone, vpa, vpas, materials, brand, channel } = body;
         if (!name) return json({ ok: false, error: 'vendor name required' });
-        await db.prepare(`INSERT INTO buy_vendors (name,phone,vpa,materials,brand,channel,created_by,created_at)
-          VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET phone=excluded.phone, vpa=excluded.vpa, materials=excluded.materials`)
-          .bind(name, phone || '', vpa || '', materials || '', brand || 'both', channel || 'delivered', user.name, istNow()).run();
+        const arr = Array.isArray(vpas) ? vpas.map(x => (x||'').trim()).filter(Boolean) : (vpa ? [vpa] : []);
+        await db.prepare(`INSERT INTO buy_vendors (name,phone,vpa,vpas,materials,brand,channel,created_by,created_at)
+          VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET phone=excluded.phone, vpa=excluded.vpa, vpas=excluded.vpas, materials=excluded.materials`)
+          .bind(name, phone || '', arr[0] || '', JSON.stringify(arr), materials || '', brand || 'both', channel || 'delivered', user.name, istNow()).run();
         return json({ ok: true });
       }
 
       // update an existing vendor's details (phone / UPI id / materials)
       if (action === 'update-vendor') {
         if (!user) return json({ ok: false, error: 'PIN required' }, 401);
-        const { id, phone, vpa, materials } = body;
+        const { id, phone, vpas, materials } = body;
         if (!id) return json({ ok: false, error: 'vendor id required' });
-        await db.prepare('UPDATE buy_vendors SET phone=?, vpa=?, materials=? WHERE id=?')
-          .bind(phone || '', vpa || '', materials || '', id).run();
+        const arr = Array.isArray(vpas) ? vpas.map(x => (x||'').trim()).filter(Boolean) : [];
+        await db.prepare('UPDATE buy_vendors SET phone=?, vpa=?, vpas=?, materials=? WHERE id=?')
+          .bind(phone || '', arr[0] || '', JSON.stringify(arr), materials || '', id).run();
         return json({ ok: true });
       }
 
