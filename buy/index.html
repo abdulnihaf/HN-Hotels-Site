@@ -48,6 +48,8 @@
   .dots{font-size:26px;letter-spacing:8px;height:30px;color:var(--gold)}
   .add{width:100%;background:transparent;border:1px dashed var(--line);color:var(--mut);margin-top:8px}
   .ph{background:#16202a;border:1px solid var(--del);color:var(--del);font-size:13px}
+  .skuchip{font-size:10px;padding:2px 7px;border-radius:20px;border:1px solid var(--gold);color:var(--gold);margin-left:6px;white-space:nowrap}
+  .skuchip.loose{border-color:var(--mut);color:var(--mut)}
   .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;border:1px solid var(--line);
     padding:10px 16px;border-radius:30px;font-size:13px;opacity:0;transition:.2s;z-index:9}
   .toast.show{opacity:1}
@@ -76,6 +78,7 @@ async function api(action,opts={}){
 }
 async function compress(file){return new Promise(res=>{const rd=new FileReader();rd.onload=()=>{const img=new Image();img.onload=()=>{const max=900;let w=img.width,h=img.height;if(w>h&&w>max){h=Math.round(h*max/w);w=max;}else if(h>max){w=Math.round(w*max/h);h=max;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',0.55));};img.src=rd.result;};rd.readAsDataURL(file);});}
 window.pickPhoto=id=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;toast('uploading…');const b64=await compress(f);const r=await api('photo',{body:{id,photo:b64,by:(ME&&ME.name)||((KITCHEN||'')+' kitchen')}});toast(r.ok?'photo ✓':'photo error');const b=document.getElementById('ph'+id);if(r.ok&&b)b.textContent='📷 photo ✓';};inp.click();};
+window.defSku=async id=>{const k=prompt('LOOSE (by weight, no brand) or DEFINED SKU (branded pack)?\nType "loose" or "sku":','sku');if(!k)return;const who=(ME&&ME.name)||((KITCHEN||'')+' kitchen');if(k.toLowerCase()[0]==='l'){const r=await api('set-sku',{body:{id,sku:{kind:'loose'},by:who}});toast(r.ok?'marked loose ✓':'err');if(r.ok)load();return;}const brand=prompt('Brand? (e.g. Amul)');if(brand===null)return;const product=prompt('Product name? (e.g. Unsalted Cooking Butter)')||'';const pack=prompt('Pack size in grams/ml? (e.g. 500)')||'';const r=await api('set-sku',{body:{id,sku:{kind:'defined',brand,product,pack_g:pack?parseInt(pack):null},by:who}});toast(r.ok?'SKU saved ✓':'err');if(r.ok)load();};
 
 // ---------- QR RECEIVE MODE ----------
 async function receiveView(){
@@ -153,7 +156,9 @@ function vendorCard(vendor,lines,chan){
   lines.forEach(l=>{
     const row=document.createElement('div');row.className='ln';
     const reqd=l.status==='requested';
-    row.innerHTML=`<div><div class="it">${l.item}</div><div class="sub">ordered ${l.qty_ordered||'—'} ${l.uom||''}</div></div>
+    const sku=(()=>{try{return JSON.parse(l.sku||'{}')}catch(e){return{}}})();
+    const chip=sku.kind==='defined'?` <span class="skuchip">🏷️ ${[sku.brand,sku.product].filter(Boolean).join(' ')}${sku.pack_g?' · '+sku.pack_g+'g':''}</span>`:(sku.kind==='loose'?` <span class="skuchip loose">loose</span>`:'');
+    row.innerHTML=`<div><div class="it">${l.item}${chip}</div><div class="sub">ordered ${l.qty_ordered||'—'} ${l.uom||''}</div></div>
       <div class="total">${l.line_total_paise?money(l.line_total_paise):''} ${reqd?'<span class="stat s-requested">asked</span>':''}</div>
       <div class="fields">
         <div class="f"><label>Received</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.qty_received||''}" onchange="edit(${l.id},'qty_received',this.value)"></div>
@@ -164,6 +169,7 @@ function vendorCard(vendor,lines,chan){
           <option value="go" ${l.channel==='go'?'selected':''}>collect</option>
           <option value="delivered" ${l.channel==='delivered'?'selected':''}>delivered</option></select></div>
         <button class="ph" id="ph${l.id}" style="grid-column:1/-1" onclick="pickPhoto(${l.id})">📷 ${l.has_photo?'photo ✓':'add photo'}</button>
+        <button class="ph" style="grid-column:1/-1;border-color:var(--gold);color:var(--gold)" onclick="defSku(${l.id})">🏷️ ${sku.kind?'edit type':'loose or defined SKU?'}</button>
       </div>`;
     card.appendChild(row);
   });
