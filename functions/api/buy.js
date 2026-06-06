@@ -233,6 +233,17 @@ export async function onRequest(context) {
       return json({ ok: true, photo: r ? r.photo : null, by: r ? r.uploaded_by : '', at: r ? r.uploaded_at : '' });
     }
 
+    // ── photo-img: serve raw image bytes so <img src> can show a thumbnail ──
+    if (action === 'photo-img') {
+      const id = url.searchParams.get('id');
+      const r = await db.prepare('SELECT photo FROM buy_photos WHERE line_id=?').bind(id).first();
+      const m = r && r.photo ? /^data:(image\/[a-z+]+);base64,(.*)$/i.exec(r.photo) : null;
+      if (!m) return new Response('', { status: 404, headers: CORS });
+      const bin = atob(m[2]); const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new Response(bytes, { headers: { 'Content-Type': m[1], 'Cache-Control': 'private, max-age=120', 'Access-Control-Allow-Origin': '*' } });
+    }
+
     // ===== writes (POST) =====
     if (request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
