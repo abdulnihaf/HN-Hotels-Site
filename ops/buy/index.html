@@ -173,7 +173,7 @@ function vendorCard(vendor,lines,chan){
           <option value="">— loose or SKU? —</option>
           <option value="loose" ${sku.kind==='loose'?'selected':''}>Loose (by weight)</option>
           <option value="defined" ${sku.kind==='defined'?'selected':''}>Defined SKU (branded)</option></select></div>
-        <div class="f"><label>Vendor</label><input ${reqd?'disabled':''} list="vendorlist" value="${(l.vendor||'').replace(/"/g,'&quot;')}" onchange="edit(${l.id},'vendor',this.value)"></div>
+        <div class="f"><label>Vendor</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'vendor',this.value)">${(VENDORS.includes(l.vendor)?VENDORS:[l.vendor].concat(VENDORS)).map(v=>`<option ${v===l.vendor?'selected':''}>${v}</option>`).join('')}</select></div>
         ${isDef?`<div class="f"><label>Brand</label><input ${reqd?'disabled':''} value="${(sku.brand||'').replace(/"/g,'&quot;')}" onchange="setSkuField(${l.id},'brand',this.value)"></div>
         <div class="f"><label>Product</label><input ${reqd?'disabled':''} value="${(sku.product||'').replace(/"/g,'&quot;')}" onchange="setSkuField(${l.id},'product',this.value)"></div>
         <div class="f"><label>Pack size (g/ml)</label><input inputmode="decimal" ${reqd?'disabled':''} value="${sku.pack_g||''}" onchange="setSkuField(${l.id},'pack_g',this.value)"></div>
@@ -201,7 +201,7 @@ window.askPay=async(vendor,brand)=>{ const r=await api('request-pay',{body:{date
 window.showAddForm=()=>{el('#addslot').innerHTML=`<div class="vgroup" style="border-color:var(--gold)">
   <div class="vhead"><span class="vn">+ Add a missed purchase</span></div>
   <div class="ln"><div class="fields">
-    <div class="f"><label>Vendor</label><input id="ax_vendor" list="vendorlist" placeholder="search vendor"></div>
+    <div class="f"><label>Vendor</label><select id="ax_vendor">${VENDORS.map(v=>`<option>${v}</option>`).join('')}</select></div>
     <div class="f"><label>Outlet</label><select id="ax_brand"><option>NCH</option><option>HE</option></select></div>
     <div class="f"><label>Item</label><input id="ax_item" list="ax_cat" placeholder="type or pick"><datalist id="ax_cat">${(DATA.catalog||[]).map(i=>`<option>${(i||'').replace(/"/g,'&quot;')}</option>`).join('')}</datalist></div>
     <div class="f"><label>Qty</label><input id="ax_qty" inputmode="decimal"></div>
