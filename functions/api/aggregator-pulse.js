@@ -193,7 +193,7 @@ async function upsertOrders(db, orders) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(platform, order_id) DO UPDATE SET
         status = CASE
-          WHEN excluded.issues LIKE '%source:odoo_kds_sync%' AND status LIKE '%DELIVER%' THEN status
+          WHEN instr(excluded.issues, 'source:odoo_kds_sync') > 0 AND instr(upper(status), 'DELIVER') > 0 THEN status
           ELSE COALESCE(excluded.status, status)
         END,
         brand = CASE WHEN excluded.brand != 'unknown' THEN excluded.brand ELSE brand END,
@@ -208,18 +208,18 @@ async function upsertOrders(db, orders) {
         issues = CASE
           WHEN excluded.issues IS NULL OR excluded.issues = '' THEN issues
           WHEN issues IS NULL OR issues = '' THEN excluded.issues
-          WHEN excluded.issues LIKE '%source:odoo_kds_sync%' AND issues LIKE '%source:odoo_kds_sync%' THEN excluded.issues
-          WHEN issues LIKE '%' || excluded.issues || '%' THEN issues
+          WHEN instr(excluded.issues, 'source:odoo_kds_sync') > 0 AND instr(issues, 'source:odoo_kds_sync') > 0 THEN excluded.issues
+          WHEN instr(issues, excluded.issues) > 0 THEN issues
           ELSE issues || '; ' || excluded.issues
         END,
         rating = COALESCE(excluded.rating, rating),
         captured_at = excluded.captured_at
     `).bind(
-      o.platform, brand, o.order_id, o.status || null,
-      o.order_time || null, o.order_date || null, o.customer_name || null,
-      o.items || null, o.order_value || null, o.net_payout || null,
-      o.fees || null, o.issues || null, o.rating || null,
-      o.outlet_name || null, o.captured_at || new Date().toISOString()
+      textOrNull(o.platform, 40), textOrNull(brand, 40), textOrNull(o.order_id, 80), textOrNull(o.status, 120),
+      textOrNull(o.order_time, 20), textOrNull(o.order_date, 20), textOrNull(o.customer_name, 160),
+      textOrNull(o.items, 1200), o.order_value || null, o.net_payout || null,
+      textOrNull(o.fees, 2000), textOrNull(o.issues, 800), o.rating || null,
+      textOrNull(o.outlet_name, 160), o.captured_at || new Date().toISOString()
     ).run();
 
     upserted++;
@@ -1957,7 +1957,13 @@ async function runAggregatorPullAttempt(db, env, pair, opts) {
   }
 
   if (result.rows?.length && opts.mode !== 'dry_run') {
-    result.rows_upserted = await upsertOrders(db, result.rows);
+    try {
+      result.rows_upserted = await upsertOrders(db, result.rows);
+    } catch (err) {
+      result.status_code = 'parser_failed';
+      result.rows_upserted = 0;
+      result.error = `Order upsert failed after ${result.rows_seen || result.rows.length} row(s): ${err.message}`;
+    }
   } else {
     result.rows_upserted = 0;
   }
@@ -2215,8 +2221,17 @@ async function pullZomatoOrderDetailCoordinate(db, env, pair, opts) {
     return { status_code: 'not_configured', rows_seen: 0, rows: [], error: 'Missing AGG_ZOMATO_ORDER_DETAIL_CURL secret.' };
   }
 
+  const historyParsed = parseCurlText(env.AGG_ZOMATO_HISTORY_CURL || '');
   const baseBody = parsed.body ? safeJsonParse(parsed.body) : undefined;
-  const headers = { ...parsed.headers, accept: 'application/json, text/plain, */*', 'content-type': 'application/json' };
+  const headers = {
+    ...(historyParsed?.headers || {}),
+    ...parsed.headers,
+    accept: 'application/json, text/plain, */*',
+    'content-type': 'application/json',
+  };
+  if (historyParsed?.headers?.cookie && parsed.headers.cookie) {
+    headers.cookie = mergeCookieHeaders(historyParsed.headers.cookie, parsed.headers.cookie);
+  }
   cleanReplayHeaders(headers);
 
   const outletName = DIRECT_ZOMATO_OUTLETS[pair.partner_outlet_id]?.outlet_name || pair.partner_outlet_name || null;
@@ -2306,7 +2321,7 @@ function materializeZomatoDetailRequest(parsed, baseBody, orderId) {
       .replace(/"order_id"\s*:\s*"[^"]*"/g, `"order_id":"${orderId}"`)
       .replace(/"orderId"\s*:\s*"[^"]*"/g, `"orderId":"${orderId}"`)
       .replace(/"id"\s*:\s*"[^"]*"/g, `"id":"${orderId}"`)
-      .replace(/([?&](?:order_id|orderId|id)=)[^&\s'"]+/g, `$1${encodeURIComponent(orderId)}`);
+      .replace(/([?&](?:order_id|orderId|id|tab_id|tabId)=)[^&\s'"]+/g, `$1${encodeURIComponent(orderId)}`);
   };
 
   const headers = { ...parsed.headers };
@@ -2322,6 +2337,19 @@ function materializeZomatoDetailRequest(parsed, baseBody, orderId) {
     body: body && typeof body === 'object' ? JSON.stringify(body) : body,
     method: body ? 'POST' : 'GET',
   };
+}
+
+function mergeCookieHeaders(...cookieHeaders) {
+  const jar = new Map();
+  for (const header of cookieHeaders) {
+    for (const part of String(header || '').split(';')) {
+      const trimmed = part.trim();
+      const eq = trimmed.indexOf('=');
+      if (eq <= 0) continue;
+      jar.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+    }
+  }
+  return Array.from(jar.entries()).map(([key, value]) => `${key}=${value}`).join('; ');
 }
 
 function replaceOrderIdInObject(value, orderId) {
@@ -3640,6 +3668,12 @@ function numberOrNull(v) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(String(v).replace(/[^\d.-]/g, ''));
   return Number.isFinite(n) ? n : null;
+}
+
+function textOrNull(value, max = 1000) {
+  if (value === null || value === undefined || value === '') return null;
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return text.length > max ? text.slice(0, max) : text;
 }
 
 function sumNumbers(values) {
