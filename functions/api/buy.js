@@ -263,9 +263,12 @@ export async function onRequest(context) {
       const tok = env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN;
       const phoneId = env.WA_SPARKSOL_PHONE_ID;
       if (!tok || !phoneId) return json({ ok: false, error: 'WABA not configured' });
-      const pr = await (await fetch(`https://graph.facebook.com/v21.0/${phoneId}?fields=whatsapp_business_account&access_token=${tok}`)).json();
-      const waba = pr && pr.whatsapp_business_account && pr.whatsapp_business_account.id;
-      if (!waba) return json({ ok: false, error: 'could not resolve WABA id', detail: pr });
+      let waba = url.searchParams.get('waba') || env.WA_SPARKSOL_WABA_ID || env.WABA_ID || '';
+      if (!waba) {
+        const pr = await (await fetch(`https://graph.facebook.com/v21.0/${phoneId}?fields=whatsapp_business_account&access_token=${tok}`)).json();
+        waba = pr && pr.whatsapp_business_account && pr.whatsapp_business_account.id;
+      }
+      if (!waba) return json({ ok: false, error: 'could not resolve WABA id' });
       const tr = await (await fetch(`https://graph.facebook.com/v21.0/${waba}/message_templates?name=${encodeURIComponent(name)}&access_token=${tok}`)).json();
       const templates = (tr.data || []).map(t => ({ name: t.name, status: t.status, language: t.language, category: t.category }));
       return json({ ok: true, templates });
