@@ -115,6 +115,8 @@ async function ensureTables(db) {
     db.prepare(`CREATE TABLE IF NOT EXISTS buy_photos (
       line_id INTEGER PRIMARY KEY, photo TEXT, uploaded_by TEXT DEFAULT '', uploaded_at TEXT DEFAULT '')`),
   ]);
+  // sku: JSON per line — {kind:'loose'} OR {kind:'defined',brand,product,pack_g,pack_label,ref_price_paise,source}
+  try { await db.prepare("ALTER TABLE buy_lines ADD COLUMN sku TEXT DEFAULT ''").run(); } catch (e) { /* column exists */ }
 }
 
 async function seedIfEmpty(db, date) {
@@ -298,6 +300,19 @@ export async function onRequest(context) {
         await db.prepare(`INSERT INTO buy_photos (line_id,photo,uploaded_by,uploaded_at) VALUES (?,?,?,?)
           ON CONFLICT(line_id) DO UPDATE SET photo=excluded.photo, uploaded_by=excluded.uploaded_by, uploaded_at=excluded.uploaded_at`)
           .bind(id, photo, (by || '').slice(0, 24), istNow()).run();
+        return json({ ok: true });
+      }
+
+      // set-sku: classify a line as loose or a defined branded SKU (with brand/product/pack). No PIN.
+      if (action === 'set-sku') {
+        const { id, sku, by } = body;
+        if (!id) return json({ ok: false, error: 'missing id' });
+        const cur = await db.prepare('SELECT sku, edit_log FROM buy_lines WHERE id=?').bind(id).first();
+        if (!cur) return json({ ok: false, error: 'no such line' });
+        const log = JSON.parse(cur.edit_log || '[]');
+        log.push({ field: 'sku', old: cur.sku || '', new: JSON.stringify(sku || {}), by: (by || '').slice(0, 24), at: istNow() });
+        await db.prepare('UPDATE buy_lines SET sku=?, edit_log=? WHERE id=?')
+          .bind(JSON.stringify(sku || {}), JSON.stringify(log), id).run();
         return json({ ok: true });
       }
     }
