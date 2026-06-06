@@ -47,6 +47,7 @@
   .pad button{background:var(--card);border:1px solid var(--line);color:var(--ink);font-size:20px;padding:16px}
   .dots{font-size:26px;letter-spacing:8px;height:30px;color:var(--gold)}
   .add{width:100%;background:transparent;border:1px dashed var(--line);color:var(--mut);margin-top:8px}
+  .ph{background:#16202a;border:1px solid var(--del);color:var(--del);font-size:13px}
   .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;border:1px solid var(--line);
     padding:10px 16px;border-radius:30px;font-size:13px;opacity:0;transition:.2s;z-index:9}
   .toast.show{opacity:1}
@@ -64,6 +65,8 @@ let PIN=sessionStorage.getItem('buy_pin')||'', ME=null, VENDORS=[], TAB='board',
 
 const el=s=>document.querySelector(s);
 const money=p=>'₹'+((p||0)/100).toLocaleString('en-IN',{maximumFractionDigits:0});
+const _WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],_MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtD=s=>{if(!s)return'';const d=new Date(s+'T00:00:00');return _WD[d.getDay()]+' '+d.getDate()+' '+_MO[d.getMonth()];};
 function toast(t){const x=el('#toast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),1600);}
 async function api(action,opts={}){
   const u=API+'?action='+action+(opts.q||'');
@@ -71,12 +74,14 @@ async function api(action,opts={}){
   if(opts.body){o.method='POST';o.body=JSON.stringify(opts.body);}
   const r=await fetch(u,o); return r.json();
 }
+async function compress(file){return new Promise(res=>{const rd=new FileReader();rd.onload=()=>{const img=new Image();img.onload=()=>{const max=900;let w=img.width,h=img.height;if(w>h&&w>max){h=Math.round(h*max/w);w=max;}else if(h>max){w=Math.round(w*max/h);h=max;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',0.55));};img.src=rd.result;};rd.readAsDataURL(file);});}
+window.pickPhoto=id=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;toast('uploading…');const b64=await compress(f);const r=await api('photo',{body:{id,photo:b64,by:(ME&&ME.name)||((KITCHEN||'')+' kitchen')}});toast(r.ok?'photo ✓':'photo error');const b=document.getElementById('ph'+id);if(r.ok&&b)b.textContent='📷 photo ✓';};inp.click();};
 
 // ---------- QR RECEIVE MODE ----------
 async function receiveView(){
   const d=await api('today',{q:'&brand='+KITCHEN});
   const lines=(d.lines||[]).filter(l=>l.channel==='delivered'||true);
-  el('#app').innerHTML=`<header><b>RECEIVE · ${KITCHEN}</b><span class="who">scan-in</span></header>
+  el('#app').innerHTML=`<header><b>RECEIVE · ${KITCHEN}</b><span class="who">for ${fmtD(d.date)}</span></header>
    <div class="wrap"><div class="muted">Enter what actually arrived. Price optional.</div>
    <div id="rl"></div></div>`;
   const c=el('#rl');
@@ -89,6 +94,7 @@ async function receiveView(){
         <input inputmode="decimal" value="${l.qty_received||''}" id="rq${l.id}"></div>
        <div class="f"><label>Price ₹ (optional)</label>
         <input inputmode="decimal" value="${l.unit_cost_paise?(l.unit_cost_paise/100):''}" id="rp${l.id}"></div>
+       <button class="ph" id="ph${l.id}" style="grid-column:1/-1" onclick="pickPhoto(${l.id})">📷 ${l.has_photo?'photo ✓':'add photo'}</button>
        <button class="ask" style="grid-column:1/-1" onclick="saveRecv(${l.id})">Save</button></div>`;
     c.appendChild(div);
   });
@@ -118,8 +124,8 @@ function render(){
   const tabs=ME.role==='owner'
     ? `<div class="tabs"><div class="tab ${TAB==='pay'?'on':''}" onclick="go('pay')">To Pay</div>
         <div class="tab ${TAB==='board'?'on':''}" onclick="go('board')">Board</div></div>`
-    : `<div class="tabs"><div class="tab on">Today's Buying</div></div>`;
-  el('#app').innerHTML=`<header><b>SAUDA</b><span class="who">${ME.name} · ${DATA.date}</span></header>${tabs}<div class="wrap" id="body"></div>`;
+    : `<div class="tabs"><div class="tab on">Purchase — for ${fmtD(DATA.date)}</div></div>`;
+  el('#app').innerHTML=`<header><b>SAUDA</b><span class="who">${ME.name} · for ${fmtD(DATA.date)}${DATA.placed?' · placed '+fmtD(DATA.placed):''}</span></header>${tabs}<div class="wrap" id="body"></div>`;
   if(TAB==='pay')renderPay(); else renderBoard();
 }
 window.go=t=>{TAB=t; if(t==='pay')api('today').then(d=>{DATA=d;render();}); else load();};
@@ -157,6 +163,7 @@ function vendorCard(vendor,lines,chan){
         <div class="f"><label>Channel</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'channel',this.value)">
           <option value="go" ${l.channel==='go'?'selected':''}>collect</option>
           <option value="delivered" ${l.channel==='delivered'?'selected':''}>delivered</option></select></div>
+        <button class="ph" id="ph${l.id}" style="grid-column:1/-1" onclick="pickPhoto(${l.id})">📷 ${l.has_photo?'photo ✓':'add photo'}</button>
       </div>`;
     card.appendChild(row);
   });
