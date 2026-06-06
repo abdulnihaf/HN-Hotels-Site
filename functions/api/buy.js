@@ -5,6 +5,17 @@
 // Lifecycle per line:  logged → (received) → requested → paid
 // Two time-decoupled events joined by a queue: staff log+ask; owner pays whenever.
 
+import { sendWithFallback } from './_lib/comms-core.js';
+
+// token shared with the hourly cron worker (low-harm: only triggers a staff reminder)
+const CRON_TOKEN = 'sauda-remind-7f3a9c';
+
+// who owns which channel for reminders: go-collect → Basheer, delivered → Zoya
+const REMIND_TARGETS = [
+  { name: 'Basheer', phone: '9061906916', channel: 'go' },
+  { name: 'Zoya',    phone: '8147120714', channel: 'delivered' },
+];
+
 const PINS = {
   '0305': { name: 'Nihaf', role: 'owner' },
   '5882': { name: 'Nihaf', role: 'owner' },
@@ -242,6 +253,43 @@ export async function onRequest(context) {
       const bin = atob(m[2]); const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       return new Response(bytes, { headers: { 'Content-Type': m[1], 'Cache-Control': 'private, max-age=120', 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    // ── remind-tick: hourly cron — WhatsApp the owner of any un-entered items ──
+    if (action === 'remind-tick') {
+      if ((url.searchParams.get('token') || '') !== CRON_TOKEN) return json({ ok: false, error: 'forbidden' }, 403);
+      const dry = url.searchParams.get('dry') === '1';
+      const date = url.searchParams.get('date') || istToday();
+      const istHour = new Date(Date.now() + 5.5 * 3600 * 1000).getUTCHours();
+      if (!dry && (istHour < 8 || istHour >= 22)) return json({ ok: true, skipped: 'outside 8–22 IST', hour: istHour });
+      const lines = (await db.prepare(
+        "SELECT channel, item, qty_received, unit_cost_paise, status FROM buy_lines WHERE biz_date=?").bind(date).all()).results || [];
+      // incomplete = still 'logged' AND (no price yet OR nothing received)
+      const inc = lines.filter(l => l.status === 'logged' && (!l.unit_cost_paise || !(l.qty_received && String(l.qty_received).trim())));
+      const BOARD = 'https://hnhotels.in/buy/';
+      const sent = [];
+      for (const t of REMIND_TARGETS) {
+        const items = inc.filter(l => (t.channel === 'go' ? l.channel === 'go' : l.channel !== 'go'));
+        if (!items.length) continue;
+        const list = items.slice(0, 6).map(i => i.item).join(', ') + (items.length > 6 ? ` +${items.length - 6} more` : '');
+        const rec = { name: t.name, phone: t.phone, count: items.length, items: list };
+        if (!dry) {
+          try {
+            await sendWithFallback(env, {
+              brand: 'sparksol', tier: 'warn', alert_id: `sauda_remind:${t.name}:${date}:${istHour}`,
+              phone: t.phone, template: 'ops_alert_v1', language: 'en',
+              vars: [
+                `Sauda — ${items.length} item(s) not yet entered`,
+                `for ${date}: ${list}`,
+                'Enter qty + price for each to release payment',
+                BOARD,
+              ],
+            });
+          } catch (e) { rec.error = e.message; }
+        }
+        sent.push(rec);
+      }
+      return json({ ok: true, dry, date, hour: istHour, total_incomplete: inc.length, sent });
     }
 
     // ===== writes (POST) =====
