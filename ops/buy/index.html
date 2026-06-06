@@ -158,11 +158,16 @@ function vendorCard(vendor,lines,chan){
     const reqd=l.status==='requested';
     const sku=(()=>{try{return JSON.parse(l.sku||'{}')}catch(e){return{}}})();
     const chip=sku.kind==='defined'?` <span class="skuchip">🏷️ ${[sku.brand,sku.product].filter(Boolean).join(' ')}${sku.pack_g?' · '+sku.pack_g+'g':''}</span>`:(sku.kind==='loose'?` <span class="skuchip loose">loose</span>`:'');
+    const isDef=sku.kind==='defined';
+    const recNum=parseFloat((l.qty_received||'').replace(/[^0-9.]/g,''))||0;
+    const computed=(isDef&&sku.pack_g&&recNum)?` = ${+(recNum*sku.pack_g/1000).toFixed(2)} kg`:'';
+    const recLabel=isDef?('Packs'+computed):('Qty ('+(l.uom||'unit')+')');
+    const priceLabel=isDef?'₹ / pack':('₹ / '+(l.uom||'unit'));
     row.innerHTML=`<div><div class="it">${l.item}${chip}</div><div class="sub">ordered ${l.qty_ordered||'—'} ${l.uom||''}</div></div>
       <div class="total">${l.line_total_paise?money(l.line_total_paise):''} ${reqd?'<span class="stat s-requested">asked</span>':''}</div>
       <div class="fields">
-        <div class="f"><label>Received</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.qty_received||''}" onchange="edit(${l.id},'qty_received',this.value)"></div>
-        <div class="f"><label>Price ₹/unit</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.unit_cost_paise?(l.unit_cost_paise/100):''}" onchange="edit(${l.id},'price',this.value)"></div>
+        <div class="f"><label>${recLabel}</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.qty_received||''}" onchange="edit(${l.id},'qty_received',this.value)"></div>
+        <div class="f"><label>${priceLabel}</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.unit_cost_paise?(l.unit_cost_paise/100):''}" onchange="edit(${l.id},'price',this.value)"></div>
         <div class="f"><label>Vendor (edit if wrong)</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'vendor',this.value)">
           ${VENDORS.map(v=>`<option ${v===l.vendor?'selected':''}>${v}</option>`).join('')}</select></div>
         <div class="f"><label>Channel</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'channel',this.value)">
