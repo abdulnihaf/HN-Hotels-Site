@@ -60,7 +60,11 @@ async function handlePost(db, request, headers, env) {
   }
 
   if (body.type === 'zomato_order_history' && body.payload) {
-    const orders = normalizeZomatoOrderHistory(body.payload);
+    const orders = normalizeZomatoOrderHistory(body.payload).map(row => ({
+      ...row,
+      brand: body.brand || row.brand,
+      outlet_name: body.outlet_name || row.outlet_name,
+    }));
     return storeOrders(db, orders, headers);
   }
 
@@ -75,6 +79,14 @@ async function handlePost(db, request, headers, env) {
   // frontend order APIs, normalizes rows, and records per-coordinate health.
   if ((body.type === 'coa_ring2_pull' || body.action === 'coa_ring2_pull')) {
     const result = await executeAggregatorCoaRing2Pull(db, env, body);
+    return new Response(JSON.stringify(result), { headers });
+  }
+
+  // POS/KDS proof pull. This reads the production HE Odoo POS rows created by
+  // the CTO's Swiggy/Zomato sync service and records whether each order reached
+  // the kitchen-preparation layer. It does not mutate Odoo or partner portals.
+  if ((body.type === 'odoo_kds_pull' || body.action === 'odoo_kds_pull')) {
+    const result = await executeAggregatorOdooKdsPull(db, env, body);
     return new Response(JSON.stringify(result), { headers });
   }
 
@@ -155,6 +167,16 @@ async function storeOrders(db, orders, headers) {
   return new Response(JSON.stringify({ ok: true, upserted }), { headers });
 }
 
+async function insertAggregatorSnapshot(db, { platform, brand, outletId = 'unknown', metricType, payload, capturedAt = new Date().toISOString() }) {
+  const data = JSON.stringify(payload);
+  if (data === '{}' || data === 'null') return 0;
+  await db.prepare(
+    `INSERT INTO aggregator_snapshots (platform, brand, outlet_id, metric_type, data, captured_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).bind(platform, brand, outletId, metricType, data, capturedAt).run();
+  return 1;
+}
+
 async function upsertOrders(db, orders) {
   let upserted = 0;
   for (const o of orders) {
@@ -170,12 +192,26 @@ async function upsertOrders(db, orders) {
       INSERT INTO aggregator_orders (platform, brand, order_id, status, order_time, order_date, customer_name, items, order_value, net_payout, fees, issues, rating, outlet_name, captured_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(platform, order_id) DO UPDATE SET
-        status = excluded.status,
+        status = CASE
+          WHEN excluded.issues LIKE '%source:odoo_kds_sync%' AND status LIKE '%DELIVER%' THEN status
+          ELSE COALESCE(excluded.status, status)
+        END,
         brand = CASE WHEN excluded.brand != 'unknown' THEN excluded.brand ELSE brand END,
         outlet_name = CASE WHEN excluded.outlet_name IS NOT NULL THEN excluded.outlet_name ELSE outlet_name END,
+        order_time = COALESCE(excluded.order_time, order_time),
+        order_date = COALESCE(excluded.order_date, order_date),
+        customer_name = COALESCE(excluded.customer_name, customer_name),
+        items = COALESCE(excluded.items, items),
+        order_value = COALESCE(excluded.order_value, order_value),
         net_payout = COALESCE(excluded.net_payout, net_payout),
         fees = COALESCE(excluded.fees, fees),
-        issues = COALESCE(excluded.issues, issues),
+        issues = CASE
+          WHEN excluded.issues IS NULL OR excluded.issues = '' THEN issues
+          WHEN issues IS NULL OR issues = '' THEN excluded.issues
+          WHEN excluded.issues LIKE '%source:odoo_kds_sync%' AND issues LIKE '%source:odoo_kds_sync%' THEN excluded.issues
+          WHEN issues LIKE '%' || excluded.issues || '%' THEN issues
+          ELSE issues || '; ' || excluded.issues
+        END,
         rating = COALESCE(excluded.rating, rating),
         captured_at = excluded.captured_at
     `).bind(
@@ -396,6 +432,43 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
+  // --- KDS-HEALTH: proof that aggregator orders reached POS/KDS ---
+  if (action === 'kds-health') {
+    const { results } = await db.prepare(`
+      SELECT platform, brand,
+             COUNT(*) AS orders,
+             MAX(captured_at) AS last_pulled_at,
+             MAX(order_date || 'T' || COALESCE(order_time, '00:00')) AS last_order_at,
+             SUM(CASE WHEN issues LIKE '%kds:yes%' THEN 1 ELSE 0 END) AS kds_orders,
+             SUM(CASE WHEN issues LIKE '%kds:no%' THEN 1 ELSE 0 END) AS missing_kds_orders
+      FROM aggregator_orders
+      WHERE issues LIKE '%source:odoo_kds_sync%'
+      GROUP BY platform, brand
+      ORDER BY platform, brand
+    `).all();
+
+    const today = todayIstDate();
+    const todayRows = await db.prepare(`
+      SELECT platform, brand, COUNT(*) AS orders,
+             SUM(CASE WHEN issues LIKE '%kds:yes%' THEN 1 ELSE 0 END) AS kds_orders
+      FROM aggregator_orders
+      WHERE issues LIKE '%source:odoo_kds_sync%' AND order_date = ?
+      GROUP BY platform, brand
+      ORDER BY platform, brand
+    `).bind(today).all();
+
+    return new Response(JSON.stringify({
+      ok: true,
+      action: 'kds-health',
+      source: 'test.hamzahotel.com pos.order via Cloudflare Odoo JSON-RPC',
+      generated_at: new Date().toISOString(),
+      totals: results || [],
+      today,
+      today_totals: todayRows.results || [],
+      note: 'Partner token refresh remains outside this Function. This endpoint proves whether refreshed sessions produced POS/KDS-visible orders.',
+    }), { headers });
+  }
+
   // --- COA ENTITIES: Ring 1 closed coordinate space for aggregator operations ---
   if (action === 'coa-entities') {
     await ensureAggregatorCoaRing1(db);
@@ -570,7 +643,7 @@ async function handleGet(db, url, headers) {
 
   // --- v6.0 HEALTH: silence detection + pipeline status ---
   if (action === 'health') {
-    const [swiggyOrder, zomatoOrder, snapshots, ring2Health] = await Promise.all([
+    const [swiggyOrder, zomatoOrder, snapshots, ring2Health, kdsHealth] = await Promise.all([
       db.prepare(`SELECT MAX(captured_at) as last FROM aggregator_orders WHERE platform='swiggy'`).first(),
       db.prepare(`SELECT MAX(captured_at) as last FROM aggregator_orders WHERE platform='zomato'`).first(),
       db.prepare(`SELECT platform, metric_type, MAX(captured_at) as last FROM aggregator_snapshots WHERE platform IN ('swiggy','zomato') GROUP BY platform, metric_type`).all(),
@@ -581,6 +654,13 @@ async function handleGet(db, url, headers) {
           AND pull_source_code IN ('swiggy_fetch_orders','swiggy_history','zomato_history_v2')
           AND status_code IN ('ok','empty_response')
         GROUP BY platform_code
+      `).all().catch(() => ({ results: [] })),
+      db.prepare(`
+        SELECT platform, MAX(captured_at) AS last, COUNT(*) AS orders,
+               SUM(CASE WHEN issues LIKE '%kds:yes%' THEN 1 ELSE 0 END) AS kds_orders
+        FROM aggregator_orders
+        WHERE issues LIKE '%source:odoo_kds_sync%'
+        GROUP BY platform
       `).all().catch(() => ({ results: [] })),
     ]);
 
@@ -597,6 +677,15 @@ async function handleGet(db, url, headers) {
     const lastDirectByPlatform = {};
     for (const r of (ring2Health.results || [])) {
       if (r.platform && r.last) lastDirectByPlatform[r.platform] = r.last;
+    }
+    const kdsByPlatform = {};
+    for (const r of (kdsHealth.results || [])) {
+      if (r.platform) kdsByPlatform[r.platform] = {
+        last: r.last || null,
+        age_minutes: ageMin(r.last),
+        orders: Number(r.orders || 0),
+        kds_orders: Number(r.kds_orders || 0),
+      };
     }
 
     // Business hours = 12pm IST to 1am IST next day. During those hours we require
@@ -630,10 +719,14 @@ async function handleGet(db, url, headers) {
       last_swiggy_order_at: lastSwiggyOrderAt,
       last_zomato_order_at: lastZomatoOrderAt,
       last_direct_pull_at: lastDirectByPlatform,
+      last_kds_pull_at: Object.fromEntries(Object.entries(kdsByPlatform).map(([platform, row]) => [platform, row.last])),
+      kds_proof: kdsByPlatform,
       last_snapshot_at: lastSnapByPlatform,
       age_minutes: {
         swiggy_order: swiggyAge, zomato_order: zomatoAge,
         swiggy_direct: swiggyDirectAge, zomato_direct: zomatoDirectAge,
+        swiggy_kds: kdsByPlatform.swiggy?.age_minutes ?? null,
+        zomato_kds: kdsByPlatform.zomato?.age_minutes ?? null,
         swiggy_snap: swiggySnapAge, zomato_snap: zomatoSnapAge,
       },
       zomato_business_hours: zomatoBusiness,
@@ -1849,6 +1942,8 @@ async function runAggregatorPullAttempt(db, env, pair, opts) {
       result = await pullSwiggyFetchCoordinate(env, pair);
     } else if (pair.platform_code === 'zomato' && pair.pull_source_code === 'zomato_history_v2') {
       result = await pullZomatoHistoryCoordinate(env, pair, opts);
+    } else if (pair.platform_code === 'zomato' && pair.pull_source_code === 'zomato_order_detail') {
+      result = await pullZomatoOrderDetailCoordinate(db, env, pair, opts);
     } else {
       result = {
         status_code: 'not_configured',
@@ -2112,6 +2207,401 @@ async function pullZomatoHistoryCoordinate(env, pair, opts) {
     if (!payload.hasMore || !postback) break;
   }
   return { status_code: rows.length ? 'ok' : 'empty_response', http_status: lastHttp, rows_seen: rows.length, rows };
+}
+
+async function pullZomatoOrderDetailCoordinate(db, env, pair, opts) {
+  const parsed = parseCurlText(env.AGG_ZOMATO_ORDER_DETAIL_CURL || '');
+  if (!parsed?.url || !parsed?.headers) {
+    return { status_code: 'not_configured', rows_seen: 0, rows: [], error: 'Missing AGG_ZOMATO_ORDER_DETAIL_CURL secret.' };
+  }
+
+  const baseBody = parsed.body ? safeJsonParse(parsed.body) : undefined;
+  const headers = { ...parsed.headers, accept: 'application/json, text/plain, */*', 'content-type': 'application/json' };
+  cleanReplayHeaders(headers);
+
+  const outletName = DIRECT_ZOMATO_OUTLETS[pair.partner_outlet_id]?.outlet_name || pair.partner_outlet_name || null;
+  const knownDetailMap = await latestZomatoDetailMap(db);
+  const knownOrderIds = new Set(knownDetailMap.keys());
+  const limit = Math.max(1, Math.min(parseInt(opts.limit || '50', 10) || 50, 100));
+  const { results: eligibleOrders } = await db.prepare(`
+    SELECT order_id, order_date, order_time, captured_at
+    FROM aggregator_orders
+    WHERE platform='zomato'
+      AND brand = ?
+      AND outlet_name = ?
+      AND order_date >= ?
+      AND order_date <= ?
+    ORDER BY order_date DESC, order_time DESC, captured_at DESC
+    LIMIT ?
+  `).bind(pair.brand_code, outletName, opts.from, opts.to, limit).all();
+
+  const orderIds = [];
+  for (const row of eligibleOrders || []) {
+    const orderId = String(row.order_id || '');
+    if (!orderId || knownOrderIds.has(orderId) || orderIds.includes(orderId)) continue;
+    orderIds.push(orderId);
+  }
+
+  if (!orderIds.length) {
+    return {
+      status_code: 'empty_response',
+      http_status: null,
+      rows_seen: 0,
+      rows: [],
+      error: 'No Zomato orders eligible for detail replay yet.',
+      sample: null,
+    };
+  }
+
+  const rows = [];
+  let lastHttp = null;
+  for (const orderId of orderIds) {
+    const requestSpec = materializeZomatoDetailRequest(parsed, baseBody, orderId);
+    const res = await fetch(requestSpec.url, {
+      method: requestSpec.method,
+      headers: requestSpec.headers,
+      body: requestSpec.body,
+    });
+    lastHttp = res.status;
+    const payload = await parsePartnerJson(res);
+
+    if (res.status === 401 || res.status === 403) {
+      return { status_code: 'unauthorized', http_status: res.status, rows_seen: rows.length, rows, error: 'Zomato order-detail cookie/CSRF unauthorized/expired.' };
+    }
+    if (!res.ok) {
+      return { status_code: 'parser_failed', http_status: res.status, rows_seen: rows.length, rows, error: `Zomato order-detail HTTP ${res.status}`, sample: payload.sample || null };
+    }
+    if (payload.parse_error) {
+      return { status_code: 'parser_failed', http_status: res.status, rows_seen: rows.length, rows, error: 'Zomato order-detail JSON parse failed.', sample: payload.sample };
+    }
+
+    await insertAggregatorSnapshot(db, {
+      platform: 'zomato',
+      brand: pair.brand_code,
+      outletId: pair.partner_outlet_id,
+      metricType: 'api_orders',
+      payload,
+      capturedAt: new Date().toISOString(),
+    });
+    rows.push({ order_id: orderId, http_status: res.status, outlet_name: outletName });
+  }
+
+  return {
+    status_code: rows.length ? 'ok' : 'empty_response',
+    http_status: lastHttp,
+    rows_seen: rows.length,
+    rows,
+    sample: rows.slice(0, 3),
+  };
+}
+
+function materializeZomatoDetailRequest(parsed, baseBody, orderId) {
+  const replaceTemplate = (value) => {
+    if (value == null) return value;
+    return String(value)
+      .replace(/__ORDER_ID__/g, orderId)
+      .replace(/\{\{ORDER_ID\}\}/g, orderId)
+      .replace(/\{\{order_id\}\}/g, orderId)
+      .replace(/\{\{ORDERID\}\}/g, orderId)
+      .replace(/"order_id"\s*:\s*"[^"]*"/g, `"order_id":"${orderId}"`)
+      .replace(/"orderId"\s*:\s*"[^"]*"/g, `"orderId":"${orderId}"`)
+      .replace(/"id"\s*:\s*"[^"]*"/g, `"id":"${orderId}"`)
+      .replace(/([?&](?:order_id|orderId|id)=)[^&\s'"]+/g, `$1${encodeURIComponent(orderId)}`);
+  };
+
+  const headers = { ...parsed.headers };
+  const url = replaceTemplate(parsed.url);
+  cleanReplayHeaders(headers);
+  const body = baseBody && typeof baseBody === 'object'
+    ? replaceOrderIdInObject(baseBody, orderId)
+    : (parsed.body ? replaceTemplate(parsed.body) : undefined);
+
+  return {
+    url,
+    headers,
+    body: body && typeof body === 'object' ? JSON.stringify(body) : body,
+    method: body ? 'POST' : 'GET',
+  };
+}
+
+function replaceOrderIdInObject(value, orderId) {
+  if (Array.isArray(value)) return value.map(v => replaceOrderIdInObject(v, orderId));
+  if (!value || typeof value !== 'object') {
+    if (typeof value === 'string') {
+      return value
+        .replace(/__ORDER_ID__/g, orderId)
+        .replace(/\{\{ORDER_ID\}\}/g, orderId)
+        .replace(/\{\{order_id\}\}/g, orderId)
+        .replace(/\{\{ORDERID\}\}/g, orderId);
+    }
+    return value;
+  }
+
+  const out = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (/^(order_?id|display_?id|id)$/i.test(key)) {
+      out[key] = orderId;
+    } else {
+      out[key] = replaceOrderIdInObject(child, orderId);
+    }
+  }
+  return out;
+}
+
+async function executeAggregatorOdooKdsPull(db, env, body = {}) {
+  const from = validIsoDate(body.from) ? body.from : todayIstDate();
+  const to = validIsoDate(body.to) ? body.to : from;
+  const limit = Math.max(1, Math.min(parseInt(body.limit || '500', 10) || 500, 1000));
+  const startedAt = new Date().toISOString();
+
+  const odooOrders = await readOdooDeliveryOrders(env, { from, to, limit });
+  const lineIds = uniqueFlat(odooOrders.map(order => normalizeIdList(order.lines)));
+  const lineRows = lineIds.length ? await readOdooOrderLines(env, lineIds) : [];
+  const linesByOrder = groupOdooLinesByOrder(lineRows);
+  const prep = await readOdooPrepProof(env, odooOrders.map(order => order.id));
+
+  const rows = odooOrders
+    .map(order => normalizeOdooKdsOrder(order, linesByOrder.get(Number(order.id)) || [], prep))
+    .filter(Boolean);
+  const upserted = await upsertOrders(db, rows);
+
+  const completedAt = new Date().toISOString();
+  await db.prepare(`
+    INSERT INTO aggregator_snapshots (platform, brand, outlet_id, metric_type, data, captured_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(
+    'odoo_kds',
+    'he',
+    'test.hamzahotel.com',
+    'pos_kds_order_pull',
+    JSON.stringify({
+      source: 'test.hamzahotel.com',
+      from,
+      to,
+      orders_seen: rows.length,
+      orders_upserted: upserted,
+      platforms: countBy(rows, 'platform'),
+      kds_yes: rows.filter(row => /kds:yes/i.test(row.issues || '')).length,
+      kds_no: rows.filter(row => /kds:no/i.test(row.issues || '')).length,
+      started_at: startedAt,
+      completed_at: completedAt,
+    }),
+    completedAt
+  ).run();
+
+  return {
+    ok: true,
+    action: 'odoo_kds_pull',
+    source: 'test.hamzahotel.com pos.order',
+    window: { from, to },
+    orders_seen: rows.length,
+    orders_upserted: upserted,
+    platforms: countBy(rows, 'platform'),
+    kds_yes: rows.filter(row => /kds:yes/i.test(row.issues || '')).length,
+    kds_no: rows.filter(row => /kds:no/i.test(row.issues || '')).length,
+    sample: rows.slice(0, 5).map(row => ({
+      platform: row.platform,
+      brand: row.brand,
+      order_id: row.order_id,
+      order_date: row.order_date,
+      order_time: row.order_time,
+      status: row.status,
+      order_value: row.order_value,
+      issues: row.issues,
+    })),
+    mutation_boundary: 'Reads Odoo POS/KDS via JSON-RPC and writes HN D1 tracking rows only. No Odoo, partner portal, price, offer, or POS mutation.',
+  };
+}
+
+async function readOdooDeliveryOrders(env, { from, to, limit }) {
+  const startUtc = istDateToOdooUtc(from, 0);
+  const endUtc = istDateToOdooUtc(addIsoDays(to, 1), 0);
+  return await odooPosCall(env, 'pos.order', 'search_read', [[
+    ['delivery_identifier', '!=', false],
+    ['date_order', '>=', startUtc],
+    ['date_order', '<', endUtc],
+  ]], {
+    fields: [
+      'id', 'name', 'pos_reference', 'delivery_identifier', 'delivery_status',
+      'delivery_json', 'date_order', 'amount_total', 'config_id', 'session_id',
+      'state', 'partner_id', 'lines', 'internal_note', 'last_order_preparation_change',
+    ],
+    limit,
+    order: 'date_order desc',
+  });
+}
+
+async function readOdooOrderLines(env, lineIds) {
+  if (!lineIds.length) return [];
+  return await odooPosCall(env, 'pos.order.line', 'search_read', [[['id', 'in', lineIds]]], {
+    fields: ['id', 'order_id', 'product_id', 'qty', 'price_unit', 'price_subtotal', 'price_subtotal_incl', 'discount'],
+    limit: Math.min(lineIds.length, 5000),
+  }).catch(() => []);
+}
+
+async function readOdooPrepProof(env, orderIds) {
+  const ids = orderIds.map(Number).filter(Number.isFinite);
+  if (!ids.length) return { field: null, byOrder: new Map(), error: null };
+  const candidates = ['pos_order_id', 'order_id'];
+  for (const field of candidates) {
+    try {
+      const rows = await odooPosCall(env, 'pos.prep.order', 'search_read', [[[field, 'in', ids]]], {
+        fields: ['id', field, 'create_date', 'write_date'],
+        limit: Math.min(ids.length * 3, 3000),
+      });
+      return { field, byOrder: groupPrepRowsByOrder(rows, field), error: null };
+    } catch (err) {
+      if (!/Invalid field|does not exist|Unknown field|Unknown/i.test(String(err.message || err))) {
+        return { field, byOrder: new Map(), error: err.message };
+      }
+    }
+  }
+  return { field: null, byOrder: new Map(), error: 'pos.prep.order relation field not found' };
+}
+
+async function odooPosCall(env, model, method, args, kwargs = {}) {
+  const key = env.POS_ODOO_KEY || env.TEST_ODOO_KEY;
+  if (!key) throw new Error('POS_ODOO_KEY or TEST_ODOO_KEY not configured');
+  const url = env.POS_ODOO_URL || env.TEST_ODOO_URL || 'https://test.hamzahotel.com/jsonrpc';
+  const db = env.POS_ODOO_DB || env.TEST_ODOO_DB || 'main';
+  const uid = Number(env.POS_ODOO_UID || env.TEST_ODOO_UID || 2);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort('odoo_timeout'), 15_000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'call',
+        params: { service: 'object', method: 'execute_kw', args: [db, uid, key, model, method, args, kwargs] },
+      }),
+    });
+    const json = await res.json();
+    if (json.error) {
+      const message = json.error.data?.message || json.error.message || JSON.stringify(json.error);
+      throw new Error(`odoo ${model}.${method}: ${String(message).slice(0, 240)}`);
+    }
+    return json.result || [];
+  } catch (err) {
+    if (err.name === 'AbortError' || String(err.message || err).includes('odoo_timeout')) {
+      throw new Error(`odoo ${model}.${method}: timeout after 15s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function normalizeOdooKdsOrder(order, lines, prep) {
+  const deliveryId = String(order.delivery_identifier || '');
+  const match = deliveryId.match(/^(swiggy|zomato)-(.+)$/i);
+  if (!match) return null;
+  const platform = match[1].toLowerCase();
+  const orderId = match[2];
+  const configName = many2OneName(order.config_id);
+  const brand = /nch|nawabi/i.test(configName) ? 'nch' : 'he';
+  const kdsRows = prep.byOrder.get(Number(order.id)) || [];
+  const kdsSeen = kdsRows.length > 0 || Boolean(order.last_order_preparation_change);
+  const lineTotal = sumNumbers(lines.map(line => line.price_subtotal_incl ?? line.price_subtotal));
+  const items = summarizeOdooLines(lines) || summarizeDeliveryJsonItems(order.delivery_json);
+  const status = kdsSeen ? 'KDS_ACKNOWLEDGED' : (order.delivery_status || order.state || 'POS_ORDERED');
+  const issueParts = [
+    'source:odoo_kds_sync',
+    `pos_id:${order.id}`,
+    `config:${configName || many2OneId(order.config_id) || 'unknown'}`,
+    `kds:${kdsSeen ? 'yes' : 'no'}`,
+    `prep_orders:${kdsRows.length}`,
+  ];
+  if (prep.error) issueParts.push(`prep_probe:${prep.error}`);
+  return {
+    platform,
+    brand,
+    order_id: String(orderId),
+    status,
+    order_time: extractIstTime(order.date_order),
+    order_date: extractIstDate(order.date_order),
+    customer_name: many2OneName(order.partner_id) || null,
+    items,
+    order_value: lineTotal || numberOrNull(order.amount_total),
+    net_payout: null,
+    fees: null,
+    issues: issueParts.join('; '),
+    rating: null,
+    outlet_name: brand === 'nch' ? 'Nawabi Chai House' : 'Hamza Express',
+    captured_at: new Date().toISOString(),
+  };
+}
+
+function summarizeOdooLines(lines) {
+  return (lines || []).map(line => {
+    const qty = numberOrNull(line.qty) || 1;
+    const product = many2OneName(line.product_id) || 'Unknown item';
+    return `${qty} x ${product}`;
+  }).join(', ') || null;
+}
+
+function summarizeDeliveryJsonItems(raw) {
+  const data = typeof raw === 'string' ? safeJsonParse(raw) : raw;
+  const candidates = [
+    data?.items,
+    data?.cart?.items,
+    data?.cartDetails?.items?.dishes,
+    data?.order?.cartDetails?.items?.dishes,
+  ].find(Array.isArray);
+  if (!candidates) return null;
+  return candidates.map(item => {
+    const qty = item.quantity || item.qty || item.count || 1;
+    const name = item.name || item.item_name || item.itemName || item.title || 'Unknown item';
+    return `${qty} x ${name}`;
+  }).join(', ');
+}
+
+function groupOdooLinesByOrder(lines) {
+  const out = new Map();
+  for (const line of lines || []) {
+    const id = Number(many2OneId(line.order_id));
+    if (!Number.isFinite(id)) continue;
+    if (!out.has(id)) out.set(id, []);
+    out.get(id).push(line);
+  }
+  return out;
+}
+
+function groupPrepRowsByOrder(rows, field) {
+  const out = new Map();
+  for (const row of rows || []) {
+    const id = Number(many2OneId(row[field]));
+    if (!Number.isFinite(id)) continue;
+    if (!out.has(id)) out.set(id, []);
+    out.get(id).push(row);
+  }
+  return out;
+}
+
+function normalizeIdList(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(v => Number(Array.isArray(v) ? v[0] : v)).filter(Number.isFinite);
+}
+
+function uniqueFlat(values) {
+  return Array.from(new Set((values || []).flat().map(Number).filter(Number.isFinite)));
+}
+
+function many2OneId(value) {
+  if (Array.isArray(value)) return value[0];
+  return value || null;
+}
+
+function many2OneName(value) {
+  if (Array.isArray(value)) return value[1] || null;
+  return null;
+}
+
+function istDateToOdooUtc(yyyyMmDd, hour = 0) {
+  const d = new Date(`${yyyyMmDd}T${String(hour).padStart(2, '0')}:00:00+05:30`);
+  return d.toISOString().slice(0, 19).replace('T', ' ');
 }
 
 async function ensureAggregatorCoaRing3(db) {
@@ -3041,7 +3531,7 @@ function normalizeSwiggyHistory(payload) {
 }
 
 function normalizeZomatoOrderDetail(payload) {
-  const order = payload?.order || payload;
+  const order = extractZomatoOrderObject(payload);
   if (!order?.id) return null;
   const outlet = DIRECT_ZOMATO_OUTLETS[String(order.resId || '')] || { brand: 'unknown', outlet_name: null };
   const dishes = order.cartDetails?.items?.dishes || [];
@@ -3065,6 +3555,22 @@ function normalizeZomatoOrderDetail(payload) {
     outlet_name: outlet.outlet_name,
     captured_at: new Date().toISOString(),
   };
+}
+
+function extractZomatoOrderObject(payload) {
+  if (!payload) return null;
+  if (payload?.order?.id) return payload.order;
+  if (payload?.data?.order?.id) return payload.data.order;
+  if (payload?.result?.order?.id) return payload.result.order;
+  if (payload?.orderDetails?.id) return payload.orderDetails;
+  if (payload?.data?.orderDetails?.id) return payload.data.orderDetails;
+  return findDeepObject(payload, (obj) =>
+    obj
+    && typeof obj === 'object'
+    && !Array.isArray(obj)
+    && obj.id
+    && (obj.resId || obj.cartDetails || obj.creator || obj.state)
+  );
 }
 
 function normalizeZomatoOrderHistory(payload) {
@@ -3268,13 +3774,13 @@ function extractPossibleRating(text) {
 async function latestZomatoDetailMap(db) {
   const { results } = await db.prepare(`
     SELECT * FROM aggregator_snapshots
-    WHERE platform='zomato' AND metric_type='api_orders'
+    WHERE platform='zomato' AND metric_type IN ('api_orders', 'api_orders_detail')
     ORDER BY captured_at DESC LIMIT 500
   `).all();
   const map = new Map();
   for (const row of (results || [])) {
     const payload = safeJsonParse(row.data);
-    const order = payload?.order || payload;
+    const order = extractZomatoOrderObject(payload);
     if (!order?.id || map.has(String(order.id))) continue;
     const normalized = normalizeZomatoOrderDetail({ order });
     if (!normalized) continue;
@@ -3294,6 +3800,23 @@ async function latestZomatoDetailMap(db) {
     });
   }
   return map;
+}
+
+function findDeepObject(value, predicate) {
+  if (!value || typeof value !== 'object') return null;
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      const found = findDeepObject(child, predicate);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (predicate(value)) return value;
+  for (const child of Object.values(value)) {
+    const found = findDeepObject(child, predicate);
+    if (found) return found;
+  }
+  return null;
 }
 
 function extractZomatoDiscount(order) {
@@ -3377,6 +3900,7 @@ function ownerStatusGroup(status, issues) {
   if (/reject/.test(hay)) return 'rejected';
   if (/cancel/.test(hay)) return 'cancelled';
   if (/deliver/.test(hay)) return 'delivered';
+  if (/acknowledg|kds|paid/.test(hay)) return 'active';
   if (/accept|prepar|ready|placed|ordered|picked|dispatch/.test(hay)) return 'active';
   return 'other';
 }
