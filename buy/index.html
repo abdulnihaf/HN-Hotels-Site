@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>Sauda — Buy Board</title>
+<style>
+  :root{ --bg:#0f1115; --card:#1a1d24; --line:#2a2f3a; --ink:#e8e6e1; --mut:#8a90a0;
+         --gold:#D4A44C; --go:#caa45a; --del:#5aa6ca; --ok:#3fae6b; --warn:#d9764a; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font:15px/1.45 -apple-system,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+  header{position:sticky;top:0;z-index:5;background:#12141a;border-bottom:1px solid var(--line);
+    padding:12px 14px;display:flex;align-items:center;gap:10px}
+  header b{font-size:16px;letter-spacing:.5px}
+  header .who{margin-left:auto;font-size:12px;color:var(--mut)}
+  .tabs{display:flex;gap:6px;padding:10px 12px}
+  .tab{flex:1;text-align:center;padding:9px;border:1px solid var(--line);border-radius:10px;color:var(--mut);background:var(--card)}
+  .tab.on{color:var(--ink);border-color:var(--gold);background:#221d12}
+  .wrap{padding:8px 12px 90px;max-width:760px;margin:0 auto}
+  .seg{margin:16px 0 6px;font-size:12px;letter-spacing:1px;color:var(--mut);text-transform:uppercase}
+  .vgroup{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:10px 0;overflow:hidden}
+  .vhead{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line)}
+  .vhead .vn{font-weight:600}
+  .chip{font-size:10px;padding:2px 7px;border-radius:20px;border:1px solid}
+  .chip.go{color:var(--go);border-color:var(--go)} .chip.del{color:var(--del);border-color:var(--del)}
+  .ln{padding:10px 13px;border-bottom:1px solid #20242d;display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
+  .ln:last-child{border-bottom:none}
+  .it{font-weight:500}.sub{font-size:12px;color:var(--mut)}
+  .fields{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+  .f label{display:block;font-size:10px;color:var(--mut);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+  input,select{width:100%;background:#0f1218;border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:10px;font-size:15px;min-height:44px}
+  input:focus,select:focus{outline:none;border-color:var(--gold)}
+  .total{font-variant-numeric:tabular-nums;font-weight:600}
+  .vfoot{padding:10px 13px;display:flex;align-items:center;gap:10px}
+  .vfoot .sum{margin-right:auto;color:var(--mut)} .vfoot .sum b{color:var(--ink)}
+  button{font:inherit;border:none;border-radius:10px;padding:11px 14px;min-height:44px;font-weight:600}
+  .ask{background:var(--gold);color:#1a1407} .ask:disabled{background:#3a3a3a;color:#777}
+  .pay{background:var(--ok);color:#03210f} .mk{background:#23303a;color:var(--del);border:1px solid var(--del)}
+  .stat{font-size:11px;padding:3px 8px;border-radius:20px}
+  .s-requested{background:#2a2412;color:var(--gold)} .s-paid{background:#11281a;color:var(--ok)}
+  .req{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px;margin:10px 0}
+  .req .top{display:flex;align-items:center;gap:10px}.req .amt{margin-left:auto;font-weight:700;font-size:18px}
+  .req ul{margin:8px 0 10px;padding-left:16px;color:var(--mut);font-size:13px}
+  .gate{max-width:300px;margin:14vh auto;text-align:center}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+  .pad button{background:var(--card);border:1px solid var(--line);color:var(--ink);font-size:20px;padding:16px}
+  .dots{font-size:26px;letter-spacing:8px;height:30px;color:var(--gold)}
+  .add{width:100%;background:transparent;border:1px dashed var(--line);color:var(--mut);margin-top:8px}
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;border:1px solid var(--line);
+    padding:10px 16px;border-radius:30px;font-size:13px;opacity:0;transition:.2s;z-index:9}
+  .toast.show{opacity:1}
+  .muted{color:var(--mut);font-size:13px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<script>
+const API='/api/buy';
+const Q=new URLSearchParams(location.search);
+const KITCHEN=Q.get('k'); // NCH | HE  → QR receive mode (no PIN)
+let PIN=sessionStorage.getItem('buy_pin')||'', ME=null, VENDORS=[], TAB='board', DATA=null;
+
+const el=s=>document.querySelector(s);
+const money=p=>'₹'+((p||0)/100).toLocaleString('en-IN',{maximumFractionDigits:0});
+function toast(t){const x=el('#toast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),1600);}
+async function api(action,opts={}){
+  const u=API+'?action='+action+(opts.q||'');
+  const o={headers:{'X-Ops-Pin':PIN,'Content-Type':'application/json'}};
+  if(opts.body){o.method='POST';o.body=JSON.stringify(opts.body);}
+  const r=await fetch(u,o); return r.json();
+}
+
+// ---------- QR RECEIVE MODE ----------
+async function receiveView(){
+  const d=await api('today',{q:'&brand='+KITCHEN});
+  const lines=(d.lines||[]).filter(l=>l.channel==='delivered'||true);
+  el('#app').innerHTML=`<header><b>RECEIVE · ${KITCHEN}</b><span class="who">scan-in</span></header>
+   <div class="wrap"><div class="muted">Enter what actually arrived. Price optional.</div>
+   <div id="rl"></div></div>`;
+  const c=el('#rl');
+  lines.forEach(l=>{
+    const div=document.createElement('div');div.className='vgroup';
+    div.innerHTML=`<div class="ln"><div><div class="it">${l.item}</div>
+      <div class="sub">${l.vendor} · ordered ${l.qty_ordered||'—'} ${l.uom||''}</div></div>
+      <span class="stat ${l.qty_received?'s-paid':''}">${l.qty_received?'✓ '+l.qty_received:'—'}</span>
+      <div class="fields"><div class="f"><label>Received qty</label>
+        <input inputmode="decimal" value="${l.qty_received||''}" id="rq${l.id}"></div>
+       <div class="f"><label>Price ₹ (optional)</label>
+        <input inputmode="decimal" value="${l.unit_cost_paise?(l.unit_cost_paise/100):''}" id="rp${l.id}"></div>
+       <button class="ask" style="grid-column:1/-1" onclick="saveRecv(${l.id})">Save</button></div>`;
+    c.appendChild(div);
+  });
+}
+window.saveRecv=async id=>{
+  const r=await api('receive',{body:{id,qty_received:el('#rq'+id).value,price:el('#rp'+id).value,by:KITCHEN+' kitchen'}});
+  toast(r.ok?'Saved ✓':'Error');
+};
+
+// ---------- PIN GATE ----------
+function gate(){
+  el('#app').innerHTML=`<div class="gate"><b style="font-size:18px;color:var(--gold)">SAUDA</b>
+   <p class="sub">Enter your PIN</p><div class="dots" id="dots"></div>
+   <div class="pad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button onclick="dig('${n}')">${n}</button>`).join('')}
+   <button onclick="dig('c')">⌫</button><button onclick="dig('0')">0</button><button onclick="submitPin()">→</button></div></div>`;
+}
+let buf='';
+window.dig=n=>{ if(n==='c')buf=buf.slice(0,-1); else if(buf.length<4)buf+=n; el('#dots').textContent='•'.repeat(buf.length); if(buf.length===4)submitPin();};
+window.submitPin=async()=>{ PIN=buf; const r=await api('verify-pin'); if(r.ok){ME=r;sessionStorage.setItem('buy_pin',PIN);TAB=r.role==='owner'?'pay':'board';load();}else{buf='';el('#dots').textContent='';toast('Wrong PIN');}};
+
+// ---------- BOARD ----------
+async function load(){
+  DATA=await api('today'); VENDORS=DATA.vendors||[];
+  render();
+}
+function render(){
+  const tabs=ME.role==='owner'
+    ? `<div class="tabs"><div class="tab ${TAB==='pay'?'on':''}" onclick="go('pay')">To Pay</div>
+        <div class="tab ${TAB==='board'?'on':''}" onclick="go('board')">Board</div></div>`
+    : `<div class="tabs"><div class="tab on">Today's Buying</div></div>`;
+  el('#app').innerHTML=`<header><b>SAUDA</b><span class="who">${ME.name} · ${DATA.date}</span></header>${tabs}<div class="wrap" id="body"></div>`;
+  if(TAB==='pay')renderPay(); else renderBoard();
+}
+window.go=t=>{TAB=t; if(t==='pay')api('today').then(d=>{DATA=d;render();}); else load();};
+
+function renderBoard(){
+  const b=el('#body'); b.innerHTML='';
+  for(const chan of ['go','delivered']){
+    const lines=DATA.lines.filter(l=>l.channel===chan && l.status!=='paid');
+    if(!lines.length)continue;
+    const seg=document.createElement('div');seg.className='seg';
+    seg.textContent=chan==='go'?'🚶 Go & purchase (collect)':'🚚 Ordered → delivered';
+    b.appendChild(seg);
+    const byV={}; lines.forEach(l=>(byV[l.vendor]=byV[l.vendor]||[]).push(l));
+    for(const v in byV) b.appendChild(vendorCard(v,byV[v],chan));
+  }
+  const add=document.createElement('button');add.className='add';add.textContent='+ add an off-list item';
+  add.onclick=addLine; b.appendChild(add);
+}
+function vendorCard(vendor,lines,chan){
+  const card=document.createElement('div');card.className='vgroup';
+  const sum=lines.filter(l=>l.status==='logged').reduce((s,l)=>s+(l.line_total_paise||0),0);
+  const anyReq=lines.some(l=>l.status==='requested');
+  card.innerHTML=`<div class="vhead"><span class="vn">${vendor}</span>
+     <span class="chip ${chan==='go'?'go':'del'}">${chan==='go'?'collect':'delivered'}</span></div>`;
+  lines.forEach(l=>{
+    const row=document.createElement('div');row.className='ln';
+    const reqd=l.status==='requested';
+    row.innerHTML=`<div><div class="it">${l.item}</div><div class="sub">ordered ${l.qty_ordered||'—'} ${l.uom||''}</div></div>
+      <div class="total">${l.line_total_paise?money(l.line_total_paise):''} ${reqd?'<span class="stat s-requested">asked</span>':''}</div>
+      <div class="fields">
+        <div class="f"><label>Received</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.qty_received||''}" onchange="edit(${l.id},'qty_received',this.value)"></div>
+        <div class="f"><label>Price ₹/unit</label><input inputmode="decimal" ${reqd?'disabled':''} value="${l.unit_cost_paise?(l.unit_cost_paise/100):''}" onchange="edit(${l.id},'price',this.value)"></div>
+        <div class="f"><label>Vendor (edit if wrong)</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'vendor',this.value)">
+          ${VENDORS.map(v=>`<option ${v===l.vendor?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="f"><label>Channel</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'channel',this.value)">
+          <option value="go" ${l.channel==='go'?'selected':''}>collect</option>
+          <option value="delivered" ${l.channel==='delivered'?'selected':''}>delivered</option></select></div>
+      </div>`;
+    card.appendChild(row);
+  });
+  const foot=document.createElement('div');foot.className='vfoot';
+  foot.innerHTML=`<span class="sum">basket <b>${money(sum)}</b></span>`;
+  const btn=document.createElement('button');btn.className='ask';
+  btn.textContent=anyReq&&sum===0?'asked ✓':'Ask for payment';
+  btn.disabled=sum===0; btn.onclick=()=>askPay(vendor,lines[0].brand);
+  foot.appendChild(btn);card.appendChild(foot);
+  return card;
+}
+window.edit=async(id,field,value)=>{ const r=await api('save',{body:{id,field,value}}); if(r.ok){toast('saved');load();}else toast(r.error||'err');};
+window.askPay=async(vendor,brand)=>{ const r=await api('request-pay',{body:{date:DATA.date,vendor,brand}});
+  if(r.ok){toast('Payment requested: '+money(r.amount_paise));load();}else toast(r.error||'err');};
+async function addLine(){
+  const item=prompt('Item name?');if(!item)return; const vendor=prompt('Vendor? ('+VENDORS.join(', ')+')','Ashrafia');
+  const qty=prompt('Qty?','1');
+  const r=await api('add-line',{body:{date:DATA.date,brand:'NCH',vendor,channel:'go',item,uom:'',qty}});
+  if(r.ok){toast('added');load();}
+}
+
+// ---------- OWNER PAY QUEUE ----------
+async function renderPay(){
+  const b=el('#body');b.innerHTML='<div class="muted">loading…</div>';
+  const d=await api('pay-queue'); const reqs=d.requests||[];
+  if(!reqs.length){b.innerHTML='<div class="muted">No payment requests yet.</div>';return;}
+  b.innerHTML='';
+  reqs.forEach(r=>{
+    const div=document.createElement('div');div.className='req';
+    const items=(r.lines||[]).map(l=>`<li>${l.item} — ${l.qty_received||''} · ${money(l.line_total_paise)}</li>`).join('');
+    div.innerHTML=`<div class="top"><b>${r.vendor}</b><span class="stat s-${r.status}">${r.status}</span>
+       <span class="amt">${money(r.amount_paise)}</span></div>
+      <div class="sub">${r.brand} · ${r.biz_date} · asked by ${r.requested_by}</div>
+      <ul>${items}</ul>`;
+    if(r.status==='requested'){
+      const row=document.createElement('div');row.style.cssText='display:flex;gap:8px';
+      if(r.upi){const a=document.createElement('a');a.href=r.upi;a.innerHTML='<button class="pay">Pay via UPI</button>';a.style.flex='1';row.appendChild(a);}
+      else{const s=document.createElement('div');s.className='sub';s.style.flex='1';s.textContent='no UPI handle — pay manually';row.appendChild(s);}
+      const mk=document.createElement('button');mk.className='mk';mk.textContent='Mark paid';
+      mk.onclick=async()=>{const x=await api('mark-paid',{body:{request_id:r.id}});if(x.ok){toast('paid ✓');renderPay();}};
+      row.appendChild(mk);div.appendChild(row);
+    }
+    b.appendChild(div);
+  });
+}
+
+// ---------- BOOT ----------
+if(KITCHEN){ receiveView(); }
+else if(PIN){ api('verify-pin').then(r=>{ if(r.ok){ME=r;TAB=r.role==='owner'?'pay':'board';load();}else gate(); }); }
+else gate();
+</script>
+</body>
+</html>
