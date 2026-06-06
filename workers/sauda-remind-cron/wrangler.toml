@@ -1,0 +1,9 @@
+name = "hn-sauda-remind-cron"
+main = "index.js"
+compatibility_date = "2024-09-23"
+account_id = "3d506f78b08b3d95c667b82ef6ee7ab8"
+
+# Hourly at :07. The Pages endpoint itself skips outside 08:00–22:00 IST and
+# only messages when items are still un-entered, so a plain hourly trigger is safe.
+[triggers]
+crons = ["7 * * * *"]
