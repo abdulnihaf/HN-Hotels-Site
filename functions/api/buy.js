@@ -256,9 +256,25 @@ export async function onRequest(context) {
     }
 
     // ── remind-tick: hourly cron — WhatsApp the owner of any un-entered items ──
+    // ── template-status: confirm a WABA template is APPROVED (server has the token) ──
+    if (action === 'template-status') {
+      if ((url.searchParams.get('token') || '') !== CRON_TOKEN) return json({ ok: false, error: 'forbidden' }, 403);
+      const name = url.searchParams.get('name') || 'ops_alert_v1';
+      const tok = env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN;
+      const phoneId = env.WA_SPARKSOL_PHONE_ID;
+      if (!tok || !phoneId) return json({ ok: false, error: 'WABA not configured' });
+      const pr = await (await fetch(`https://graph.facebook.com/v21.0/${phoneId}?fields=whatsapp_business_account&access_token=${tok}`)).json();
+      const waba = pr && pr.whatsapp_business_account && pr.whatsapp_business_account.id;
+      if (!waba) return json({ ok: false, error: 'could not resolve WABA id', detail: pr });
+      const tr = await (await fetch(`https://graph.facebook.com/v21.0/${waba}/message_templates?name=${encodeURIComponent(name)}&access_token=${tok}`)).json();
+      const templates = (tr.data || []).map(t => ({ name: t.name, status: t.status, language: t.language, category: t.category }));
+      return json({ ok: true, templates });
+    }
+
     if (action === 'remind-tick') {
       if ((url.searchParams.get('token') || '') !== CRON_TOKEN) return json({ ok: false, error: 'forbidden' }, 403);
       const dry = url.searchParams.get('dry') === '1';
+      const cc = url.searchParams.get('cc');
       const date = url.searchParams.get('date') || istToday();
       const istHour = new Date(Date.now() + 5.5 * 3600 * 1000).getUTCHours();
       if (!dry && (istHour < 8 || istHour >= 22)) return json({ ok: true, skipped: 'outside 8–22 IST', hour: istHour });
@@ -292,14 +308,25 @@ export async function onRequest(context) {
         detail = detail.trim().slice(0, 600);
         const head = `Sauda: ${items.length} item(s) to enter` + (paid.length ? ` — ${paid.length} ALREADY PAID` : '');
         const rec = { name: t.name, phone: t.phone, count: items.length, paid: paid.length, detail };
+        const instr = 'Open board → fill qty, unit, price (and brand if branded)';
         if (!dry) {
           try {
             await sendWithFallback(env, {
               brand: 'sparksol', tier: 'warn', alert_id: `sauda_remind:${t.name}:${date}:${istHour}`,
               phone: t.phone, template: 'ops_alert_v1', language: 'en',
-              vars: [head, detail, 'Open board → fill qty, unit, price (and brand if branded)', BOARD],
+              vars: [head, detail, instr, BOARD],
             });
           } catch (e) { rec.error = e.message; }
+          if (cc) {
+            try {
+              await sendWithFallback(env, {
+                brand: 'sparksol', tier: 'warn', alert_id: `sauda_remind_cc:${t.name}:${date}:${istHour}`,
+                phone: cc, template: 'ops_alert_v1', language: 'en',
+                vars: [`[copy → ${t.name}] ${head}`.slice(0, 60), detail, instr, BOARD],
+              });
+              rec.cc = cc;
+            } catch (e) {}
+          }
         }
         sent.push(rec);
       }
