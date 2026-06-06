@@ -58,6 +58,7 @@
 </head>
 <body>
 <div id="app"></div>
+<input type="file" id="gphoto" accept="image/*" style="display:none">
 <div class="toast" id="toast"></div>
 <script>
 const API='/api/buy';
@@ -80,7 +81,20 @@ async function compress(file){
   try{const bmp=await createImageBitmap(file);let w=bmp.width,h=bmp.height;if(w&&h){const max=1280;if(w>h&&w>max){h=Math.round(h*max/w);w=max;}else if(h>max){w=Math.round(w*max/h);h=max;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(bmp,0,0,w,h);if(bmp.close)bmp.close();const d=c.toDataURL('image/jpeg',0.6);if(d&&d.length>800)return d;}}catch(e){}
   return await new Promise(res=>{const rd=new FileReader();rd.onerror=()=>res('');rd.onload=()=>{const img=new Image();img.onerror=()=>res('');img.onload=()=>{let w=img.width||0,h=img.height||0;if(!w||!h){res('');return;}const max=1280;if(w>h&&w>max){h=Math.round(h*max/w);w=max;}else if(h>max){w=Math.round(w*max/h);h=max;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',0.6));};img.src=rd.result;};rd.readAsDataURL(file);});
 }
-window.pickPhoto=id=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.style.position='fixed';inp.style.left='-9999px';document.body.appendChild(inp);inp.onchange=async()=>{const f=inp.files&&inp.files[0];try{document.body.removeChild(inp);}catch(e){}if(!f)return;toast('reading photo…');let b64='';try{b64=await compress(f);}catch(e){b64='';}if(!b64||b64.length<800){toast('photo came blank — try again / pick from gallery');return;}toast('uploading…');const r=await api('photo',{body:{id,photo:b64,by:(ME&&ME.name)||((KITCHEN||'')+' kitchen')}});if(r.ok){toast('photo ✓');const b=document.getElementById('ph'+id);if(b)b.innerHTML='<img src="'+API+'?action=photo-img&id='+id+'&t='+Date.now()+'" style="max-height:64px;border-radius:6px;vertical-align:middle"> change photo';}else toast('upload failed');};inp.click();};
+let _photoLine=null;
+async function uploadPhotoFor(id,file){
+  if(!id||!file)return; toast('reading photo…');
+  let b64='';try{b64=await compress(file);}catch(e){b64='';}
+  if(!b64||b64.length<800){toast('photo came blank — try again');return;}
+  toast('uploading…');
+  const r=await api('photo',{body:{id,photo:b64,by:(ME&&ME.name)||((KITCHEN||'')+' kitchen')}});
+  if(r.ok){toast('photo ✓');const b=document.getElementById('ph'+id);if(b)b.innerHTML='<img src="'+API+'?action=photo-img&id='+id+'&t='+Date.now()+'" style="max-height:64px;border-radius:6px;vertical-align:middle"> change photo';}
+  else toast('upload failed');
+  try{sessionStorage.removeItem('_pl');}catch(e){}
+}
+function bindGphoto(){const g=document.getElementById('gphoto');if(!g||g._bound)return;g._bound=true;g.onchange=async()=>{const f=g.files&&g.files[0];if(!f)return;const id=_photoLine||parseInt(sessionStorage.getItem('_pl')||'0');await uploadPhotoFor(id,f);g.value='';};}
+window.pickPhoto=id=>{_photoLine=id;try{sessionStorage.setItem('_pl',id);}catch(e){}bindGphoto();const g=document.getElementById('gphoto');g.value='';g.click();};
+window.addEventListener('pageshow',()=>{bindGphoto();const g=document.getElementById('gphoto');if(g&&g.files&&g.files[0]){const id=_photoLine||parseInt(sessionStorage.getItem('_pl')||'0');if(id)uploadPhotoFor(id,g.files[0]);}});
 window.setKind=async(id,kind)=>{const l=DATA.lines.find(x=>x.id==id);let s={};try{s=JSON.parse(l.sku||'{}')}catch(e){}if(!kind){s={};}else{s.kind=kind;}const r=await api('set-sku',{body:{id,sku:s,by:(ME&&ME.name)||''}});if(r.ok){l.sku=JSON.stringify(s);renderBoard();toast(kind==='defined'?'fill brand + pack below':'marked loose');}};
 window.setSkuField=async(id,field,value)=>{const l=DATA.lines.find(x=>x.id==id);let s={};try{s=JSON.parse(l.sku||'{}')}catch(e){}s.kind=s.kind||'defined';s[field]=field==='pack_g'?(value?parseInt(value):null):value;const r=await api('set-sku',{body:{id,sku:s,by:(ME&&ME.name)||''}});if(r.ok)l.sku=JSON.stringify(s);toast(r.ok?'saved':'err');};
 
