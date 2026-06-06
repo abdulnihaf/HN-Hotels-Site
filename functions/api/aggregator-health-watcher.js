@@ -2,7 +2,7 @@
 //
 // Architecture:
 //   workers/aggregator-health-watcher (cron */5) → hits this Function with ?action=tick
-//   This Function probes 3 surfaces, dedups via D1, and fires SMS+Voice via comms-core.
+//   This Function probes 3 surfaces, dedups via D1, and fires WABA via comms-core.
 //
 // Probes:
 //   A. /api/aggregator-pulse?action=health        — delivery (Swiggy + Zomato), suppressed 02:00-09:00 IST
@@ -13,7 +13,7 @@
 //
 // Auth: callers must send CRON_TOKEN as ?token= or x-cron-token header (except action=status).
 
-import { sendSms, sendVoice } from './_lib/comms-core.js';
+import { sendWaba, sendSms, sendVoice } from './_lib/comms-core.js';
 
 const PAGES_BASE = 'https://hnhotels.in';
 const SUPPRESS_MIN = 30;
@@ -21,6 +21,12 @@ const DELIVERY_MAX_STALE = 30;
 const DINE_MAX_STALE = 60;
 const DASHBOARD_MIN_BYTES = 1024;
 const NIGHT_SUPPRESS_IST = [2, 9]; // [start, end) IST hour for delivery silence
+const OWNER_ALERT_PHONE = '917010426808';
+const WABA_ALERT_BRAND = 'sparksol';
+const WABA_AGGREGATOR_TEMPLATE = 'aggregator_session_expired_alert_v1';
+const WABA_FALLBACK_TEMPLATE = 'ops_alert_critical_v1';
+const CORE_RING2_SOURCES = new Set(['swiggy_fetch_orders', 'swiggy_history', 'zomato_history_v2']);
+const CRITICAL_RING2_STATES = new Set(['unauthorized', 'parser_failed']);
 
 function nowIST() { return new Date(Date.now() + 5.5 * 60 * 60 * 1000); }
 function withinNightSuppress() {
@@ -28,6 +34,25 @@ function withinNightSuppress() {
   return h >= NIGHT_SUPPRESS_IST[0] && h < NIGHT_SUPPRESS_IST[1];
 }
 function istHHMM() { return nowIST().toISOString().slice(11, 16); }
+function alertPhone(env) {
+  return env.AGG_ALERT_PHONE || env.ALERT_PHONE || env.OWNER_PHONE || env.AGG_REPORT_OWNER_PHONE || OWNER_ALERT_PHONE;
+}
+function shorten(value, max = 120) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text.length > max ? text.slice(0, max - 1) + '...' : text;
+}
+function ring2AttemptLabel(attempt) {
+  const platform = String(attempt?.platform_code || 'aggregator').toUpperCase();
+  const brand = String(attempt?.brand_code || 'unknown').toUpperCase();
+  const source = String(attempt?.pull_source_code || attempt?.source_kind || 'feed');
+  const status = String(attempt?.status_code || 'failed');
+  const http = attempt?.http_status ? ` HTTP ${attempt.http_status}` : '';
+  return `${platform}/${brand} ${source} ${status}${http}`;
+}
+function coreRing2Failures(ring2) {
+  const attempts = Array.isArray(ring2?.body?.attempts) ? ring2.body.attempts : [];
+  return attempts.filter(a => CORE_RING2_SOURCES.has(a?.pull_source_code) && CRITICAL_RING2_STATES.has(a?.status_code));
+}
 
 async function probeJson(env, action) {
   const key = env.DASHBOARD_KEY || env.DASHBOARD_API_KEY;
@@ -170,15 +195,49 @@ async function recordSuppression(env, platformKey, severity) {
 
 async function fireAlert(env, { platformKey, message, severity = 'warn' }) {
   if (await isSuppressed(env, platformKey)) return { sent: false, reason: 'suppressed' };
-  const phone = env.ALERT_PHONE;
-  if (!phone) return { sent: false, reason: 'no ALERT_PHONE secret configured' };
+  const phone = alertPhone(env);
+  if (!phone) return { sent: false, reason: 'no alert phone configured' };
   const results = {};
-  try { results.sms = await sendSms(env, { phone, message }); }
-  catch (e) { results.sms_error = e.message; }
-  try { results.voice = await sendVoice(env, { phone, message_text: message, alert_id: `health-${platformKey}-${Date.now()}` }); }
-  catch (e) { results.voice_error = e.message; }
+  const platformLabel = platformKey.replace(/^delivery_/, '').replace(/^dine_/, '').replace(/_/g, ' ').toUpperCase();
+  const action = 'Open https://hnhotels.in/ops/aggregator/ and refresh the partner API session/cURL.';
+  try {
+    results.waba = await sendWaba(env, {
+      brand: WABA_ALERT_BRAND,
+      phone,
+      template: WABA_AGGREGATOR_TEMPLATE,
+      language: 'en',
+      vars: [platformLabel, 'HN Aggregator', severity, action],
+    });
+  } catch (e) {
+    results.waba_error = e.message;
+  }
+  if (!results.waba?.ok) {
+    try {
+      results.waba_fallback = await sendWaba(env, {
+        brand: WABA_ALERT_BRAND,
+        phone,
+        template: WABA_FALLBACK_TEMPLATE,
+        language: 'en',
+        vars: [
+          'HN aggregator tracking',
+          String(SUPPRESS_MIN),
+          shorten(message, 120),
+          action,
+        ],
+      });
+    } catch (e) {
+      results.waba_fallback_error = e.message;
+    }
+  }
+  const wabaOk = results.waba?.ok || results.waba_fallback?.ok;
+  if (!wabaOk) {
+    try { results.sms = await sendSms(env, { phone, message }); }
+    catch (e) { results.sms_error = e.message; }
+    try { results.voice = await sendVoice(env, { phone, message_text: message, alert_id: `health-${platformKey}-${Date.now()}` }); }
+    catch (e) { results.voice_error = e.message; }
+  }
   await recordSuppression(env, platformKey, severity);
-  return { sent: true, results };
+  return { sent: true, channel: wabaOk ? 'waba' : 'fallback', results };
 }
 
 export async function onRequest(context) {
@@ -203,6 +262,24 @@ export async function onRequest(context) {
     out.probes.ring2_pull = await runRing2Pull(env);
     out.probes.ring3_analyze = await runRing3Analyze(env);
     out.probes.daily_owner_report = await runDailyOwnerReport(env);
+
+    const coreFailures = coreRing2Failures(out.probes.ring2_pull);
+    if (coreFailures.length) {
+      const detail = coreFailures.slice(0, 3).map(ring2AttemptLabel).join('; ');
+      const r = await fireAlert(env, {
+        platformKey: 'delivery_ring2_core',
+        message: `HE-Aggregator: core delivery feed broken (${detail}) as of ${istHHMM()} IST`,
+        severity: 'crit',
+      });
+      out.alerts.push({ platform: 'delivery_ring2_core', failures: coreFailures.length, ...r });
+    } else if (!out.probes.ring2_pull.ok && !out.probes.ring2_pull.body) {
+      const r = await fireAlert(env, {
+        platformKey: 'delivery_ring2_endpoint',
+        message: `HE-Aggregator: Ring 2 pull endpoint failed (${out.probes.ring2_pull.error || out.probes.ring2_pull.status || 'unknown'}) as of ${istHHMM()} IST`,
+        severity: 'crit',
+      });
+      out.alerts.push({ platform: 'delivery_ring2_endpoint', ...r });
+    }
 
     // A. Delivery health
     const delivery = await probeJson(env, 'health');
