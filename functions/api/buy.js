@@ -263,33 +263,47 @@ export async function onRequest(context) {
       const istHour = new Date(Date.now() + 5.5 * 3600 * 1000).getUTCHours();
       if (!dry && (istHour < 8 || istHour >= 22)) return json({ ok: true, skipped: 'outside 8–22 IST', hour: istHour });
       const lines = (await db.prepare(
-        "SELECT channel, item, qty_received, unit_cost_paise, status FROM buy_lines WHERE biz_date=?").bind(date).all()).results || [];
-      // incomplete = still 'logged' AND (no price yet OR nothing received)
-      const inc = lines.filter(l => l.status === 'logged' && (!l.unit_cost_paise || !(l.qty_received && String(l.qty_received).trim())));
+        "SELECT vendor, channel, item, qty_received, unit_cost_paise, sku, status FROM buy_lines WHERE biz_date=?").bind(date).all()).results || [];
+      // vendor → all UPI handles (for paid-detection)
+      const vrows = (await db.prepare('SELECT name, vpa, vpas FROM buy_vendors').all()).results || [];
+      const vpaByVendor = {};
+      for (const v of vrows) { let a = []; try { a = JSON.parse(v.vpas || '[]'); } catch (e) {} if (!a.length && v.vpa) a = [v.vpa]; vpaByVendor[v.name] = a.map(x => String(x).toLowerCase()).filter(Boolean); }
+      // today's outgoing payments (to flag "paid but not entered")
+      let paidBlob = '';
+      try { const pr = (await db.prepare("SELECT narration, counterparty_ref FROM money_events WHERE direction='debit' AND substr(COALESCE(txn_at,received_at),1,10)=?").bind(date).all()).results || []; paidBlob = pr.map(p => ((p.narration || '') + ' ' + (p.counterparty_ref || '')).toLowerCase()).join(' '); } catch (e) {}
+      const vendorPaid = vn => (vpaByVendor[vn] || []).some(h => h && paidBlob.includes(h));
+      const needsOf = l => { let s = {}; try { s = JSON.parse(l.sku || '{}'); } catch (e) {} const n = []; if (s.kind === 'defined' && !(s.brand && String(s.brand).trim())) n.push('brand'); if (!(l.qty_received && String(l.qty_received).trim())) n.push('qty'); if (!l.unit_cost_paise) n.push('price'); return n; };
       const BOARD = 'https://hnhotels.in/buy/';
+      const nm = arr => arr.slice(0, 4).map(x => x.item).join(', ') + (arr.length > 4 ? ` +${arr.length - 4}` : '');
       const sent = [];
       for (const t of REMIND_TARGETS) {
-        const items = inc.filter(l => (t.channel === 'go' ? l.channel === 'go' : l.channel !== 'go'));
+        const items = lines.filter(l => l.status === 'logged' && (t.channel === 'go' ? l.channel === 'go' : l.channel !== 'go'))
+          .map(l => ({ item: l.item, need: needsOf(l), paid: vendorPaid(l.vendor) })).filter(x => x.need.length);
         if (!items.length) continue;
-        const list = items.slice(0, 6).map(i => i.item).join(', ') + (items.length > 6 ? ` +${items.length - 6} more` : '');
-        const rec = { name: t.name, phone: t.phone, count: items.length, items: list };
+        const paid = items.filter(x => x.paid);
+        const needPrice = items.filter(x => !x.paid && x.need.includes('price'));
+        const needQty = items.filter(x => !x.paid && !x.need.includes('price') && x.need.includes('qty'));
+        const needBrand = items.filter(x => !x.paid && !x.need.includes('price') && !x.need.includes('qty') && x.need.includes('brand'));
+        let detail = '';
+        if (paid.length) detail += `ALREADY PAID — enter now: ${nm(paid)}. `;
+        if (needPrice.length) detail += `Need price: ${nm(needPrice)}. `;
+        if (needQty.length) detail += `Need qty+unit: ${nm(needQty)}. `;
+        if (needBrand.length) detail += `Need brand: ${nm(needBrand)}.`;
+        detail = detail.trim().slice(0, 600);
+        const head = `Sauda: ${items.length} item(s) to enter` + (paid.length ? ` — ${paid.length} ALREADY PAID` : '');
+        const rec = { name: t.name, phone: t.phone, count: items.length, paid: paid.length, detail };
         if (!dry) {
           try {
             await sendWithFallback(env, {
               brand: 'sparksol', tier: 'warn', alert_id: `sauda_remind:${t.name}:${date}:${istHour}`,
               phone: t.phone, template: 'ops_alert_v1', language: 'en',
-              vars: [
-                `Sauda — ${items.length} item(s) not yet entered`,
-                `for ${date}: ${list}`,
-                'Enter qty + price for each to release payment',
-                BOARD,
-              ],
+              vars: [head, detail, 'Open board → fill qty, unit, price (and brand if branded)', BOARD],
             });
           } catch (e) { rec.error = e.message; }
         }
         sent.push(rec);
       }
-      return json({ ok: true, dry, date, hour: istHour, total_incomplete: inc.length, sent });
+      return json({ ok: true, dry, date, hour: istHour, sent });
     }
 
     // ===== writes (POST) =====
