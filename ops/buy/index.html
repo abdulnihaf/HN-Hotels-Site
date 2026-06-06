@@ -179,7 +179,7 @@ function vendorCard(vendor,lines,chan){
     const sku=(()=>{try{return JSON.parse(l.sku||'{}')}catch(e){return{}}})();
     const chip=sku.kind==='defined'?` <span class="skuchip">🏷️ ${[sku.brand,sku.product].filter(Boolean).join(' ')}${sku.pack_g?' · '+sku.pack_g+'g':''}</span>`:(sku.kind==='loose'?` <span class="skuchip loose">loose</span>`:'');
     const isDef=sku.kind==='defined';
-    const CONT=['case','box','carton','crate','packet','pkt','bundle','tin','can','sack','bora'];
+    const CONT=['case','box','carton','crate','packet','pkt','bundle'];
     const isCont=CONT.includes((l.uom||'').toLowerCase());
     const ppN=parseFloat(sku.pack_qty)||0;
     const recNum=parseFloat((l.qty_received||'').replace(/[^0-9.]/g,''))||0;
