@@ -96,7 +96,7 @@ function bindGphoto(){const g=document.getElementById('gphoto');if(!g||g._bound)
 window.pickPhoto=id=>{_photoLine=id;try{sessionStorage.setItem('_pl',id);}catch(e){}bindGphoto();const g=document.getElementById('gphoto');g.value='';g.click();};
 window.addEventListener('pageshow',()=>{bindGphoto();const g=document.getElementById('gphoto');if(g&&g.files&&g.files[0]){const id=_photoLine||parseInt(sessionStorage.getItem('_pl')||'0');if(id)uploadPhotoFor(id,g.files[0]);}});
 window.setKind=async(id,kind)=>{const l=DATA.lines.find(x=>x.id==id);let s={};try{s=JSON.parse(l.sku||'{}')}catch(e){}if(!kind){s={};}else{s.kind=kind;}const r=await api('set-sku',{body:{id,sku:s,by:(ME&&ME.name)||''}});if(r.ok){l.sku=JSON.stringify(s);renderBoard();toast(kind==='defined'?'fill brand + pack below':'marked loose');}};
-window.setSkuField=async(id,field,value)=>{const l=DATA.lines.find(x=>x.id==id);let s={};try{s=JSON.parse(l.sku||'{}')}catch(e){}s.kind=s.kind||'defined';s[field]=field==='pack_g'?(value?parseInt(value):null):value;const r=await api('set-sku',{body:{id,sku:s,by:(ME&&ME.name)||''}});if(r.ok)l.sku=JSON.stringify(s);toast(r.ok?'saved':'err');};
+window.setSkuField=async(id,field,value)=>{const l=DATA.lines.find(x=>x.id==id);let s={};try{s=JSON.parse(l.sku||'{}')}catch(e){}if((field==='brand'||field==='product'||field==='pack_g')&&!s.kind)s.kind='defined';s[field]=(field==='pack_g'||field==='pack_qty')?(value?parseFloat(value):null):value;const r=await api('set-sku',{body:{id,sku:s,by:(ME&&ME.name)||''}});if(r.ok)l.sku=JSON.stringify(s);toast(r.ok?'saved':'err');};
 
 // ---------- QR RECEIVE MODE ----------
 async function receiveView(){
@@ -179,6 +179,9 @@ function vendorCard(vendor,lines,chan){
     const sku=(()=>{try{return JSON.parse(l.sku||'{}')}catch(e){return{}}})();
     const chip=sku.kind==='defined'?` <span class="skuchip">🏷️ ${[sku.brand,sku.product].filter(Boolean).join(' ')}${sku.pack_g?' · '+sku.pack_g+'g':''}</span>`:(sku.kind==='loose'?` <span class="skuchip loose">loose</span>`:'');
     const isDef=sku.kind==='defined';
+    const CONT=['case','box','carton','crate','packet','pkt','bundle','tin','can','sack','bora'];
+    const isCont=CONT.includes((l.uom||'').toLowerCase());
+    const ppN=parseFloat(sku.pack_qty)||0;
     const recNum=parseFloat((l.qty_received||'').replace(/[^0-9.]/g,''))||0;
     const computed=(isDef&&sku.pack_g&&recNum)?` = ${+(recNum*sku.pack_g/1000).toFixed(2)} kg`:'';
     const recLabel=isDef?('Packs'+computed):('Qty ('+(l.uom||'unit')+')');
@@ -200,6 +203,7 @@ function vendorCard(vendor,lines,chan){
         <div class="f"><label>Channel</label><select ${reqd?'disabled':''} onchange="edit(${l.id},'channel',this.value)">
           <option value="go" ${l.channel==='go'?'selected':''}>collect</option>
           <option value="delivered" ${l.channel==='delivered'?'selected':''}>delivered</option></select></div>
+        ${isCont?`<div class="f" style="grid-column:1/-1"><label>Units in 1 ${l.uom}${(ppN&&recNum)?` — total ${+(ppN*recNum).toFixed(0)} pcs`:''}</label><input inputmode="decimal" ${reqd?'disabled':''} value="${sku.pack_qty||''}" onchange="setSkuField(${l.id},'pack_qty',this.value)" placeholder="how many pieces in 1 ${l.uom}"></div>`:''}
         <button class="ph" id="ph${l.id}" style="grid-column:1/-1" onclick="pickPhoto(${l.id})">${l.has_photo?`<img src="${API}?action=photo-img&id=${l.id}" style="max-height:64px;border-radius:6px;vertical-align:middle"> change photo`:'📷 add / upload photo'}</button>
       </div>`;
     card.appendChild(row);
