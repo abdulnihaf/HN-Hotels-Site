@@ -117,6 +117,37 @@ async function ensureTables(db) {
   ]);
   // sku: JSON per line — {kind:'loose'} OR {kind:'defined',brand,product,pack_g,pack_label,ref_price_paise,source}
   try { await db.prepare("ALTER TABLE buy_lines ADD COLUMN sku TEXT DEFAULT ''").run(); } catch (e) { /* column exists */ }
+  await db.prepare(`CREATE TABLE IF NOT EXISTS buy_vendors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, phone TEXT DEFAULT '', vpa TEXT DEFAULT '',
+    materials TEXT DEFAULT '', brand TEXT DEFAULT 'both', channel TEXT DEFAULT 'delivered',
+    active INTEGER DEFAULT 1, created_by TEXT DEFAULT '', created_at TEXT DEFAULT '')`).run();
+  await seedVendors(db);
+}
+
+// vendor registry seed — every vendor + their UPI ID (the payment-mapping key). Phones left blank for owner to fill.
+const SEED_VENDORS = [
+  ['Bootha','prabhurathi13@oksbi','buffalo milk','NCH','delivered'],
+  ['Ganga Bakers','paytmqr67bsov@ptys','buns (bun maska, malai bun)','NCH','delivered'],
+  ['Abdul Suhail','8971457998@hdfc','chicken cutlets','NCH','delivered'],
+  ['M Farooq','7259834218@ibl','Osmania biscuit','NCH','delivered'],
+  ['Krishnamoorthi','krishnamurhinisha@okaxis','samosa','NCH','go'],
+  ['Syed Siraj Ahmed','9916374699ssa@ybl','eggs','HE','delivered'],
+  ['Rupnath','paytmqr6pdq3f@ptys','packaging (cups, bags, pouches, tissue, containers)','both','delivered'],
+  ['Ashrafia','q318394880@ybl','departmental / provisions','both','go'],
+  ['Manjunath','q025257178@ybl','vegetables, lemon','HE','delivered'],
+  ['Nazeer','q101761866@ybl','water, cold drinks','both','delivered'],
+  ['MD Tabrez','mdt93044@ybl','Rumali roti','HE','delivered'],
+  ['Jay & Jay','','milk powder','NCH','delivered'],
+  ['Mudassir Pasha','','charcoal','HE','go'],
+  ['MN chicken','','chicken','HE','delivered'],
+];
+async function seedVendors(db) {
+  const row = await db.prepare('SELECT COUNT(*) AS n FROM buy_vendors').first();
+  if (row && row.n > 0) return;
+  const at = istNow();
+  await db.batch(SEED_VENDORS.map(([name, vpa, materials, brand, channel]) =>
+    db.prepare(`INSERT OR IGNORE INTO buy_vendors (name,vpa,materials,brand,channel,created_by,created_at) VALUES (?,?,?,?,?, 'system', ?)`)
+      .bind(name, vpa, materials, brand, channel, at)));
 }
 
 async function seedIfEmpty(db, date) {
@@ -150,8 +181,11 @@ export async function onRequest(context) {
       return json({ ok: true, name: user.name, role: user.role });
     }
 
-    // ── meta: vendor list for dropdown ────────────────────────────
-    if (action === 'vendors') return json({ ok: true, vendors: VENDORS });
+    // ── meta: vendor registry for searchable dropdown ─────────────
+    if (action === 'vendors') {
+      const reg = (await db.prepare('SELECT id,name,phone,vpa,materials,brand,channel FROM buy_vendors WHERE active=1 ORDER BY name').all()).results || [];
+      return json({ ok: true, vendors: reg.map(v => v.name), registry: reg });
+    }
 
     // ── today: full board for a date (default IST today) ──────────
     if (action === 'today') {
@@ -169,7 +203,8 @@ export async function onRequest(context) {
       // known-item catalog (every item ever seen) — powers the add-a-purchase picker
       const catRows = (await db.prepare('SELECT DISTINCT item FROM buy_lines ORDER BY item').all()).results || [];
       const catalog = catRows.map(r => r.item).filter(Boolean);
-      return json({ ok: true, date, placed, lines, requests: reqs, vendors: VENDORS, vpa: VENDOR_VPA, catalog });
+      const vreg = (await db.prepare('SELECT id,name,phone,vpa,materials,brand,channel FROM buy_vendors WHERE active=1 ORDER BY name').all()).results || [];
+      return json({ ok: true, date, placed, lines, requests: reqs, vendors: vreg.map(v => v.name), registry: vreg, vpa: VENDOR_VPA, catalog });
     }
 
     // ── pay-queue: owner view of all open + recent requests ───────
@@ -247,6 +282,27 @@ export async function onRequest(context) {
         return json({ ok: true });
       }
 
+      // add a new vendor (name + phone + UPI id + what they supply) — self-serve
+      if (action === 'add-vendor') {
+        if (!user) return json({ ok: false, error: 'PIN required' }, 401);
+        const { name, phone, vpa, materials, brand, channel } = body;
+        if (!name) return json({ ok: false, error: 'vendor name required' });
+        await db.prepare(`INSERT INTO buy_vendors (name,phone,vpa,materials,brand,channel,created_by,created_at)
+          VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET phone=excluded.phone, vpa=excluded.vpa, materials=excluded.materials`)
+          .bind(name, phone || '', vpa || '', materials || '', brand || 'both', channel || 'delivered', user.name, istNow()).run();
+        return json({ ok: true });
+      }
+
+      // update an existing vendor's details (phone / UPI id / materials)
+      if (action === 'update-vendor') {
+        if (!user) return json({ ok: false, error: 'PIN required' }, 401);
+        const { id, phone, vpa, materials } = body;
+        if (!id) return json({ ok: false, error: 'vendor id required' });
+        await db.prepare('UPDATE buy_vendors SET phone=?, vpa=?, materials=? WHERE id=?')
+          .bind(phone || '', vpa || '', materials || '', id).run();
+        return json({ ok: true });
+      }
+
       // request payment for a vendor (basket) — the only door to money
       if (action === 'request-pay') {
         if (!user) return json({ ok: false, error: 'PIN required' }, 401);
@@ -257,9 +313,11 @@ export async function onRequest(context) {
         if (!lines.length) return json({ ok: false, error: 'no priced lines to request for this vendor' });
         const amount = lines.reduce((s, l) => s + (l.line_total_paise||0), 0);
         const ids = lines.map(l => l.id);
+        const vrow = await db.prepare('SELECT vpa FROM buy_vendors WHERE name=?').bind(vendor).first();
+        const vpa = (vrow && vrow.vpa) || VENDOR_VPA[vendor] || '';
         const res = await db.prepare(`INSERT INTO buy_requests (biz_date,brand,vendor,vpa,amount_paise,line_ids,status,requested_by,requested_at)
           VALUES (?,?,?,?,?,?, 'requested',?,?)`)
-          .bind(d, brand||lines[0].brand, vendor, VENDOR_VPA[vendor]||'', amount, JSON.stringify(ids), user.name, istNow()).run();
+          .bind(d, brand||lines[0].brand, vendor, vpa, amount, JSON.stringify(ids), user.name, istNow()).run();
         const rid = res.meta.last_row_id;
         const ph = ids.map(()=>'?').join(',');
         await db.prepare(`UPDATE buy_lines SET status='requested', request_id=? WHERE id IN (${ph})`).bind(rid, ...ids).run();
