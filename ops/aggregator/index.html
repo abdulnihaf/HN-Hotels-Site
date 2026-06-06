@@ -221,6 +221,44 @@ select:focus,input:focus{outline:1px solid var(--line2)}
 }
 .proof-row strong{font-size:12px}
 .proof-row span{display:block;margin-top:3px;color:var(--muted);font-size:11px}
+.menu-panel{margin-top:12px}
+.menu-summary-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin-bottom:10px;
+}
+.menu-summary-card,.menu-category-card{
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface2);
+  padding:10px;
+  min-height:70px;
+}
+.menu-summary-card strong,.menu-category-card strong{display:block;font-size:15px;line-height:1.2}
+.menu-summary-card span,.menu-category-card span{display:block;margin-top:5px;color:var(--muted);font-size:11px}
+.menu-category-grid{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:8px;
+  margin-bottom:10px;
+}
+.menu-table-wrap{overflow:auto;max-height:58vh;border-top:1px solid var(--line)}
+.menu-table{min-width:1120px}
+.menu-item-name{font-weight:900;max-width:280px}
+.menu-item-sub{margin-top:3px;color:var(--faint);font-size:11px;max-width:320px}
+.menu-price{font-weight:900;font-size:15px;white-space:nowrap}
+.menu-mobile{display:none;padding:10px;gap:10px}
+.menu-card{
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface2);
+  padding:10px;
+}
+.menu-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.menu-card-head strong{font-size:13px;line-height:1.25}
+.menu-card-meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.menu-card-line{margin-top:8px;color:var(--muted);font-size:11px}
 .orders-panel{margin-top:12px}
 .table-wrap{overflow:auto;max-height:62vh}
 table{width:100%;min-width:1160px;border-collapse:collapse}
@@ -266,6 +304,8 @@ tr:hover td{background:rgba(255,255,255,.025)}
   .filters{grid-template-columns:repeat(4,1fr)}
   .metric-grid{grid-template-columns:repeat(3,1fr)}
   .layout{grid-template-columns:1fr}
+  .menu-summary-grid{grid-template-columns:repeat(2,1fr)}
+  .menu-category-grid{grid-template-columns:repeat(3,1fr)}
 }
 @media(max-width:760px){
   .app{padding:12px 10px 42px}
@@ -280,9 +320,12 @@ tr:hover td{background:rgba(255,255,255,.025)}
   .queue-tags{grid-column:2;justify-content:flex-start}
   .desktop-table{display:none}
   .mobile-orders{display:grid}
+  .menu-table-wrap{display:none}
+  .menu-mobile{display:grid}
+  .menu-category-grid{grid-template-columns:1fr 1fr}
 }
 @media(max-width:520px){
-  .truth-strip,.filters,.metric-grid{grid-template-columns:1fr}
+  .truth-strip,.filters,.metric-grid,.menu-summary-grid,.menu-category-grid{grid-template-columns:1fr}
   .btn,.link-btn{width:100%;min-height:44px}
   .top-actions{width:100%}
   .pill{width:100%;justify-content:center}
@@ -461,6 +504,44 @@ tr:hover td{background:rgba(255,255,255,.025)}
     </aside>
   </section>
 
+  <section class="panel menu-panel" aria-label="Live menu pricing">
+    <div class="panel-head">
+      <div>
+        <h2>Live Menu & Price Book</h2>
+        <div class="source-note">Current configured Swiggy and Zomato menu price snapshot, grouped for positioning decisions.</div>
+      </div>
+      <div class="panel-note" id="menuMeta">Loading menu</div>
+    </div>
+    <div class="panel-body">
+      <div class="menu-summary-grid" id="menuSummaryGrid"></div>
+      <div class="menu-category-grid" id="menuCategoryGrid"></div>
+    </div>
+    <div class="menu-table-wrap">
+      <table class="menu-table">
+        <thead>
+          <tr>
+            <th>Outlet</th>
+            <th>Platform</th>
+            <th>Category</th>
+            <th>Item</th>
+            <th>Variant</th>
+            <th>Price</th>
+            <th>Packaging</th>
+            <th>Status</th>
+            <th>Demand signal</th>
+            <th>Order proof</th>
+          </tr>
+        </thead>
+        <tbody id="menuBody">
+          <tr><td colspan="10" class="empty">Loading menu price book</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="menu-mobile" id="menuMobile">
+      <div class="empty">Loading menu price book</div>
+    </div>
+  </section>
+
   <section class="panel orders-panel">
     <div class="panel-head">
       <h2>Order Drilldown</h2>
@@ -498,6 +579,7 @@ tr:hover td{background:rgba(255,255,255,.025)}
 <script>
 const API = '/api/aggregator-pulse';
 const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
+const CATALOG_URL = '/ops/aggregator/live-menu-pricing.json';
 const LS = 'hn_aggregator_tracking_cockpit_v1';
 const MAY_START = '2026-05-01';
 
@@ -505,6 +587,8 @@ const state = {
   orders: [],
   filtered: [],
   health: null,
+  catalog: null,
+  catalogError: null,
   lastError: null,
 };
 
@@ -526,6 +610,11 @@ const els = {
   breakdownGrid: document.getElementById('breakdownGrid'),
   proofList: document.getElementById('proofList'),
   focusGrid: document.getElementById('focusGrid'),
+  menuMeta: document.getElementById('menuMeta'),
+  menuSummaryGrid: document.getElementById('menuSummaryGrid'),
+  menuCategoryGrid: document.getElementById('menuCategoryGrid'),
+  menuBody: document.getElementById('menuBody'),
+  menuMobile: document.getElementById('menuMobile'),
 };
 
 function loadState(){
@@ -612,6 +701,19 @@ async function loadOrders(){
   renderAll();
 }
 
+async function loadCatalog(){
+  try {
+    const r = await fetch(CATALOG_URL);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    state.catalog = await r.json();
+    state.catalogError = null;
+  } catch (err) {
+    state.catalog = null;
+    state.catalogError = err;
+  }
+  renderMenuLayer();
+}
+
 async function loadFallback(err){
   try {
     const r = await fetch(`${API}?${orderQuery('orders')}`);
@@ -687,6 +789,7 @@ function renderAll(){
   renderBreakdown(summary.breakdown);
   renderProof(state.filtered);
   renderFocus(summary);
+  renderMenuLayer();
   renderRows(state.filtered);
 }
 
@@ -889,6 +992,189 @@ function renderFocus(summary){
   els.focusGrid.innerHTML = rows.map(([label, cls, note]) => `
     <div class="breakdown-row"><div><strong>${label}</strong><span>${escapeHtml(note)}</span></div><div class="${cls}"><strong>${cls === 'green' ? 'OK' : cls === 'red' ? 'Fix' : 'Watch'}</strong></div></div>
   `).join('');
+}
+
+function renderMenuLayer(){
+  if (!els.menuBody) return;
+  if (state.catalogError) {
+    const msg = `Unable to load price book: ${escapeHtml(state.catalogError.message)}`;
+    els.menuMeta.textContent = 'Menu unavailable';
+    els.menuSummaryGrid.innerHTML = '';
+    els.menuCategoryGrid.innerHTML = '';
+    els.menuBody.innerHTML = `<tr><td colspan="10" class="empty">${msg}</td></tr>`;
+    els.menuMobile.innerHTML = `<div class="empty">${msg}</div>`;
+    return;
+  }
+  if (!state.catalog) {
+    els.menuMeta.textContent = 'Loading menu';
+    els.menuSummaryGrid.innerHTML = '';
+    els.menuCategoryGrid.innerHTML = '';
+    els.menuBody.innerHTML = '<tr><td colspan="10" class="empty">Loading menu price book</td></tr>';
+    els.menuMobile.innerHTML = '<div class="empty">Loading menu price book</div>';
+    return;
+  }
+
+  const items = filteredCatalogItems();
+  const sourceRows = state.catalog.sources || [];
+  const highDemand = items.filter(item => ['high','core','premium'].includes(item.demandTier)).length;
+  const unavailable = items.filter(item => item.visible === false || item.enabled === false || item.inStock === false).length;
+  const withImage = items.filter(item => item.hasImage).length;
+  els.menuMeta.textContent = `${items.length} price rows · ${sourceRows.length} sources`;
+
+  els.menuSummaryGrid.innerHTML = [
+    ['Sources', `${sourceRows.length}/4`, 'Swiggy HE/NCH and Zomato HE/NCH captured'],
+    ['Price rows', items.length, `${uniqueCount(items, item => item.name)} unique visible item names in filter`],
+    ['High-value anchors', highDemand, 'Historical demand or core-item signal'],
+    ['Needs listing check', unavailable, 'Disabled, hidden, or out-of-stock rows'],
+  ].map(([label, value, note]) => `
+    <div class="menu-summary-card"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)} · ${escapeHtml(note)}</span></div>
+  `).join('');
+
+  renderMenuCategories(items);
+  renderMenuRows(items.slice(0, 160));
+}
+
+function filteredCatalogItems(){
+  const q = els.search.value.trim().toLowerCase();
+  const brand = els.brand.value;
+  const platform = els.platform.value;
+  return (state.catalog?.items || []).filter(item => {
+    if (brand !== 'all' && item.brand !== brand) return false;
+    if (platform !== 'all' && item.platform !== platform) return false;
+    if (q) {
+      const text = [item.name, item.variant, item.category, item.normalizedCategory, item.demandNote, item.platform, item.brandName].join(' ').toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderMenuCategories(items){
+  const map = new Map();
+  for (const item of items) {
+    const key = item.normalizedCategory || 'Other';
+    const row = map.get(key) || { category: key, rows: 0, min: Infinity, max: 0, high: 0, unavailable: 0 };
+    row.rows += 1;
+    row.min = Math.min(row.min, Number(item.price || 0));
+    row.max = Math.max(row.max, Number(item.price || 0));
+    if (['high','core','premium'].includes(item.demandTier)) row.high += 1;
+    if (item.visible === false || item.enabled === false || item.inStock === false) row.unavailable += 1;
+    map.set(key, row);
+  }
+  const categories = [...map.values()].sort((a, b) => b.high - a.high || b.rows - a.rows || a.category.localeCompare(b.category));
+  els.menuCategoryGrid.innerHTML = categories.length ? categories.slice(0, 10).map(row => `
+    <div class="menu-category-card">
+      <strong>${escapeHtml(row.category)}</strong>
+      <span>${row.rows} rows · ${rupee(row.min === Infinity ? 0 : row.min)}-${rupee(row.max)} · ${row.high} anchors</span>
+    </div>
+  `).join('') : '<div class="empty">No menu category in this filter</div>';
+}
+
+function renderMenuRows(items){
+  if (!items.length) {
+    els.menuBody.innerHTML = '<tr><td colspan="10" class="empty">No menu price rows for this filter</td></tr>';
+    els.menuMobile.innerHTML = '<div class="empty">No menu price rows for this filter</div>';
+    return;
+  }
+  const rows = items.map(item => ({ item, demand: orderDemandFor(item) }))
+    .sort((a,b) => demandRank(b.item) - demandRank(a.item) || b.demand.orders - a.demand.orders || a.item.normalizedCategory.localeCompare(b.item.normalizedCategory) || a.item.name.localeCompare(b.item.name));
+  els.menuBody.innerHTML = rows.map(({ item, demand }) => menuTableRow(item, demand)).join('');
+  els.menuMobile.innerHTML = rows.slice(0, 80).map(({ item, demand }) => menuCard(item, demand)).join('');
+}
+
+function menuTableRow(item, demand){
+  return `<tr>
+    <td>${brandTag(item.brand)}</td>
+    <td>${platformTag(item.platform)}</td>
+    <td>${escapeHtml(item.normalizedCategory || item.category || '-')}<div class="faint">${escapeHtml(item.category || '')}</div></td>
+    <td><div class="menu-item-name">${escapeHtml(item.name)}</div><div class="menu-item-sub">${escapeHtml(trimText(item.description, 110))}</div></td>
+    <td>${escapeHtml(item.variant || 'Default')}</td>
+    <td><div class="menu-price">${rupee(item.price)}</div>${priceSubtext(item)}</td>
+    <td>${packagingText(item)}</td>
+    <td>${menuStatusTags(item)}</td>
+    <td>${demandTag(item)}<div class="faint">${escapeHtml(item.demandNote || '')}</div></td>
+    <td>${demand.orders ? `<strong>${demand.orders}</strong><div class="faint">${rupee(demand.revenue)} visible demand</div>` : '<span class="faint">No visible order hit</span>'}</td>
+  </tr>`;
+}
+
+function menuCard(item, demand){
+  return `<article class="menu-card">
+    <div class="menu-card-head">
+      <div><strong>${escapeHtml(item.name)}</strong><div class="faint">${escapeHtml(item.variant || 'Default')} · ${escapeHtml(item.normalizedCategory || '')}</div></div>
+      <div class="menu-price">${rupee(item.price)}</div>
+    </div>
+    <div class="menu-card-meta">${brandTag(item.brand)}${platformTag(item.platform)}${demandTag(item)}</div>
+    <div class="menu-card-line">${packagingText(item)} · ${plainStatus(item)}</div>
+    <div class="menu-card-line">${demand.orders ? `${demand.orders} visible order hits · ${rupee(demand.revenue)}` : item.demandNote}</div>
+  </article>`;
+}
+
+function orderDemandFor(item){
+  const name = String(item.name || '').toLowerCase();
+  const shortName = name.replace(/\b(with|and|the|special|combo|box)\b/g, '').replace(/\s+/g, ' ').trim();
+  let orders = 0;
+  let revenue = 0;
+  for (const row of state.filtered || []) {
+    const hay = String(row.items || '').toLowerCase();
+    if (!hay) continue;
+    if (hay.includes(name) || (shortName.length > 5 && hay.includes(shortName))) {
+      orders += 1;
+      revenue += row.order_value_number || 0;
+    }
+  }
+  return { orders, revenue };
+}
+
+function priceSubtext(item){
+  const parts = [];
+  if (item.historyPrice != null && Number(item.historyPrice) !== Number(item.price)) parts.push(`was ${rupee(item.historyPrice)}`);
+  if (item.maxAllowedPrice != null) parts.push(`max ${rupee(item.maxAllowedPrice)}`);
+  if (item.variantDelta) parts.push(`base ${rupee(item.basePrice)} + ${rupee(item.variantDelta)}`);
+  return parts.length ? `<div class="faint">${parts.join(' · ')}</div>` : '';
+}
+
+function packagingText(item){
+  if (item.packagingCharge == null) return '<span class="faint">Not captured</span>';
+  if (item.packagingType === 'PERCENTAGE') return `${item.packagingCharge}% packaging`;
+  return `${rupee(item.packagingCharge)} packaging`;
+}
+
+function menuStatusTags(item){
+  const tags = [];
+  tags.push(`<span class="tag status ${item.visible === false ? 'issue' : 'delivered'}">${item.visible === false ? 'Hidden' : 'Visible'}</span>`);
+  tags.push(`<span class="tag status ${item.inStock === false ? 'issue' : 'active'}">${item.inStock === false ? 'Out stock' : 'In stock'}</span>`);
+  if (item.enabled === false) tags.push('<span class="tag status issue">Disabled</span>');
+  if (!item.hasImage) tags.push('<span class="tag status issue">No image</span>');
+  return tags.join(' ');
+}
+
+function plainStatus(item){
+  const parts = [];
+  parts.push(item.visible === false ? 'hidden' : 'visible');
+  parts.push(item.inStock === false ? 'out of stock' : 'in stock');
+  if (item.enabled === false) parts.push('disabled');
+  if (!item.hasImage) parts.push('no image');
+  return parts.join(' · ');
+}
+
+function demandTag(item){
+  const label = item.demandTier === 'premium' ? 'Premium' : item.demandTier === 'core' ? 'Core' : item.demandTier === 'high' ? 'High demand' : item.demandTier === 'attach' ? 'Attach' : 'Watch';
+  const cls = ['premium','core','high','attach'].includes(item.demandTier) ? 'status active' : 'status';
+  return `<span class="tag ${cls}">${label}</span>`;
+}
+
+function demandRank(item){
+  return { premium: 5, core: 4, high: 3, attach: 2, watch: 1 }[item.demandTier] || 0;
+}
+
+function uniqueCount(rows, picker){
+  return new Set(rows.map(picker).filter(Boolean)).size;
+}
+
+function trimText(value, limit){
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= limit) return text;
+  return text.slice(0, limit - 1) + '…';
 }
 
 function renderRows(rows){
@@ -1186,6 +1472,7 @@ for (const el of [els.date, els.platform, els.brand, els.status, els.issue, els.
 els.search.addEventListener('input', () => { saveState(); renderAll(); });
 document.getElementById('refreshBtn').addEventListener('click', () => { loadHealth(); loadOrders(); });
 loadHealth();
+loadCatalog();
 loadOrders();
 setInterval(loadHealth, 30000);
 setInterval(loadOrders, 60000);
