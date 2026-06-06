@@ -112,6 +112,8 @@ async function ensureTables(db) {
       status TEXT DEFAULT 'requested',
       requested_by TEXT DEFAULT '', requested_at TEXT DEFAULT '',
       paid_by TEXT DEFAULT '', paid_at TEXT DEFAULT '', payment_ref TEXT DEFAULT '')`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS buy_photos (
+      line_id INTEGER PRIMARY KEY, photo TEXT, uploaded_by TEXT DEFAULT '', uploaded_at TEXT DEFAULT '')`),
   ]);
 }
 
@@ -154,13 +156,15 @@ export async function onRequest(context) {
       const date = url.searchParams.get('date') || istToday();
       await seedIfEmpty(db, date);
       const brand = url.searchParams.get('brand'); // optional filter (kitchen QR)
-      let sql = 'SELECT * FROM buy_lines WHERE biz_date=?';
+      let sql = 'SELECT buy_lines.*, (SELECT 1 FROM buy_photos p WHERE p.line_id=buy_lines.id) AS has_photo FROM buy_lines WHERE biz_date=?';
       const binds = [date];
       if (brand) { sql += ' AND brand=?'; binds.push(brand); }
       sql += ' ORDER BY channel DESC, vendor, id';
       const lines = (await db.prepare(sql).bind(...binds).all()).results || [];
       const reqs = (await db.prepare('SELECT * FROM buy_requests WHERE biz_date=? ORDER BY id DESC').bind(date).all()).results || [];
-      return json({ ok: true, date, lines, requests: reqs, vendors: VENDORS, vpa: VENDOR_VPA });
+      // orders are placed the night before the delivery/purchase date
+      const placed = new Date(new Date(date + 'T00:00:00Z').getTime() - 86400000).toISOString().slice(0, 10);
+      return json({ ok: true, date, placed, lines, requests: reqs, vendors: VENDORS, vpa: VENDOR_VPA });
     }
 
     // ── pay-queue: owner view of all open + recent requests ───────
@@ -178,6 +182,13 @@ export async function onRequest(context) {
         r.upi = r.vpa ? `upi://pay?pa=${encodeURIComponent(r.vpa)}&pn=${encodeURIComponent(r.vendor)}&am=${(r.amount_paise/100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(r.vendor+' '+r.biz_date)}` : '';
       }
       return json({ ok: true, requests: reqs });
+    }
+
+    // ── get-photo: return the stored image for a line ────────────
+    if (action === 'get-photo') {
+      const id = url.searchParams.get('id');
+      const r = await db.prepare('SELECT photo, uploaded_by, uploaded_at FROM buy_photos WHERE line_id=?').bind(id).first();
+      return json({ ok: true, photo: r ? r.photo : null, by: r ? r.uploaded_by : '', at: r ? r.uploaded_at : '' });
     }
 
     // ===== writes (POST) =====
@@ -277,6 +288,16 @@ export async function onRequest(context) {
         log.push({ field: 'received', old: cur.qty_received||'', new: String(qty_received), by: who, at: istNow() });
         await db.prepare(`UPDATE buy_lines SET qty_received=?, unit_cost_paise=?, line_total_paise=?, updated_by=?, updated_at=?, edit_log=? WHERE id=?`)
           .bind(String(qty_received), unit, Math.round(unit*qtyNum), who, istNow(), JSON.stringify(log), id).run();
+        return json({ ok: true });
+      }
+
+      // photo: one image per line (base64 data URL). No PIN — kitchen QR can use it too.
+      if (action === 'photo') {
+        const { id, photo, by } = body;
+        if (!id || !photo) return json({ ok: false, error: 'missing id/photo' });
+        await db.prepare(`INSERT INTO buy_photos (line_id,photo,uploaded_by,uploaded_at) VALUES (?,?,?,?)
+          ON CONFLICT(line_id) DO UPDATE SET photo=excluded.photo, uploaded_by=excluded.uploaded_by, uploaded_at=excluded.uploaded_at`)
+          .bind(id, photo, (by || '').slice(0, 24), istNow()).run();
         return json({ ok: true });
       }
     }
