@@ -166,7 +166,10 @@ export async function onRequest(context) {
       const reqs = (await db.prepare('SELECT * FROM buy_requests WHERE biz_date=? ORDER BY id DESC').bind(date).all()).results || [];
       // orders are placed the night before the delivery/purchase date
       const placed = new Date(new Date(date + 'T00:00:00Z').getTime() - 86400000).toISOString().slice(0, 10);
-      return json({ ok: true, date, placed, lines, requests: reqs, vendors: VENDORS, vpa: VENDOR_VPA });
+      // known-item catalog (every item ever seen) — powers the add-a-purchase picker
+      const catRows = (await db.prepare('SELECT DISTINCT item FROM buy_lines ORDER BY item').all()).results || [];
+      const catalog = catRows.map(r => r.item).filter(Boolean);
+      return json({ ok: true, date, placed, lines, requests: reqs, vendors: VENDORS, vpa: VENDOR_VPA, catalog });
     }
 
     // ── pay-queue: owner view of all open + recent requests ───────
@@ -231,14 +234,16 @@ export async function onRequest(context) {
         return json({ ok: true });
       }
 
-      // add an off-list line (something bought that wasn't ordered)
+      // add a missed purchase (a vendor/item not on today's list) — self-serve, no owner needed
       if (action === 'add-line') {
         if (!user) return json({ ok: false, error: 'PIN required' }, 401);
-        const { date, brand, vendor, channel, item, uom, qty } = body;
-        await db.prepare(`INSERT INTO buy_lines (biz_date,brand,vendor,channel,item,uom,qty_ordered,qty_received,status,updated_by,updated_at,edit_log)
-          VALUES (?,?,?,?,?,?,?,?, 'logged',?,?, ?)`)
-          .bind(date||istToday(), brand||'NCH', vendor||'Ashrafia', channel||'go', item||'', uom||'', qty||'', qty||'',
-                user.name, istNow(), JSON.stringify([{field:'added',new:item,by:user.name,at:istNow()}])).run();
+        const { date, brand, vendor, channel, item, uom, qty, sku } = body;
+        if (!item) return json({ ok: false, error: 'item required' });
+        await db.prepare(`INSERT INTO buy_lines (biz_date,brand,vendor,channel,item,uom,qty_ordered,qty_received,sku,status,updated_by,updated_at,edit_log)
+          VALUES (?,?,?,?,?,?,?,'',?, 'logged',?,?, ?)`)
+          .bind(date||istToday(), brand||'NCH', vendor||'Ashrafia', channel||'go', item, uom||'', qty||'',
+                JSON.stringify(sku||{}), user.name, istNow(),
+                JSON.stringify([{field:'added', new:item, by:user.name, at:istNow()}])).run();
         return json({ ok: true });
       }
 
