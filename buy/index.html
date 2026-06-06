@@ -212,31 +212,36 @@ window.showAddForm=()=>{el('#addslot').innerHTML=`<div class="vgroup" style="bor
   </div></div></div>`;};
 window.submitAdd=async()=>{const item=el('#ax_item').value.trim();if(!item){toast('item name?');return;}const body={date:DATA.date,brand:el('#ax_brand').value,vendor:el('#ax_vendor').value,channel:el('#ax_channel').value,item,uom:el('#ax_uom').value,qty:el('#ax_qty').value,sku:{kind:el('#ax_kind').value}};const r=await api('add-line',{body});if(r.ok){toast('added ✓');load();}else toast(r.error||'err');};
 
-// ---------- VENDORS (registry: phone · UPI id · what they supply) ----------
+// ---------- VENDORS (registry: phone + MANY UPI ids + what they supply) ----------
+function vpasOf(v){let a=[];try{a=JSON.parse(v.vpas||'[]')}catch(e){a=[]}if(!a.length&&v.vpa)a=[v.vpa];return a;}
 function renderVendors(){
   const b=el('#body');b.innerHTML='';
   const add=document.createElement('div');add.className='vgroup';add.style.borderColor='var(--gold)';
   add.innerHTML=`<div class="vhead"><span class="vn">+ New vendor</span></div><div class="ln"><div class="fields">
     <div class="f"><label>Name</label><input id="nv_name"></div>
     <div class="f"><label>Phone</label><input id="nv_phone" inputmode="tel"></div>
-    <div class="f"><label>UPI ID (for payment)</label><input id="nv_vpa" placeholder="name@bank"></div>
-    <div class="f"><label>Supplies (raw materials)</label><input id="nv_mat"></div>
+    <div class="f" style="grid-column:1/-1"><label>UPI ID</label><input id="nv_vpa" placeholder="name@bank"></div>
+    <div class="f" style="grid-column:1/-1"><label>Supplies (raw materials)</label><input id="nv_mat"></div>
     <button class="ask" style="grid-column:1/-1" onclick="addVendor()">Add vendor</button>
   </div></div>`;
   b.appendChild(add);
   (DATA.registry||[]).forEach(v=>{
+    const vpas=vpasOf(v);const has=vpas.some(Boolean);
     const c=document.createElement('div');c.className='vgroup';
-    c.innerHTML=`<div class="vhead"><span class="vn">${v.name}</span>${v.vpa?'<span class="skuchip">UPI ✓</span>':'<span class="skuchip loose">no UPI</span>'}</div>
+    c.innerHTML=`<div class="vhead"><span class="vn">${v.name}</span>${has?`<span class="skuchip">${vpas.filter(Boolean).length} UPI ✓</span>`:'<span class="skuchip loose">no UPI</span>'}</div>
       <div class="ln"><div class="fields">
-        <div class="f"><label>Phone</label><input inputmode="tel" value="${(v.phone||'').replace(/"/g,'&quot;')}" onchange="updVendor(${v.id},'phone',this.value)"></div>
-        <div class="f"><label>UPI ID</label><input value="${(v.vpa||'').replace(/"/g,'&quot;')}" onchange="updVendor(${v.id},'vpa',this.value)"></div>
-        <div class="f" style="grid-column:1/-1"><label>Supplies</label><input value="${(v.materials||'').replace(/"/g,'&quot;')}" onchange="updVendor(${v.id},'materials',this.value)"></div>
+        <div class="f"><label>Phone</label><input id="vph-${v.id}" inputmode="tel" value="${(v.phone||'').replace(/"/g,'&quot;')}" onchange="saveVendor(${v.id})"></div>
+        <div class="f" style="grid-column:1/-1"><label>UPI IDs — add every handle they use</label>
+          <div id="vpas-${v.id}">${(vpas.length?vpas:['']).map(x=>`<input class="vpa-inp" style="margin-bottom:6px" placeholder="name@bank" value="${(x||'').replace(/"/g,'&quot;')}" onchange="saveVendor(${v.id})">`).join('')}</div>
+          <button class="ph" style="border-color:var(--gold);color:var(--gold)" onclick="addVpa(${v.id})">+ add another UPI ID</button></div>
+        <div class="f" style="grid-column:1/-1"><label>Supplies</label><input id="vmat-${v.id}" value="${(v.materials||'').replace(/"/g,'&quot;')}" onchange="saveVendor(${v.id})"></div>
       </div></div>`;
     b.appendChild(c);
   });
 }
-window.addVendor=async()=>{const name=el('#nv_name').value.trim();if(!name){toast('vendor name?');return;}const r=await api('add-vendor',{body:{name,phone:el('#nv_phone').value,vpa:el('#nv_vpa').value,materials:el('#nv_mat').value}});if(r.ok){toast('vendor added ✓');load();}else toast(r.error||'err');};
-window.updVendor=async(id,field,value)=>{const v=(DATA.registry||[]).find(x=>x.id==id);if(!v)return;v[field]=value;const r=await api('update-vendor',{body:{id,phone:v.phone||'',vpa:v.vpa||'',materials:v.materials||''}});toast(r.ok?'saved':'err');};
+window.addVpa=id=>{const cont=el('#vpas-'+id);const inp=document.createElement('input');inp.className='vpa-inp';inp.placeholder='name@bank';inp.style.marginBottom='6px';inp.setAttribute('onchange','saveVendor('+id+')');cont.appendChild(inp);inp.focus();};
+window.saveVendor=async id=>{const phone=el('#vph-'+id).value,materials=el('#vmat-'+id).value;const vpas=[...el('#vpas-'+id).querySelectorAll('.vpa-inp')].map(i=>i.value.trim()).filter(Boolean);const r=await api('update-vendor',{body:{id,phone,vpas,materials}});const v=(DATA.registry||[]).find(x=>x.id==id);if(v){v.phone=phone;v.materials=materials;v.vpas=JSON.stringify(vpas);v.vpa=vpas[0]||'';}toast(r.ok?'saved ✓':'err');};
+window.addVendor=async()=>{const name=el('#nv_name').value.trim();if(!name){toast('vendor name?');return;}const r=await api('add-vendor',{body:{name,phone:el('#nv_phone').value,vpas:[el('#nv_vpa').value],materials:el('#nv_mat').value}});if(r.ok){toast('vendor added ✓');load();}else toast(r.error||'err');};
 
 // ---------- OWNER PAY QUEUE ----------
 async function renderPay(){
