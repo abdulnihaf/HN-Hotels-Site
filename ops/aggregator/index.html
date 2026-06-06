@@ -3,26 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aggregator Orders — HN Hotels</title>
+<title>Aggregator Tracking Cockpit — HN Hotels</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#08090d;
-  --panel:#101218;
-  --panel2:#161923;
-  --line:#262a36;
-  --line2:#343947;
-  --text:#edf0f5;
-  --muted:#9aa1ad;
-  --faint:#626b78;
-  --sw:#fc8019;
-  --zm:#e23744;
-  --he:#ff7043;
-  --nch:#26a69a;
-  --green:#40c463;
-  --amber:#f59e0b;
-  --red:#ef4444;
-  --blue:#60a5fa;
+  --bg:#0b0d10;
+  --surface:#11151b;
+  --surface2:#171c24;
+  --surface3:#202733;
+  --line:#2a313d;
+  --line2:#3a4454;
+  --text:#f4f6f8;
+  --muted:#a9b1bd;
+  --faint:#6d7684;
+  --green:#42c26b;
+  --amber:#f4b23c;
+  --red:#f05b5b;
+  --blue:#68a8ff;
+  --teal:#36c5b4;
+  --swiggy:#fc8019;
+  --zomato:#e23744;
+  --he:#ff794f;
+  --nch:#3cc9a7;
 }
 body{
   min-height:100vh;
@@ -32,56 +34,81 @@ body{
   font-size:13px;
   line-height:1.45;
 }
-.wrap{max-width:1500px;margin:0 auto;padding:18px 18px 56px}
-.top{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:16px;
-  padding-bottom:16px;
+.app{max-width:1540px;margin:0 auto;padding:16px 16px 54px}
+.topbar{
+  display:grid;
+  grid-template-columns:minmax(260px,1fr) auto;
+  gap:18px;
+  align-items:start;
+  padding-bottom:14px;
   border-bottom:1px solid var(--line);
 }
-.title h1{font-size:20px;line-height:1.1;letter-spacing:0;font-weight:800}
-.title p{margin-top:5px;color:var(--muted);font-size:12px}
-.health{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
-.dot{width:8px;height:8px;border-radius:99px;background:var(--faint)}
-.dot.ok{background:var(--green)}.dot.degraded{background:var(--amber)}.dot.down{background:var(--red)}
+.eyebrow{color:var(--faint);font-size:10px;font-weight:850;letter-spacing:.5px;text-transform:uppercase}
+h1{margin-top:4px;font-size:24px;line-height:1.08;font-weight:900;letter-spacing:0}
+.subtitle{margin-top:6px;color:var(--muted);font-size:12px;max-width:720px}
+.top-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.btn,.link-btn{
+  min-height:36px;
+  padding:0 12px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--line2);
+  border-radius:7px;
+  color:var(--text);
+  background:var(--surface2);
+  font:inherit;
+  font-weight:800;
+  font-size:12px;
+  text-decoration:none;
+  cursor:pointer;
+}
+.btn:hover,.link-btn:hover{border-color:var(--muted)}
 .pill{
   display:inline-flex;
   align-items:center;
-  min-height:28px;
+  gap:7px;
+  min-height:30px;
   padding:5px 10px;
   border:1px solid var(--line);
   border-radius:999px;
   color:var(--muted);
-  background:var(--panel);
+  background:var(--surface);
   font-size:11px;
   white-space:nowrap;
 }
-.btn{
-  min-height:34px;
-  padding:0 13px;
-  border:1px solid var(--line2);
-  border-radius:7px;
-  background:var(--panel2);
-  color:var(--text);
-  font-weight:700;
-  font-size:12px;
-  cursor:pointer;
+.dot{width:8px;height:8px;border-radius:99px;background:var(--faint);flex:0 0 auto}
+.dot.ok{background:var(--green)}.dot.watch,.dot.degraded{background:var(--amber)}.dot.down{background:var(--red)}
+.truth-strip{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin:14px 0;
 }
-.btn:hover{border-color:var(--muted)}
+.truth-item{
+  border:1px solid var(--line);
+  background:var(--surface);
+  border-radius:8px;
+  padding:10px 12px;
+  min-height:74px;
+}
+.truth-item strong{display:block;font-size:16px;line-height:1.2}
+.truth-item span{display:block;margin-top:5px;color:var(--muted);font-size:11px}
+.truth-item.ok{border-color:rgba(66,194,107,.45)}
+.truth-item.watch{border-color:rgba(244,178,60,.55)}
+.truth-item.down{border-color:rgba(240,91,91,.55)}
 .filters{
   display:grid;
-  grid-template-columns:repeat(6,minmax(120px,1fr));
-  gap:10px;
-  margin:16px 0;
+  grid-template-columns:1.05fr .9fr .9fr .9fr 1fr 1fr 1.45fr;
+  gap:9px;
+  margin:14px 0;
 }
 .field{display:flex;flex-direction:column;gap:5px}
-.field label{color:var(--faint);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.field label{color:var(--faint);font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.45px}
 select,input{
   width:100%;
-  min-height:36px;
-  background:var(--panel);
+  min-height:38px;
+  background:var(--surface);
   border:1px solid var(--line);
   color:var(--text);
   border-radius:7px;
@@ -89,45 +116,117 @@ select,input{
   font:inherit;
 }
 select:focus,input:focus{outline:1px solid var(--line2)}
-.summary{
+.metric-grid{
   display:grid;
-  grid-template-columns:repeat(6,1fr);
+  grid-template-columns:repeat(6,minmax(0,1fr));
   gap:10px;
-  margin-bottom:16px;
+  margin:12px 0 16px;
 }
 .metric{
-  background:var(--panel);
+  background:var(--surface);
   border:1px solid var(--line);
   border-radius:8px;
+  min-height:92px;
   padding:12px;
-  min-height:84px;
 }
-.metric .label{color:var(--muted);font-size:11px;font-weight:700}
-.metric .value{margin-top:8px;font-size:25px;font-weight:800;letter-spacing:0}
-.metric .value.green{color:var(--green)}
-.metric .value.amber{color:var(--amber)}
-.metric .value.red{color:var(--red)}
+.metric .label{color:var(--muted);font-size:11px;font-weight:800}
+.metric .value{margin-top:8px;font-size:26px;font-weight:900;letter-spacing:0}
 .metric .sub{margin-top:4px;color:var(--faint);font-size:11px}
-.bar{
+.green{color:var(--green)}.amber{color:var(--amber)}.red{color:var(--red)}.blue{color:var(--blue)}
+.layout{
+  display:grid;
+  grid-template-columns:1.35fr .65fr;
+  gap:12px;
+  align-items:start;
+}
+.panel{
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface);
+  overflow:hidden;
+}
+.panel-head{
+  min-height:48px;
+  padding:12px 13px;
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content:space-between;
   gap:12px;
-  margin:18px 0 8px;
+  border-bottom:1px solid var(--line);
 }
-.bar h2{font-size:14px;font-weight:800}
-.bar .meta{color:var(--muted);font-size:12px;text-align:right}
-.table-shell{
+.panel h2{font-size:14px;line-height:1.25;font-weight:900}
+.panel-note{color:var(--muted);font-size:11px;text-align:right}
+.panel-body{padding:12px}
+.queue{display:grid;gap:8px}
+.queue-row{
+  display:grid;
+  grid-template-columns:7px 1fr auto;
+  gap:10px;
+  align-items:start;
+  padding:10px;
   border:1px solid var(--line);
   border-radius:8px;
-  overflow:hidden;
-  background:var(--panel);
+  background:var(--surface2);
 }
-.table-scroll{max-height:68vh;overflow:auto}
-table{width:100%;border-collapse:collapse;min-width:1120px}
+.severity{width:7px;height:100%;min-height:48px;border-radius:99px;background:var(--faint)}
+.severity.critical{background:var(--red)}.severity.warn{background:var(--amber)}.severity.info{background:var(--blue)}
+.queue-main strong{display:block;font-size:13px;line-height:1.25}
+.queue-main span{display:block;margin-top:4px;color:var(--muted);font-size:11px}
+.queue-tags{display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap}
+.tag{
+  min-height:22px;
+  display:inline-flex;
+  align-items:center;
+  border-radius:999px;
+  padding:2px 8px;
+  font-size:10px;
+  font-weight:850;
+  white-space:nowrap;
+}
+.tag.swiggy{background:rgba(252,128,25,.16);color:var(--swiggy)}
+.tag.zomato{background:rgba(226,55,68,.16);color:var(--zomato)}
+.tag.he{background:rgba(255,121,79,.15);color:var(--he)}
+.tag.nch{background:rgba(60,201,167,.15);color:var(--nch)}
+.tag.status{background:rgba(255,255,255,.08);color:var(--muted)}
+.tag.status.delivered{background:rgba(66,194,107,.14);color:var(--green)}
+.tag.status.active{background:rgba(104,168,255,.14);color:var(--blue)}
+.tag.status.rejected,.tag.status.cancelled,.tag.status.missed{background:rgba(240,91,91,.15);color:var(--red)}
+.tag.status.issue{background:rgba(244,178,60,.15);color:var(--amber)}
+.source-grid,.coverage-grid,.breakdown-grid{
+  display:grid;
+  gap:8px;
+}
+.source-row,.coverage-row,.breakdown-row{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:10px;
+  align-items:center;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface2);
+}
+.source-row strong,.coverage-row strong,.breakdown-row strong{font-size:12px}
+.source-row span,.coverage-row span,.breakdown-row span{color:var(--muted);font-size:11px}
+.source-age{font-weight:900}
+.proof-list{display:grid;gap:8px}
+.proof-row{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:10px;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface2);
+}
+.proof-row strong{font-size:12px}
+.proof-row span{display:block;margin-top:3px;color:var(--muted);font-size:11px}
+.orders-panel{margin-top:12px}
+.table-wrap{overflow:auto;max-height:62vh}
+table{width:100%;min-width:1160px;border-collapse:collapse}
 thead{position:sticky;top:0;z-index:2}
 th{
-  background:var(--panel2);
+  background:var(--surface2);
   color:var(--muted);
   text-align:left;
   padding:9px 10px;
@@ -139,83 +238,91 @@ th{
 }
 td{
   padding:10px;
-  border-bottom:1px solid rgba(38,42,54,.7);
+  border-bottom:1px solid rgba(42,49,61,.72);
   vertical-align:top;
 }
 tr:hover td{background:rgba(255,255,255,.025)}
-.tag{
-  display:inline-flex;
-  align-items:center;
-  min-height:21px;
-  border-radius:999px;
-  padding:2px 8px;
-  font-size:10px;
-  font-weight:800;
-  white-space:nowrap;
+.order-id{font-weight:900;color:var(--text);white-space:nowrap}
+.muted{color:var(--muted)}.faint{color:var(--faint)}
+.money{font-weight:900;white-space:nowrap}
+.items{max-width:380px;color:#d5dbe4}
+.issue{max-width:330px;color:#ffc0c0}
+.rating{color:#ffd166;font-weight:900;white-space:nowrap}
+.mobile-orders{display:none;padding:10px;gap:10px}
+.order-card{
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:10px;
+  background:var(--surface2);
 }
-.tag.sw{background:rgba(252,128,25,.16);color:var(--sw)}
-.tag.zm{background:rgba(226,55,68,.16);color:var(--zm)}
-.tag.he{background:rgba(255,112,67,.15);color:var(--he)}
-.tag.nch{background:rgba(38,166,154,.15);color:var(--nch)}
-.status{background:rgba(255,255,255,.08);color:var(--muted)}
-.status.delivered{background:rgba(64,196,99,.15);color:var(--green)}
-.status.active{background:rgba(96,165,250,.15);color:var(--blue)}
-.status.rejected,.status.cancelled,.status.missed{background:rgba(239,68,68,.15);color:var(--red)}
-.order-id{font-weight:800;color:var(--text);white-space:nowrap}
-.muted{color:var(--muted)}
-.faint{color:var(--faint)}
-.money{font-weight:800;white-space:nowrap}
-.items{max-width:360px;color:#cfd4dd}
-.issue{max-width:300px;color:#ffb4b4}
-.discount.known{color:var(--amber);font-weight:800}
-.rating{color:#ffd166;font-weight:800;white-space:nowrap}
-.empty{padding:46px 18px;text-align:center;color:var(--faint)}
-.source{
-  margin-top:10px;
-  color:var(--faint);
-  font-size:11px;
+.card-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.card-top strong{font-size:14px}
+.card-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.card-line{margin-top:8px;color:#d5dbe4;font-size:12px}
+.card-meta{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;color:var(--muted);font-size:11px}
+.empty{padding:42px 16px;text-align:center;color:var(--faint)}
+.source-note{margin-top:8px;color:var(--faint);font-size:11px}
+@media(max-width:1180px){
+  .filters{grid-template-columns:repeat(4,1fr)}
+  .metric-grid{grid-template-columns:repeat(3,1fr)}
+  .layout{grid-template-columns:1fr}
 }
-@media(max-width:1050px){
-  .filters{grid-template-columns:repeat(3,1fr)}
-  .summary{grid-template-columns:repeat(3,1fr)}
-}
-@media(max-width:720px){
-  .wrap{padding:14px 12px 42px}
-  .top{flex-direction:column}
-  .health{justify-content:flex-start}
+@media(max-width:760px){
+  .app{padding:12px 10px 42px}
+  .topbar{grid-template-columns:1fr}
+  .top-actions{justify-content:flex-start}
+  h1{font-size:21px}
+  .truth-strip{grid-template-columns:1fr 1fr}
   .filters{grid-template-columns:1fr 1fr}
-  .summary{grid-template-columns:1fr 1fr}
+  .metric-grid{grid-template-columns:1fr 1fr}
+  .panel-head{align-items:flex-start}
+  .queue-row{grid-template-columns:6px 1fr}
+  .queue-tags{grid-column:2;justify-content:flex-start}
+  .desktop-table{display:none}
+  .mobile-orders{display:grid}
 }
-@media(max-width:480px){
-  .filters,.summary{grid-template-columns:1fr}
+@media(max-width:520px){
+  .truth-strip,.filters,.metric-grid{grid-template-columns:1fr}
+  .btn,.link-btn{width:100%;min-height:44px}
+  .top-actions{width:100%}
+  .pill{width:100%;justify-content:center}
+  .card-meta{grid-template-columns:1fr}
 }
 </style>
 </head>
 <body>
-<main class="wrap">
-  <header class="top">
-    <div class="title">
-      <h1>Aggregator Orders</h1>
-      <p>Group order ledger. Brand-owned algorithm dashboards are split into HE and NCH.</p>
+<main class="app">
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">HN Hotels · Delivery aggregator ops</div>
+      <h1>Aggregator Tracking Cockpit</h1>
+      <p class="subtitle">Live order-history tracking for Swiggy and Zomato across Hamza Express and Nawabi Chai House. Positioning changes start only after this screen shows a clean operational baseline.</p>
     </div>
-    <div class="health">
-      <a class="btn" href="/ops/he/aggregator/" style="text-decoration:none">HE Dashboard</a>
-      <a class="btn" href="/ops/nch/aggregator/" style="text-decoration:none">NCH Dashboard</a>
-      <span class="pill"><span class="dot" id="healthDot"></span>&nbsp;<span id="healthText">Checking</span></span>
+    <div class="top-actions">
+      <a class="link-btn" href="/ops/he/aggregator/">HE</a>
+      <a class="link-btn" href="/ops/nch/aggregator/">NCH</a>
+      <span class="pill"><span class="dot" id="healthDot"></span><span id="healthText">Checking source</span></span>
       <span class="pill" id="updatedAt">Not loaded</span>
       <button class="btn" id="refreshBtn" type="button">Refresh</button>
     </div>
   </header>
 
+  <section class="truth-strip" id="truthStrip" aria-label="Tracking state">
+    <div class="truth-item"><strong>Loading</strong><span>Source freshness</span></div>
+    <div class="truth-item"><strong>0</strong><span>Orders in view</span></div>
+    <div class="truth-item"><strong>0</strong><span>Open exceptions</span></div>
+    <div class="truth-item"><strong>Pending</strong><span>Execution proof</span></div>
+  </section>
+
   <section class="filters" aria-label="Filters">
     <div class="field">
       <label for="dateFilter">Period</label>
       <select id="dateFilter">
-        <option value="may_mtd">May MTD</option>
         <option value="today">Today</option>
         <option value="yesterday">Yesterday</option>
         <option value="week">7 days</option>
         <option value="month">30 days</option>
+        <option value="may_mtd">May 1 to now</option>
         <option value="all">All time</option>
         <option value="custom">Custom</option>
       </select>
@@ -250,8 +357,24 @@ tr:hover td{background:rgba(255,255,255,.025)}
       </select>
     </div>
     <div class="field">
+      <label for="issueFilter">Signal</label>
+      <select id="issueFilter">
+        <option value="all">All</option>
+        <option value="exception">Any exception</option>
+        <option value="delay">Delay / handover</option>
+        <option value="complaint">Complaint</option>
+        <option value="rejection">Rejection / stock</option>
+        <option value="rating">Poor rating</option>
+        <option value="proof">Execution proof</option>
+      </select>
+    </div>
+    <div class="field">
       <label for="fromDate">From</label>
       <input id="fromDate" type="date">
+    </div>
+    <div class="field">
+      <label for="searchBox">Search</label>
+      <input id="searchBox" type="search" placeholder="Order, customer, item">
     </div>
     <div class="field">
       <label for="toDate">To</label>
@@ -259,92 +382,180 @@ tr:hover td{background:rgba(255,255,255,.025)}
     </div>
   </section>
 
-  <section class="summary" id="summary">
-    <div class="metric"><div class="label">Total orders</div><div class="value" id="mTotal">0</div><div class="sub" id="mPlatforms">No rows</div></div>
-    <div class="metric"><div class="label">Delivered</div><div class="value green" id="mDelivered">0</div><div class="sub" id="mRevenue">₹0 revenue</div></div>
-    <div class="metric"><div class="label">Rejected</div><div class="value red" id="mRejected">0</div><div class="sub">Restaurant rejected</div></div>
-    <div class="metric"><div class="label">Missed</div><div class="value red" id="mMissed">0</div><div class="sub">Not accepted / timed out</div></div>
-    <div class="metric"><div class="label">Issues</div><div class="value amber" id="mIssues">0</div><div class="sub">Delay, handover, rejection</div></div>
-    <div class="metric"><div class="label">Discount detail</div><div class="value amber" id="mDiscount">0</div><div class="sub">Detail rows captured</div></div>
+  <section class="metric-grid" aria-label="Summary metrics">
+    <div class="metric"><div class="label">Orders</div><div class="value" id="mTotal">0</div><div class="sub" id="mPlatforms">No rows</div></div>
+    <div class="metric"><div class="label">Delivered revenue</div><div class="value green" id="mRevenue">₹0</div><div class="sub" id="mDelivered">0 delivered</div></div>
+    <div class="metric"><div class="label">Operational exceptions</div><div class="value red" id="mExceptions">0</div><div class="sub" id="mExceptionSub">No exception rows</div></div>
+    <div class="metric"><div class="label">Issue rate</div><div class="value amber" id="mIssueRate">0%</div><div class="sub" id="mIssueSub">Delay, complaint, stock</div></div>
+    <div class="metric"><div class="label">Average rating</div><div class="value blue" id="mAvgRating">--</div><div class="sub" id="mRatingSub">Order rating coverage</div></div>
+    <div class="metric"><div class="label">Discount detail</div><div class="value amber" id="mDiscount">0</div><div class="sub">Rows with captured discount</div></div>
   </section>
 
-  <section>
-    <div class="bar">
-      <h2>Order History</h2>
-      <div class="meta" id="tableMeta">Loading</div>
-    </div>
-    <div class="table-shell">
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Platform</th>
-              <th>Outlet</th>
-              <th>Status</th>
-              <th>Order</th>
-              <th>Customer</th>
-              <th>Rating</th>
-              <th>Items</th>
-              <th>Value</th>
-              <th>Discount</th>
-              <th>Issue / Reason</th>
-              <th>Captured</th>
-            </tr>
-          </thead>
-          <tbody id="ordersBody">
-            <tr><td colspan="12" class="empty">Loading orders</td></tr>
-          </tbody>
-        </table>
+  <section class="layout">
+    <article class="panel">
+      <div class="panel-head">
+        <h2>Action Queue</h2>
+        <div class="panel-note" id="queueMeta">Loading</div>
       </div>
+      <div class="panel-body">
+        <div class="queue" id="actionQueue">
+          <div class="empty">Loading exceptions</div>
+        </div>
+      </div>
+    </article>
+
+    <aside class="panel">
+      <div class="panel-head">
+        <h2>Source Freshness</h2>
+        <div class="panel-note" id="sourceMeta">Checking</div>
+      </div>
+      <div class="panel-body">
+        <div class="source-grid" id="sourceGrid"></div>
+        <div class="source-note">A quiet dashboard is trusted only when source pulls are fresh.</div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="layout" style="margin-top:12px">
+    <article class="panel">
+      <div class="panel-head">
+        <h2>Outlet Coverage Matrix</h2>
+        <div class="panel-note" id="coverageMeta">Loading</div>
+      </div>
+      <div class="panel-body">
+        <div class="coverage-grid" id="coverageGrid"></div>
+      </div>
+    </article>
+
+    <aside class="panel">
+      <div class="panel-head">
+        <h2>Complaints & Delays</h2>
+        <div class="panel-note" id="breakdownMeta">Loading</div>
+      </div>
+      <div class="panel-body">
+        <div class="breakdown-grid" id="breakdownGrid"></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="layout" style="margin-top:12px">
+    <article class="panel">
+      <div class="panel-head">
+        <h2>Execution Proof</h2>
+        <div class="panel-note" id="proofMeta">Partner row to execution row</div>
+      </div>
+      <div class="panel-body">
+        <div class="proof-list" id="proofList"></div>
+        <div class="source-note">HE proof target is partner order to POS/KDS/prep. NCH proof target is partner order to POS/counter/print. Missing proof remains visible instead of being assumed.</div>
+      </div>
+    </article>
+
+    <aside class="panel">
+      <div class="panel-head">
+        <h2>Today Focus</h2>
+        <div class="panel-note" id="focusMeta">Ops before offers</div>
+      </div>
+      <div class="panel-body">
+        <div class="breakdown-grid" id="focusGrid"></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="panel orders-panel">
+    <div class="panel-head">
+      <h2>Order Drilldown</h2>
+      <div class="panel-note" id="tableMeta">Loading</div>
     </div>
-    <div class="source" id="sourceNote">Direct partner API order rows. Discount and order-level rating appear only when exposed by captured partner responses.</div>
+    <div class="desktop-table table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Platform</th>
+            <th>Outlet</th>
+            <th>Status</th>
+            <th>Order</th>
+            <th>Customer</th>
+            <th>Rating</th>
+            <th>Items</th>
+            <th>Value</th>
+            <th>Discount</th>
+            <th>Operational signal</th>
+            <th>Captured</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody">
+          <tr><td colspan="12" class="empty">Loading orders</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="mobile-orders" id="mobileOrders">
+      <div class="empty">Loading orders</div>
+    </div>
   </section>
 </main>
 
 <script>
 const API = '/api/aggregator-pulse';
 const KEY = 'MzJLvqeyg__o4KX52Gu95ZGMWVLsdVVdNYdzfUJQHvA';
-const LS = 'hn_owner_aggregator_orders_v2';
+const LS = 'hn_aggregator_tracking_cockpit_v1';
 const MAY_START = '2026-05-01';
+
+const state = {
+  orders: [],
+  filtered: [],
+  health: null,
+  lastError: null,
+};
 
 const els = {
   date: document.getElementById('dateFilter'),
   platform: document.getElementById('platformFilter'),
   brand: document.getElementById('brandFilter'),
   status: document.getElementById('statusFilter'),
+  issue: document.getElementById('issueFilter'),
   from: document.getElementById('fromDate'),
   to: document.getElementById('toDate'),
+  search: document.getElementById('searchBox'),
   body: document.getElementById('ordersBody'),
+  mobile: document.getElementById('mobileOrders'),
   meta: document.getElementById('tableMeta'),
+  queue: document.getElementById('actionQueue'),
+  sourceGrid: document.getElementById('sourceGrid'),
+  coverageGrid: document.getElementById('coverageGrid'),
+  breakdownGrid: document.getElementById('breakdownGrid'),
+  proofList: document.getElementById('proofList'),
+  focusGrid: document.getElementById('focusGrid'),
 };
 
 function loadState(){
+  els.to.value = todayIst();
   try {
-    const state = JSON.parse(localStorage.getItem(LS) || '{}');
-    for (const key of ['date','platform','brand','status','from','to']) {
-      if (state[key] && els[key]) els[key].value = state[key];
+    const saved = JSON.parse(localStorage.getItem(LS) || '{}');
+    for (const key of ['date','platform','brand','status','issue','from','to','search']) {
+      if (saved[key] && els[key]) els[key].value = saved[key];
     }
   } catch {}
 }
 
 function saveState(){
-  const state = {
+  const saved = {
     date: els.date.value,
     platform: els.platform.value,
     brand: els.brand.value,
     status: els.status.value,
+    issue: els.issue.value,
     from: els.from.value,
     to: els.to.value,
+    search: els.search.value,
   };
-  localStorage.setItem(LS, JSON.stringify(state));
+  localStorage.setItem(LS, JSON.stringify(saved));
 }
 
-function qs(){
-  const p = new URLSearchParams({ action:'owner-orders', key:KEY, date:els.date.value });
+function orderQuery(action = 'owner-orders'){
+  const p = new URLSearchParams({ action, key: KEY, date: els.date.value });
   if (els.platform.value !== 'all') p.set('platform', els.platform.value);
   if (els.brand.value !== 'all') p.set('brand', els.brand.value);
-  if (els.status.value !== 'all') p.set('status', els.status.value);
   if (els.date.value === 'may_mtd') {
     p.set('date', 'custom');
     p.set('from', MAY_START);
@@ -362,142 +573,576 @@ async function loadHealth(){
   try {
     const r = await fetch(`${API}?action=health&key=${KEY}`);
     const h = await r.json();
-    dot.className = `dot ${h.status || ''}`;
-    const sw = h.age_minutes?.swiggy_order;
-    const zm = h.age_minutes?.zomato_order;
+    state.health = h;
+    const status = h.status || 'down';
+    dot.className = `dot ${status === 'ok' ? 'ok' : status === 'degraded' ? 'watch' : 'down'}`;
+    const ages = h.age_minutes || {};
+    const sw = bestAge(ages, 'swiggy');
+    const zm = bestAge(ages, 'zomato');
     const parts = [];
     if (sw != null) parts.push(`SW ${sw}m`);
     if (zm != null) parts.push(`ZM ${zm}m`);
-    text.textContent = `${h.status || 'unknown'}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+    text.textContent = `${status}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+    renderSourceFreshness();
+    renderAll();
   } catch {
+    state.health = { status: 'down', issues: ['health unavailable'] };
     dot.className = 'dot down';
     text.textContent = 'health unavailable';
+    renderSourceFreshness();
+    renderAll();
   }
 }
 
 async function loadOrders(){
   saveState();
-  els.body.innerHTML = '<tr><td colspan="12" class="empty">Loading orders</td></tr>';
-  els.meta.textContent = 'Loading';
+  setLoading();
   try {
-    const r = await fetch(`${API}?${qs()}`);
+    const r = await fetch(`${API}?${orderQuery('owner-orders')}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     if (!data.ok) throw new Error(data.error || 'API error');
-    renderSummary(data.summary || {});
-    renderRows(data.orders || []);
+    state.orders = normalizeRows(data.orders || []);
+    state.lastError = null;
     document.getElementById('updatedAt').textContent =
       `Updated ${new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}`;
-    els.meta.textContent = `${(data.orders || []).length} rows`;
   } catch (err) {
     await loadFallback(err);
   }
+  renderAll();
 }
 
 async function loadFallback(err){
   try {
-    const p = new URLSearchParams({ action:'orders', key:KEY, date:els.date.value });
-    if (els.platform.value !== 'all') p.set('platform', els.platform.value);
-    if (els.brand.value !== 'all') p.set('brand', els.brand.value);
-    if (els.date.value === 'may_mtd') {
-      p.set('date', 'custom');
-      p.set('from', MAY_START);
-      p.set('to', todayIst());
-    } else if (els.date.value === 'custom' && els.from.value && els.to.value) {
-      p.set('from', els.from.value);
-      p.set('to', els.to.value);
-    }
-    const r = await fetch(`${API}?${p.toString()}`);
+    const r = await fetch(`${API}?${orderQuery('orders')}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     const rows = (data.orders || []).map(o => ({
       ...o,
       status_group: groupStatus(o.status, o.issues),
       discount_total: null,
-      discount_lines: [],
       customer_order_count: null,
       payment_method: null,
       detail_available: false,
-    })).filter(o => els.status.value === 'all' || o.status_group === els.status.value);
-    renderSummary(summarize(rows));
-    renderRows(rows);
-    els.meta.textContent = `${rows.length} rows · fallback`;
-    document.getElementById('updatedAt').textContent = 'Owner API fallback';
+    }));
+    state.orders = normalizeRows(rows);
+    state.lastError = null;
+    document.getElementById('updatedAt').textContent = 'Loaded fallback API';
   } catch {
-    els.body.innerHTML = `<tr><td colspan="12" class="empty">Unable to load orders: ${escapeHtml(err.message)}</td></tr>`;
-    els.meta.textContent = 'Error';
+    state.orders = [];
+    state.lastError = err;
   }
+}
+
+function setLoading(){
+  els.body.innerHTML = '<tr><td colspan="12" class="empty">Loading orders</td></tr>';
+  els.mobile.innerHTML = '<div class="empty">Loading orders</div>';
+  els.queue.innerHTML = '<div class="empty">Loading exceptions</div>';
+  els.meta.textContent = 'Loading';
+}
+
+function normalizeRows(rows){
+  return rows.map(row => {
+    const statusGroup = row.status_group || groupStatus(row.status, row.issues);
+    const ratingNumber = parseRating(row.rating);
+    const issueCodes = classifyIssueCodes(row, statusGroup, ratingNumber);
+    const humanIssue = humanIssueText(row);
+    const value = Number(row.order_value || 0);
+    const proof = classifyProof(row);
+    const normalized = {
+      ...row,
+      status_group: statusGroup,
+      rating_number: ratingNumber,
+      issue_codes: issueCodes,
+      human_issue: humanIssue,
+      order_value_number: value,
+      proof_status: proof.status,
+      proof_label: proof.label,
+      proof_note: proof.note,
+    };
+    normalized.severity = rowSeverity(normalized);
+    normalized.search_blob = [
+      row.order_id, row.display_id, row.customer_name, row.items, row.status,
+      row.issues, row.outlet_name, row.platform, row.brand,
+    ].join(' ').toLowerCase();
+    return normalized;
+  });
+}
+
+function renderAll(){
+  if (!state.orders.length && state.lastError) {
+    const msg = `Unable to load orders: ${escapeHtml(state.lastError.message)}`;
+    els.body.innerHTML = `<tr><td colspan="12" class="empty">${msg}</td></tr>`;
+    els.mobile.innerHTML = `<div class="empty">${msg}</div>`;
+    els.meta.textContent = 'Error';
+    return;
+  }
+  state.filtered = applyClientFilters(state.orders);
+  const summary = summarize(state.filtered);
+  renderTruth(summary);
+  renderMetrics(summary);
+  renderQueue(state.filtered);
+  renderSourceFreshness();
+  renderCoverage(state.filtered);
+  renderBreakdown(summary.breakdown);
+  renderProof(state.filtered);
+  renderFocus(summary);
+  renderRows(state.filtered);
+}
+
+function applyClientFilters(rows){
+  const status = els.status.value;
+  const issue = els.issue.value;
+  const q = els.search.value.trim().toLowerCase();
+  return rows.filter(row => {
+    if (status !== 'all' && row.status_group !== status) return false;
+    if (issue !== 'all' && !matchesIssueFilter(row, issue)) return false;
+    if (q && !row.search_blob.includes(q)) return false;
+    return true;
+  });
+}
+
+function matchesIssueFilter(row, filter){
+  if (filter === 'exception') return row.severity !== 'none';
+  if (filter === 'delay') return row.issue_codes.includes('delay');
+  if (filter === 'complaint') return row.issue_codes.some(c => ['complaint','wrong_item','missing_item','quality','packaging'].includes(c));
+  if (filter === 'rejection') return row.issue_codes.some(c => ['rejected','stock'].includes(c));
+  if (filter === 'rating') return row.issue_codes.includes('poor_rating');
+  if (filter === 'proof') return row.proof_status !== 'not_linked';
+  return true;
 }
 
 function summarize(rows){
+  const delivered = rows.filter(row => row.status_group === 'delivered');
+  const exceptions = rows.filter(row => row.severity !== 'none');
+  const issueRows = rows.filter(row => row.issue_codes.some(c => !['proof_yes','proof_no','proof_linked'].includes(c)));
+  const ratings = rows.map(row => row.rating_number).filter(v => v != null);
+  const byPlatform = countBy(rows, row => row.platform || 'unknown');
+  const breakdown = {
+    delay: rows.filter(row => row.issue_codes.includes('delay')).length,
+    complaint: rows.filter(row => row.issue_codes.some(c => ['complaint','wrong_item','missing_item','quality','packaging'].includes(c))).length,
+    rejection_stock: rows.filter(row => row.issue_codes.some(c => ['rejected','stock'].includes(c))).length,
+    missed: rows.filter(row => row.issue_codes.includes('missed')).length,
+    cancelled: rows.filter(row => row.issue_codes.includes('cancelled')).length,
+    poor_rating: rows.filter(row => row.issue_codes.includes('poor_rating')).length,
+  };
   return {
-    total_orders: rows.length,
-    delivered_orders: rows.filter(o => o.status_group === 'delivered').length,
-    rejected_orders: rows.filter(o => o.status_group === 'rejected').length,
-    missed_orders: rows.filter(o => o.status_group === 'missed').length,
-    issue_orders: rows.filter(o => o.issues).length,
-    delivered_revenue: rows.filter(o => o.status_group === 'delivered').reduce((s,o)=>s+(Number(o.order_value)||0),0),
-    discount_known_orders: rows.filter(o => o.discount_total != null).length,
-    by_platform: rows.reduce((m,o)=>(m[o.platform]=(m[o.platform]||0)+1,m),{}),
+    total: rows.length,
+    delivered: delivered.length,
+    revenue: delivered.reduce((sum, row) => sum + row.order_value_number, 0),
+    exceptions: exceptions.length,
+    critical: exceptions.filter(row => row.severity === 'critical').length,
+    warn: exceptions.filter(row => row.severity === 'warn').length,
+    issueRows: issueRows.length,
+    issueRate: rows.length ? Math.round(issueRows.length / rows.length * 1000) / 10 : 0,
+    avgRating: ratings.length ? Math.round((ratings.reduce((s,v)=>s+v,0) / ratings.length) * 10) / 10 : null,
+    ratingCoverage: ratings.length,
+    discountRows: rows.filter(row => row.discount_total != null).length,
+    byPlatform,
+    breakdown,
   };
 }
 
-function renderSummary(s){
-  document.getElementById('mTotal').textContent = s.total_orders || 0;
-  document.getElementById('mDelivered').textContent = s.delivered_orders || 0;
-  document.getElementById('mRejected').textContent = s.rejected_orders || 0;
-  document.getElementById('mMissed').textContent = s.missed_orders || 0;
-  document.getElementById('mIssues').textContent = s.issue_orders || 0;
-  document.getElementById('mDiscount').textContent = s.discount_known_orders || 0;
-  document.getElementById('mRevenue').textContent = `${rupee(s.delivered_revenue || 0)} revenue`;
-  const bp = s.by_platform || {};
-  const platformParts = Object.entries(bp).map(([k,v]) => `${labelPlatform(k)} ${v}`);
-  const prefix = els.date.value === 'may_mtd' ? 'May 1-now · ' : '';
-  document.getElementById('mPlatforms').textContent = platformParts.length ? prefix + platformParts.join(' · ') : 'No rows';
+function renderTruth(summary){
+  const sourceStatus = state.health?.status || 'down';
+  const sourceClass = sourceStatus === 'ok' ? 'ok' : sourceStatus === 'degraded' ? 'watch' : 'down';
+  const proof = proofSummary(state.filtered);
+  const proofClass = proof.status === 'live' ? 'ok' : proof.status === 'partial' ? 'watch' : 'watch';
+  const exceptionClass = summary.critical ? 'down' : summary.exceptions ? 'watch' : 'ok';
+  document.getElementById('truthStrip').innerHTML = `
+    <div class="truth-item ${sourceClass}"><strong>${escapeHtml(labelSourceState(sourceStatus))}</strong><span>${sourceSubtext()}</span></div>
+    <div class="truth-item ${summary.total ? 'ok' : 'watch'}"><strong>${summary.total}</strong><span>${periodLabel()} orders in view</span></div>
+    <div class="truth-item ${exceptionClass}"><strong>${summary.exceptions}</strong><span>${summary.critical} critical · ${summary.warn} watch</span></div>
+    <div class="truth-item ${proofClass}"><strong>${escapeHtml(proof.label)}</strong><span>${escapeHtml(proof.sub)}</span></div>
+  `;
 }
 
-function renderRows(orders){
-  if (!orders.length) {
-    els.body.innerHTML = '<tr><td colspan="12" class="empty">No orders for this filter</td></tr>';
+function renderMetrics(summary){
+  document.getElementById('mTotal').textContent = summary.total;
+  const platformParts = Object.entries(summary.byPlatform).map(([key, val]) => `${labelPlatform(key)} ${val}`);
+  document.getElementById('mPlatforms').textContent = platformParts.length ? platformParts.join(' · ') : 'No rows';
+  document.getElementById('mRevenue').textContent = rupee(summary.revenue);
+  document.getElementById('mDelivered').textContent = `${summary.delivered} delivered`;
+  document.getElementById('mExceptions').textContent = summary.exceptions;
+  document.getElementById('mExceptionSub').textContent = `${summary.critical} critical · ${summary.warn} watch`;
+  document.getElementById('mIssueRate').textContent = `${summary.issueRate}%`;
+  document.getElementById('mIssueSub').textContent = `${summary.issueRows} rows with ops signals`;
+  document.getElementById('mAvgRating').textContent = summary.avgRating == null ? '--' : summary.avgRating;
+  document.getElementById('mRatingSub').textContent = `${summary.ratingCoverage} order ratings captured`;
+  document.getElementById('mDiscount').textContent = summary.discountRows;
+}
+
+function renderQueue(rows){
+  const exceptions = rows
+    .filter(row => row.severity !== 'none')
+    .sort((a,b) => severityRank(b) - severityRank(a) || compareOrders(a,b))
+    .slice(0, 10);
+  document.getElementById('queueMeta').textContent = exceptions.length ? `${exceptions.length} visible` : 'Clean';
+  if (!exceptions.length) {
+    els.queue.innerHTML = '<div class="empty">No operational exception in this filter</div>';
     return;
   }
-  els.body.innerHTML = orders.map(o => {
-    const statusGroup = o.status_group || groupStatus(o.status, o.issues);
-    const brand = labelBrand(o.brand, o.outlet_name);
-    const rating = o.rating != null ? `<span class="rating">${escapeHtml(o.rating)} star</span>` : '<span class="faint">not captured</span>';
-    const discount = o.discount_total != null
-      ? `<span class="discount known">${rupee(o.discount_total)}</span>`
-      : '<span class="faint">not captured</span>';
-    const detailBits = [];
-    if (o.customer_order_count_label) detailBits.push(escapeHtml(o.customer_order_count_label));
-    else if (o.customer_order_count != null) detailBits.push(`${Number(o.customer_order_count)} lifetime orders`);
-    if (o.payment_method) detailBits.push(escapeHtml(o.payment_method));
-    return `<tr>
-      <td><strong>${escapeHtml(o.order_time || '--:--')}</strong><div class="faint">${escapeHtml(o.order_date || '')}</div></td>
-      <td><span class="tag ${o.platform === 'swiggy' ? 'sw' : 'zm'}">${labelPlatform(o.platform)}</span></td>
-      <td><span class="tag ${o.brand === 'nch' ? 'nch' : o.brand === 'he' ? 'he' : ''}">${brand}</span></td>
-      <td><span class="tag status ${statusGroup}">${escapeHtml(labelStatus(statusGroup, o.status))}</span></td>
-      <td><div class="order-id">${escapeHtml(o.display_id || o.order_id || '')}</div><div class="faint">${o.detail_available ? 'detail captured' : 'history row'}</div></td>
-      <td>${escapeHtml(o.customer_name || 'unknown')}<div class="faint">${detailBits.join(' · ')}</div></td>
-      <td>${rating}</td>
-      <td class="items">${escapeHtml(o.items || '-')}</td>
-      <td class="money">${o.order_value != null ? rupee(o.order_value) : '-'}</td>
-      <td>${discount}</td>
-      <td class="issue">${escapeHtml(o.rejection_reason || o.issues || '')}</td>
-      <td><span class="faint">${ago(o.captured_at)}</span></td>
-    </tr>`;
+  els.queue.innerHTML = exceptions.map(row => `
+    <div class="queue-row">
+      <div class="severity ${row.severity}"></div>
+      <div class="queue-main">
+        <strong>${escapeHtml(actionTitle(row))}</strong>
+        <span>${escapeHtml(actionSubtext(row))}</span>
+      </div>
+      <div class="queue-tags">
+        ${platformTag(row.platform)}
+        ${brandTag(row.brand)}
+        <span class="tag status ${row.status_group}">${escapeHtml(labelStatus(row.status_group, row.status))}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSourceFreshness(){
+  const h = state.health || {};
+  const ages = h.age_minutes || {};
+  const rows = [
+    ['Zomato direct pull', ages.zomato_direct],
+    ['Zomato order rows', ages.zomato_order],
+    ['Zomato snapshots', ages.zomato_snap],
+    ['Swiggy direct pull', ages.swiggy_direct],
+    ['Swiggy order rows', ages.swiggy_order],
+    ['Swiggy snapshots', ages.swiggy_snap],
+  ];
+  document.getElementById('sourceMeta').textContent = h.status || 'unknown';
+  els.sourceGrid.innerHTML = rows.map(([label, age]) => {
+    const cls = age == null ? 'red' : age <= 15 ? 'green' : age <= 60 ? 'amber' : 'red';
+    const val = age == null ? 'none' : `${age}m`;
+    return `<div class="source-row"><div><strong>${label}</strong><span>${sourceAgeNote(age)}</span></div><div class="source-age ${cls}">${val}</div></div>`;
   }).join('');
 }
 
-function labelPlatform(v){
-  if (v === 'swiggy') return 'Swiggy';
-  if (v === 'zomato') return 'Zomato';
-  return v || 'Unknown';
+function renderCoverage(rows){
+  const combos = [
+    ['he','zomato'], ['he','swiggy'], ['nch','zomato'], ['nch','swiggy'],
+  ];
+  const lines = combos.map(([brand, platform]) => {
+    const set = rows.filter(row => row.brand === brand && row.platform === platform);
+    const deliveredRevenue = set.filter(row => row.status_group === 'delivered').reduce((sum,row)=>sum+row.order_value_number,0);
+    const latest = set[0] ? `${set[0].order_date || ''} ${set[0].order_time || ''}`.trim() : 'No row';
+    const exceptions = set.filter(row => row.severity !== 'none').length;
+    return `<div class="coverage-row">
+      <div><strong>${labelBrand(brand)} · ${labelPlatform(platform)}</strong><span>${latest} · ${exceptions} exceptions</span></div>
+      <div><strong>${set.length}</strong><span>${rupee(deliveredRevenue)}</span></div>
+    </div>`;
+  });
+  document.getElementById('coverageMeta').textContent = `${rows.length} rows`;
+  els.coverageGrid.innerHTML = lines.join('');
 }
 
-function labelBrand(brand, outlet){
-  if (brand === 'he') return 'HE';
-  if (brand === 'nch') return 'NCH';
-  return outlet || 'Unknown';
+function renderBreakdown(breakdown){
+  const rows = [
+    ['Delay / handover', breakdown.delay],
+    ['Customer complaint', breakdown.complaint],
+    ['Rejected / stock', breakdown.rejection_stock],
+    ['Missed acceptance', breakdown.missed],
+    ['Cancelled', breakdown.cancelled],
+    ['Poor rating', breakdown.poor_rating],
+  ];
+  const active = rows.filter(([,count]) => count > 0).length;
+  document.getElementById('breakdownMeta').textContent = active ? `${active} active signals` : 'No issue signal';
+  els.breakdownGrid.innerHTML = rows.map(([label, count]) => `
+    <div class="breakdown-row"><div><strong>${label}</strong><span>${count ? 'Needs review' : 'Clear in this filter'}</span></div><div class="${count ? 'amber' : 'green'}"><strong>${count}</strong></div></div>
+  `).join('');
+}
+
+function renderProof(rows){
+  const linked = rows.filter(row => row.proof_status !== 'not_linked');
+  const yes = rows.filter(row => row.proof_status === 'yes').length;
+  const no = rows.filter(row => row.proof_status === 'no').length;
+  const pending = rows.length - linked.length;
+  const proof = proofSummary(rows);
+  document.getElementById('proofMeta').textContent = proof.sub;
+  els.proofList.innerHTML = [
+    ['Proof-linked rows', linked.length, linked.length ? 'POS/KDS proof marker found' : 'Backend proof pull not live in this range'],
+    ['Confirmed execution', yes, yes ? 'Execution marker present' : 'No confirmed proof marker'],
+    ['Missing execution proof', no, no ? 'Partner row exists without execution marker' : 'No explicit missing-proof row'],
+    ['Unlinked partner rows', pending, pending ? 'Order history visible, execution proof pending' : 'All visible rows carry proof marker'],
+  ].map(([label, count, note]) => `
+    <div class="proof-row"><div><strong>${label}</strong><span>${note}</span></div><div class="${count ? 'amber' : 'green'}"><strong>${count}</strong></div></div>
+  `).join('');
+}
+
+function renderFocus(summary){
+  const sourceStatus = state.health?.status || 'down';
+  const top = topBreakdown(summary.breakdown);
+  const proof = proofSummary(state.filtered);
+  const rows = [
+    sourceStatus !== 'ok'
+      ? ['Source first', 'red', 'A stale source makes every other number unsafe']
+      : ['Source first', 'green', 'Partner API tracking is fresh enough for operating'],
+    summary.exceptions
+      ? ['Fix visible exceptions', summary.critical ? 'red' : 'amber', `${summary.exceptions} exception rows before positioning changes`]
+      : ['Fix visible exceptions', 'green', 'No exception row in this filter'],
+    top
+      ? ['Largest ops leak', 'amber', `${top.label}: ${top.count} rows`]
+      : ['Largest ops leak', 'green', 'No delay, complaint, rejection, missed, or rating leak'],
+    proof.status === 'none'
+      ? ['Proof layer', 'amber', 'Execution proof still needs the backend link before it can certify closure']
+      : ['Proof layer', proof.status === 'partial' ? 'amber' : 'green', proof.sub],
+  ];
+  els.focusGrid.innerHTML = rows.map(([label, cls, note]) => `
+    <div class="breakdown-row"><div><strong>${label}</strong><span>${escapeHtml(note)}</span></div><div class="${cls}"><strong>${cls === 'green' ? 'OK' : cls === 'red' ? 'Fix' : 'Watch'}</strong></div></div>
+  `).join('');
+}
+
+function renderRows(rows){
+  els.meta.textContent = `${rows.length} rows · ${periodLabel()}`;
+  if (!rows.length) {
+    els.body.innerHTML = '<tr><td colspan="12" class="empty">No orders for this filter</td></tr>';
+    els.mobile.innerHTML = '<div class="empty">No orders for this filter</div>';
+    return;
+  }
+  els.body.innerHTML = rows.map(orderTableRow).join('');
+  els.mobile.innerHTML = rows.map(orderCard).join('');
+}
+
+function orderTableRow(row){
+  const rating = row.rating_number != null ? `<span class="rating">${row.rating_number}</span>` : '<span class="faint">not captured</span>';
+  const discount = row.discount_total != null ? `<span class="amber">${rupee(row.discount_total)}</span>` : '<span class="faint">not captured</span>';
+  const signal = row.human_issue || issueLabel(row) || row.proof_note || '';
+  return `<tr>
+    <td><strong>${escapeHtml(row.order_time || '--:--')}</strong><div class="faint">${escapeHtml(row.order_date || '')}</div></td>
+    <td>${platformTag(row.platform)}</td>
+    <td>${brandTag(row.brand)}</td>
+    <td><span class="tag status ${row.status_group}">${escapeHtml(labelStatus(row.status_group, row.status))}</span></td>
+    <td><div class="order-id">${escapeHtml(row.display_id || row.order_id || '')}</div><div class="faint">${escapeHtml(row.proof_label)}</div></td>
+    <td>${escapeHtml(row.customer_name || 'unknown')}<div class="faint">${escapeHtml(customerMeta(row))}</div></td>
+    <td>${rating}</td>
+    <td class="items">${escapeHtml(row.items || '-')}</td>
+    <td class="money">${row.order_value_number ? rupee(row.order_value_number) : '-'}</td>
+    <td>${discount}</td>
+    <td class="issue">${escapeHtml(signal)}</td>
+    <td><span class="faint">${ago(row.captured_at)}</span></td>
+  </tr>`;
+}
+
+function orderCard(row){
+  const signal = row.human_issue || issueLabel(row) || row.proof_note || 'No issue signal';
+  return `<article class="order-card">
+    <div class="card-top">
+      <div><strong>${escapeHtml(row.display_id || row.order_id || '')}</strong><div class="faint">${escapeHtml(row.order_date || '')} ${escapeHtml(row.order_time || '')}</div></div>
+      <div class="money">${row.order_value_number ? rupee(row.order_value_number) : '-'}</div>
+    </div>
+    <div class="card-tags">${platformTag(row.platform)}${brandTag(row.brand)}<span class="tag status ${row.status_group}">${escapeHtml(labelStatus(row.status_group, row.status))}</span></div>
+    <div class="card-line">${escapeHtml(row.customer_name || 'unknown')}</div>
+    <div class="card-line">${escapeHtml(row.items || '-')}</div>
+    <div class="card-meta"><span>${escapeHtml(signal)}</span><span>${escapeHtml(row.proof_label)}</span></div>
+  </article>`;
+}
+
+function classifyIssueCodes(row, statusGroup, ratingNumber){
+  const text = `${row.status || ''} ${row.issues || ''} ${row.rejection_reason || ''}`.toLowerCase();
+  const codes = [];
+  if (statusGroup === 'missed') codes.push('missed');
+  if (statusGroup === 'rejected') codes.push('rejected');
+  if (statusGroup === 'cancelled') codes.push('cancelled');
+  if (/delay|handover|late|food ready|not marked|ready not|prep/.test(text)) codes.push('delay');
+  if (/complaint/.test(text)) codes.push('complaint');
+  if (/wrong/.test(text)) codes.push('wrong_item');
+  if (/missing/.test(text)) codes.push('missing_item');
+  if (/quality|cold|stale/.test(text)) codes.push('quality');
+  if (/packag/.test(text)) codes.push('packaging');
+  if (/out of stock|stock unavailable|stock/.test(text)) codes.push('stock');
+  if (ratingNumber != null && ratingNumber <= 3) codes.push('poor_rating');
+  if (/source:odoo_kds_sync|kds:yes|kds:no/.test(text)) codes.push('proof_linked');
+  if (/kds:yes/.test(text)) codes.push('proof_yes');
+  if (/kds:no|missing_kds/.test(text)) codes.push('proof_no');
+  return Array.from(new Set(codes));
+}
+
+function rowSeverity(row){
+  if (row.issue_codes.some(c => ['missed','rejected','cancelled','stock','proof_no'].includes(c))) return 'critical';
+  if (row.issue_codes.some(c => ['delay','complaint','wrong_item','missing_item','quality','packaging','poor_rating'].includes(c))) return 'warn';
+  return 'none';
+}
+
+function classifyProof(row){
+  const text = `${row.issues || ''}`.toLowerCase();
+  if (/kds:yes/.test(text)) return { status:'yes', label:'Execution proved', note:'POS/KDS marker present' };
+  if (/kds:no|missing_kds/.test(text)) return { status:'no', label:'Proof missing', note:'Partner row exists, execution marker missing' };
+  if (/source:odoo_kds_sync/.test(text)) return { status:'linked', label:'Proof linked', note:'Execution proof source present' };
+  return { status:'not_linked', label:'Proof pending', note:'No execution proof marker on this row' };
+}
+
+function proofSummary(rows){
+  const linked = rows.filter(row => row.proof_status !== 'not_linked').length;
+  const yes = rows.filter(row => row.proof_status === 'yes').length;
+  const no = rows.filter(row => row.proof_status === 'no').length;
+  if (!rows.length) return { status:'none', label:'No rows', sub:'No order rows in filter' };
+  if (!linked) return { status:'none', label:'Pending', sub:'Execution proof not live for visible rows' };
+  if (no) return { status:'partial', label:'Gap found', sub:`${no} rows missing proof` };
+  if (yes === rows.length) return { status:'live', label:'Live', sub:'All visible rows proved' };
+  return { status:'partial', label:'Partial', sub:`${linked}/${rows.length} rows carry proof` };
+}
+
+function humanIssueText(row){
+  const raw = row.rejection_reason || row.issues || '';
+  return String(raw)
+    .split(';')
+    .map(part => part.trim())
+    .filter(part => part && !/^source:/i.test(part) && !/^kds:/i.test(part) && !/^prep_probe:/i.test(part))
+    .join('; ');
+}
+
+function issueLabel(row){
+  const labels = {
+    missed: 'Missed acceptance',
+    rejected: 'Rejected by restaurant',
+    cancelled: 'Cancelled order',
+    stock: 'Stock issue',
+    delay: 'Delay or handover issue',
+    complaint: 'Customer complaint',
+    wrong_item: 'Wrong item complaint',
+    missing_item: 'Missing item complaint',
+    quality: 'Quality complaint',
+    packaging: 'Packaging complaint',
+    poor_rating: 'Poor rating',
+    proof_no: 'Execution proof missing',
+  };
+  const code = row.issue_codes.find(c => labels[c]);
+  return code ? labels[code] : '';
+}
+
+function actionTitle(row){
+  const order = row.display_id || row.order_id || 'order';
+  if (row.issue_codes.includes('missed')) return `Missed acceptance · ${order}`;
+  if (row.issue_codes.includes('rejected')) return `Restaurant rejection · ${order}`;
+  if (row.issue_codes.includes('cancelled')) return `Cancelled order · ${order}`;
+  if (row.issue_codes.includes('stock')) return `Stock issue · ${order}`;
+  if (row.issue_codes.includes('delay')) return `Delay / handover · ${order}`;
+  if (row.issue_codes.some(c => ['complaint','wrong_item','missing_item','quality','packaging'].includes(c))) return `Customer complaint · ${order}`;
+  if (row.issue_codes.includes('poor_rating')) return `Poor rating · ${order}`;
+  if (row.issue_codes.includes('proof_no')) return `Execution proof missing · ${order}`;
+  return `Review order · ${order}`;
+}
+
+function actionSubtext(row){
+  const item = row.items ? row.items.slice(0, 140) : 'Items not captured';
+  const signal = humanIssueText(row) || issueLabel(row) || row.proof_note || 'Operational signal';
+  return `${labelBrand(row.brand)} · ${labelPlatform(row.platform)} · ${signal} · ${item}`;
+}
+
+function groupStatus(status, issues){
+  const hay = `${status || ''} ${issues || ''}`.toLowerCase();
+  if (/miss|timed?\s*out|not accepted/.test(hay)) return 'missed';
+  if (/reject/.test(hay)) return 'rejected';
+  if (/cancel/.test(hay)) return 'cancelled';
+  if (/deliver/.test(hay)) return 'delivered';
+  if (/accept|prepar|ready|placed|ordered|picked|dispatch|active/.test(hay)) return 'active';
+  return 'other';
+}
+
+function parseRating(value){
+  if (value == null || value === '') return null;
+  const n = Number(String(value).replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function customerMeta(row){
+  const bits = [];
+  if (row.customer_order_count_label) bits.push(row.customer_order_count_label);
+  else if (row.customer_order_count != null) bits.push(`${Number(row.customer_order_count)} lifetime orders`);
+  if (row.payment_method) bits.push(row.payment_method);
+  return bits.join(' · ');
+}
+
+function countBy(rows, picker){
+  return rows.reduce((acc,row) => {
+    const key = picker(row);
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function topBreakdown(breakdown){
+  const labels = {
+    delay: 'Delay / handover',
+    complaint: 'Customer complaint',
+    rejection_stock: 'Rejected / stock',
+    missed: 'Missed acceptance',
+    cancelled: 'Cancelled',
+    poor_rating: 'Poor rating',
+  };
+  const ranked = Object.entries(breakdown).filter(([,count]) => count > 0).sort((a,b) => b[1] - a[1]);
+  return ranked[0] ? { label: labels[ranked[0][0]], count: ranked[0][1] } : null;
+}
+
+function severityRank(row){
+  return row.severity === 'critical' ? 3 : row.severity === 'warn' ? 2 : row.severity === 'info' ? 1 : 0;
+}
+
+function compareOrders(a,b){
+  return String(b.order_date || '').localeCompare(String(a.order_date || '')) ||
+    String(b.order_time || '').localeCompare(String(a.order_time || '')) ||
+    String(b.captured_at || '').localeCompare(String(a.captured_at || ''));
+}
+
+function bestAge(ages, platform){
+  const vals = [`${platform}_direct`, `${platform}_snap`, `${platform}_order`]
+    .map(key => ages[key])
+    .filter(v => v != null);
+  return vals.length ? Math.min(...vals) : null;
+}
+
+function sourceAgeNote(age){
+  if (age == null) return 'No pull seen';
+  if (age <= 15) return 'Fresh';
+  if (age <= 60) return 'Watch';
+  return 'Stale';
+}
+
+function labelSourceState(status){
+  if (status === 'ok') return 'Fresh';
+  if (status === 'degraded') return 'Watch';
+  return 'Blocked';
+}
+
+function sourceSubtext(){
+  const issues = state.health?.issues || [];
+  if (issues.length) return issues.slice(0, 2).join(' · ');
+  const ages = state.health?.age_minutes || {};
+  const sw = bestAge(ages, 'swiggy');
+  const zm = bestAge(ages, 'zomato');
+  const parts = [];
+  if (sw != null) parts.push(`SW ${sw}m`);
+  if (zm != null) parts.push(`ZM ${zm}m`);
+  return parts.length ? parts.join(' · ') : 'Waiting for health';
+}
+
+function periodLabel(){
+  if (els.date.value === 'today') return 'Today';
+  if (els.date.value === 'yesterday') return 'Yesterday';
+  if (els.date.value === 'week') return '7 days';
+  if (els.date.value === 'month') return '30 days';
+  if (els.date.value === 'may_mtd') return 'May 1 to now';
+  if (els.date.value === 'custom') return `${els.from.value || '?'} to ${els.to.value || '?'}`;
+  return 'All time';
+}
+
+function platformTag(platform){
+  return `<span class="tag ${platform === 'swiggy' ? 'swiggy' : platform === 'zomato' ? 'zomato' : 'status'}">${escapeHtml(labelPlatform(platform))}</span>`;
+}
+
+function brandTag(brand){
+  return `<span class="tag ${brand === 'nch' ? 'nch' : brand === 'he' ? 'he' : 'status'}">${escapeHtml(labelBrand(brand))}</span>`;
+}
+
+function labelPlatform(value){
+  if (value === 'swiggy') return 'Swiggy';
+  if (value === 'zomato') return 'Zomato';
+  return value || 'Unknown';
+}
+
+function labelBrand(value){
+  if (value === 'he') return 'HE';
+  if (value === 'nch') return 'NCH';
+  return value || 'Unknown';
 }
 
 function labelStatus(group, raw){
@@ -509,18 +1154,8 @@ function labelStatus(group, raw){
   return raw || 'Other';
 }
 
-function groupStatus(status, issues){
-  const h = `${status || ''} ${issues || ''}`.toLowerCase();
-  if (/miss|timed?\s*out|not accepted/.test(h)) return 'missed';
-  if (/reject/.test(h)) return 'rejected';
-  if (/cancel/.test(h)) return 'cancelled';
-  if (/deliver/.test(h)) return 'delivered';
-  if (/accept|prepar|ready|placed|ordered|picked|dispatch/.test(h)) return 'active';
-  return 'other';
-}
-
-function rupee(v){
-  const n = Number(v || 0);
+function rupee(value){
+  const n = Number(value || 0);
   return '₹' + Math.round(n).toLocaleString('en-IN');
 }
 
@@ -540,14 +1175,15 @@ function ago(iso){
   return `${Math.round(hours / 24)}d ago`;
 }
 
-function escapeHtml(v){
-  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 }
 
 loadState();
-for (const el of [els.date, els.platform, els.brand, els.status, els.from, els.to]) {
+for (const el of [els.date, els.platform, els.brand, els.status, els.issue, els.from, els.to]) {
   el.addEventListener('change', loadOrders);
 }
+els.search.addEventListener('input', () => { saveState(); renderAll(); });
 document.getElementById('refreshBtn').addEventListener('click', () => { loadHealth(); loadOrders(); });
 loadHealth();
 loadOrders();
