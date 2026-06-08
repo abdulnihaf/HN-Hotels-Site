@@ -122,22 +122,28 @@ export async function onRequest(context) {
       out.alerts.push({ platform: 'delivery_endpoint', ...r });
     }
 
-    // B. Dine health (anytime)
+    // B. Dine health (anytime) — PROBE ONLY, ALERTING DISABLED (2026-06-09).
+    // Dine-in platforms (zomato_dining / swiggy_dineout / eazydiner) are NOT being
+    // scraped right now, so they read as perpetually "stale" and were firing one
+    // SMS + one voice call per platform every 30 min → ~300/day of cost + noise to
+    // the owner. We keep the probe for the dashboard but DO NOT alert on dine until
+    // dine scraping is live again. To re-enable: restore the fireAlert loop below.
     const dine = await probeJson(env, 'dine-health');
     out.probes.dine = dine;
-    if (dine.ok) {
-      // dine.body.platforms is an ARRAY of {platform, last_seen, stale_minutes, ...}
-      const platforms = Array.isArray(dine.body?.platforms) ? dine.body.platforms
-                       : Object.values(dine.body?.platforms || {});
-      for (const pdata of platforms) {
-        const age = Number(pdata?.stale_minutes ?? pdata?.age_minutes ?? 9999);
-        const pname = pdata?.platform || 'unknown';
-        if (age > DINE_MAX_STALE) {
-          const r = await fireAlert(env, { platformKey: `dine_${pname}`, message: `HE-Aggregator: dine ${pname} stale ${age}m as of ${istHHMM()} IST` });
-          out.alerts.push({ platform: `dine_${pname}`, stale_min: age, ...r });
-        }
-      }
-    }
+    out.probes.dine_alerts_disabled = true;
+    // --- dine alerting intentionally disabled; see note above ---
+    // if (dine.ok) {
+    //   const platforms = Array.isArray(dine.body?.platforms) ? dine.body.platforms
+    //                    : Object.values(dine.body?.platforms || {});
+    //   for (const pdata of platforms) {
+    //     const age = Number(pdata?.stale_minutes ?? pdata?.age_minutes ?? 9999);
+    //     const pname = pdata?.platform || 'unknown';
+    //     if (age > DINE_MAX_STALE) {
+    //       const r = await fireAlert(env, { platformKey: `dine_${pname}`, message: `HE-Aggregator: dine ${pname} stale ${age}m as of ${istHHMM()} IST` });
+    //       out.alerts.push({ platform: `dine_${pname}`, stale_min: age, ...r });
+    //     }
+    //   }
+    // }
 
     // C. Dashboard 200 + body size
     const dash = await probeDashboard();
