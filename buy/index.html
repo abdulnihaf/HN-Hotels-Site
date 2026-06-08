@@ -58,7 +58,7 @@
 </head>
 <body>
 <div id="app"></div>
-<input type="file" id="gphoto" accept="image/*" style="display:none">
+<input type="file" id="gphoto" accept="image/*" multiple style="display:none">
 <div class="toast" id="toast"></div>
 <script>
 const API='/api/buy';
@@ -82,19 +82,42 @@ async function compress(file){
   return await new Promise(res=>{const rd=new FileReader();rd.onerror=()=>res('');rd.onload=()=>{const img=new Image();img.onerror=()=>res('');img.onload=()=>{let w=img.width||0,h=img.height||0;if(!w||!h){res('');return;}const max=1280;if(w>h&&w>max){h=Math.round(h*max/w);w=max;}else if(h>max){w=Math.round(w*max/h);h=max;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',0.6));};img.src=rd.result;};rd.readAsDataURL(file);});
 }
 let _photoLine=null;
-async function uploadPhotoFor(id,file){
-  if(!id||!file)return; toast('reading photo…');
+async function uploadOne(id,file){
   let b64='';try{b64=await compress(file);}catch(e){b64='';}
-  if(!b64||b64.length<800){toast('photo came blank — try again');return;}
-  toast('uploading…');
+  if(!b64||b64.length<800)return false;
   const r=await api('photo',{body:{id,photo:b64,by:(ME&&ME.name)||((KITCHEN||'')+' kitchen')}});
-  if(r.ok){toast('photo ✓');const b=document.getElementById('ph'+id);if(b)b.innerHTML='<img src="'+API+'?action=photo-img&id='+id+'&t='+Date.now()+'" style="max-height:64px;border-radius:6px;vertical-align:middle"> change photo';}
-  else toast('upload failed');
+  return !!(r&&r.ok);
+}
+async function uploadPhotosFor(id,files){
+  if(!id||!files||!files.length)return;
+  const list=[...files];let ok=0;
+  for(let i=0;i<list.length;i++){toast(`uploading ${i+1}/${list.length}…`);if(await uploadOne(id,list[i]))ok++;}
+  toast(ok?`${ok} photo${ok>1?'s':''} ✓`:'photo came blank — try again');
+  await refreshPhotos(id);
   try{sessionStorage.removeItem('_pl');}catch(e){}
 }
-function bindGphoto(){const g=document.getElementById('gphoto');if(!g||g._bound)return;g._bound=true;g.onchange=async()=>{const f=g.files&&g.files[0];if(!f)return;const id=_photoLine||parseInt(sessionStorage.getItem('_pl')||'0');await uploadPhotoFor(id,f);g.value='';};}
+// one item can carry many bill/goods photos — render them all + an add button
+function thumbsHTML(id,pids){
+  return `<div style="display:flex;flex-wrap:wrap;align-items:center">`+(pids||[]).filter(Boolean).map(pid=>
+    `<span style="position:relative;display:inline-block;margin:0 8px 8px 0">
+       <img src="${API}?action=photo-img&pid=${pid}" style="height:66px;border-radius:6px;vertical-align:middle">
+       <span onclick="delPhoto(${pid},${id})" style="position:absolute;top:-7px;right:-7px;background:#000;border:1px solid var(--line);color:var(--warn);border-radius:50%;width:21px;height:21px;line-height:19px;text-align:center;font-size:12px">✕</span>
+     </span>`).join('')+`</div>`;
+}
+function addBtnHTML(id,n){return `<button class="ph" id="ph${id}" style="width:100%" onclick="pickPhoto(${id})">📷 ${n?'add more photos':'add / upload photo(s)'}</button>`;}
+function photoCellHTML(l){
+  const pids=l.photo_ids?String(l.photo_ids).split(','):[];
+  return `<div id="phwrap${l.id}" style="grid-column:1/-1">${thumbsHTML(l.id,pids)}${addBtnHTML(l.id,pids.length)}</div>`;
+}
+async function refreshPhotos(id){
+  const w=document.getElementById('phwrap'+id);if(!w)return;
+  const d=await api('photos',{q:'&id='+id});const pids=(d.photos||[]).map(p=>p.id);
+  w.innerHTML=thumbsHTML(id,pids)+addBtnHTML(id,pids.length);
+}
+window.delPhoto=async(pid,id)=>{const r=await api('del-photo',{body:{pid}});if(r&&r.ok){toast('removed');refreshPhotos(id);}else toast('err');};
+function bindGphoto(){const g=document.getElementById('gphoto');if(!g||g._bound)return;g._bound=true;g.onchange=async()=>{const fs=g.files;if(!fs||!fs.length)return;const id=_photoLine||parseInt(sessionStorage.getItem('_pl')||'0');await uploadPhotosFor(id,fs);g.value='';};}
 window.pickPhoto=id=>{_photoLine=id;try{sessionStorage.setItem('_pl',id);}catch(e){}bindGphoto();const g=document.getElementById('gphoto');g.value='';g.click();};
-window.addEventListener('pageshow',()=>{bindGphoto();const g=document.getElementById('gphoto');if(g&&g.files&&g.files[0]){const id=_photoLine||parseInt(sessionStorage.getItem('_pl')||'0');if(id)uploadPhotoFor(id,g.files[0]);}});
+window.addEventListener('pageshow',()=>{bindGphoto();const g=document.getElementById('gphoto');if(g&&g.files&&g.files.length){const id=_photoLine||parseInt(sessionStorage.getItem('_pl')||'0');if(id)uploadPhotosFor(id,g.files);}});
 window.setKind=async(id,kind)=>{const l=DATA.lines.find(x=>x.id==id);let s={};try{s=JSON.parse(l.sku||'{}')}catch(e){}if(!kind){s={};}else{s.kind=kind;}const r=await api('set-sku',{body:{id,sku:s,by:(ME&&ME.name)||''}});if(r.ok){l.sku=JSON.stringify(s);renderBoard();toast(kind==='defined'?'fill brand + pack below':'marked loose');}};
 window.setSkuField=async(id,field,value)=>{const l=DATA.lines.find(x=>x.id==id);let s={};try{s=JSON.parse(l.sku||'{}')}catch(e){}if((field==='brand'||field==='product'||field==='pack_g')&&!s.kind)s.kind='defined';s[field]=(field==='pack_g'||field==='pack_qty')?(value?parseFloat(value):null):value;const r=await api('set-sku',{body:{id,sku:s,by:(ME&&ME.name)||''}});if(r.ok)l.sku=JSON.stringify(s);toast(r.ok?'saved':'err');};
 
@@ -115,7 +138,7 @@ async function receiveView(){
         <input inputmode="decimal" value="${l.qty_received||''}" id="rq${l.id}"></div>
        <div class="f"><label>Price ₹ (optional)</label>
         <input inputmode="decimal" value="${l.unit_cost_paise?(l.unit_cost_paise/100):''}" id="rp${l.id}"></div>
-       <button class="ph" id="ph${l.id}" style="grid-column:1/-1" onclick="pickPhoto(${l.id})">${l.has_photo?`<img src="${API}?action=photo-img&id=${l.id}" style="max-height:64px;border-radius:6px;vertical-align:middle"> change photo`:'📷 add / upload photo'}</button>
+       ${photoCellHTML(l)}
        <button class="ask" style="grid-column:1/-1" onclick="saveRecv(${l.id})">Save</button></div>`;
     c.appendChild(div);
   });
@@ -204,7 +227,7 @@ function vendorCard(vendor,lines,chan){
           <option value="go" ${l.channel==='go'?'selected':''}>collect</option>
           <option value="delivered" ${l.channel==='delivered'?'selected':''}>delivered</option></select></div>
         ${isCont?`<div class="f" style="grid-column:1/-1"><label>Units in 1 ${l.uom}${(ppN&&recNum)?` — total ${+(ppN*recNum).toFixed(0)} pcs`:''}</label><input inputmode="decimal" ${reqd?'disabled':''} value="${sku.pack_qty||''}" onchange="setSkuField(${l.id},'pack_qty',this.value)" placeholder="how many pieces in 1 ${l.uom}"></div>`:''}
-        <button class="ph" id="ph${l.id}" style="grid-column:1/-1" onclick="pickPhoto(${l.id})">${l.has_photo?`<img src="${API}?action=photo-img&id=${l.id}" style="max-height:64px;border-radius:6px;vertical-align:middle"> change photo`:'📷 add / upload photo'}</button>
+        ${photoCellHTML(l)}
       </div>`;
     card.appendChild(row);
   });

@@ -134,6 +134,17 @@ async function ensureTables(db) {
     active INTEGER DEFAULT 1, created_by TEXT DEFAULT '', created_at TEXT DEFAULT '')`).run();
   // vpas: JSON array of ALL a vendor's UPI handles (one vendor can pay-in under several). vpa = primary (for the pay link).
   try { await db.prepare("ALTER TABLE buy_vendors ADD COLUMN vpas TEXT DEFAULT ''").run(); } catch (e) {}
+  // multi-photo: MANY images per line (append-only). Supersedes the single-row buy_photos table.
+  await db.prepare(`CREATE TABLE IF NOT EXISTS buy_line_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, line_id INTEGER, photo TEXT,
+    uploaded_by TEXT DEFAULT '', uploaded_at TEXT DEFAULT '')`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_blp_line ON buy_line_photos(line_id)`).run();
+  // one-time, idempotent migration of any legacy single photos into the multi table
+  try {
+    await db.prepare(`INSERT INTO buy_line_photos (line_id,photo,uploaded_by,uploaded_at)
+      SELECT line_id,photo,uploaded_by,uploaded_at FROM buy_photos
+      WHERE photo IS NOT NULL AND line_id NOT IN (SELECT line_id FROM buy_line_photos)`).run();
+  } catch (e) { /* legacy table may not exist */ }
   await seedVendors(db);
 }
 
@@ -205,7 +216,10 @@ export async function onRequest(context) {
       const date = url.searchParams.get('date') || istToday();
       await seedIfEmpty(db, date);
       const brand = url.searchParams.get('brand'); // optional filter (kitchen QR)
-      let sql = 'SELECT buy_lines.*, (SELECT 1 FROM buy_photos p WHERE p.line_id=buy_lines.id) AS has_photo FROM buy_lines WHERE biz_date=?';
+      let sql = `SELECT buy_lines.*,
+        (SELECT COUNT(*) FROM buy_line_photos p WHERE p.line_id=buy_lines.id) AS photo_count,
+        (SELECT group_concat(p.id) FROM buy_line_photos p WHERE p.line_id=buy_lines.id) AS photo_ids
+        FROM buy_lines WHERE biz_date=?`;
       const binds = [date];
       if (brand) { sql += ' AND brand=?'; binds.push(brand); }
       sql += ' ORDER BY channel DESC, vendor, id';
@@ -237,17 +251,28 @@ export async function onRequest(context) {
       return json({ ok: true, requests: reqs });
     }
 
-    // ── get-photo: return the stored image for a line ────────────
+    // ── get-photo: return the latest stored image for a line ─────
     if (action === 'get-photo') {
       const id = url.searchParams.get('id');
-      const r = await db.prepare('SELECT photo, uploaded_by, uploaded_at FROM buy_photos WHERE line_id=?').bind(id).first();
+      const r = await db.prepare('SELECT photo, uploaded_by, uploaded_at FROM buy_line_photos WHERE line_id=? ORDER BY id DESC LIMIT 1').bind(id).first();
       return json({ ok: true, photo: r ? r.photo : null, by: r ? r.uploaded_by : '', at: r ? r.uploaded_at : '' });
     }
 
-    // ── photo-img: serve raw image bytes so <img src> can show a thumbnail ──
-    if (action === 'photo-img') {
+    // ── photos: list every image on a line (ids + meta, no bytes) ─
+    if (action === 'photos') {
       const id = url.searchParams.get('id');
-      const r = await db.prepare('SELECT photo FROM buy_photos WHERE line_id=?').bind(id).first();
+      const rows = (await db.prepare('SELECT id, uploaded_by, uploaded_at FROM buy_line_photos WHERE line_id=? ORDER BY id').bind(id).all()).results || [];
+      return json({ ok: true, photos: rows });
+    }
+
+    // ── photo-img: serve raw image bytes so <img src> can show a thumbnail ──
+    // by photo id (pid) for a specific image, or by line id (latest on that line)
+    if (action === 'photo-img') {
+      const pid = url.searchParams.get('pid');
+      const id = url.searchParams.get('id');
+      const r = pid
+        ? await db.prepare('SELECT photo FROM buy_line_photos WHERE id=?').bind(pid).first()
+        : await db.prepare('SELECT photo FROM buy_line_photos WHERE line_id=? ORDER BY id DESC LIMIT 1').bind(id).first();
       const m = r && r.photo ? /^data:(image\/[a-z+]+);base64,(.*)$/i.exec(r.photo) : null;
       if (!m) return new Response('', { status: 404, headers: CORS });
       const bin = atob(m[2]); const bytes = new Uint8Array(bin.length);
@@ -463,13 +488,22 @@ export async function onRequest(context) {
         return json({ ok: true });
       }
 
-      // photo: one image per line (base64 data URL). No PIN — kitchen QR can use it too.
+      // photo: APPEND one image to a line (base64 data URL) — many allowed. No PIN — kitchen QR can use it too.
       if (action === 'photo') {
         const { id, photo, by } = body;
         if (!id || !photo) return json({ ok: false, error: 'missing id/photo' });
-        await db.prepare(`INSERT INTO buy_photos (line_id,photo,uploaded_by,uploaded_at) VALUES (?,?,?,?)
-          ON CONFLICT(line_id) DO UPDATE SET photo=excluded.photo, uploaded_by=excluded.uploaded_by, uploaded_at=excluded.uploaded_at`)
+        const c = await db.prepare('SELECT COUNT(*) AS n FROM buy_line_photos WHERE line_id=?').bind(id).first();
+        if (c && c.n >= 8) return json({ ok: false, error: 'max 8 photos per item' });
+        const res = await db.prepare('INSERT INTO buy_line_photos (line_id,photo,uploaded_by,uploaded_at) VALUES (?,?,?,?)')
           .bind(id, photo, (by || '').slice(0, 24), istNow()).run();
+        return json({ ok: true, photo_id: res.meta.last_row_id });
+      }
+
+      // del-photo: remove one image by its photo id. No PIN (same surface as upload).
+      if (action === 'del-photo') {
+        const { pid } = body;
+        if (!pid) return json({ ok: false, error: 'missing pid' });
+        await db.prepare('DELETE FROM buy_line_photos WHERE id=?').bind(pid).run();
         return json({ ok: true });
       }
 
