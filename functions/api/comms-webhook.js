@@ -2,6 +2,14 @@
 // Receives delivery receipts + inbound replies. Captures opt-in YES/NO into comms_optin
 // and ack actions (RESOLVE/SNOOZE) into comms_outbox.
 // Forwards everything else to brand site so existing whatsapp.js flows keep working.
+//
+// THE BRAIN (glasses path): a free-form question from the OWNER on the Sparksol
+// line (the dedicated, no-customer-flow WABA) is routed to answerBrainQuery() —
+// Claude reads live ops data and replies. This is how the Ray-Ban Meta glasses
+// ask-and-hear loop works: dictated question in, spoken answer read aloud. Gated
+// to OWNER_PHONE + sparksol, so it can never touch HE/NCH customer messaging.
+
+import { answerBrainQuery } from './_lib/brain.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -25,7 +33,7 @@ const NO_RX  = /^\s*(no|n|stop|nahi|nahin|opt[\s_-]?out|cancel|unsubscribe)\s*\.
 const ACK_RX = /^\s*(resolved?|done|fixed|cleared|ack(nowledge)?d?|✅)\s*\.?\s*$/i;
 const SNOOZE_RX = /^\s*(snooze|later|busy|wait|hold)\s*\.?\s*$/i;
 
-async function handleInboundMessage(env, { from_phone, msg_text, msg_id, business_phone_id }) {
+async function handleInboundMessage(env, { from_phone, msg_text, msg_id, business_phone_id, originBase }) {
   const recipient = normalizePhone(from_phone);
 
   // Determine brand by which business phone the message came in to.
@@ -146,7 +154,41 @@ async function handleInboundMessage(env, { from_phone, msg_text, msg_id, busines
     }
   }
 
+  // 4. THE BRAIN — owner's free-form question on the Sparksol line → Claude.
+  //    Falls through to here only when nothing above matched (not an opt-in,
+  //    not an ack/snooze). This is the Ray-Ban Meta glasses path: the question
+  //    Nihaf dictated comes in, the spoken answer goes back and is read aloud.
+  //    Hard-gated to the owner phone + sparksol so customer flows are untouched.
+  const ownerPhone = env.OWNER_PHONE ? normalizePhone(env.OWNER_PHONE) : null;
+  if (brand === 'sparksol' && ownerPhone && recipient === ownerPhone && body) {
+    try {
+      const answer = await answerBrainQuery(env, { question: body, originBase });
+      await sendSparksolText(env, recipient, answer);
+      return { handled: 'brain', recipient };
+    } catch (e) {
+      await sendSparksolText(env, recipient, `Brain hit an error: ${String(e.message || e).slice(0, 150)}`);
+      return { handled: 'brain-error', error: String(e.message || e) };
+    }
+  }
+
   return { handled: 'none' };
+}
+
+// Free-form text out on the Sparksol line. Used by the brain to speak its answer
+// back. Allowed because the owner just messaged us (24h window is open).
+async function sendSparksolText(env, to, body) {
+  const phoneId = env.WA_SPARKSOL_PHONE_ID;
+  const token   = env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN;
+  if (!phoneId || !token) { console.error('sendSparksolText: missing sparksol creds'); return; }
+  try {
+    await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body } }),
+    });
+  } catch (e) {
+    console.error('sendSparksolText failed:', e?.message || e);
+  }
 }
 
 async function sendWelcomeReply(env, to, brand, staffName) {
@@ -411,6 +453,7 @@ export async function onRequest(context) {
           || '';
         const result = await handleInboundMessage(env, {
           from_phone, msg_text, msg_id, business_phone_id,
+          originBase: `${url.protocol}//${url.host}`,
         });
         handled.push({ type: 'message', from: from_phone, ...result });
       }
