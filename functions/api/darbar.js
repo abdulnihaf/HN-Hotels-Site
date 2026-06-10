@@ -211,7 +211,7 @@ async function home(db, url) {
 
   // O4 — chronic missed-punch: same pin odd-count >=3 of trailing 7 business days.
   const chronic = await db.prepare(
-    `SELECT e.pin, COALESCE(e.known_as,e.name) AS name, e.brand_label,
+    `SELECT e.id, e.pin, COALESCE(e.known_as,e.name) AS name, e.brand_label,
             COUNT(*) AS odd_days
        FROM hr_attendance_daily ad
        JOIN hr_employees e ON e.id=ad.employee_id AND e.is_active=1 AND e.track_attendance=1
@@ -220,18 +220,18 @@ async function home(db, url) {
       GROUP BY e.id HAVING odd_days >= 3 ORDER BY odd_days DESC`
   ).bind(businessDay).all();
   for (const r of chronic.results || []) {
-    exceptions.push({ type: 'chronic_missed', pin: r.pin, name: r.name, brand: r.brand_label, odd_days: r.odd_days });
+    exceptions.push({ type: 'chronic_missed', id: r.id, pin: r.pin, name: r.name, brand: r.brand_label, odd_days: r.odd_days });
   }
 
   // O3 — never-punched roster pin (enrolled or not?).
   const never = await db.prepare(
-    `SELECT e.pin, COALESCE(e.known_as,e.name) AS name, e.brand_label
+    `SELECT e.id, e.pin, COALESCE(e.known_as,e.name) AS name, e.brand_label
        FROM hr_employees e
       WHERE e.is_active=1 AND e.track_attendance=1 AND e.pin IS NOT NULL AND e.pin!=''
         AND NOT EXISTS (SELECT 1 FROM hr_cams_punches p WHERE p.pin = e.pin)`
   ).all();
   for (const r of never.results || []) {
-    exceptions.push({ type: 'never_punched', pin: r.pin, name: r.name, brand: r.brand_label });
+    exceptions.push({ type: 'never_punched', id: r.id, pin: r.pin, name: r.name, brand: r.brand_label });
   }
 
   // O6 — pay not set: an active person the system cannot pay. The app asks
