@@ -210,6 +210,12 @@ function cardFor(x) {
       <div class="xc-top"><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
         <div class="xc-meta">Forgot a punch on <b>${x.odd_days}</b> of the last 7 days — needs a word, not another SMS.</div></div><span class="pill yellow">chronic</span></div></div>`;
   }
+  if (x.type === 'pay_missing') {
+    return `<div class="card xcard chronic">
+      <div class="xc-top"><div><div class="xc-name">${esc(x.name)} <span class="pill ${(x.brand || '').toLowerCase()}">${x.brand || ''}</span></div>
+        <div class="xc-meta">No pay set — the system can't show money facts for them. Their settlement line is held until you set it.</div></div><span class="pill gold">pay not set</span></div>
+      <div class="acts"><button class="btn primary" onclick='setPaySheet(${x.id}, ${JSON.stringify(x.name)})'>Set pay</button></div></div>`;
+  }
   if (x.type === 'never_punched') {
     return `<div class="card xcard never">
       <div class="xc-top"><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
@@ -622,6 +628,28 @@ function renderRoster() {
       <div class="role">${esc(e.job_name || '')} ${e.pin ? '· PIN ' + esc(e.pin) : ''} · ${esc(e.pay_type || '')}</div></div>
       ${pay ? `<div style="font-weight:700;font-size:14px" class="num">${pay}</div>` : ''}</div></div>`;
   }).join('');
+}
+function setPaySheet(id, name) {
+  if (!S.fin) return toast('Pay is owner-only', 'info');
+  if (needToken()) return;
+  sheet(`<h2>${esc(name)} — set pay</h2><div class="sd">One number, once. Their card unlocks everywhere the moment you save.</div>
+    <div class="fld"><label>Pay type</label><select id="spType"><option value="Contract">Daily wage</option><option value="Monthly">Monthly</option></select></div>
+    <div class="fld"><label>Amount ₹ (per day / per month)</label><input id="spAmt" type="number" inputmode="numeric" placeholder="e.g. 600"></div>
+    <div class="acts"><button class="btn primary" onclick='doSetPay(${id})'>Save pay</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
+}
+async function doSetPay(id) {
+  const amt = Number($('spAmt').value);
+  if (!amt) return toast('Enter the amount', 'err');
+  const type = $('spType').value;
+  try {
+    await post('/api/hr-admin', {
+      action: 'employee-upsert', id,
+      pay_type: type,
+      monthly_salary: type === 'Monthly' ? amt : (amt * 30),
+      daily_rate: type === 'Contract' ? amt : Math.round(amt / 30),
+    });
+    closeSheet(); toast('Pay set'); loadHome();
+  } catch (e) { toast(e.message, 'err'); }
 }
 function rosterTap(id) {
   // The person's everything: month grid + three lanes + actions. Over-write
