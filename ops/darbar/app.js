@@ -571,7 +571,7 @@ async function loadPayCtx(mode, empId, month) {
     <div class="fld"><label>📲 Receipt goes to — confirm ${esc(emp.name)}'s number</label><input id="payPhone" type="tel" inputmode="numeric" value="${esc(emp.phone || '')}" placeholder="10-digit WhatsApp number"></div>
     <div class="fld"><label>Paid via</label><select id="payVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
     <div class="fld"><label>Note (optional)</label><input id="payNote" placeholder="${mode === 'settle' ? 'final settlement / partial' : 'reason'}"></div>
-    <div class="acts"><button class="btn primary" onclick='doPay("${mode}", ${emp.id}, ${JSON.stringify(month)})'>${verb} — ${esc(monthLabel(month))}</button><button class="btn ghost-b sm" onclick='overrideSheet(${emp.id}, ${JSON.stringify(emp.name)})'>Over-write</button><button class="btn ghost-b sm" onclick="closeSheet()">Cancel</button></div>`);
+    <div class="acts"><button class="btn primary" onclick='doPay("${mode}", ${emp.id}, ${JSON.stringify(month)})'>${verb} — ${esc(monthLabel(month))}</button><button class="btn ghost-b sm" onclick='overrideSheet(${emp.id}, ${JSON.stringify(emp.name)})'>Over-write</button><button class="btn danger sm" onclick='confirmExit(${emp.id}, ${JSON.stringify(emp.name)})'>Mark left</button><button class="btn ghost-b sm" onclick="closeSheet()">Cancel</button></div>`);
 }
 
 async function doPay(mode, empId, month) {
