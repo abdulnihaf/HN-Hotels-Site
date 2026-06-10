@@ -430,7 +430,7 @@ async function loadPay() {
     const byEmp = {};
     adv.forEach(a => {
       const id = a.employee_id;
-      if (!byEmp[id]) byEmp[id] = { name: a.employee_known_as || a.employee_name || a.name || a.known_as || ('Emp #' + id), brand: a.brand_label || '', advTotal: 0, setTotal: 0 };
+      if (!byEmp[id]) byEmp[id] = { id, name: a.employee_known_as || a.employee_name || a.name || a.known_as || ('Emp #' + id), brand: a.brand_label || '', advTotal: 0, setTotal: 0 };
       if (a.source === 'settlement') byEmp[id].setTotal += Number(a.amount || 0);
       else byEmp[id].advTotal += Number(a.amount || 0);
     });
@@ -442,9 +442,9 @@ async function loadPay() {
         ? '<span class="pill" style="background:var(--green-soft);color:var(--green)">✓ Settled</span>'
         : '<span class="pill" style="background:var(--gold-soft);color:var(--gold)">advance only</span>';
       const parts = [p.advTotal ? `advance ${inr(p.advTotal)}` : '', p.setTotal ? `settlement ${inr(p.setTotal)}` : ''].filter(Boolean).join(' + ');
-      return `<div class="card"><div class="xc-top">
+      return `<div class="card" onclick='loadPayCtx("settle", ${p.id}, ${JSON.stringify(month)})'><div class="xc-top">
         <div><div class="xc-name">${esc(p.name)} ${p.brand ? `<span class="pill ${(p.brand || '').toLowerCase()}">${esc(p.brand)}</span>` : ''} ${badge}</div>
-        <div class="xc-meta">${esc(parts)}${settled ? ' · month complete' : ''}</div></div>
+        <div class="xc-meta">${esc(parts)}${settled ? ' · month complete' : ''} · <span style="color:var(--gold)">tap for the trail</span></div></div>
         <div class="num" style="font-weight:800;font-size:17px">${inr(total)}</div></div></div>`;
     }).join('');
   } catch (e) { $('advList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -547,8 +547,10 @@ async function loadPayCtx(mode, empId, month) {
   const chips = months.map(mm =>
     `<button class="mchip ${mm === month ? 'on' : ''}" onclick="loadPayCtx('${mode}', ${emp.id}, '${mm}')">${esc(monthLabel(mm))}${mm === currentMonthIST() ? ' · live' : ''}</button>`).join('');
   const rmark = r => r.receipt_status === 'sent' ? ' ✓' : r.receipt_status === 'failed' ? ' ✗' : r.receipt_status === 'no_phone' ? ' (no phone)' : '';
-  const advs = (c.advances.rows || []).map(r => `${inr(r.amount)} · ${String(r.advance_date).slice(5)} · ${esc(r.paid_via || '')}${rmark(r)}`).join('   ') || 'none';
-  const setts = ((c.settlements && c.settlements.rows) || []).map(r => `${inr(r.amount)} · ${String(r.advance_date || '').slice(5)} · ${esc(r.paid_via || '')}${rmark(r)}`).join('   ') || 'none';
+  // THE TRAIL — every piece on its own line: ₹ · date · mode · receipt mark.
+  const payLine = r => `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line-soft)"><span class="num" style="font-weight:700;color:var(--text)">${inr(r.amount)}</span><span>${esc(fmtDayShort(String(r.advance_date || '').slice(0, 10)))} · ${esc(r.paid_via || '')}${rmark(r)}</span></div>`;
+  const advs = (c.advances.rows || []).map(payLine).join('') || 'none';
+  const setts = ((c.settlements && c.settlements.rows) || []).map(payLine).join('') || 'none';
   const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
   const verb = mode === 'settle' ? 'Record settlement' : 'Give advance';
   sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'} — ${esc(emp.name)}</h2>
@@ -562,9 +564,9 @@ async function loadPayCtx(mode, empId, month) {
         <span class="pill ${a.absent ? 'red' : 'grey'}">absent ${a.absent}</span>
         ${a.off ? `<span class="pill purple">off ${a.off}</span>` : ''}</div></div>
     <div class="card"><div class="xc-top"><div><b>2 · Advances given</b> <span class="xc-meta">${esc(monthLabel(month))}</span></div><div class="num" style="font-weight:800">${inr(c.advances.total)}</div></div>
-      <div class="xc-meta">${esc(advs)}</div></div>
+      <div class="xc-meta">${advs}</div></div>
     <div class="card"><div class="xc-top"><div><b>3 · Settled</b></div><div class="num" style="font-weight:800">${inr((c.settlements && c.settlements.total) || 0)}</div></div>
-      <div class="xc-meta">${esc(setts)}</div></div>
+      <div class="xc-meta">${setts}</div></div>
     <div class="fld"><label>${mode === 'settle' ? 'You paid ₹ — your number' : 'Advance amount ₹'}</label><input id="payAmt" type="number" inputmode="numeric" placeholder="your number"></div>
     <div class="fld"><label>📲 Receipt goes to — confirm ${esc(emp.name)}'s number</label><input id="payPhone" type="tel" inputmode="numeric" value="${esc(emp.phone || '')}" placeholder="10-digit WhatsApp number"></div>
     <div class="fld"><label>Paid via</label><select id="payVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
