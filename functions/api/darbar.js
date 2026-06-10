@@ -234,6 +234,18 @@ async function home(db, url) {
     exceptions.push({ type: 'never_punched', pin: r.pin, name: r.name, brand: r.brand_label });
   }
 
+  // O6 — pay not set: an active person the system cannot pay. The app asks
+  // the owner directly (owner directive 2026-06-11: collect what's needed
+  // through the UI, never through chat).
+  const noPay = await db.prepare(
+    `SELECT id, pin, COALESCE(known_as,name) AS name, brand_label
+       FROM hr_employees
+      WHERE is_active=1 AND COALESCE(monthly_salary,0)=0 AND COALESCE(daily_rate,0)=0`
+  ).all();
+  for (const r of noPay.results || []) {
+    exceptions.push({ type: 'pay_missing', id: r.id, pin: r.pin, name: r.name, brand: r.brand_label });
+  }
+
   return json({
     business_day: businessDay,
     ist_now: dayRow.ist_now,
