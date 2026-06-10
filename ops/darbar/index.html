@@ -199,6 +199,25 @@
     .spin{animation:spin .9s linear infinite;display:inline-block}
     .skel{background:linear-gradient(90deg,var(--e1),var(--e2),var(--e1));background-size:200% 100%;animation:sh 1.2s infinite;border-radius:var(--r);height:64px}
     @keyframes sh{to{background-position:-200% 0}}
+
+    /* ── month attendance grid (pay/settle sheets) ── */
+    .mchips{display:flex;gap:8px;margin:2px 0 12px}
+    .mchip{flex:1;padding:10px 8px;border-radius:11px;border:1px solid var(--line);background:var(--e2);color:var(--dim);text-align:center;font-weight:700;font-size:13px}
+    .mchip.on{border-color:var(--gold-bd);color:var(--gold);background:var(--gold-soft)}
+    .agrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:9px}
+    .agw{font-size:9px;color:var(--mute);text-align:center;padding-bottom:1px}
+    .agc{aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-variant-numeric:tabular-nums;background:var(--e2);color:var(--mute)}
+    .agc.ok{background:var(--green-soft);color:var(--green);font-weight:700}
+    .agc.err{background:var(--yellow-soft);color:var(--yellow);font-weight:700}
+    .agc.absent{background:var(--red-soft);color:var(--red)}
+    .agc.off{background:var(--purple-soft);color:var(--purple)}
+    .agc.open{background:var(--blue-soft);color:var(--blue);font-weight:700;outline:1.5px solid rgba(94,158,255,.5);outline-offset:-1.5px}
+    .agc.future{background:transparent;border:1px dashed var(--line-soft);color:#3a3a42}
+    .agc.nodata{background:var(--e1);color:#4a4a52}
+    .agc.blank{background:transparent}
+    .aleg{display:flex;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:10px;color:var(--dim)}
+    .aleg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+    .aleg i.ok{background:var(--green)}.aleg i.err{background:var(--yellow)}.aleg i.absent{background:var(--red)}.aleg i.off{background:var(--purple)}.aleg i.open{background:var(--blue)}
   </style>
 </head>
 <body>
