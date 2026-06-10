@@ -187,7 +187,7 @@ function cardFor(x) {
     const pay = x.monthly_salary ? `${inr(x.monthly_salary)}/mo` : x.daily_rate ? `${inr(x.daily_rate)}/day` : '';
     const tierPill = x.tier === 'certain' ? '<span class="pill red">gone 21d+</span>' : x.tier === 'strong' ? '<span class="pill yellow">14d+</span>' : '<span class="pill grey">7d+</span>';
     return `<div class="card xcard departed">
-      <div class="xc-top"><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
+      <div class="xc-top" onclick='rosterTap(${x.id})'><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
         <div class="xc-meta">Silent <b>${x.days_silent}d</b> · still on payroll ${pay ? `at <b>${pay}</b>` : ''}<br>last punch ${x.last_punch ? esc(x.last_punch.slice(0, 10)) : 'never'}</div></div>${tierPill}</div>
       <div class="acts">
         <button class="btn danger" onclick='confirmExit(${x.id}, ${JSON.stringify(x.name)})'>Mark left</button>
@@ -207,18 +207,18 @@ function cardFor(x) {
   }
   if (x.type === 'chronic') {
     return `<div class="card xcard chronic">
-      <div class="xc-top"><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
+      <div class="xc-top" onclick='rosterTap(${x.id})'><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
         <div class="xc-meta">Forgot a punch on <b>${x.odd_days}</b> of the last 7 days — needs a word, not another SMS.</div></div><span class="pill yellow">chronic</span></div></div>`;
   }
   if (x.type === 'pay_missing') {
     return `<div class="card xcard chronic">
-      <div class="xc-top"><div><div class="xc-name">${esc(x.name)} <span class="pill ${(x.brand || '').toLowerCase()}">${x.brand || ''}</span></div>
+      <div class="xc-top" onclick='rosterTap(${x.id})'><div><div class="xc-name">${esc(x.name)} <span class="pill ${(x.brand || '').toLowerCase()}">${x.brand || ''}</span></div>
         <div class="xc-meta">No pay set — the system can't show money facts for them. Their settlement line is held until you set it.</div></div><span class="pill gold">pay not set</span></div>
       <div class="acts"><button class="btn primary" onclick='setPaySheet(${x.id}, ${JSON.stringify(x.name)})'>Set pay</button></div></div>`;
   }
   if (x.type === 'never_punched') {
     return `<div class="card xcard never">
-      <div class="xc-top"><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
+      <div class="xc-top" onclick='rosterTap(${x.id})'><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
         <div class="xc-meta">On roster (PIN ${esc(x.pin)}) but has <b>never punched</b> — enrolled on the device, or not really working?</div></div><span class="pill blue">no punches</span></div></div>`;
   }
   return '';
