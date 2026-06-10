@@ -543,6 +543,15 @@ export async function onRequest({ request, env }) {
        ORDER BY date
     `).bind(employeeId, start, end).all();
 
+    // Every day row of the month — feeds the visual attendance grid on the
+    // pay/settle sheet (the owner sees the person's whole month before paying).
+    const dayRows = await db.prepare(`
+      SELECT date, status, COALESCE(punch_count,0) AS punch_count, first_in_at, last_out_at
+        FROM hr_attendance_daily
+       WHERE employee_id = ? AND date BETWEEN ? AND ?
+       ORDER BY date
+    `).bind(employeeId, start, end).all();
+
     const advRows = await db.prepare(`
       SELECT id, advance_date, amount, paid_via, COALESCE(reason,'') AS reason
         FROM hr_advances
@@ -574,6 +583,7 @@ export async function onRequest({ request, env }) {
         absent: Number(att?.absent || 0), off: Number(att?.off || 0),
         pending: Number(att?.pending || 0), recorded: Number(att?.recorded || 0),
         off_absent_days: (offDays.results || []),
+        days: (dayRows.results || []),
       },
       advances: { total: advances_total, rows: advRows.results || [] },
       settlements: { total: settled_total, rows: setRows.results || [] },

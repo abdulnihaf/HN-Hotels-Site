@@ -424,104 +424,126 @@ async function loadPay() {
     }).join('');
   } catch (e) { $('advList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
-async function openAdvance() {
-  if (needToken()) return;
-  if (!S.employees.length) { try { S.employees = (await api(`/api/hr-admin?action=employees&active=1`)).employees || []; } catch {} }
-  const opts = S.employees.filter(e => e.is_active).map(e => `<option value="${e.id}">${esc(e.known_as || e.name)} · ${esc(e.brand_label)}</option>`).join('');
-  sheet(`<h2>Pay advance</h2><div class="sd">Records the cash event in the ledger — any day, any amount.</div>
-    <div class="fld"><label>Worker</label><select id="advEmp" onchange="advPhonePrefill()">${opts}</select></div>
-    <div class="fld"><label>Amount ₹</label><input id="advAmt" type="number" inputmode="numeric" placeholder="3000"></div>
-    <div class="fld"><label>📲 Receipt goes to — confirm the worker's number</label><input id="advPhone" type="tel" inputmode="numeric" placeholder="10-digit WhatsApp number"></div>
-    <div class="fld"><label>Paid via</label><select id="advVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
-    <div class="fld"><label>Note (optional)</label><input id="advNote" placeholder="reason"></div>
-    <div class="acts"><button class="btn primary" onclick="doAdvance()">Pay + notify</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
-  advPhonePrefill();
-}
-function advPhonePrefill() {
-  const sel = $('advEmp'); if (!sel || !$('advPhone')) return;
-  const e = S.employees.find(x => String(x.id) === String(sel.value));
-  $('advPhone').value = (e && e.phone) || '';
-}
-async function doAdvance() {
-  const amt = Number($('advAmt').value);
-  if (!amt) return toast('Enter an amount', 'err');
-  try {
-    const r = await fetch('/api/hr-payroll?action=record-advance', {
-      method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ employee_id: Number($('advEmp').value), amount: amt, advance_date: todayIST(), paid_via: $('advVia').value, reason: $('advNote').value || null, confirmed_phone: ($('advPhone') || {}).value || '', pay_period: payPeriod() }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || 'failed');
-    closeSheet(); toast(receiptToast('Advance recorded', j.receipt)); loadPay();
-  } catch (e) { toast(e.message, 'err'); }
-}
-// Reflect whether the WhatsApp receipt actually went out, in the confirmation toast.
-function receiptToast(base, rc) {
-  if (!rc) return base;
-  if (rc.ok) return base + ' · receipt sent';
-  if (rc.reason === 'no_phone' || rc.attempted === false) return base + ' · no number on file, no receipt';
-  return base + ' · recorded, receipt didn’t send';
+/* ━━━ Unified pay context — settle OR advance, month chips + visual grid ━━━
+ * Owner rules (2026-06-10): three SEPARATE fact lanes, no fused math; the
+ * attendance grid comes up BEFORE any money moves; settling defaults to the
+ * month being cleared (May until the 10th), an advance defaults to the
+ * CURRENT month — one tap flips it. */
+function currentMonthIST() { return todayIST().slice(0, 7); }
+
+function attGridHTML(c) {
+  const month = c.month, days = (c.attendance && c.attendance.days) || [];
+  const map = {}; days.forEach(d => { map[d.date] = d; });
+  const [y, m] = month.split('-').map(Number);
+  const nDays = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const firstDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const biz = bizDayIST();
+  const wd = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => `<div class="agw">${x}</div>`).join('');
+  let cells = '';
+  for (let i = 0; i < firstDow; i++) cells += '<div class="agc blank"></div>';
+  for (let d = 1; d <= nDays; d++) {
+    const ds = `${month}-${String(d).padStart(2, '0')}`;
+    const r = map[ds];
+    let cls = 'nodata';
+    if (ds > biz) cls = 'future';
+    else if (ds === biz) cls = 'open';                       // today — still open till 4am
+    else if (r) {
+      if (r.status === 'week_off' || r.status === 'leave') cls = 'off';
+      else if ((r.punch_count || 0) === 0) cls = 'absent';
+      else cls = (r.punch_count % 2 === 1) ? 'err' : 'ok';   // any tap = worked; odd = punch missing
+    }
+    cells += `<div class="agc ${cls}">${d}</div>`;
+  }
+  const isCur = month === currentMonthIST();
+  return `<div class="agrid">${wd}${cells}</div>
+    <div class="aleg"><span><i class="ok"></i>worked</span><span><i class="err"></i>punch missing</span><span><i class="absent"></i>absent</span><span><i class="off"></i>off</span>${isCur ? '<span><i class="open"></i>today — closes 4am</span>' : ''}</div>`;
 }
 
-/* ━━━ Settle a person — flexible, any day, owner sets the amount ━━━ */
 async function openSettle() {
   if (!S.fin) return toast('Pay is owner-only', 'info');
+  openPay('settle');
+}
+async function openAdvance() { openPay('advance'); }
+
+async function openPay(mode) {
   if (needToken()) return;
   if (!S.employees.length) { try { S.employees = (await api('/api/hr-admin?action=employees&active=1')).employees || []; } catch {} }
   const opts = S.employees.filter(e => e.is_active).map(e => `<option value="${e.id}">${esc(e.known_as || e.name)} · ${esc(e.brand_label || '')}</option>`).join('');
   if (!opts) return toast('No staff loaded — re-enter PIN', 'err');
-  sheet(`<h2>Settle a person</h2><div class="sd">Pick who you're paying — you'll see their days off, advance taken and what's left, then you type what you actually paid.</div>
-    <div class="fld"><label>Worker</label><select id="setEmp">${opts}</select></div>
-    <div class="acts"><button class="btn primary" onclick="loadSettle()">See & settle</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
+  const title = mode === 'settle' ? 'Settle a person' : 'Pay advance';
+  const sub = mode === 'settle'
+    ? "Pick who you're paying — their month comes up first: attendance, advances, settled."
+    : 'Attendance comes up first — you never pay blind. Advance lands on the month you choose.';
+  sheet(`<h2>${title}</h2><div class="sd">${sub}</div>
+    <div class="fld"><label>Worker</label><select id="payEmp">${opts}</select></div>
+    <div class="acts"><button class="btn primary" onclick="loadPayCtx('${mode}')">See & ${mode === 'settle' ? 'settle' : 'pay'}</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
 }
-async function loadSettle() {
-  const sel = $('setEmp'); const id = sel ? sel.value : null;
-  if (!id) return;
-  const month = payPeriod();
+
+async function loadPayCtx(mode, empId, month) {
+  empId = empId || ($('payEmp') && $('payEmp').value);
+  if (!empId) return;
+  month = month || (mode === 'settle' ? payPeriod() : currentMonthIST());
   sheet(`<h2>Loading…</h2><div class="skel"></div><div class="skel"></div>`);
   let c;
-  try { c = await api(`/api/hr-payroll?action=settle-context&employee_id=${id}&month=${month}`); }
-  catch (e) { return sheet(`<h2>Settle</h2><div class="empty">${esc(e.message)}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`); }
-  if (!c || c.error || !c.employee) return sheet(`<h2>Settle</h2><div class="empty">${esc((c && c.error) || 'no data')}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`);
+  try { c = await api(`/api/hr-payroll?action=settle-context&employee_id=${empId}&month=${month}`); }
+  catch (e) { return sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'}</h2><div class="empty">${esc(e.message)}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`); }
+  if (!c || c.error || !c.employee) return sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'}</h2><div class="empty">${esc((c && c.error) || 'no data')}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`);
   const a = c.attendance, emp = c.employee;
-  const off = (a.off_absent_days || []).map(d => `${String(d.date).slice(8)} ${d.status === 'week_off' ? 'off' : d.status === 'leave' ? 'leave' : 'absent'}`).join(' · ') || '—';
-  const advs = (c.advances.rows || []).map(r => `${inr(r.amount)} · ${String(r.advance_date).slice(5)}`).join('   ') || 'none';
-  const setts = ((c.settlements && c.settlements.rows) || []).map(r => `${inr(r.amount)} · ${String(r.advance_date || r.date || '').slice(5)}`).join('   ') || 'none';
+  const months = [...new Set([activeSettlementMonth(), currentMonthIST()])];
+  const chips = months.map(mm =>
+    `<button class="mchip ${mm === month ? 'on' : ''}" onclick="loadPayCtx('${mode}', ${emp.id}, '${mm}')">${esc(monthLabel(mm))}${mm === currentMonthIST() ? ' · live' : ''}</button>`).join('');
+  const advs = (c.advances.rows || []).map(r => `${inr(r.amount)} · ${String(r.advance_date).slice(5)} · ${esc(r.paid_via || '')}`).join('   ') || 'none';
+  const setts = ((c.settlements && c.settlements.rows) || []).map(r => `${inr(r.amount)} · ${String(r.advance_date || '').slice(5)} · ${esc(r.paid_via || '')}`).join('   ') || 'none';
   const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
-  // THREE SEPARATE LANES, no fused math (owner's rule 2026-06-10): the owner is
-  // the calculator. 1·attendance 2·advances 3·settled — facts only, he decides.
-  sheet(`<h2>Settle ${esc(emp.name)}</h2>
+  const verb = mode === 'settle' ? 'Record settlement' : 'Give advance';
+  sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'} — ${esc(emp.name)}</h2>
     <div class="sd">${esc(emp.brand || '')} · ${esc(emp.pay_type || '')} · ${salaryLbl}</div>
-    <div class="card"><div class="xc-meta"><b>1 · Attendance</b> — ${esc(c.month)}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-        <span class="pill green">present ${a.present}</span>
-        ${a.irregular ? `<span class="pill yellow">missed-punch ${a.irregular}</span>` : ''}
-        <span class="pill ${a.absent ? 'red' : 'green'}">absent ${a.absent}</span>
-        ${a.off ? `<span class="pill">off ${a.off}</span>` : ''}</div>
-      <div class="xc-meta" style="margin-top:8px">Off / absent: ${esc(off)}</div></div>
-    <div class="card"><div class="xc-top"><div><b>2 · Advances given</b></div><div class="num" style="font-weight:800">${inr(c.advances.total)}</div></div>
+    <div class="mchips">${chips}</div>
+    <div class="card"><div class="xc-meta"><b>1 · Attendance</b> — ${esc(monthLabel(month))}</div>
+      ${attGridHTML(c)}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+        <span class="pill green">worked ${a.present}</span>
+        ${a.irregular ? `<span class="pill yellow">punch missing ${a.irregular}</span>` : ''}
+        <span class="pill ${a.absent ? 'red' : 'grey'}">absent ${a.absent}</span>
+        ${a.off ? `<span class="pill purple">off ${a.off}</span>` : ''}</div></div>
+    <div class="card"><div class="xc-top"><div><b>2 · Advances given</b> <span class="xc-meta">${esc(monthLabel(month))}</span></div><div class="num" style="font-weight:800">${inr(c.advances.total)}</div></div>
       <div class="xc-meta">${esc(advs)}</div></div>
-    <div class="card"><div class="xc-top"><div><b>3 · Settled so far</b></div><div class="num" style="font-weight:800">${inr((c.settlements && c.settlements.total) || 0)}</div></div>
+    <div class="card"><div class="xc-top"><div><b>3 · Settled</b></div><div class="num" style="font-weight:800">${inr((c.settlements && c.settlements.total) || 0)}</div></div>
       <div class="xc-meta">${esc(setts)}</div></div>
-    <div class="fld"><label>You paid ₹ — your number</label><input id="setAmt" type="number" inputmode="numeric" placeholder="your number"></div>
-    <div class="fld"><label>📲 Receipt goes to — confirm ${esc(emp.name)}'s number</label><input id="setPhone" type="tel" inputmode="numeric" value="${esc(emp.phone || '')}" placeholder="10-digit WhatsApp number"></div>
-    <div class="fld"><label>Paid via</label><select id="setVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
-    <div class="fld"><label>Note (optional)</label><input id="setNote" placeholder="final settlement / partial"></div>
-    <div class="acts"><button class="btn primary" onclick='doSettle(${emp.id})'>Record settlement</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
+    <div class="fld"><label>${mode === 'settle' ? 'You paid ₹ — your number' : 'Advance amount ₹'}</label><input id="payAmt" type="number" inputmode="numeric" placeholder="your number"></div>
+    <div class="fld"><label>📲 Receipt goes to — confirm ${esc(emp.name)}'s number</label><input id="payPhone" type="tel" inputmode="numeric" value="${esc(emp.phone || '')}" placeholder="10-digit WhatsApp number"></div>
+    <div class="fld"><label>Paid via</label><select id="payVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
+    <div class="fld"><label>Note (optional)</label><input id="payNote" placeholder="${mode === 'settle' ? 'final settlement / partial' : 'reason'}"></div>
+    <div class="acts"><button class="btn primary" onclick='doPay("${mode}", ${emp.id}, ${JSON.stringify(month)})'>${verb} — ${esc(monthLabel(month))}</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
 }
-async function doSettle(id) {
-  const amt = Number($('setAmt').value);
-  if (!amt) return toast('Type what you paid', 'err');
-  const month = payPeriod();
+
+async function doPay(mode, empId, month) {
+  const amt = Number($('payAmt').value);
+  if (!amt) return toast(mode === 'settle' ? 'Type what you paid' : 'Enter an amount', 'err');
+  const body = {
+    employee_id: Number(empId), amount: amt, advance_date: todayIST(),
+    paid_via: ($('payVia') || {}).value || 'cash',
+    confirmed_phone: ($('payPhone') || {}).value || '', pay_period: month,
+  };
+  if (mode === 'settle') { body.source = 'settlement'; body.reason = 'salary settlement'; body.notes = ($('payNote') || {}).value || ('Settlement ' + month); }
+  else { body.reason = ($('payNote') || {}).value || null; }
   try {
     const r = await fetch('/api/hr-payroll?action=record-advance', {
       method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ employee_id: Number(id), amount: amt, advance_date: todayIST(), paid_via: ($('setVia') || {}).value || 'cash', source: 'settlement', reason: 'salary settlement', notes: (($('setNote') || {}).value || ('Settlement ' + month)), confirmed_phone: ($('setPhone') || {}).value || '', pay_period: month }),
+      body: JSON.stringify(body),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'failed');
-    closeSheet(); toast(receiptToast('Settlement recorded', j.receipt)); loadPay();
+    closeSheet(); toast(receiptToast(mode === 'settle' ? 'Settlement recorded' : 'Advance recorded', j.receipt)); loadPay();
   } catch (e) { toast(e.message, 'err'); }
+}
+
+// Reflect whether the WhatsApp receipt actually went out, in the confirmation toast.
+function receiptToast(base, rc) {
+  if (!rc) return base;
+  if (rc.ok) return base + ' \u00b7 receipt sent';
+  if (rc.reason === 'no_phone' || rc.attempted === false) return base + ' \u00b7 no number on file, no receipt';
+  return base + ' \u00b7 recorded, receipt didn\u2019t send';
 }
 
 /* ━━━━━━━━━━━━━━ ROSTER ━━━━━━━━━━━━━━ */
