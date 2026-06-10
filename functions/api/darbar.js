@@ -89,6 +89,8 @@ export async function onRequest(context) {
 
     if (request.method === 'GET') {
       if (action === 'home') return withCors(await home(db, url), request);
+      if (action === 'ghost-photo') return withCors(await ghostPhoto(db, url), request);
+      if (action === 'month-board') return withCors(await monthBoard(db, url), request);
       if (action === 'reconcile') return withCors(await reconcile(db, false), request);
       return withCors(json({ error: `unknown GET action: ${action}` }, 400), request);
     }
@@ -190,8 +192,17 @@ async function home(db, url) {
   for (const r of ghosts.results || []) {
     const g = await db.prepare(`SELECT status FROM hr_ghost_pins WHERE pin=? ORDER BY id DESC LIMIT 1`).bind(r.pin).first();
     if (g && (g.status === 'onboarded' || g.status === 'dismissed')) continue;
+    // The device's own enrolled name (Push User Data) — the ghost often isn't
+    // anonymous anymore; the F38+ told us who they are.
+    let deviceName = null;
+    try {
+      const ue = await db.prepare(
+        `SELECT user_name FROM hr_cams_user_events WHERE pin=? AND user_name IS NOT NULL AND user_name!='' ORDER BY id DESC LIMIT 1`
+      ).bind(r.pin).first();
+      if (ue) deviceName = ue.user_name;
+    } catch {}
     exceptions.push({
-      type: 'ghost', pin: r.pin, punches: r.punches, days: r.days,
+      type: 'ghost', pin: r.pin, punches: r.punches, days: r.days, device_name: deviceName,
       last_punch: r.last_punch, days_silent: r.days_silent,
       active: r.days_silent <= GHOST_ACTIVE_DAYS,
       shape: r.morning && r.evening ? 'split (morning+evening)' : r.morning ? 'morning' : 'evening',
@@ -236,12 +247,53 @@ async function home(db, url) {
     },
     exception_count: exceptions.length,
     exceptions,
-    health: {
-      cams_last_punch_age_min: dayRow.cams_age_min,
-      cams_ok: (dayRow.cams_age_min ?? 9999) < 90,
-      ghost_count: (ghosts.results || []).length,
-    },
+    health: (() => {
+      // Punch traffic clusters 06:00-11:00 IST (shift starts) and 00:00-04:00
+      // (HE close-outs). 11:00-24:00 is a natural lull -- hours of silence there
+      // are normal, not an outage. Alarm fast in busy windows, slow otherwise.
+      const age = dayRow.cams_age_min ?? 9999;
+      const hr = parseInt(String(dayRow.ist_now).slice(11, 13), 10);
+      const busy = (hr >= 6 && hr < 11) || (hr < 4);
+      return {
+        cams_last_punch_age_min: age,
+        cams_quiet_hours: !busy,
+        cams_ok: age < (busy ? 120 : 420),
+        ghost_count: (ghosts.results || []).length,
+      };
+    })(),
   });
+}
+
+/* ━━━ GHOST PHOTO — the enrolled face the device pushed (hr_cams_user_events) ━━━ */
+async function ghostPhoto(db, url) {
+  const pin = url.searchParams.get('pin');
+  if (!pin) return json({ error: 'pin required' }, 400);
+  try {
+    const r = await db.prepare(
+      `SELECT user_name, photo_base64 FROM hr_cams_user_events
+        WHERE pin=? AND photo_base64 IS NOT NULL ORDER BY id DESC LIMIT 1`
+    ).bind(pin).first();
+    return json({ pin, user_name: (r && r.user_name) || null, photo_base64: (r && r.photo_base64) || null });
+  } catch { return json({ pin, user_name: null, photo_base64: null }); }
+}
+
+/* ━━━ MONTH BOARD — every person × (days worked · advances · settled), facts only ━━━ */
+async function monthBoard(db, url) {
+  const month = url.searchParams.get('month') || new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
+  const start = month + '-01', end = month + '-31';
+  const rows = await db.prepare(
+    `SELECT e.id, e.pin, COALESCE(e.known_as, e.name) AS name, e.brand_label AS brand,
+            e.pay_type, e.monthly_salary, e.daily_rate, e.is_active,
+            (SELECT COUNT(*) FROM hr_attendance_daily ad  WHERE ad.employee_id=e.id  AND ad.date BETWEEN ?1 AND ?2 AND ad.punch_count > 0) AS days_worked,
+            (SELECT COUNT(*) FROM hr_attendance_daily ad2 WHERE ad2.employee_id=e.id AND ad2.date BETWEEN ?1 AND ?2 AND ad2.punch_count > 0 AND ad2.punch_count % 2 = 1) AS days_error,
+            (SELECT COALESCE(SUM(a.amount),0)  FROM hr_advances a  WHERE a.employee_id=e.id  AND COALESCE(a.pay_period,  substr(a.advance_date,1,7))  = ?3 AND COALESCE(a.source,'')  != 'settlement') AS advances,
+            (SELECT COALESCE(SUM(a2.amount),0) FROM hr_advances a2 WHERE a2.employee_id=e.id AND COALESCE(a2.pay_period, substr(a2.advance_date,1,7)) = ?3 AND COALESCE(a2.source,'')  = 'settlement') AS settled
+       FROM hr_employees e
+      WHERE e.is_active = 1
+         OR EXISTS (SELECT 1 FROM hr_advances a3 WHERE a3.employee_id=e.id AND COALESCE(a3.pay_period, substr(a3.advance_date,1,7)) = ?3)
+      ORDER BY (settled > 0), brand, name`
+  ).bind(start, end, month).all();
+  return json({ month, rows: rows.results || [] });
 }
 
 /* ━━━ RECONCILE — ghost/departed/never diff. POST persists new ghost pins. ━━━ */
