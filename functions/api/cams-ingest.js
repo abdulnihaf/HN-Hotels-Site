@@ -81,10 +81,62 @@ export async function onRequest(context) {
   // retries appear to send payloads where these don't match byte-for-byte
   // (encoding quirk?), and auth token already identifies the device.
 
-  // Extract punch fields
+  // ── Non-punch events (Push User Data: UserUpdated / UserDeleted, etc.) ──
+  // CAMS sends these when a user is enrolled/edited on the device (and re-sends
+  // the user list after a device reconnect). We MUST ack {"status":"done"} on
+  // every event we don't model — any non-done response puts the CAMS queue ON
+  // HOLD and head-of-line-blocks all punches behind it (observed live
+  // 2026-06-10: a UserUpdated for pin 44 got 400 → whole queue stalled).
+  // UserUpdated carries name + pin + face photo straight from the device —
+  // stored in hr_cams_user_events as the device-first onboarding signal.
+  if (!rt.PunchLog) {
+    const uu = rt.UserUpdated || rt.UserDeleted;
+    const evType = rt.UserUpdated ? 'UserUpdated' : (rt.UserDeleted ? 'UserDeleted' : 'Unknown');
+    const pin = uu ? String(uu.UserID || uu.UserId || '').trim() : '';
+    if (uu && pin) {
+      const userName = [uu.FirstName, uu.LastName].filter(Boolean).join(' ').trim() || null;
+      const opTime = String(uu.OperationTime || '').replace(/\s+GMT\s+[+-]\d{4}.*$/, '') || null;
+      const photo = uu.Photo && uu.Photo.Type === 'Base64' ? (uu.Photo.Data || null) : null;
+      const insertEvent = () => db.prepare(
+        `INSERT OR IGNORE INTO hr_cams_user_events
+           (device_serial, event_type, pin, user_name, user_type, operation_time, photo_base64)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(stgid, evType, pin, userName, String(uu.UserType || '').trim() || null, opTime, photo).run();
+      try {
+        await insertEvent();
+      } catch (e) {
+        // First event ever: create the table, then retry once.
+        try {
+          await db.prepare(
+            `CREATE TABLE IF NOT EXISTS hr_cams_user_events (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               device_serial TEXT NOT NULL,
+               event_type TEXT NOT NULL,
+               pin TEXT NOT NULL,
+               user_name TEXT,
+               user_type TEXT,
+               operation_time TEXT,
+               photo_base64 TEXT,
+               received_at TEXT DEFAULT (datetime('now')),
+               UNIQUE(device_serial, event_type, pin, operation_time)
+             )`
+          ).run();
+          await insertEvent();
+        } catch (e2) {
+          console.error('[cams-ingest] user-event write failed:', e2.message);
+        }
+      }
+    }
+    // Ack unconditionally — never hold the queue over an event we don't model.
+    return json({ status: 'done' });
+  }
+
+  // Extract punch fields. A malformed PunchLog is logged and ACKED — a retry
+  // can never repair it, and a non-done response stalls every event behind it.
   const p = rt.PunchLog;
-  if (!p || !p.UserId || !p.LogTime) {
-    return json({ status: 'error', message: 'PunchLog missing required fields' }, 400);
+  if (!p.UserId || !p.LogTime) {
+    console.error('[cams-ingest] PunchLog missing required fields:', JSON.stringify(p).slice(0, 200));
+    return json({ status: 'done' });
   }
 
   const userId     = String(p.UserId).trim();
