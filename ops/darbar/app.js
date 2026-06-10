@@ -18,7 +18,8 @@ const S = {
   token: null, user: null, role: null, fin: false,
   tab: 'today',
   home: null,
-  attendDate: null, attendBrand: 'all', attendRows: [], attendFilter: null,
+  attendDate: null, attendBrand: 'all', attendRows: [], attendFilter: null, attMode: 'day', attMonthRows: [],
+  payBrand: 'all',
   rosterBrand: 'all', employees: [],
 };
 
@@ -296,16 +297,76 @@ async function dismissGhost(pin) {
 document.querySelectorAll('#attBrand button').forEach(b => b.onclick = () => {
   S.attendBrand = b.dataset.b;
   document.querySelectorAll('#attBrand button').forEach(x => x.classList.toggle('on', x === b));
-  renderAttend();
+  S.attMode === 'month' ? renderAttendMonth(S.attendDate.slice(0, 7)) : renderAttend();
 });
-function shiftDay(d) { const x = new Date(S.attendDate + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + d); S.attendDate = x.toISOString().slice(0, 10); loadAttend(); }
-function jumpToday() { S.attendDate = bizDayIST(); loadAttend(); }
+function shiftDay(d) {
+  if (S.attMode === 'month') {
+    const [y, m] = S.attendDate.slice(0, 7).split('-').map(Number);
+    const x = new Date(Date.UTC(y, m - 1 + d, 1));
+    S.attendDate = x.toISOString().slice(0, 10);
+    return loadAttendMonth();
+  }
+  const x = new Date(S.attendDate + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + d); S.attendDate = x.toISOString().slice(0, 10); loadAttend();
+}
+function jumpToday() { S.attendDate = bizDayIST(); S.attMode === 'month' ? loadAttendMonth() : loadAttend(); }
+function toggleAttMode() {
+  S.attMode = S.attMode === 'day' ? 'month' : 'day';
+  $('attModeBtn').textContent = S.attMode === 'day' ? 'Month' : 'Day';
+  S.attMode === 'month' ? loadAttendMonth() : loadAttend();
+}
+/* Month view — every person's month as a dot-strip, one screen. */
+async function loadAttendMonth() {
+  const month = S.attendDate.slice(0, 7);
+  $('attDay').textContent = monthLabel(month);
+  $('attStats').innerHTML = '';
+  $('attList').innerHTML = '<div class="skel"></div><div class="skel"></div>';
+  try {
+    const r = await api(`/api/darbar?action=month-attendance&month=${month}`);
+    S.attMonthRows = r.rows || [];
+    renderAttendMonth(month);
+  } catch (e) { $('attList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderAttendMonth(month) {
+  const biz = bizDayIST();
+  const byEmp = {};
+  for (const r of S.attMonthRows) {
+    if (S.attendBrand !== 'all' && r.brand !== S.attendBrand) continue;
+    if (!byEmp[r.id]) byEmp[r.id] = { id: r.id, name: r.name, brand: r.brand, days: {} };
+    byEmp[r.id].days[r.date] = r;
+  }
+  const [y, m] = month.split('-').map(Number);
+  const nDays = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const people = Object.values(byEmp).sort((a, b) => a.name.localeCompare(b.name));
+  if (!people.length) { $('attList').innerHTML = '<div class="empty">No attendance recorded this month.</div>'; return; }
+  $('attList').innerHTML = people.map(p => {
+    let worked = 0, errs = 0, abs = 0, cells = '';
+    for (let d = 1; d <= nDays; d++) {
+      const ds = `${month}-${String(d).padStart(2, '0')}`;
+      const r = p.days[ds];
+      let cls = 'nodata';
+      if (ds > biz) cls = 'future';
+      else if (ds === biz) cls = 'open';
+      else if (r) {
+        if (r.status === 'week_off' || r.status === 'leave') cls = 'off';
+        else if ((r.punch_count || 0) === 0) { cls = 'absent'; abs++; }
+        else { worked++; if (r.punch_count % 2 === 1) { cls = 'err'; errs++; } else cls = 'ok'; }
+      }
+      cells += `<div class="mc ${cls}"></div>`;
+    }
+    return `<div class="arow" onclick='rosterTap(${p.id})'><div class="top">
+      <div style="flex:1"><div class="nm">${esc(p.name)} <span class="pill ${(p.brand || '').toLowerCase()}">${p.brand || ''}</span></div>
+      <div class="mstrip">${cells}</div></div>
+      <div style="text-align:right;font-size:11.5px;line-height:1.5" class="num"><span style="color:var(--green);font-weight:700">${worked}w</span><br>${errs ? `<span style="color:var(--yellow)">${errs}!</span> ` : ''}<span style="color:var(--red)">${abs}a</span></div>
+    </div></div>`;
+  }).join('');
+}
 async function refreshAttend() {
   // server-side recompute picks up new punches, then reload
   try { toast('Pulling punches…', 'info'); await post('/api/hr-admin', { action: 'pull-attendance', pin: S.pin, from: S.attendDate, to: S.attendDate }); } catch (e) {}
   loadAttend();
 }
 async function loadAttend() {
+  if (S.attMode === 'month') return loadAttendMonth();
   $('attDay').textContent = fmtDayShort(S.attendDate);
   $('attList').innerHTML = '<div class="skel"></div><div class="skel"></div>';
   try {
@@ -388,6 +449,11 @@ async function fixPunch(empId, date) {
 }
 
 /* ━━━━━━━━━━━━━━ PAY ━━━━━━━━━━━━━━ */
+document.querySelectorAll('#payBrand button').forEach(b => b.onclick = () => {
+  S.payBrand = b.dataset.b;
+  document.querySelectorAll('#payBrand button').forEach(x => x.classList.toggle('on', x === b));
+  loadPay();
+});
 // Active settlement month: salaries for month M are paid by the 10th of M+1.
 // So the 1st→10th you're still CLEARING the previous month — that's the default
 // view. After the 10th the current month becomes active. (You're settling May
@@ -424,7 +490,8 @@ async function loadPay() {
   $('advList').innerHTML = '<div class="skel"></div>';
   try {
     const r = await fetch(`/api/hr-payroll?action=list-advances&month=${month}`, { headers: authHeaders() }).then(x => x.json());
-    const adv = r.advances || r.rows || [];
+    let adv = r.advances || r.rows || [];
+    if (S.payBrand !== 'all') adv = adv.filter(a => (a.brand_label || '') === S.payBrand);
     if (!adv.length) { $('advList').innerHTML = `<div class="empty">No payments recorded for ${esc(monthLbl)} yet.</div>`; return; }
     // Group BY PERSON — show what's DONE this month (total paid), not per-transaction.
     const byEmp = {};
@@ -457,7 +524,8 @@ async function openMonthBoard() {
   let b;
   try { b = await api(`/api/darbar?action=month-board&month=${month}`); }
   catch (e) { return sheet(`<h2>Board</h2><div class="empty">${esc(e.message)}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`); }
-  const rows = b.rows || [];
+  let rows = b.rows || [];
+  if (S.payBrand !== 'all') rows = rows.filter(r => (r.brand || '') === S.payBrand);
   const chip = r => r.settled > 0 ? `<span class="pill green">✓ ${inr(r.settled)}</span>`
     : r.advances > 0 ? `<span class="pill gold">adv ${inr(r.advances)}</span>`
     : `<span class="pill grey">nothing yet</span>`;
