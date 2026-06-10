@@ -926,7 +926,7 @@ async function handleGet(url, env, auth = null) {
  * POST handlers — PIN-gated
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-async function handlePost(request, env) {
+async function handlePost(request, env, auth) {
   const db = env.DB;
   let body;
   try { body = await request.json(); }
@@ -973,7 +973,18 @@ async function handlePost(request, env) {
     'cams-remote':         'admin',
   };
   const need = permMap[action] || 'read';
-  const user = body._service_user || checkPin(pin, need);
+  // Auth precedence: internal service key → legacy body PIN → verified Darbar
+  // token. The PWA stopped sending body PINs once HMAC tokens landed; the
+  // token already proves who they are — demanding a second body PIN here is
+  // what 403'd every app-initiated pull-attendance after the hardening.
+  let user = body._service_user || checkPin(pin, need);
+  if (!user && auth) {
+    const principal = auth.service
+      ? { name: 'service', role: 'admin', view_financials: true }
+      : { name: auth.u, role: auth.r, view_financials: !!auth.f };
+    const rank = { read: 0, manager: 1, onboarding: 1.5, hr: 1.5, admin: 2 };
+    if ((rank[principal.role] ?? 0) >= (rank[need] ?? 0)) user = principal;
+  }
   if (!user) return json({ error: `${need} PIN required` }, 403);
 
   /* ━━━━━━━━━━ D1 roster writes ━━━━━━━━━━ */
@@ -2344,7 +2355,18 @@ export async function onRequest(context) {
     if (request.method === 'POST') {
       // POST writes are PIN-gated inside handlePost; service key bypasses PIN check.
       // We also require a token so cross-site POST is blocked.
-      const auth = await verifyToken(env, request);
+      let auth = await verifyToken(env, request);
+      if (!auth) {
+        // Legacy internal callers (attendance-cron, pre-fix cams-ingest) send the
+        // service key in the BODY, not the x-service-key header. Peek a clone so
+        // those keep working — the strong CAMS_AUTH_TOKEN is the gate, never a PIN.
+        try {
+          const peek = await request.clone().json();
+          if (peek && peek.service_key && env.CAMS_AUTH_TOKEN && peek.service_key === env.CAMS_AUTH_TOKEN) {
+            auth = { u: 'service', r: 'admin', f: true, service: true };
+          }
+        } catch {}
+      }
       if (!auth) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json', ...ch } });
       const res = await handlePost(request, env, auth);
       for (const [k, v] of Object.entries(ch)) res.headers.set(k, v);

@@ -197,10 +197,13 @@ export async function onRequest(context) {
       try {
         await fetch(`${new URL(request.url).origin}/api/hr-admin`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          // x-service-key satisfies hr-admin's front token gate — body
+          // service_key alone got 401'd there after the security hardening,
+          // which silently killed the auto-rollup 2026-05-31 → 06-10.
+          headers: { 'Content-Type': 'application/json', 'x-service-key': expectedToken },
           body: JSON.stringify({
             action: 'pull-attendance',
-            service_key: expectedToken,   // CAMS_AUTH_TOKEN
+            service_key: expectedToken,   // CAMS_AUTH_TOKEN (inner PIN bypass)
             from, to,
           }),
         });

@@ -486,21 +486,24 @@ async function loadSettle() {
   const a = c.attendance, emp = c.employee;
   const off = (a.off_absent_days || []).map(d => `${String(d.date).slice(8)} ${d.status === 'week_off' ? 'off' : d.status === 'leave' ? 'leave' : 'absent'}`).join(' · ') || '—';
   const advs = (c.advances.rows || []).map(r => `${inr(r.amount)} · ${String(r.advance_date).slice(5)}`).join('   ') || 'none';
+  const setts = ((c.settlements && c.settlements.rows) || []).map(r => `${inr(r.amount)} · ${String(r.advance_date || r.date || '').slice(5)}`).join('   ') || 'none';
   const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
+  // THREE SEPARATE LANES, no fused math (owner's rule 2026-06-10): the owner is
+  // the calculator. 1·attendance 2·advances 3·settled — facts only, he decides.
   sheet(`<h2>Settle ${esc(emp.name)}</h2>
     <div class="sd">${esc(emp.brand || '')} · ${esc(emp.pay_type || '')} · ${salaryLbl}</div>
-    <div class="card"><div class="xc-meta">${esc(c.month)} — context only, you decide any docking</div>
+    <div class="card"><div class="xc-meta"><b>1 · Attendance</b> — ${esc(c.month)}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <span class="pill green">present ${a.present}</span>
         ${a.irregular ? `<span class="pill yellow">missed-punch ${a.irregular}</span>` : ''}
         <span class="pill ${a.absent ? 'red' : 'green'}">absent ${a.absent}</span>
         ${a.off ? `<span class="pill">off ${a.off}</span>` : ''}</div>
       <div class="xc-meta" style="margin-top:8px">Off / absent: ${esc(off)}</div></div>
-    <div class="card"><div class="xc-top"><div>Advance already taken</div><div class="num" style="font-weight:800">${inr(c.advances.total)}</div></div>
+    <div class="card"><div class="xc-top"><div><b>2 · Advances given</b></div><div class="num" style="font-weight:800">${inr(c.advances.total)}</div></div>
       <div class="xc-meta">${esc(advs)}</div></div>
-    ${c.settlements && c.settlements.total ? `<div class="card"><div class="xc-top"><div>Already settled this month</div><div class="num">${inr(c.settlements.total)}</div></div></div>` : ''}
-    <div class="card" style="border-color:var(--gold-soft)"><div class="xc-top"><div><b>Remaining</b><div class="xc-meta">salary − advance, before any docking</div></div><div class="num" style="font-weight:800;color:var(--gold);font-size:18px">${inr(c.remaining_hint)}</div></div></div>
-    <div class="fld"><label>You paid ₹ — your number</label><input id="setAmt" type="number" inputmode="numeric" placeholder="${c.remaining_hint || ''}"></div>
+    <div class="card"><div class="xc-top"><div><b>3 · Settled so far</b></div><div class="num" style="font-weight:800">${inr((c.settlements && c.settlements.total) || 0)}</div></div>
+      <div class="xc-meta">${esc(setts)}</div></div>
+    <div class="fld"><label>You paid ₹ — your number</label><input id="setAmt" type="number" inputmode="numeric" placeholder="your number"></div>
     <div class="fld"><label>📲 Receipt goes to — confirm ${esc(emp.name)}'s number</label><input id="setPhone" type="tel" inputmode="numeric" value="${esc(emp.phone || '')}" placeholder="10-digit WhatsApp number"></div>
     <div class="fld"><label>Paid via</label><select id="setVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
     <div class="fld"><label>Note (optional)</label><input id="setNote" placeholder="final settlement / partial"></div>
