@@ -163,14 +163,17 @@ async function loadHome() {
     const dot = $('todayDot');
     if (n) { dot.textContent = n; dot.classList.remove('hide'); } else dot.classList.add('hide');
     const age = h.health?.cams_last_punch_age_min;
-    $('todaySub').innerHTML = `${h.stats.present} present · ` +
-      (h.health?.cams_ok ? `device <b>live</b> (${age}m ago)` : `<b style="color:var(--red)">device silent ${age}m</b>`);
+    const dev = !h.health ? ''
+      : h.health.cams_ok
+        ? (age > 90 ? `last punch ${age}m · <span style="color:var(--dim)">normal lull</span>` : `device <b>live</b> (${age}m ago)`)
+        : `<b style="color:var(--red)">device silent ${age}m — check it</b>`;
+    $('todaySub').innerHTML = `${h.stats.present} present · ` + dev;
   } catch (e) { $('inbox').innerHTML = `<div class="empty">Couldn't load: ${esc(e.message)}</div>`; }
 }
 function renderHero(s) {
   $('hero').innerHTML = [
     ['present', 'Present', 'g', s.present || 0],
-    ['miss', '⚠ Fix', 'y', s.missing_punch || 0],
+    ['work', 'Working', 'b', s.missing_punch || 0],
     ['absent', 'Absent', 'r', (s.absent || 0) + (s.in_progress || 0)],
     ['exp', 'Expected', '', s.expected || 0],
   ].map(([k, l, c, n]) => `<div class="stat ${c}"><div class="n num">${n}</div><div class="l">${l}</div></div>`).join('');
@@ -193,11 +196,12 @@ function cardFor(x) {
       </div></div>`;
   }
   if (x.type === 'ghost') {
+    const nm = x.device_name ? `${esc(x.device_name)} <span class="pill purple">PIN ${esc(x.pin)} · no roster</span>` : `Unknown — PIN ${esc(x.pin)} <span class="pill purple">ghost</span>`;
     return `<div class="card xcard ghost">
-      <div class="xc-top"><div><div class="xc-name">Unknown — PIN ${esc(x.pin)} <span class="pill purple">ghost</span></div>
-        <div class="xc-meta"><b>${x.punches}</b> punches over <b>${x.days}</b> days · ${esc(x.shape)}<br>${x.active ? '<b style="color:var(--green)">working now</b>' : `last seen ${x.days_silent}d ago`}</div></div></div>
+      <div class="xc-top"><div><div class="xc-name">${nm}</div>
+        <div class="xc-meta">${x.device_name ? `device says <b>${esc(x.device_name)}</b> · ` : ''}<b>${x.punches}</b> punches over <b>${x.days}</b> days · ${esc(x.shape)}<br>${x.active ? '<b style="color:var(--green)">working now</b>' : `last seen ${x.days_silent}d ago`}</div></div></div>
       <div class="acts">
-        <button class="btn primary" onclick='nameGhost(${JSON.stringify(x.pin)})'>Name this worker</button>
+        <button class="btn primary" onclick='nameGhost(${JSON.stringify(x.pin)}, ${JSON.stringify(x.device_name || '')})'>Add to roster</button>
         <button class="btn ghost-b" onclick='dismissGhost(${JSON.stringify(x.pin)})'>Ignore</button>
       </div></div>`;
   }
@@ -249,15 +253,21 @@ async function doLeave(id) {
 }
 function keepActive() { toast('Kept active — will re-ask if still silent', 'info'); }
 
-function nameGhost(pin) {
+function nameGhost(pin, deviceName) {
   if (needToken()) return;
-  sheet(`<h2>Name PIN ${esc(pin)}</h2><div class="sd">Turn this working ghost into a real roster member. Attendance starts counting immediately.</div>
-    <div class="fld"><label>Name</label><input id="obName" placeholder="full name"></div>
+  sheet(`<h2>Name PIN ${esc(pin)}</h2><div class="sd">Turn this working ghost into a real roster member. Attendance counts from their first punch, retroactively.</div>
+    <div id="obPhoto" style="display:flex;justify-content:center;margin-bottom:10px"></div>
+    <div class="fld"><label>Name</label><input id="obName" value="${esc(deviceName || '')}" placeholder="full name"></div>
     <div class="fld"><label>Brand</label><select id="obBrand"><option value="NCH">Nawabi Chai House</option><option value="HE">Hamza Express</option><option value="HQ">HQ</option></select></div>
     <div class="fld"><label>Pay type</label><select id="obPay" onchange="document.getElementById('obWageWrap').dataset.t=this.value"><option value="Contract">Daily wage</option><option value="Monthly">Monthly</option></select></div>
     <div class="fld" id="obWageWrap" data-t="Contract"><label>Daily rate ₹ / Monthly ₹</label><input id="obWage" type="number" inputmode="numeric" placeholder="e.g. 600"></div>
     <div class="fld"><label>Phone (for punch-reminders)</label><input id="obPhone" type="tel" inputmode="numeric" placeholder="10-digit"></div>
     <div class="acts"><button class="btn primary" onclick='doOnboard(${JSON.stringify(pin)})'>Add to roster</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
+  // The face the device enrolled — so the owner knows exactly WHO this is.
+  api(`/api/darbar?action=ghost-photo&pin=${encodeURIComponent(pin)}`).then(p => {
+    if (p && p.photo_base64 && $('obPhoto')) $('obPhoto').innerHTML =
+      `<img src="data:image/jpeg;base64,${p.photo_base64}" alt="" style="width:96px;height:96px;border-radius:14px;object-fit:cover;border:1px solid var(--line)">`;
+  }).catch(() => {});
 }
 async function doOnboard(pin) {
   const pay = $('obPay').value, wage = Number($('obWage').value) || null;
@@ -299,16 +309,19 @@ async function loadAttend() {
   } catch (e) { $('attList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function attState(r) {
-  // Owner's canonical rule: ANY tap = present (1/2/3/4…); 0 taps = absent.
-  // Odd taps = present but a punch is missing (forgot break-end or check-out) →
-  // still present, flagged `incomplete` so it can be fixed. 2/4 = clean shift.
-  if (r.status === 'week_off' || r.status === 'leave') return { k: 'off', incomplete: false, label: r.status === 'leave' ? 'LEAVE' : 'WEEK OFF' };
+  // Owner's canonical rule: ANY tap = present; 0 taps = absent; odd = a punch
+  // missing. BUT on the still-open business day (closes 4am) an odd count just
+  // means MID-SHIFT — working or on break — never an error, never a Fix button.
+  // Errors only exist on CLOSED days. 0 taps on the open day = "not in yet".
+  const live = S.attendDate === bizDayIST();
+  if (r.status === 'week_off' || r.status === 'leave') return { k: 'off', incomplete: false, working: false, label: r.status === 'leave' ? 'LEAVE' : 'WEEK OFF' };
   const pc = r.punch_count || 0;
   if (pc >= 1) {
-    const incomplete = pc % 2 === 1;
-    return { k: 'present', incomplete, label: incomplete ? (pc === 1 ? 'IN — NO OUT' : 'MISSING PUNCH') : 'PRESENT' };
+    const odd = pc % 2 === 1;
+    if (live && odd) return { k: 'present', incomplete: false, working: true, label: 'WORKING' };
+    return { k: 'present', incomplete: odd, working: false, label: odd ? (pc === 1 ? 'IN — NO OUT' : 'MISSING PUNCH') : 'PRESENT' };
   }
-  return { k: 'absent', incomplete: false, label: 'ABSENT' };
+  return { k: 'absent', incomplete: false, working: false, label: live ? 'NOT IN YET' : 'ABSENT' };
 }
 function attMatch(r, f) {
   const st = attState(r);
@@ -338,8 +351,8 @@ function renderAttend() {
     const st = attState(r); const nm = r.known_as && r.known_as !== r.name ? `${esc(r.name)} <span style="color:var(--mute)">(${esc(r.known_as)})</span>` : esc(r.name);
     const sess = sessionLine(r);
     const fixBtn = (st.k === 'present' && st.incomplete) ? `<button class="btn primary sm" style="margin-top:9px" onclick='fixPunch(${r.employee_id}, ${JSON.stringify(S.attendDate)})'>Fix — impute missing punch</button>` : '';
-    const dot = st.k === 'present' ? (st.incomplete ? 'missing' : 'present') : st.k;
-    const pill = st.k === 'present' ? (st.incomplete ? 'yellow' : 'green') : st.k === 'absent' ? 'red' : 'purple';
+    const dot = st.working ? 'inprog' : st.k === 'present' ? (st.incomplete ? 'missing' : 'present') : st.k;
+    const pill = st.working ? 'blue' : st.k === 'present' ? (st.incomplete ? 'yellow' : 'green') : st.k === 'absent' ? 'red' : 'purple';
     return `<div class="arow"><div class="top"><div>
         <div class="nm"><span class="sdot ${dot}"></span>${nm} <span class="pill ${(r.brand_label||'').toLowerCase()}">${r.brand_label||''}</span></div>
         <div class="role">${esc(r.job_name || r.department_name || '')}</div>
@@ -424,6 +437,28 @@ async function loadPay() {
     }).join('');
   } catch (e) { $('advList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
+/* ━━━ MONTH BOARD — who's done, who's left, facts only ━━━ */
+async function openMonthBoard() {
+  if (needToken()) return;
+  const month = payPeriod();
+  sheet(`<h2>${esc(monthLabel(month))} — board</h2><div class="skel"></div><div class="skel"></div>`);
+  let b;
+  try { b = await api(`/api/darbar?action=month-board&month=${month}`); }
+  catch (e) { return sheet(`<h2>Board</h2><div class="empty">${esc(e.message)}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`); }
+  const rows = b.rows || [];
+  const chip = r => r.settled > 0 ? `<span class="pill green">✓ ${inr(r.settled)}</span>`
+    : r.advances > 0 ? `<span class="pill gold">adv ${inr(r.advances)}</span>`
+    : `<span class="pill grey">nothing yet</span>`;
+  const done = rows.filter(r => r.settled > 0).length;
+  sheet(`<h2>${esc(monthLabel(month))} — board</h2>
+    <div class="sd">${done}/${rows.length} settled · tap a row — facts come up, you decide</div>
+    ${rows.map(r => `<div class="arow" onclick='closeSheet();loadPayCtx("settle", ${r.id}, ${JSON.stringify(b.month)})' style="margin-bottom:8px"><div class="top">
+      <div><div class="nm">${esc(r.name)} <span class="pill ${(r.brand || '').toLowerCase()}">${r.brand || ''}</span>${r.is_active ? '' : ' <span class="pill grey">left</span>'}</div>
+      <div class="role">worked <b>${r.days_worked}</b>d${r.days_error ? ` · ${r.days_error} punch-missing` : ''} · adv ${inr(r.advances)}</div></div>
+      ${chip(r)}</div></div>`).join('')}
+    <div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`);
+}
+
 /* ━━━ Unified pay context — settle OR advance, month chips + visual grid ━━━
  * Owner rules (2026-06-10): three SEPARATE fact lanes, no fused math; the
  * attendance grid comes up BEFORE any money moves; settling defaults to the
@@ -499,8 +534,9 @@ async function loadPayCtx(mode, empId, month) {
   const months = [...new Set([prevMonthIST(), currentMonthIST(), month])];
   const chips = months.map(mm =>
     `<button class="mchip ${mm === month ? 'on' : ''}" onclick="loadPayCtx('${mode}', ${emp.id}, '${mm}')">${esc(monthLabel(mm))}${mm === currentMonthIST() ? ' · live' : ''}</button>`).join('');
-  const advs = (c.advances.rows || []).map(r => `${inr(r.amount)} · ${String(r.advance_date).slice(5)} · ${esc(r.paid_via || '')}`).join('   ') || 'none';
-  const setts = ((c.settlements && c.settlements.rows) || []).map(r => `${inr(r.amount)} · ${String(r.advance_date || '').slice(5)} · ${esc(r.paid_via || '')}`).join('   ') || 'none';
+  const rmark = r => r.receipt_status === 'sent' ? ' ✓' : r.receipt_status === 'failed' ? ' ✗' : r.receipt_status === 'no_phone' ? ' (no phone)' : '';
+  const advs = (c.advances.rows || []).map(r => `${inr(r.amount)} · ${String(r.advance_date).slice(5)} · ${esc(r.paid_via || '')}${rmark(r)}`).join('   ') || 'none';
+  const setts = ((c.settlements && c.settlements.rows) || []).map(r => `${inr(r.amount)} · ${String(r.advance_date || '').slice(5)} · ${esc(r.paid_via || '')}${rmark(r)}`).join('   ') || 'none';
   const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
   const verb = mode === 'settle' ? 'Record settlement' : 'Give advance';
   sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'} — ${esc(emp.name)}</h2>
@@ -521,7 +557,7 @@ async function loadPayCtx(mode, empId, month) {
     <div class="fld"><label>📲 Receipt goes to — confirm ${esc(emp.name)}'s number</label><input id="payPhone" type="tel" inputmode="numeric" value="${esc(emp.phone || '')}" placeholder="10-digit WhatsApp number"></div>
     <div class="fld"><label>Paid via</label><select id="payVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
     <div class="fld"><label>Note (optional)</label><input id="payNote" placeholder="${mode === 'settle' ? 'final settlement / partial' : 'reason'}"></div>
-    <div class="acts"><button class="btn primary" onclick='doPay("${mode}", ${emp.id}, ${JSON.stringify(month)})'>${verb} — ${esc(monthLabel(month))}</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
+    <div class="acts"><button class="btn primary" onclick='doPay("${mode}", ${emp.id}, ${JSON.stringify(month)})'>${verb} — ${esc(monthLabel(month))}</button><button class="btn ghost-b sm" onclick='overrideSheet(${emp.id}, ${JSON.stringify(emp.name)})'>Over-write</button><button class="btn ghost-b sm" onclick="closeSheet()">Cancel</button></div>`);
 }
 
 async function doPay(mode, empId, month) {
@@ -567,7 +603,7 @@ async function loadRoster() {
 function renderRoster() {
   let rows = S.employees.filter(e => e.is_active);
   if (S.rosterBrand !== 'all') rows = rows.filter(e => e.brand_label === S.rosterBrand);
-  $('rosterSub').textContent = `${rows.length} serving · tap to over-write pay`;
+  $('rosterSub').textContent = `${rows.length} serving · tap a person for their month`;
   if (!rows.length) { $('rosterList').innerHTML = '<div class="empty">No one here.</div>'; return; }
   // Monthly staffing cost = each person's full-month pay (monthly salary, or daily×30),
   // at 100% attendance, before overtime/extras. Owner-only; recomputes per brand filter.
@@ -579,13 +615,19 @@ function renderRoster() {
       <div><b>Monthly staffing cost</b><div class="xc-meta">${where} · ${rows.length} staff · full attendance, before OT${missing ? ` · <span style="color:var(--red)">${missing} missing salary</span>` : ''}</div></div>
       <div class="num" style="font-weight:800;color:var(--gold);font-size:19px">${inr(total)}</div></div></div>` : '';
   $('rosterList').innerHTML = costCard + rows.map(e => {
-    const pay = S.fin ? (e.monthly_salary ? `${inr(e.monthly_salary)}/mo` : e.daily_rate ? `${inr(e.daily_rate)}/day` : '—') : '';
+    const pay = S.fin ? (e.pay_type === 'Contract' && e.daily_rate ? `${inr(e.daily_rate)}/day` : e.monthly_salary ? `${inr(e.monthly_salary)}/mo` : e.daily_rate ? `${inr(e.daily_rate)}/day` : '—') : '';
     const noPin = !e.pin ? '<span class="pill yellow">no pin</span>' : '';
-    return `<div class="arow" onclick='overrideSheet(${e.id}, ${JSON.stringify(e.known_as || e.name)})'><div class="top">
+    return `<div class="arow" onclick='rosterTap(${e.id})'><div class="top">
       <div><div class="nm">${esc(e.known_as || e.name)} <span class="pill ${(e.brand_label||'').toLowerCase()}">${e.brand_label||''}</span> ${noPin}</div>
       <div class="role">${esc(e.job_name || '')} ${e.pin ? '· PIN ' + esc(e.pin) : ''} · ${esc(e.pay_type || '')}</div></div>
       ${pay ? `<div style="font-weight:700;font-size:14px" class="num">${pay}</div>` : ''}</div></div>`;
   }).join('');
+}
+function rosterTap(id) {
+  // The person's everything: month grid + three lanes + actions. Over-write
+  // pay lives inside that sheet now.
+  if (!S.fin) return toast('Pay is owner-only', 'info');
+  loadPayCtx('settle', id);
 }
 function overrideSheet(id, name) {
   if (!S.fin) return toast('Pay is owner-only', 'info');
@@ -609,7 +651,9 @@ async function doOverride(id) {
 /* ━━━━━━━━━━━━━━ ACCOUNT / HEALTH ━━━━━━━━━━━━━━ */
 function openAccount() {
   const h = S.home?.health || {};
-  const cams = h.cams_ok ? `<span class="pill green">live · ${h.cams_last_punch_age_min}m</span>` : `<span class="pill red">silent ${h.cams_last_punch_age_min ?? '?'}m</span>`;
+  const cams = h.cams_ok
+    ? (h.cams_last_punch_age_min > 90 ? `<span class="pill grey">lull · ${h.cams_last_punch_age_min}m</span>` : `<span class="pill green">live · ${h.cams_last_punch_age_min}m</span>`)
+    : `<span class="pill red">silent ${h.cams_last_punch_age_min ?? '?'}m</span>`;
   sheet(`<h2>Account</h2><div class="sd">${esc(S.user || '')} · ${esc(S.role || '')}</div>
     <div class="yrow"><div class="ic" style="background:var(--gold-soft);color:var(--gold)">🪪</div><div><div class="yl">CAMS device</div><div class="ys">biometric punch feed</div></div><div class="yv">${cams}</div></div>
     <div class="yrow"><div class="ic" style="background:var(--green-soft);color:var(--green)">💬</div><div><div class="yl">WhatsApp · HE</div><div class="ys">staff nudges + receipts</div></div><div class="yv"><span class="pill green">live</span></div></div>

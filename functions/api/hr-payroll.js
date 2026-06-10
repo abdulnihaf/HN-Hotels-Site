@@ -275,6 +275,12 @@ export async function onRequest({ request, env }) {
         receipt = { attempted: false, reason: 'no_phone' };
       }
     } catch (e) { receipt = { attempted: true, ok: false, error: String(e && e.message || e) }; }
+    // Persist the receipt outcome on the row — the ledger shows forever whether
+    // the worker actually got the WhatsApp, not just a vanishing toast.
+    try {
+      const rs = !receipt ? null : receipt.attempted === false ? 'no_phone' : receipt.ok ? 'sent' : 'failed';
+      if (r?.id && rs) await db.prepare(`UPDATE hr_advances SET receipt_status=? WHERE id=?`).bind(rs, r.id).run();
+    } catch {}
     return json({ ok: true, id: r?.id, receipt });
   }
 
@@ -553,7 +559,7 @@ export async function onRequest({ request, env }) {
     `).bind(employeeId, start, end).all();
 
     const advRows = await db.prepare(`
-      SELECT id, advance_date, amount, paid_via, COALESCE(reason,'') AS reason
+      SELECT id, advance_date, amount, paid_via, COALESCE(reason,'') AS reason, receipt_status
         FROM hr_advances
        WHERE employee_id = ? AND COALESCE(pay_period, substr(advance_date,1,7)) = ?
          AND COALESCE(source,'') != 'settlement'
@@ -562,7 +568,7 @@ export async function onRequest({ request, env }) {
     const advances_total = (advRows.results || []).reduce((s, r) => s + Number(r.amount || 0), 0);
 
     const setRows = await db.prepare(`
-      SELECT id, advance_date, amount, paid_via FROM hr_advances
+      SELECT id, advance_date, amount, paid_via, receipt_status FROM hr_advances
        WHERE employee_id = ? AND COALESCE(pay_period, substr(advance_date,1,7)) = ?
          AND COALESCE(source,'') = 'settlement' ORDER BY advance_date DESC
     `).bind(employeeId, month).all();
