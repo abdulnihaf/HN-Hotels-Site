@@ -86,9 +86,13 @@ async function runPull(env) {
     // pin goes in the request body (hr-admin.js reads body.pin, not a header)
     const res = await fetch(`${pagesUrl}/api/hr-admin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // x-service-key passes hr-admin's front token gate (hardening 2026-05-29);
+      // body pin alone gets 401'd there. service_key in body doubles as the
+      // inner PIN bypass so this works even if the header is ever stripped.
+      headers: { 'Content-Type': 'application/json', ...(env.CAMS_AUTH_TOKEN ? { 'x-service-key': env.CAMS_AUTH_TOKEN } : {}) },
       body: JSON.stringify({
         action: 'pull-attendance',
+        service_key: env.CAMS_AUTH_TOKEN || undefined,
         pin,
         from: yesterday,
         to: today,
