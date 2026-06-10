@@ -356,10 +356,10 @@ function renderAttend() {
   $('attList').innerHTML = hdr + list.map(r => {
     const st = attState(r); const nm = r.known_as && r.known_as !== r.name ? `${esc(r.name)} <span style="color:var(--mute)">(${esc(r.known_as)})</span>` : esc(r.name);
     const sess = sessionLine(r);
-    const fixBtn = (st.k === 'present' && st.incomplete) ? `<button class="btn primary sm" style="margin-top:9px" onclick='fixPunch(${r.employee_id}, ${JSON.stringify(S.attendDate)})'>Fix — impute missing punch</button>` : '';
+    const fixBtn = (st.k === 'present' && st.incomplete) ? `<button class="btn primary sm" style="margin-top:9px" onclick='event.stopPropagation();fixPunch(${r.employee_id}, ${JSON.stringify(S.attendDate)})'>Fix — impute missing punch</button>` : '';
     const dot = st.working ? 'inprog' : st.k === 'present' ? (st.incomplete ? 'missing' : 'present') : st.k;
     const pill = st.working ? 'blue' : st.k === 'present' ? (st.incomplete ? 'yellow' : 'green') : st.k === 'absent' ? 'red' : 'purple';
-    return `<div class="arow"><div class="top"><div>
+    return `<div class="arow" onclick='attRowTap(${r.employee_id})'><div class="top"><div>
         <div class="nm"><span class="sdot ${dot}"></span>${nm} <span class="pill ${(r.brand_label||'').toLowerCase()}">${r.brand_label||''}</span></div>
         <div class="role">${esc(r.job_name || r.department_name || '')}</div>
         <div class="sess">${sess}</div></div>
@@ -374,6 +374,12 @@ function sessionLine(r) {
   const br = r.break_taken_minutes ? ` · break ${r.break_taken_minutes}m` : '';
   const pc = `${r.punch_count} tap${r.punch_count > 1 ? 's' : ''}`;
   return `${t(r.first_in_at)} → ${r.last_out_at ? t(r.last_out_at) : '<span style="color:var(--blue)">open</span>'}${hrs}${br} · ${pc}`;
+}
+function attRowTap(empId) {
+  // Day board answers "who's here TODAY"; tapping a person answers "how was
+  // their MONTH" — same person sheet as Roster/Pay (grid + three lanes).
+  if (!S.fin) return;
+  loadPayCtx('settle', empId, S.attendDate.slice(0, 7));
 }
 async function fixPunch(empId, date) {
   if (needToken()) return;
