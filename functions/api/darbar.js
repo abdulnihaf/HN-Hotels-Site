@@ -91,6 +91,7 @@ export async function onRequest(context) {
       if (action === 'home') return withCors(await home(db, url), request);
       if (action === 'ghost-photo') return withCors(await ghostPhoto(db, url), request);
       if (action === 'month-board') return withCors(await monthBoard(db, url), request);
+      if (action === 'month-attendance') return withCors(await monthAttendance(db, url), request);
       if (action === 'reconcile') return withCors(await reconcile(db, false), request);
       return withCors(json({ error: `unknown GET action: ${action}` }, 400), request);
     }
@@ -287,6 +288,20 @@ async function ghostPhoto(db, url) {
     ).bind(pin).first();
     return json({ pin, user_name: (r && r.user_name) || null, photo_base64: (r && r.photo_base64) || null });
   } catch { return json({ pin, user_name: null, photo_base64: null }); }
+}
+
+/* ━━━ MONTH ATTENDANCE — every active person × every day of a month (dot-strips) ━━━ */
+async function monthAttendance(db, url) {
+  const month = url.searchParams.get('month') || new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
+  const rows = await db.prepare(
+    `SELECT ad.employee_id AS id, e.pin, COALESCE(e.known_as, e.name) AS name, e.brand_label AS brand,
+            ad.date, COALESCE(ad.punch_count, 0) AS punch_count, ad.status
+       FROM hr_attendance_daily ad
+       JOIN hr_employees e ON e.id = ad.employee_id AND e.is_active = 1 AND e.track_attendance = 1
+      WHERE ad.date BETWEEN ?1 || '-01' AND ?1 || '-31'
+      ORDER BY e.brand_label, name, ad.date`
+  ).bind(month).all();
+  return json({ month, rows: rows.results || [] });
 }
 
 /* ━━━ MONTH BOARD — every person × (days worked · advances · settled), facts only ━━━ */

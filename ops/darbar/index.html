@@ -218,6 +218,11 @@
     .aleg{display:flex;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:10px;color:var(--dim)}
     .aleg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
     .aleg i.ok{background:var(--green)}.aleg i.err{background:var(--yellow)}.aleg i.absent{background:var(--red)}.aleg i.off{background:var(--purple)}.aleg i.open{background:var(--blue)}
+    /* month-view mini strips (one row per person, one cell per day) */
+    .mstrip{display:flex;gap:2.5px;flex-wrap:wrap;margin-top:7px}
+    .mc{width:9px;height:9px;border-radius:3px;background:var(--e2)}
+    .mc.ok{background:var(--green)} .mc.err{background:var(--yellow)} .mc.absent{background:var(--red-soft);outline:1px solid var(--red);outline-offset:-1px}
+    .mc.off{background:var(--purple)} .mc.open{background:var(--blue)} .mc.future{background:transparent;border:1px dashed var(--line)} .mc.nodata{background:var(--e1)}
   </style>
 </head>
 <body>
@@ -262,6 +267,7 @@
       <div class="d num" id="attDay">—</div>
       <button onclick="shiftDay(1)">›</button>
       <button onclick="jumpToday()" title="Today" style="width:auto;padding:0 12px;font-size:13px">Today</button>
+      <button onclick="toggleAttMode()" id="attModeBtn" style="width:auto;padding:0 12px;font-size:13px">Month</button>
     </div>
     <div class="seg" id="attBrand">
       <button data-b="all" class="on">All</button><button data-b="HE">HE</button><button data-b="NCH">NCH</button><button data-b="HQ">HQ</button>
@@ -275,6 +281,9 @@
     <div class="nav" id="nav-pay"><div></div><div class="t">Pay</div><button class="act r" onclick="openAdvance()">＋</button></div>
     <div class="lt"><h1>Pay</h1><div class="sub" id="paySub">Settle or advance — anyone, any day</div></div>
     <div id="settleBanner" style="margin:0 16px 12px"></div>
+    <div class="seg" id="payBrand">
+      <button data-b="all" class="on">All</button><button data-b="HE">HE</button><button data-b="NCH">NCH</button><button data-b="HQ">HQ</button>
+    </div>
     <div style="margin:0 16px 10px;display:flex;gap:8px">
       <button class="btn primary" style="flex:1" onclick="openSettle()">Settle a person</button>
       <button class="btn ghost-b" style="flex:1" onclick="openAdvance()">Pay advance</button>
