@@ -430,6 +430,10 @@ async function loadPay() {
  * month being cleared (May until the 10th), an advance defaults to the
  * CURRENT month — one tap flips it. */
 function currentMonthIST() { return todayIST().slice(0, 7); }
+function prevMonthIST() {
+  const [y, m] = currentMonthIST().split('-').map(Number);
+  return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+}
 
 function attGridHTML(c) {
   const month = c.month, days = (c.attendance && c.attendance.days) || [];
@@ -489,7 +493,10 @@ async function loadPayCtx(mode, empId, month) {
   catch (e) { return sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'}</h2><div class="empty">${esc(e.message)}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`); }
   if (!c || c.error || !c.employee) return sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'}</h2><div class="empty">${esc((c && c.error) || 'no data')}</div><div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`);
   const a = c.attendance, emp = c.employee;
-  const months = [...new Set([activeSettlementMonth(), currentMonthIST()])];
+  // Always offer last month + this month (the two real-life cases: clearing
+  // the previous month vs paying against the running one) + whatever month
+  // the sheet is on. Older months stay reachable via the Pay-tab navigator.
+  const months = [...new Set([prevMonthIST(), currentMonthIST(), month])];
   const chips = months.map(mm =>
     `<button class="mchip ${mm === month ? 'on' : ''}" onclick="loadPayCtx('${mode}', ${emp.id}, '${mm}')">${esc(monthLabel(mm))}${mm === currentMonthIST() ? ' · live' : ''}</button>`).join('');
   const advs = (c.advances.rows || []).map(r => `${inr(r.amount)} · ${String(r.advance_date).slice(5)} · ${esc(r.paid_via || '')}`).join('   ') || 'none';
