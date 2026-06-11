@@ -188,6 +188,39 @@ export async function onRequest(context) {
       return json({ success: true, recorded: results.length, at: now, by: person, items: results });
     }
 
+    // ── PLACE ORDER (Zoya/Bashir — creates the receive expectations) ──
+    // Placement itself happens on WhatsApp; THIS is the app record that makes
+    // the outlet's receive screen know what to expect on the delivery date.
+    if (action === 'place-order' && context.request.method === 'POST') {
+      const ORDER_PLACERS = ['Zoya', 'Bashir', 'Nihaf', 'Tanveer', 'Naveen'];
+      const body = await context.request.json();
+      const person = PINS[body.pin];
+      if (!person || !ORDER_PLACERS.includes(person)) return json({ success: false, error: 'Not authorised to place orders' }, 401);
+      const poDate = body.po_date;  // 'YYYY-MM-DD' IST delivery date
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(poDate || '')) return json({ success: false, error: 'po_date invalid' });
+      const now = new Date().toISOString();
+      let n = 0;
+      for (const l of (body.lines || [])) {
+        const item = ITEMS.find(i => i.code === l.code);
+        if (!item || !(l.qty > 0)) continue;
+        await DB.prepare(
+          `INSERT INTO rm_po_expected (brand, po_date, item_code, item_name, ordered_qty, ordered_unit, expect_note, created_at)
+           VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(poDate, item.code, item.name, l.qty, l.unit || item.uom, `placed by ${person}${l.note ? ' · ' + l.note : ''}`, now).run();
+        n++;
+      }
+      return json({ success: true, placed: n, po_date: poDate, by: person, at: now });
+    }
+
+    // ── ORDERS for a date (order page shows what's already placed) ──
+    if (action === 'orders') {
+      const date = url.searchParams.get('date');
+      const rows = (await DB.prepare(
+        `SELECT * FROM rm_po_expected WHERE brand='NCH' AND po_date=? ORDER BY id`
+      ).bind(date).all()).results || [];
+      return json({ success: true, po_date: date, lines: rows });
+    }
+
     // ── EXPECTED TODAY (from the day's PO — receiver confirms against these) ──
     if (action === 'expected') {
       const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10); // IST date
