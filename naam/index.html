@@ -448,8 +448,49 @@ function openLane(id){
   $('#detailBody').innerHTML=html;
   $('#detailBody').scrollTop=0;
   $('#detailPane').classList.add('open');
+  injectLive(id);
 }
 $('#detailBack').onclick=()=>$('#detailPane').classList.remove('open');
+
+/* ── LIVE PLUMBING — Meta + Google lanes fetch real numbers on open ──
+   Meta: /api/meta-ads (Graph insights, edge-cached 10 min). NO conversions
+   shown by doctrine — Meta's conversion column is broken for HN; impact is
+   judged by POS-spike correlation. Google: GBP performance is live; Ads
+   campaign GAQL stays snapshot until the MCC developer token is obtained. */
+async function injectLive(id){
+  if(id!=='meta'&&id!=='google')return;
+  const box=document.createElement('div');
+  box.className='detail-section';
+  box.innerHTML=`<h3>Live right now</h3><div class="dgrid" id="liveGrid"><div class="dcard"><div class="dl">fetching live…</div></div></div><div id="liveNote" style="font-size:10.5px;color:var(--text-mute);margin-top:8px"></div>`;
+  const body=$('#detailBody');
+  body.insertBefore(box, body.children[2]||null);
+  try{
+    if(id==='meta'){
+      const d=await fetch('https://hnhotels.in/api/meta-ads?period=7d').then(r=>r.json());
+      if(!d.ok)throw new Error(d.error||'meta fetch failed');
+      let g=`<div class="dcard"><div class="dv">₹${d.totals.spend.toLocaleString('en-IN')}</div><div class="dl">spend · 7d</div></div>
+        <div class="dcard"><div class="dv">${d.totals.clicks.toLocaleString('en-IN')}</div><div class="dl">clicks · 7d</div></div>
+        <div class="dcard"><div class="dv">${(d.totals.impressions/1000).toFixed(1)}k</div><div class="dl">impressions</div></div>`;
+      for(const c of d.campaigns.slice(0,4)){
+        g+=`<div class="dcard" style="grid-column:1/-1"><div class="dv" style="font-size:14px">${esc(c.name)}</div><div class="dl">₹${c.spend.toLocaleString('en-IN')} · ${c.clicks} clicks · CTR ${c.ctr}% · freq ${c.frequency}</div></div>`;
+      }
+      $('#liveGrid').innerHTML=g;
+      $('#liveNote').textContent='Conversions hidden by doctrine (platform column broken) — judge by POS-spike correlation. Cached ≤10 min.';
+    }else{
+      const d=await fetch(`https://hnhotels.in/api/gbp-cockpit?brand=${state.brand}&period=7d`).then(r=>r.json());
+      if(!d.ok)throw new Error('gbp fetch failed');
+      const daily=d.daily||[];
+      const imp=daily.reduce((s,x)=>s+(x.impressions||0),0), act=daily.reduce((s,x)=>s+(x.actions||0),0);
+      $('#liveGrid').innerHTML=`
+        <div class="dcard"><div class="dv">${imp.toLocaleString('en-IN')}</div><div class="dl">GBP impressions · 7d</div></div>
+        <div class="dcard"><div class="dv">${act.toLocaleString('en-IN')}</div><div class="dl">GBP actions · 7d</div></div>
+        <div class="dcard"><div class="dv">${d.summary&&d.summary.actionRate!=null?d.summary.actionRate+'%':'—'}</div><div class="dl">action rate${d.summary&&d.summary.actionRatePrior!=null?' (prior '+d.summary.actionRatePrior+'%)':''}</div></div>`;
+      $('#liveNote').textContent=(d.freshness&&d.freshness.performance?d.freshness.performance+' · ':'')+'Ads campaign live-pull pending Google Ads developer token — campaign card below is snapshot.';
+    }
+  }catch(e){
+    $('#liveGrid').innerHTML='<div class="dcard"><div class="dl">live fetch failed — snapshot below stands</div></div>';
+  }
+}
 
 /* ---------- CREATIVE ---------- */
 const LANE_ICON={meta:'📣',flyers:'📄',packaging:'📦',reel:'🎬',pisignage:'📺',tv:'📺',menu:'🍽',brand:'✦',hero:'🔥',qr:'▦',other:'◆'};
