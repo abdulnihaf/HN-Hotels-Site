@@ -672,6 +672,16 @@ async function openPay(mode) {
     <div class="acts"><button class="btn primary" onclick="loadPayCtx('${mode}')">See & ${mode === 'settle' ? 'settle' : 'pay'}</button><button class="btn ghost-b" onclick="closeSheet()">Cancel</button></div>`);
 }
 
+// Undo a wrongly recorded advance/settlement line — confirm, delete, re-render.
+async function undoPayLine(id, amount, mode, empId, month) {
+  if (!confirm(`Remove this ${inr(amount)} entry? This is for MIS-ENTRIES only — the money record disappears from the month.`)) return;
+  try {
+    await post('/api/hr-payroll?action=delete-advance', { id });
+    toast('✕ entry removed');
+    loadPayCtx(mode, empId, month);
+  } catch (e) { toast(e.message || 'could not remove', true); }
+}
+
 async function loadPayCtx(mode, empId, month) {
   empId = empId || ($('payEmp') && $('payEmp').value);
   if (!empId) return;
@@ -690,7 +700,9 @@ async function loadPayCtx(mode, empId, month) {
     `<button class="mchip ${mm === month ? 'on' : ''}" onclick="loadPayCtx('${mode}', ${emp.id}, '${mm}')">${esc(monthLabel(mm))}${mm === currentMonthIST() ? ' · live' : ''}</button>`).join('');
   const rmark = r => r.receipt_status === 'sent' ? ' ✓' : r.receipt_status === 'failed' ? ' ✗' : r.receipt_status === 'no_phone' ? ' (no phone)' : '';
   // THE TRAIL — every piece on its own line: ₹ · date · mode · receipt mark.
-  const payLine = r => `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line-soft)"><span class="num" style="font-weight:700;color:var(--text)">${inr(r.amount)}</span><span>${esc(fmtDayShort(String(r.advance_date || '').slice(0, 10)))} · ${esc(r.paid_via || '')}${rmark(r)}</span></div>`;
+  // Each money line carries its own undo (✕) — mis-entries die in the app,
+  // never in a chat. delete-advance is admin-gated server-side (fin token).
+  const payLine = r => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px dashed var(--line-soft)"><span class="num" style="font-weight:700;color:var(--text)">${inr(r.amount)}</span><span style="flex:1;text-align:right">${esc(fmtDayShort(String(r.advance_date || '').slice(0, 10)))} · ${esc(r.paid_via || '')}${rmark(r)}</span><span onclick="event.stopPropagation();undoPayLine(${r.id},${Number(r.amount)},'${mode}',${Number(empId)},'${month}')" style="color:var(--red);font-weight:800;font-size:13px;padding:2px 6px;cursor:pointer">✕</span></div>`;
   const advs = (c.advances.rows || []).map(payLine).join('') || 'none';
   const setts = ((c.settlements && c.settlements.rows) || []).map(payLine).join('') || 'none';
   const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
