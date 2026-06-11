@@ -113,9 +113,9 @@
   <div class="scroll" id="home-list"><div class="loading">Loading…</div></div>
   <div class="actions">
     <button class="btn btn-green" onclick="startFlow('receipt')">📥 Receive</button>
-    <button class="btn btn-dark" id="issue-btn" onclick="startFlow('issue')">📤 Issue</button>
+    <button class="btn btn-gold" id="issue-btn" onclick="startFlow('issue')">📤 Taking to counter</button>
     <button class="btn btn-dark" id="waste-btn" onclick="startFlow('waste')" style="flex:.7">🗑️</button>
-    <button class="btn btn-gold" onclick="startFlow('count')">📋 Count</button>
+    <button class="btn" id="count-btn" onclick="startFlow('count')">📋 Count</button>
   </div>
 </div>
 
@@ -167,6 +167,9 @@ function renderHomeChrome() {
   el('home-sub').textContent = `${S.person} · tap location chip to switch`;
   el('issue-btn').classList.toggle('hidden', S.loc !== 'store');
   el('waste-btn').classList.toggle('hidden', S.loc !== 'counter');  // waste is a counter event (layer 1)
+  // At the store door the hero action is the MOVE; counting is secondary.
+  el('count-btn').classList.toggle('btn-gold', S.loc !== 'store');
+  el('count-btn').classList.toggle('btn-dark', S.loc === 'store');
 }
 function goHome() { renderHomeChrome(); show('s-home'); loadLive(); }
 async function loadLive() {
@@ -262,18 +265,33 @@ function pickItem(code) {
     : S.flow === 'receipt' ? (S.item.made_in_house ? 'made in kitchen — how many moving to the counter?' : 'how many arrived?')
     : byPack ? `how many ${S.item.pack.name}s? (1 ${S.item.pack.name} = ${S.item.pack.size} ${S.item.uom}s)`
     : 'how many going to the counter?';
+  // One-tap presets for pack/case moves — the 1 AM worker taps a number, never types.
+  const presets = conv ? `
+    <div style="display:flex;gap:10px;justify-content:center;margin-bottom:16px">
+      ${[1, 2, 3, 4].map(n => `<button onclick="setQty(${n})" id="pre-${n}"
+        style="width:58px;height:58px;border-radius:14px;border:1.5px solid var(--gold-bd,#6b5524);background:rgba(212,162,76,.08);color:var(--gold,#d4a24c);font-size:22px;font-weight:800;font-family:inherit">${n}</button>`).join('')}
+    </div>
+    <div class="item-meta" style="margin-bottom:10px">tap ${conv.name}s — or type another number</div>` : '';
   el('flow-body').innerHTML = `
     <div class="card" style="text-align:center;padding:22px">
       <div style="font-size:40px;margin-bottom:8px">${S.flow === 'waste' ? '🗑️' : ICONS[code] || '📦'}</div>
       <div class="item-name" style="font-size:18px">${S.item.name}</div>
       <div class="item-meta" style="margin-bottom:18px">${ask}</div>
-      <input id="qty-one" class="qty-input" type="number" inputmode="numeric" placeholder="0" autofocus
-        ${conv ? `oninput="el('pack-conv').textContent = this.value ? this.value + ' × ' + ${conv.size} + ' = ' + (this.value * ${conv.size}) + ' ${S.item.uom}s' : ''"` : ''}>
+      ${presets}
+      <input id="qty-one" class="qty-input" type="number" inputmode="numeric" placeholder="0" ${conv ? '' : 'autofocus'}
+        ${conv ? `oninput="qtyConv(this.value)"` : ''}>
       ${conv ? '<div id="pack-conv" class="item-meta" style="margin-top:10px;color:var(--gold);font-weight:700"></div>' : ''}
       ${S.flow === 'waste' ? '<input id="waste-reason" class="qty-input" style="font-size:15px;font-weight:600;margin-top:10px" placeholder="reason (stale / dropped / burnt…)">' : ''}
     </div>`;
+  S.conv = conv;
   el('flow-actions').style.display = 'flex';
 }
+function qtyConv(v) {
+  if (!S.conv) return;
+  el('pack-conv').textContent = v ? `${v} × ${S.conv.size} = ${v * S.conv.size} ${S.item.uom}s` : '';
+  for (let n = 1; n <= 4; n++) { const b = el('pre-' + n); if (b) b.style.background = String(n) === String(v) ? 'rgba(212,162,76,.35)' : 'rgba(212,162,76,.08)'; }
+}
+function setQty(n) { el('qty-one').value = n; qtyConv(n); }
 async function submitFlow() {
   el('flow-submit').disabled = true;
   try {
