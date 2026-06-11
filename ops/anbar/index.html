@@ -114,6 +114,7 @@
   <div class="actions">
     <button class="btn btn-green" onclick="startFlow('receipt')">📥 Receive</button>
     <button class="btn btn-dark" id="issue-btn" onclick="startFlow('issue')">📤 Issue</button>
+    <button class="btn btn-dark" id="waste-btn" onclick="startFlow('waste')" style="flex:.7">🗑️</button>
     <button class="btn btn-gold" onclick="startFlow('count')">📋 Count</button>
   </div>
 </div>
@@ -165,6 +166,7 @@ function renderHomeChrome() {
   el('home-loc').textContent = S.loc.toUpperCase();
   el('home-sub').textContent = `${S.person} · tap location chip to switch`;
   el('issue-btn').classList.toggle('hidden', S.loc !== 'store');
+  el('waste-btn').classList.toggle('hidden', S.loc !== 'counter');  // waste is a counter event (layer 1)
 }
 function goHome() { renderHomeChrome(); show('s-home'); loadLive(); }
 async function loadLive() {
@@ -182,7 +184,7 @@ async function loadLive() {
       const exp = lane.expected;
       right = `<div class="item-num">${exp}<small>expected ${it.uom}</small></div>`;
       meta = S.loc === 'counter'
-        ? `counted ${lane.last_count} at ${istTime(lane.counted_at)} · +${lane.received || 0} recv · +${lane.issued_in || 0} issued · −${lane.sold || 0} sold${lane.odoo_ok === false ? ' · ⚠ POS offline' : ''}`
+        ? `counted ${lane.last_count} at ${istTime(lane.counted_at)} · +${lane.received || 0} recv · +${lane.issued_in || 0} issued · −${lane.sold || 0} sold${lane.waste ? ' · −' + lane.waste + ' waste' : ''}${lane.odoo_ok === false ? ' · ⚠ POS offline' : ''}`
         : `counted ${lane.last_count} at ${istTime(lane.counted_at)} · +${lane.received || 0} recv · −${lane.issued_out || 0} issued out`;
     }
     html += `<div class="card"><div class="item-row" onclick="showHistory('${it.code}')">
@@ -197,7 +199,7 @@ async function loadLive() {
 // ── FLOWS ──
 async function startFlow(kind) {
   S.flow = kind; S.item = null; S.countEntries = {}; S.expectedId = null;
-  el('flow-title').textContent = kind === 'receipt' ? '📥 Receive delivery' : kind === 'issue' ? '📤 Issue to counter' : '📋 Count stock';
+  el('flow-title').textContent = kind === 'receipt' ? '📥 Receive delivery' : kind === 'issue' ? '📤 Issue to counter' : kind === 'waste' ? '🗑️ Record waste' : '📋 Count stock';
   el('flow-sub').textContent = `${S.loc.toUpperCase()} · ${S.person}`;
   el('flow-actions').style.display = kind === 'count' ? 'flex' : 'none';
   const items = S.live.filter(it => S.loc === 'counter' ? true : it.locs.includes('store'));
@@ -250,19 +252,25 @@ function confirmExpected(expectedId, code) {
 function pickItem(code) {
   S.expectedId = null;
   S.item = S.live.find(i => i.code === code);
-  // Issues of packed items happen by the PACK — the server multiplies, humans never do.
+  // Humans never multiply: issues move by PACK, deliveries arrive by CASE/BOX —
+  // the server converts both. Made-in-house items receive as kitchen batches.
   const byPack = S.flow === 'issue' && S.item.pack;
-  const ask = S.flow === 'receipt' ? 'how many arrived?'
+  const byCase = S.flow === 'receipt' && S.item.ccase;
+  const conv = byPack ? S.item.pack : byCase ? S.item.ccase : null;
+  const ask = S.flow === 'waste' ? `how many ${S.item.uom}s thrown? (reason below)`
+    : byCase ? `how many ${S.item.ccase.name}es arrived? (1 ${S.item.ccase.name} = ${S.item.ccase.size} ${S.item.uom}s)`
+    : S.flow === 'receipt' ? (S.item.made_in_house ? 'made in kitchen — how many moving to the counter?' : 'how many arrived?')
     : byPack ? `how many ${S.item.pack.name}s? (1 ${S.item.pack.name} = ${S.item.pack.size} ${S.item.uom}s)`
     : 'how many going to the counter?';
   el('flow-body').innerHTML = `
     <div class="card" style="text-align:center;padding:22px">
-      <div style="font-size:40px;margin-bottom:8px">${ICONS[code] || '📦'}</div>
+      <div style="font-size:40px;margin-bottom:8px">${S.flow === 'waste' ? '🗑️' : ICONS[code] || '📦'}</div>
       <div class="item-name" style="font-size:18px">${S.item.name}</div>
       <div class="item-meta" style="margin-bottom:18px">${ask}</div>
       <input id="qty-one" class="qty-input" type="number" inputmode="numeric" placeholder="0" autofocus
-        ${byPack ? `oninput="el('pack-conv').textContent = this.value ? this.value + ' × ' + ${S.item.pack.size} + ' = ' + (this.value * ${S.item.pack.size}) + ' ${S.item.uom}s' : ''"` : ''}>
-      ${byPack ? '<div id="pack-conv" class="item-meta" style="margin-top:10px;color:var(--gold);font-weight:700"></div>' : ''}
+        ${conv ? `oninput="el('pack-conv').textContent = this.value ? this.value + ' × ' + ${conv.size} + ' = ' + (this.value * ${conv.size}) + ' ${S.item.uom}s' : ''"` : ''}>
+      ${conv ? '<div id="pack-conv" class="item-meta" style="margin-top:10px;color:var(--gold);font-weight:700"></div>' : ''}
+      ${S.flow === 'waste' ? '<input id="waste-reason" class="qty-input" style="font-size:15px;font-weight:600;margin-top:10px" placeholder="reason (stale / dropped / burnt…)">' : ''}
     </div>`;
   el('flow-actions').style.display = 'flex';
 }
@@ -278,11 +286,12 @@ async function submitFlow() {
     } else {
       const qty = parseFloat(el('qty-one')?.value || '0');
       if (!(qty > 0)) { toast('Enter quantity', true); return; }
-      const action = S.flow === 'receipt' ? 'record-receipt' : 'record-issue';
+      const action = S.flow === 'receipt' ? 'record-receipt' : S.flow === 'waste' ? 'record-waste' : 'record-issue';
       const byPack = S.flow === 'issue' && S.item.pack;
-      const r = await fetch(`${API}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.pin, loc: S.loc, code: S.item.code, qty, unit: byPack ? 'pack' : 'unit', expected_id: S.expectedId || undefined }) }).then(x => x.json());
+      const byCase = S.flow === 'receipt' && S.item.ccase;
+      const r = await fetch(`${API}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.pin, loc: S.loc, code: S.item.code, qty, unit: byPack ? 'pack' : byCase ? 'case' : 'unit', expected_id: S.expectedId || undefined, reason: S.flow === 'waste' ? (el('waste-reason')?.value || '') : undefined }) }).then(x => x.json());
       if (!r.success) throw new Error(r.error);
-      toast(`✓ ${S.item.name} ${S.flow === 'receipt' ? 'received' : 'issued'}: ${r.qty} ${S.item.uom}s · ${istTime(r.at)}`);
+      toast(`✓ ${S.item.name} ${S.flow === 'receipt' ? 'received' : S.flow === 'waste' ? 'wasted' : 'issued'}: ${r.qty} ${S.item.uom}s · ${istTime(r.at)}`);
     }
     goHome();
   } catch (e) { toast(e.message || 'failed', true); }
