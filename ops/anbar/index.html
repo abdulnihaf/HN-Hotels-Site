@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Anbar — NCH Inventory</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Anbar">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+<style>
+  /* Anbar — Darbar/Takht court design language */
+  :root {
+    --bg:#000; --card:#13131a; --card2:#1b1b24; --border:rgba(255,255,255,.09);
+    --text:#f7f7fa; --muted:#9a9aa3; --dim:#5c5c66;
+    --gold:#d4a24c; --gold-dim:rgba(212,162,76,.16); --gold-bd:rgba(212,162,76,.42);
+    --green:#37d399; --green-dim:rgba(55,211,153,.14);
+    --red:#ff5c5c; --red-dim:rgba(255,92,92,.14);
+    --amber:#fbbf24; --amber-dim:rgba(251,191,36,.15);
+    --blue:#5e9eff;
+    --anbar:#4f6e52; --anbar-bd:rgba(110,160,118,.45);   /* chamber hue: godown green */
+    --serif:'Cormorant Garamond', Georgia, serif;
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif; font-size:14px; }
+  .screen { display:none; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
+  .screen.active { display:flex; }
+  .scroll { overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch; padding:0 16px calc(20px + var(--safe-bot)); }
+  .nav { display:flex; align-items:center; gap:10px; padding:calc(14px + var(--safe-top)) 16px 10px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .nav-back { width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); font-size:20px; border-radius:10px; }
+  .nav-back:active { background:var(--card); }
+  .nav-title { font-size:15px; font-weight:700; flex:1; }
+  .nav-sub { font-size:11px; color:var(--muted); }
+  .loc-chip { font-size:11px; font-weight:800; padding:4px 10px; border-radius:10px; background:var(--gold-dim); color:var(--gold); text-transform:uppercase; letter-spacing:.04em; }
+
+  .gate { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:calc(32px + var(--safe-top)) 24px calc(32px + var(--safe-bot)); }
+  .tile { width:72px; height:72px; border-radius:16px; background:var(--card); border:1px solid var(--anbar-bd); display:flex; align-items:center; justify-content:center; font-size:30px; color:var(--gold); margin-bottom:18px; font-family:var(--serif); }
+  .brand { font-family:var(--serif); font-size:52px; font-weight:700; color:var(--text); text-shadow:0 1px 0 rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.45); }
+  .brand-sub { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--gold); margin:2px 0 30px; }
+  .gate-foot { font-family:var(--serif); font-style:italic; font-size:13px; color:rgba(212,162,76,.5); margin-top:26px; }
+
+  .pin-dots { display:flex; gap:14px; justify-content:center; margin:6px 0 24px; }
+  .pin-dot { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(212,162,76,.6); transition:all .15s; }
+  .pin-dot.filled { background:var(--gold); border-color:var(--gold); }
+  .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; justify-items:center; width:100%; max-width:280px; }
+  .key { background:var(--card2); border:1px solid var(--border); border-radius:50%; width:66px; height:66px; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; }
+  .key:active { background:var(--gold-dim); border-color:var(--gold); transform:scale(.96); }
+  .key.del { color:var(--red); font-size:18px; }
+  .err { color:var(--red); font-size:13px; min-height:18px; margin-top:14px; }
+
+  .card { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:14px; margin-top:12px; }
+  .item-row { display:flex; align-items:center; gap:12px; cursor:pointer; }
+  .item-ico { width:44px; height:44px; border-radius:12px; background:var(--card2); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .item-name { font-size:15px; font-weight:700; }
+  .item-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+  .item-num { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; text-align:right; }
+  .item-num small { display:block; font-size:10px; color:var(--dim); font-weight:600; text-transform:uppercase; }
+  .ok { color:var(--green); } .bad { color:var(--red); } .warn { color:var(--amber); }
+
+  .actions { display:flex; gap:8px; padding:10px 16px calc(12px + var(--safe-bot)); border-top:1px solid var(--border); flex-shrink:0; }
+  .btn { flex:1; border:none; border-radius:12px; padding:15px 8px; font-size:14px; font-weight:800; cursor:pointer; font-family:inherit; }
+  .btn:active { transform:scale(.97); }
+  .btn-gold { background:var(--gold); color:#1a1206; }
+  .btn-dark { background:var(--card2); color:var(--text); border:1px solid var(--border); }
+  .btn-green { background:var(--green-dim); color:var(--green); border:1px solid rgba(55,211,153,.4); }
+  .btn:disabled { opacity:.35; }
+
+  .qty-input { width:100%; background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:16px; color:var(--text); font-size:30px; font-weight:800; text-align:center; outline:none; font-variant-numeric:tabular-nums; }
+  .qty-input:focus { border-color:var(--gold); }
+  .toast { position:fixed; bottom:calc(28px + var(--safe-bot)); left:50%; transform:translateX(-50%); padding:12px 22px; border-radius:12px; font-size:14px; font-weight:700; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; background:var(--green-dim); color:var(--green); border:1px solid rgba(55,211,153,.4); }
+  .toast.show { opacity:1; }
+  .hidden { display:none !important; }
+  .loading { text-align:center; padding:40px 0; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- GATE -->
+<div id="s-gate" class="screen active">
+  <div class="gate">
+    <div class="tile">انبار</div>
+    <div class="brand">Anbar</div>
+    <div class="brand-sub">Every grain accounted, every move recorded</div>
+    <div id="gate-loc" style="margin-bottom:14px"></div>
+    <div class="pin-dots"><div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div><div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div></div>
+    <div class="pad">
+      <div class="key" onclick="key('1')">1</div><div class="key" onclick="key('2')">2</div><div class="key" onclick="key('3')">3</div>
+      <div class="key" onclick="key('4')">4</div><div class="key" onclick="key('5')">5</div><div class="key" onclick="key('6')">6</div>
+      <div class="key" onclick="key('7')">7</div><div class="key" onclick="key('8')">8</div><div class="key" onclick="key('9')">9</div>
+      <div class="key" style="opacity:0"></div><div class="key" onclick="key('0')">0</div><div class="key del" onclick="del()">⌫</div>
+    </div>
+    <div class="err" id="gate-err"></div>
+    <div class="gate-foot">HN Hotels · Nawabi Chai House</div>
+  </div>
+</div>
+
+<!-- HOME: live board for this location -->
+<div id="s-home" class="screen">
+  <div class="nav">
+    <div>
+      <div class="nav-title">Anbar · Nawabi Chai House</div>
+      <div class="nav-sub" id="home-sub"></div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="loc-chip" id="home-loc" onclick="switchLoc()">COUNTER</div>
+  </div>
+  <div class="scroll" id="home-list"><div class="loading">Loading…</div></div>
+  <div class="actions">
+    <button class="btn btn-green" onclick="startFlow('receipt')">📥 Receive</button>
+    <button class="btn btn-dark" id="issue-btn" onclick="startFlow('issue')">📤 Issue</button>
+    <button class="btn btn-gold" onclick="startFlow('count')">📋 Count</button>
+  </div>
+</div>
+
+<!-- FLOW: pick item → qty -->
+<div id="s-flow" class="screen">
+  <div class="nav">
+    <div class="nav-back" onclick="goHome()">‹</div>
+    <div><div class="nav-title" id="flow-title"></div><div class="nav-sub" id="flow-sub"></div></div>
+  </div>
+  <div class="scroll" id="flow-body"></div>
+  <div class="actions" id="flow-actions" style="display:none">
+    <button class="btn btn-gold" id="flow-submit" onclick="submitFlow()">Record</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/anbar';
+const ICONS = { 'NCH-OB':'🍪', 'NCH-WTR':'💧', 'NCH-KH':'🌴', 'NCH-BUN':'🍞', 'NCH-CC':'🍗', 'NCH-PS':'🥟' };
+const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {} };
+
+// QR-door scoping: ?loc=counter|store|kitchen pre-scopes the app
+const qLoc = new URLSearchParams(location.search).get('loc');
+if (qLoc === 'store' || qLoc === 'counter') S.loc = qLoc;
+if (qLoc === 'kitchen') S.loc = 'counter';  // kitchen receipts land on the counter lane at layer 1
+
+function el(id) { return document.getElementById(id); }
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); el(id).classList.add('active'); }
+function toast(msg, bad) { const t = el('toast'); t.textContent = msg; t.style.color = bad ? 'var(--red)' : 'var(--green)'; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2600); }
+function istTime(iso) { return new Date(iso).toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Kolkata'}); }
+
+// ── GATE ──
+function key(k) { if (S.entry.length >= 4) return; S.entry += k; dots(); if (S.entry.length === 4) verify(); }
+function del() { S.entry = S.entry.slice(0, -1); dots(); el('gate-err').textContent = ''; }
+function dots() { for (let i = 0; i < 4; i++) el('d' + i).classList.toggle('filled', i < S.entry.length); }
+async function verify() {
+  const r = await fetch(`${API}?action=verify-pin&pin=${S.entry}`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) { el('gate-err').textContent = r.error || 'Wrong PIN'; S.entry = ''; dots(); return; }
+  S.pin = S.entry; S.person = r.person; S.entry = '';
+  localStorage.setItem('anbar_pin', S.pin); localStorage.setItem('anbar_person', S.person);
+  goHome();
+}
+
+// ── HOME ──
+function switchLoc() { S.loc = S.loc === 'counter' ? 'store' : 'counter'; renderHomeChrome(); loadLive(); }
+function renderHomeChrome() {
+  el('home-loc').textContent = S.loc.toUpperCase();
+  el('home-sub').textContent = `${S.person} · tap location chip to switch`;
+  el('issue-btn').classList.toggle('hidden', S.loc !== 'store');
+}
+function goHome() { renderHomeChrome(); show('s-home'); loadLive(); }
+async function loadLive() {
+  el('home-list').innerHTML = '<div class="loading">Loading…</div>';
+  const r = await fetch(`${API}?action=live`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) { el('home-list').innerHTML = '<div class="loading">Failed to load</div>'; return; }
+  S.live = r.items;
+  let html = '';
+  for (const it of r.items) {
+    const lane = S.loc === 'store' ? it.store : it.counter;
+    if (S.loc === 'store' && !it.locs.includes('store')) continue;
+    let right = '<div class="item-num" style="color:var(--dim)">—<small>no baseline</small></div>';
+    let meta = 'not counted yet';
+    if (lane && lane.last_count != null) {
+      const exp = lane.expected;
+      right = `<div class="item-num">${exp}<small>expected ${it.uom}</small></div>`;
+      meta = S.loc === 'counter'
+        ? `counted ${lane.last_count} at ${istTime(lane.counted_at)} · +${lane.received || 0} recv · +${lane.issued_in || 0} issued · −${lane.sold || 0} sold${lane.odoo_ok === false ? ' · ⚠ POS offline' : ''}`
+        : `counted ${lane.last_count} at ${istTime(lane.counted_at)} · +${lane.received || 0} recv · −${lane.issued_out || 0} issued out`;
+    }
+    html += `<div class="card"><div class="item-row" onclick="showHistory('${it.code}')">
+      <div class="item-ico">${ICONS[it.code] || '📦'}</div>
+      <div style="flex:1"><div class="item-name">${it.name}</div><div class="item-meta">${meta}</div></div>
+      ${right}
+    </div></div>`;
+  }
+  el('home-list').innerHTML = html || '<div class="loading">No items for this location</div>';
+}
+
+// ── FLOWS ──
+function startFlow(kind) {
+  S.flow = kind; S.item = null; S.countEntries = {};
+  el('flow-title').textContent = kind === 'receipt' ? '📥 Receive delivery' : kind === 'issue' ? '📤 Issue to counter' : '📋 Count stock';
+  el('flow-sub').textContent = `${S.loc.toUpperCase()} · ${S.person}`;
+  el('flow-actions').style.display = kind === 'count' ? 'flex' : 'none';
+  const items = S.live.filter(it => S.loc === 'counter' ? true : it.locs.includes('store'));
+  if (kind === 'count') {
+    el('flow-body').innerHTML = items.map(it => `
+      <div class="card"><div style="display:flex;align-items:center;gap:12px">
+        <div class="item-ico">${ICONS[it.code] || '📦'}</div>
+        <div style="flex:1"><div class="item-name">${it.name}</div><div class="item-meta">${it.uom}s on hand right now</div></div>
+        <input class="qty-input" style="width:110px;padding:10px;font-size:24px" type="number" inputmode="numeric" placeholder="—" onchange="S.countEntries['${it.code}']=this.value">
+      </div></div>`).join('');
+  } else {
+    el('flow-body').innerHTML = items.map(it => `
+      <div class="card"><div class="item-row" onclick="pickItem('${it.code}')">
+        <div class="item-ico">${ICONS[it.code] || '📦'}</div>
+        <div style="flex:1"><div class="item-name">${it.name}</div><div class="item-meta">tap to enter quantity</div></div>
+        <div style="color:var(--gold);font-size:20px">›</div>
+      </div></div>`).join('');
+  }
+  show('s-flow');
+}
+function pickItem(code) {
+  S.item = S.live.find(i => i.code === code);
+  el('flow-body').innerHTML = `
+    <div class="card" style="text-align:center;padding:22px">
+      <div style="font-size:40px;margin-bottom:8px">${ICONS[code] || '📦'}</div>
+      <div class="item-name" style="font-size:18px">${S.item.name}</div>
+      <div class="item-meta" style="margin-bottom:18px">${S.flow === 'receipt' ? 'how many arrived?' : 'how many going to the counter?'}</div>
+      <input id="qty-one" class="qty-input" type="number" inputmode="numeric" placeholder="0" autofocus>
+    </div>`;
+  el('flow-actions').style.display = 'flex';
+}
+async function submitFlow() {
+  el('flow-submit').disabled = true;
+  try {
+    if (S.flow === 'count') {
+      const entries = Object.entries(S.countEntries).filter(([, v]) => v !== '' && v != null).map(([code, qty]) => ({ code, qty: parseFloat(qty) }));
+      if (!entries.length) { toast('Enter at least one count', true); return; }
+      const r = await fetch(`${API}?action=record-count`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.pin, loc: S.loc, items: entries }) }).then(x => x.json());
+      if (!r.success) throw new Error(r.error);
+      toast(`✓ ${r.recorded} counts recorded ${istTime(r.at)}`);
+    } else {
+      const qty = parseFloat(el('qty-one')?.value || '0');
+      if (!(qty > 0)) { toast('Enter quantity', true); return; }
+      const action = S.flow === 'receipt' ? 'record-receipt' : 'record-issue';
+      const r = await fetch(`${API}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.pin, loc: S.loc, code: S.item.code, qty }) }).then(x => x.json());
+      if (!r.success) throw new Error(r.error);
+      toast(`✓ ${S.item.name} ${S.flow === 'receipt' ? 'received' : 'issued'}: ${qty} · ${istTime(r.at)}`);
+    }
+    goHome();
+  } catch (e) { toast(e.message || 'failed', true); }
+  finally { el('flow-submit').disabled = false; }
+}
+async function showHistory(code) {
+  const r = await fetch(`${API}?action=history&code=${code}&limit=20`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) return;
+  const name = (S.live.find(i => i.code === code) || {}).name || code;
+  el('flow-title').textContent = `${ICONS[code] || ''} ${name}`;
+  el('flow-sub').textContent = 'movement trail · newest first';
+  el('flow-actions').style.display = 'none';
+  el('flow-body').innerHTML = r.events.map(e => `
+    <div class="card" style="padding:11px 14px;display:flex;gap:10px;align-items:center">
+      <div style="font-size:16px">${e.k === 'count' ? '📋' : e.k === 'receipt' ? '📥' : '📤'}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:700">${e.k} · ${e.qty}</div>
+      <div class="item-meta">${new Date(e.at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'})} · ${e.who || ''} ${e.kind ? '· ' + e.kind : ''}</div></div>
+    </div>`).join('') || '<div class="loading">No movements yet</div>';
+  show('s-flow');
+}
+
+// ── INIT ──
+if (qLoc) el('gate-loc').innerHTML = `<span class="loc-chip">${S.loc.toUpperCase()} DOOR</span>`;
+if (S.pin && S.person) { goHome(); } // device remembered
+</script>
+</body>
+</html>
