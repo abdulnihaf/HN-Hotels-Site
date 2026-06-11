@@ -29,6 +29,18 @@ export async function onRequest(context) {
   const pin = url.searchParams.get('pin') || '';
   if (!OWNER_PINS.has(pin)) return json({ ok: false, error: 'auth_required' }, 401);
 
+  // ?action=whoami — reveal the Sparksol line's own number (the "Hukm" contact).
+  // The creds live only as deployed secrets, so this is the one place that can ask.
+  if (url.searchParams.get('action') === 'whoami') {
+    const phoneId = env.WA_SPARKSOL_PHONE_ID;
+    const token   = env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN;
+    if (!phoneId || !token) return json({ ok: false, error: 'sparksol creds missing' }, 500);
+    const r = await fetch(`https://graph.facebook.com/v24.0/${phoneId}?fields=display_phone_number,verified_name`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    return json({ ok: r.ok, sparksol: await r.json().catch(() => null) }, r.ok ? 200 : 502);
+  }
+
   let question = url.searchParams.get('q') || '';
   if (!question && request.method === 'POST') {
     const body = await request.json().catch(() => ({}));
