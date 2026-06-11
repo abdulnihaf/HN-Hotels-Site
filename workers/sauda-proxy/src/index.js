@@ -36,9 +36,16 @@ export default {
       const sub = path.replace(/^\/requests\/?/, '');
       return fetch(ORIGIN + '/ops/sauda-pay/' + sub + url.search, request);
     }
-    // Everything else: map subdomain-root path -> APP_BASE on origin
+    // Everything else: map subdomain-root path -> APP_BASE on origin.
+    // redirect:'follow' — Pages 308-normalizes /dir to /dir/; the incoming
+    // request's manual redirect mode must not leak the origin URL to the user.
     const target = ORIGIN + APP_BASE + (path === '/' ? '/' : path) + url.search;
-    const res = await fetch(target, request);
+    const res = await fetch(target, {
+      method: request.method,
+      headers: request.headers,
+      body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
+      redirect: 'follow',
+    });
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('text/html')) {
       let html = await res.text();
