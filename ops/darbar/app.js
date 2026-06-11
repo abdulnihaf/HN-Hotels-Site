@@ -532,39 +532,50 @@ async function openMonthBoard() {
   const done = rows.filter(r => r.settled > 0).length;
 
   /* Rough wage estimate per person — for the gauge only, never the settle sheet.
-   * Monthly = contract salary regardless of punches (presence pays full day, so the
-   * contract is the honest ceiling even when someone like Azeem never punches).
-   * Daily = days worked × rate (⚠ when punches look too thin to trust).
-   * Left / untracked / no-rate → not estimable, excluded from the total and listed. */
+   * Returns a LOW–HIGH band, because punches aren't gospel:
+   *  · Monthly with any punch in the month → contract salary (presence pays full day).
+   *  · Monthly, tracked, ZERO punches in the month → not estimable (joined later /
+   *    didn't work that month — assuming a full contract would overcount).
+   *  · Contract/daily, solid punches → days × rate.
+   *  · Contract/daily, thin punches (<8d) → band: days×rate up to the contract month
+   *    (the Azeem case — barely punches but works the month).
+   *  · Left → dues written off, no pending. Untracked / no-rate → listed, not counted. */
   const est = r => {
-    if (!r.is_active) return { v: null, why: 'left' };
-    if ((r.pay_type || '').toLowerCase() === 'monthly' && r.monthly_salary > 0)
-      return { v: r.monthly_salary, why: 'contract' };
-    if (r.daily_rate > 0) {
-      if (r.track_attendance === 0) return { v: null, why: 'untracked' };
-      return { v: r.days_worked * r.daily_rate, why: r.days_worked < 8 ? 'thin' : 'days' };
+    if (!r.is_active) return { lo: null, why: 'left' };
+    const sal = r.monthly_salary || 0, rate = r.daily_rate || 0;
+    if ((r.pay_type || '').toLowerCase() === 'monthly' && sal > 0) {
+      if (r.track_attendance !== 0 && (r.days_worked || 0) === 0) return { lo: null, why: 'no punches' };
+      return { lo: sal, hi: sal, why: 'contract' };
     }
-    return { v: null, why: 'no rate' };
+    if (rate > 0) {
+      if (r.track_attendance === 0) return { lo: null, why: 'untracked' };
+      const lo = (r.days_worked || 0) * rate;
+      if ((r.days_worked || 0) < 8 && sal > lo) return { lo, hi: sal, why: 'thin' };
+      return { lo, hi: lo, why: 'days' };
+    }
+    return { lo: null, why: 'no rate' };
   };
-  let paid = 0, pending = 0; const skipped = [];
+  let paid = 0, pendLo = 0, pendHi = 0; const skipped = [];
   for (const r of rows) {
     paid += (r.advances || 0) + (r.settled || 0);
     const e2 = est(r);
     if (r.settled > 0) continue;                       // month closed for them — owner decided
-    if (e2.v == null) { if (e2.why !== 'left') skipped.push(`${r.name} (${e2.why})`); continue; }
-    pending += Math.max(0, e2.v - (r.advances || 0));
+    if (e2.lo == null) { if (e2.why !== 'left') skipped.push(`${r.name} (${e2.why})`); continue; }
+    pendLo += Math.max(0, e2.lo - (r.advances || 0));
+    pendHi += Math.max(0, e2.hi - (r.advances || 0));
   }
+  const band = (lo, hi) => lo === hi ? `≈ ${inr(lo)}` : `≈ ${inr(lo)} – ${inr(hi)}`;
   const estLine = r => {
     const e2 = est(r);
-    if (r.settled > 0 || e2.v == null) return '';
-    return ` · est ≈${inr(e2.v)}${e2.why === 'thin' ? ' ⚠ punches thin' : ''}`;
+    if (r.settled > 0 || e2.lo == null) return '';
+    return ` · est ${band(e2.lo, e2.hi)}${e2.why === 'thin' ? ' ⚠ punches thin' : ''}`;
   };
 
   sheet(`<h2>${esc(monthLabel(month))} — board</h2>
     <div class="arow" style="margin-bottom:10px"><div class="top">
       <div><div class="role">paid for ${esc(monthLabel(month))}</div><div class="nm">${inr(paid)}</div>
-      <div class="role" style="margin-top:6px">left to pay (rough)</div><div class="nm" style="color:var(--gold,#c9a227)">≈ ${inr(pending)}</div>
-      <div class="role" style="margin-top:6px">paid is exact · pending = contract for monthly, days×rate for daily, minus advances${skipped.length ? `<br>not counted: ${esc(skipped.join(', '))}` : ''}</div></div>
+      <div class="role" style="margin-top:6px">left to pay (rough)</div><div class="nm" style="color:var(--gold,#c9a227)">${band(pendLo, pendHi)}</div>
+      <div class="role" style="margin-top:6px">paid is exact · pending = contract for monthly, days×rate for daily, minus advances · thin punches widen the band${skipped.length ? `<br>not counted: ${esc(skipped.join(', '))}` : ''}</div></div>
     </div></div>
     <div class="sd">${done}/${rows.length} settled · tap a row — facts come up, you decide</div>
     ${rows.map(r => `<div class="arow" onclick='closeSheet();loadPayCtx("settle", ${r.id}, ${JSON.stringify(b.month)})' style="margin-bottom:8px"><div class="top">
