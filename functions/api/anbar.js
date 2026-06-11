@@ -27,13 +27,15 @@ const PINS = {
 // Layer-1 NCH items. pos = product.template ids + factor (units consumed per line qty).
 // All bun SKUs consume the same physical bun → one Anbar item, factor 1 each.
 const ITEMS = [
-  // Store hierarchy: 1 box = 20 packets, 1 packet = 24 pieces. Issues to the
-  // counter happen BY THE PACKET — the app converts; humans never multiply.
-  { code: 'NCH-OB',  name: 'Osmania Biscuit', uom: 'piece',  locs: ['counter', 'store'], pack: { name: 'packet', size: 24 }, pos: [{ tmpl: 1030, f: 1 }, { tmpl: 1033, f: 3 }] },
+  // HUMANS NEVER MULTIPLY: pack = the unit issues move in (store→counter);
+  // case = the unit deliveries arrive in (receives). The server converts both.
+  // 1 OB box = 20 packets = 480 pieces · 1 cutlet box = 30 pieces.
+  // made_in_house: produced in the kitchen — receive = "made & moved to counter".
+  { code: 'NCH-OB',  name: 'Osmania Biscuit', uom: 'piece',  locs: ['counter', 'store'], pack: { name: 'packet', size: 24 }, ccase: { name: 'box', size: 480 }, pos: [{ tmpl: 1030, f: 1 }, { tmpl: 1033, f: 3 }] },
   { code: 'NCH-WTR', name: 'Water Bottle',    uom: 'bottle', locs: ['counter'],          pos: [{ tmpl: 1076, f: 1 }] },
-  { code: 'NCH-KH',  name: 'Khajoor',         uom: 'piece',  locs: ['counter', 'store'], pos: [{ tmpl: 1435, f: 1 }] },
+  { code: 'NCH-KH',  name: 'Khajoor',         uom: 'piece',  locs: ['counter'],          made_in_house: true, pos: [{ tmpl: 1435, f: 1 }] },
   { code: 'NCH-BUN', name: 'Bun (all types)', uom: 'bun',    locs: ['counter'],          pos: [{ tmpl: 1029, f: 1 }, { tmpl: 1644, f: 1 }, { tmpl: 1645, f: 1 }, { tmpl: 1643, f: 1 }] },
-  { code: 'NCH-CC',  name: 'Chicken Cutlet',  uom: 'piece',  locs: ['counter'],          pos: [{ tmpl: 1031, f: 1 }] },
+  { code: 'NCH-CC',  name: 'Chicken Cutlet',  uom: 'piece',  locs: ['counter'],          ccase: { name: 'box', size: 30 }, pos: [{ tmpl: 1031, f: 1 }] },
   { code: 'NCH-PS',  name: 'Pyaaz Samosa',    uom: 'piece',  locs: ['counter'],          pos: [{ tmpl: 1097, f: 1 }] },
   // Store-only items (layer 2 ingredients): tracked at the store door from the
   // moment anything exits. No POS term — store law is count + received − issued.
@@ -111,7 +113,7 @@ export async function onRequest(context) {
     // ── LIVE BOARD: per item per location — expected vs last count ──
     if (action === 'live') {
       const out = [];
-      for (const item of ITEMS) out.push({ code: item.code, name: item.name, uom: item.uom, locs: item.locs, pack: item.pack || null });
+      for (const item of ITEMS) out.push({ code: item.code, name: item.name, uom: item.uom, locs: item.locs, pack: item.pack || null, ccase: item.ccase || null, made_in_house: !!item.made_in_house });
 
       // last count per (item, outlet)
       const counts = (await DB.prepare(
@@ -139,10 +141,11 @@ export async function onRequest(context) {
           (await DB.prepare(`SELECT COALESCE(SUM(qty),0) t FROM ${table} WHERE brand='NCH' AND item_code=? AND ${where} AND ${timecol} > ?`)
             .bind(item.code, cc ? cc.counted_at : '1970').first())?.t || 0;
 
-        // counter lane
+        // counter lane (waste rows live in rm_outlet_issues with outlet='NCH-WASTE')
         if (cc) {
           const rec = await sums('rm_outlet_receipts', 'received_at', "loc='counter'");
           const iss = await sums('rm_outlet_issues', 'issued_at', "outlet='NCH-COUNTER'");
+          const waste = await sums('rm_outlet_issues', 'issued_at', "outlet='NCH-WASTE'");
           // sold since THIS item's count anchor (re-windowed client-side is overkill; one query window, filter by date in SQL-less way):
           let soldQty = sold[item.code] || 0;
           if (odooOk && ODOO_KEY && cc.counted_at !== since) {
@@ -150,8 +153,8 @@ export async function onRequest(context) {
           }
           item.counter = {
             last_count: cc.qty, counted_at: cc.counted_at,
-            received: rec, issued_in: iss, sold: soldQty,
-            expected: Math.round((cc.qty + rec + iss - soldQty) * 100) / 100,
+            received: rec, issued_in: iss, sold: soldQty, waste,
+            expected: Math.round((cc.qty + rec + iss - waste - soldQty) * 100) / 100,
             odoo_ok: odooOk,
           };
         } else item.counter = null;
@@ -160,7 +163,7 @@ export async function onRequest(context) {
         if (item.locs.includes('store')) {
           if (sc) {
             const rec = (await DB.prepare(`SELECT COALESCE(SUM(qty),0) t FROM rm_outlet_receipts WHERE brand='NCH' AND item_code=? AND loc='store' AND received_at > ?`).bind(item.code, sc.counted_at).first())?.t || 0;
-            const iss = (await DB.prepare(`SELECT COALESCE(SUM(qty),0) t FROM rm_outlet_issues WHERE brand='NCH' AND item_code=? AND issued_at > ?`).bind(item.code, sc.counted_at).first())?.t || 0;
+            const iss = (await DB.prepare(`SELECT COALESCE(SUM(qty),0) t FROM rm_outlet_issues WHERE brand='NCH' AND item_code=? AND outlet='NCH-COUNTER' AND issued_at > ?`).bind(item.code, sc.counted_at).first())?.t || 0;
             item.store = { last_count: sc.qty, counted_at: sc.counted_at, received: rec, issued_out: iss, expected: Math.round((sc.qty + rec - iss) * 100) / 100 };
           } else item.store = { last_count: null, note: 'store baseline not counted yet' };
         }
@@ -240,11 +243,20 @@ export async function onRequest(context) {
       const item = ITEMS.find(i => i.code === body.code);
       if (!item || !(body.qty > 0)) return json({ success: false, error: 'item/qty invalid' });
       const loc = body.loc === 'store' ? 'store' : 'counter';
+      // Case-unit receive: deliveries arrive in boxes/cases — server multiplies.
+      let pieces = body.qty, note = body.notes || '';
+      if (item.ccase && body.unit === 'case') {
+        pieces = body.qty * item.ccase.size;
+        note = `${body.qty} ${item.ccase.name}(es) × ${item.ccase.size} = ${pieces} ${item.uom}s. ${note}`.trim();
+      }
+      // Made-in-house: the kitchen batch counted as it moves to the counter.
+      const source = item.made_in_house ? 'kitchen' : 'vendor';
       const now = new Date().toISOString();
       const r = await DB.prepare(
         `INSERT INTO rm_outlet_receipts (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes)
-         VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?, 'vendor', ?)`
-      ).bind(loc, item.code, item.name, body.qty, item.uom, now, person, body.notes || '').run();
+         VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(loc, item.code, item.name, pieces, item.uom, now, person, source, note).run();
+      body.qty = pieces;
       if (body.expected_id) {
         await DB.prepare(
           `UPDATE rm_po_expected SET status='received', received_receipt_id=? WHERE id=? AND status='pending'`
@@ -272,6 +284,23 @@ export async function onRequest(context) {
          VALUES ('NCH', 'NCH-COUNTER', ?, ?, ?, ?, ?, ?, ?)`
       ).bind(item.code, item.name, pieces, item.uom, now, person, note).run();
       return json({ success: true, at: now, by: person, code: item.code, qty: pieces, packs: item.pack && body.unit === 'pack' ? body.qty : null });
+    }
+
+    // ── RECORD WASTE (counter → bin, with reason) ──
+    // Waste without a record is where theft hides ("it was waste, promise").
+    // A recorded waste event separates spoilage from seepage permanently.
+    if (action === 'record-waste' && context.request.method === 'POST') {
+      const body = await context.request.json();
+      const person = PINS[body.pin];
+      if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+      const item = ITEMS.find(i => i.code === body.code);
+      if (!item || !(body.qty > 0)) return json({ success: false, error: 'item/qty invalid' });
+      const now = new Date().toISOString();
+      await DB.prepare(
+        `INSERT INTO rm_outlet_issues (brand, outlet, item_code, item_name, qty, uom, issued_at, issued_by, notes)
+         VALUES ('NCH', 'NCH-WASTE', ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(item.code, item.name, body.qty, item.uom, now, person, `WASTE: ${body.reason || 'no reason given'}`).run();
+      return json({ success: true, at: now, by: person, code: item.code, qty: body.qty });
     }
 
     // ── HISTORY (audit trail per item) ──
