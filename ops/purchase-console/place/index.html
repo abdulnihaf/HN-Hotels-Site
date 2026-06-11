@@ -20,14 +20,15 @@
   html,body { height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif; font-size:14px; }
   .screen { display:none; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
   .screen.active { display:flex; }
-  .scroll { overflow-y:auto; flex:1; padding:0 16px calc(20px + var(--safe-bot)); }
-  .nav { padding:calc(14px + var(--safe-top)) 16px 10px; border-bottom:1px solid var(--border); }
-  .nav-title { font-size:15px; font-weight:700; }
-  .nav-sub { font-size:11px; color:var(--muted); }
+  .scroll { overflow-y:auto; flex:1; padding:0 16px calc(24px + var(--safe-bot)); }
+  .nav { padding:calc(14px + var(--safe-top)) 16px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+  .nav-back { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:20px; cursor:pointer; flex-shrink:0; }
+  .nav-title { font-size:16px; font-weight:800; flex:1; }
+  .nav-sub { font-size:11px; color:var(--muted); margin-top:2px; }
   .gate { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:24px; }
   .tile { width:72px; height:72px; border-radius:16px; background:var(--card); border:1px solid var(--gold-bd); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--gold); margin-bottom:18px; font-family:var(--serif); }
   .brand { font-family:var(--serif); font-size:48px; font-weight:700; }
-  .brand-sub { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--gold); margin:2px 0 26px; }
+  .brand-sub { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--gold); margin:2px 0 26px; text-align:center; }
   .pin-dots { display:flex; gap:14px; margin:4px 0 22px; }
   .pin-dot { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(212,162,76,.6); }
   .pin-dot.filled { background:var(--gold); border-color:var(--gold); }
@@ -36,31 +37,39 @@
   .key:active { background:var(--gold-dim); border-color:var(--gold); transform:scale(.96); }
   .key.del { color:var(--red); font-size:18px; }
   .err { color:var(--red); font-size:13px; min-height:18px; margin-top:12px; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:13px; margin-top:11px; }
+  .datechips { display:flex; gap:8px; padding:12px 16px 2px; }
+  .chip { flex:1; text-align:center; padding:11px; border-radius:11px; background:var(--card); border:1px solid var(--border); font-weight:800; font-size:13px; cursor:pointer; color:var(--muted); }
+  .chip.on { color:var(--gold); border-color:var(--gold-bd); background:var(--gold-dim); }
+  .sect { font-size:11px; font-weight:800; letter-spacing:.07em; color:var(--muted); text-transform:uppercase; margin:20px 4px 2px; }
+  .vcard { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:15px 14px; margin-top:9px; cursor:pointer; }
+  .vcard:active { background:var(--card2); }
+  .vico { width:46px; height:46px; border-radius:12px; background:var(--card2); display:flex; align-items:center; justify-content:center; font-size:21px; flex-shrink:0; }
+  .vname { font-size:15px; font-weight:800; }
+  .vmeta { font-size:11px; color:var(--muted); margin-top:3px; }
+  .vbadge { font-size:11px; font-weight:800; color:var(--green); }
+  .varrow { color:var(--gold); font-size:19px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:13px; margin-top:10px; }
   .row { display:flex; align-items:center; gap:11px; }
-  .ico { width:42px; height:42px; border-radius:12px; background:var(--card2); display:flex; align-items:center; justify-content:center; font-size:19px; }
   .iname { font-size:15px; font-weight:700; }
   .imeta { font-size:11px; color:var(--muted); margin-top:2px; }
   .qin { width:88px; background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:11px 8px; color:var(--text); font-size:20px; font-weight:800; text-align:center; outline:none; }
   .qin:focus { border-color:var(--gold); }
-  .datechips { display:flex; gap:8px; margin-top:12px; }
-  .chip { flex:1; text-align:center; padding:11px; border-radius:11px; background:var(--card); border:1px solid var(--border); font-weight:800; font-size:13px; cursor:pointer; color:var(--muted); }
-  .chip.on { color:var(--gold); border-color:var(--gold-bd); background:var(--gold-dim); }
+  .placed { font-size:12px; color:var(--green); margin-top:6px; }
   .actions { padding:10px 16px calc(12px + var(--safe-bot)); border-top:1px solid var(--border); }
   .btn { width:100%; border:none; border-radius:12px; padding:16px; font-size:15px; font-weight:800; cursor:pointer; background:var(--gold); color:#1a1206; font-family:inherit; }
   .btn:disabled { opacity:.35; }
-  .placed { font-size:12px; color:var(--green); margin-top:6px; }
   .toast { position:fixed; bottom:calc(28px + var(--safe-bot)); left:50%; transform:translateX(-50%); padding:12px 22px; border-radius:12px; font-size:14px; font-weight:700; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; background:var(--green-dim); color:var(--green); border:1px solid rgba(55,211,153,.4); white-space:nowrap; }
   .toast.show { opacity:1; }
 </style>
 </head>
 <body>
 
+<!-- GATE -->
 <div id="s-gate" class="screen active">
   <div class="gate">
     <div class="tile">سودا</div>
     <div class="brand">Sauda</div>
-    <div class="brand-sub">Place the order — the foundation of receiving</div>
+    <div class="brand-sub">Pick the vendor. Fill the plan. Done.</div>
     <div class="pin-dots"><div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div><div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div></div>
     <div class="pad">
       <div class="key" onclick="key('1')">1</div><div class="key" onclick="key('2')">2</div><div class="key" onclick="key('3')">3</div>
@@ -72,70 +81,63 @@
   </div>
 </div>
 
-<div id="s-order" class="screen">
-  <div class="nav">
-    <div class="nav-title">Place Order · Nawabi Chai House</div>
-    <div class="nav-sub" id="who"></div>
-    <div class="datechips">
-      <div class="chip" id="chip-today" onclick="setDate(0)">Deliver TODAY</div>
-      <div class="chip on" id="chip-tmrw" onclick="setDate(1)">Deliver TOMORROW</div>
-    </div>
+<!-- STEP 1: PICK THE VENDOR -->
+<div id="s-vendors" class="screen">
+  <div class="nav"><div style="flex:1"><div class="nav-title">Place Order · NCH</div><div class="nav-sub" id="who"></div></div></div>
+  <div class="datechips">
+    <div class="chip" id="chip-today" onclick="setDate(0)">For TODAY</div>
+    <div class="chip on" id="chip-tmrw" onclick="setDate(1)">For TOMORROW</div>
   </div>
-  <div class="scroll" id="lines"></div>
-  <div class="actions"><button class="btn" id="place-btn" onclick="placeOrder()">Place order →</button></div>
+  <div class="scroll" id="vlist"></div>
+</div>
+
+<!-- STEP 2: THE VENDOR'S PLAN -->
+<div id="s-basket" class="screen">
+  <div class="nav">
+    <div class="nav-back" onclick="goVendors()">‹</div>
+    <div style="flex:1"><div class="nav-title" id="bTitle"></div><div class="nav-sub" id="bSub"></div></div>
+  </div>
+  <div class="scroll" id="bBody"></div>
+  <div class="actions"><button class="btn" id="bPlace" onclick="placeBasket()">Place this plan →</button></div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
 const API = '/api/anbar';
-// THE ORDER'S REAL UNIT IS THE VENDOR'S BASKET — one basket = one WhatsApp.
-// Zoya fills baskets vendor by vendor, exactly as she messages them. Nothing
-// is ever pushed from the backend. Items marked counter:true are Anbar-tracked
-// (they become CONFIRM cards at the counter); the rest are PO-only records.
-// Vendor↔item mapping from the verified UPI-fingerprint work; baskets marked
-// (assumed) need the owner's one-glance check.
-const GROUPS = [
-  { title:'Ganga Bakery — buns · delivers daily · PREPAID at order', items:[
-    { code:'NCH-BUN', name:'Buns', icon:'🍞', unit:'no', counter:true },
-  ]},
-  { title:'Abdul Suhail — cutlets · order → delivers', items:[
-    { code:'NCH-CC', name:'Chicken Cutlet', icon:'🍗', unit:'box (30 pcs)', counter:true },
-  ]},
-  { title:'Krishnamoorthi — samosa · Bashir go-collects', items:[
-    { code:'NCH-PS', name:'Pyaaz Samosa', icon:'🥟', unit:'no', counter:true },
-  ]},
-  { title:'Nazeer Nadeem — water · delivers fresh', items:[
-    { code:'NCH-WTR', name:'Water (Bisleri)', icon:'💧', unit:'case', counter:true },
-  ]},
-  { title:'Bootha Narayana — buffalo milk', items:[
-    { code:'PO-MILK-AM', name:'Milk — morning', icon:'🥛', unit:'L' },
-    { code:'PO-MILK-PM', name:'Milk — evening', icon:'🥛', unit:'L' },
-  ]},
-  { title:'M Farooq Siddique — Osmania · bulk → store room', items:[
-    { code:'NCH-OB', name:'Osmania Biscuit', icon:'🍪', unit:'box (480 pcs)', counter:true },
-    { code:'NCH-KH', name:'Khajoor', icon:'🌴', unit:'pack', counter:true },
-  ]},
-  { title:'Market / Bashir pickup — (vendor mapping assumed, correct me)', items:[
-    { code:'PO-BUTTER',   name:'Butter',                    icon:'🧈', unit:'pkt' },
-    { code:'PO-LEMON',    name:'Lemon',                     icon:'🍋', unit:'no' },
-    { code:'PO-PUDINA',   name:'Pudina (mint)',             icon:'🌿', unit:'bundle' },
-    { code:'PO-MILKMAID', name:'Milkmaid (condensed milk)', icon:'🥫', unit:'kg' },
-  ]},
-  { title:'Rupnath Traders — packaging (assumed)', items:[
-    { code:'PO-CUPS',   name:'Use-&-throw cups', icon:'🥤', unit:'no' },
-    { code:'PO-TISSUE', name:'Tissue paper',     icon:'🧻', unit:'bundle' },
-  ]},
-  { title:'A M Ruba Bharat Gas — LPG', items:[
-    { code:'PO-LPG', name:'LPG cylinder', icon:'🔥', unit:'no' },
-  ]},
+/* THE ORDER'S UNIT IS THE VENDOR. Step 1: tap the vendor. Step 2: fill the plan.
+   channel 'delivers' = Zoya orders, vendor delivers · 'pickup' = Bashir go-collects.
+   Every vendor plan takes ad-hoc extra items; whole new vendors via 'Someone else'.
+   NOTHING is ever pushed from the backend — people create every line. */
+const VENDORS = [
+  { key:'ganga',   ch:'delivers', icon:'🍞', name:'Ganga Bakery',        meta:'buns · PREPAID at order',
+    items:[{code:'NCH-BUN',name:'Buns',unit:'no',counter:true}] },
+  { key:'suhail',  ch:'delivers', icon:'🍗', name:'Abdul Suhail',        meta:'cutlets · order → delivers',
+    items:[{code:'NCH-CC',name:'Chicken Cutlet',unit:'box (30 pcs)',counter:true}] },
+  { key:'nazeer',  ch:'delivers', icon:'💧', name:'Nazeer Nadeem',       meta:'Bisleri water · delivers fresh',
+    items:[{code:'NCH-WTR',name:'Water (Bisleri)',unit:'case',counter:true}] },
+  { key:'bootha',  ch:'delivers', icon:'🥛', name:'Bootha Narayana',     meta:'buffalo milk · AM + PM',
+    items:[{code:'PO-MILK-AM',name:'Milk — morning',unit:'L'},{code:'PO-MILK-PM',name:'Milk — evening',unit:'L'}] },
+  { key:'farooq',  ch:'delivers', icon:'🍪', name:'M Farooq Siddique',   meta:'Osmania · bulk → store room',
+    items:[{code:'NCH-OB',name:'Osmania Biscuit',unit:'box (480 pcs)',counter:true},{code:'NCH-KH',name:'Khajoor',unit:'pack',counter:true}] },
+  { key:'bharat',  ch:'delivers', icon:'🔥', name:'A M Ruba Bharat Gas', meta:'LPG cylinder',
+    items:[{code:'PO-LPG',name:'LPG cylinder',unit:'no'}] },
+  { key:'krishna', ch:'pickup',   icon:'🥟', name:'Krishnamoorthi',      meta:'samosa · go-collect',
+    items:[{code:'NCH-PS',name:'Pyaaz Samosa',unit:'no',counter:true}] },
+  { key:'ashrafia',ch:'pickup',   icon:'🥚', name:'Ashrafia',            meta:'departmental · eggs · go-collect',
+    items:[{code:'PO-EGGS',name:'Eggs',unit:'tray'}] },
+  { key:'market',  ch:'pickup',   icon:'🛒', name:'Market run',          meta:'fresh & pantry',
+    items:[{code:'PO-BUTTER',name:'Butter',unit:'pkt'},{code:'PO-LEMON',name:'Lemon',unit:'no'},{code:'PO-PUDINA',name:'Pudina (mint)',unit:'bundle'},{code:'PO-MILKMAID',name:'Milkmaid',unit:'kg'}] },
+  { key:'rupnath', ch:'pickup',   icon:'📦', name:'Rupnath Traders',     meta:'cups · tissue · packaging',
+    items:[{code:'PO-CUPS',name:'Use-&-throw cups',unit:'no'},{code:'PO-TISSUE',name:'Tissue paper',unit:'bundle'}] },
+  { key:'other',   ch:'both',     icon:'➕', name:'Someone else',        meta:'any vendor, any item', items:[] },
 ];
-const ITEMS = GROUPS.flatMap(g=>g.items);
-const S = { pin: localStorage.getItem('sauda_pin')||'', person:'', entry:'', dayOffset:1 };
+const S = { pin: localStorage.getItem('sauda_pin')||'', person:'', entry:'', dayOffset:1, vendor:null, placed:[] };
 function el(id){return document.getElementById(id);}
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));el(id).classList.add('active');}
 function toast(m,bad){const t=el('toast');t.textContent=m;t.style.color=bad?'var(--red)':'var(--green)';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
-function istDate(offset){ const d=new Date(Date.now()+5.5*3600e3+offset*86400e3); return d.toISOString().slice(0,10); }
+function istDate(off){return new Date(Date.now()+5.5*3600e3+off*86400e3).toISOString().slice(0,10);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 function key(k){if(S.entry.length>=4)return;S.entry+=k;dots();if(S.entry.length===4)verify();}
 function del(){S.entry=S.entry.slice(0,-1);dots();el('gate-err').textContent='';}
@@ -144,57 +146,96 @@ async function verify(){
   const r=await fetch(`/api/sauda-pay?action=verify-pin&pin=${S.entry}`).then(x=>x.json()).catch(()=>({}));
   if(!r.success){el('gate-err').textContent='Wrong PIN';S.entry='';dots();return;}
   S.pin=S.entry;S.person=r.person;S.entry='';localStorage.setItem('sauda_pin',S.pin);
-  enter();
+  goVendors();
 }
-function enter(){ el('who').textContent=`${S.person} · qty empty = not ordered`; show('s-order'); renderLines(); }
 
-function setDate(off){ S.dayOffset=off; el('chip-today').classList.toggle('on',off===0); el('chip-tmrw').classList.toggle('on',off===1); renderLines(); }
+function setDate(off){S.dayOffset=off;el('chip-today').classList.toggle('on',off===0);el('chip-tmrw').classList.toggle('on',off===1);goVendors();}
 
-async function renderLines(){
+/* ── STEP 1: vendor grid (the person's channel first, the other below) ── */
+async function goVendors(){
+  el('who').textContent=`${S.person} · tap a vendor, fill the plan`;
+  show('s-vendors');
   const date=istDate(S.dayOffset);
-  const r=await fetch(`${API}?action=orders&date=${date}`).then(x=>x.json()).catch(()=>({}));
-  const placed=(r.lines||[]);
-  el('lines').innerHTML = GROUPS.map(g=>
-    `<div style="font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin:18px 4px 0">${g.title}</div>`+
-    g.items.map(it=>{
-      const prev=placed.filter(p=>p.item_code===it.code);
-      const placedTxt = prev.length ? prev.map(p=>
-        `<div class="placed">${p.status==='pending'
-          ? `✓ placed: ${p.ordered_qty} ${p.ordered_unit} <span style="color:var(--red);font-weight:800;margin-left:8px;cursor:pointer" onclick="cancelLine(${p.id},'${it.name.replace(/'/g,"\\'")}')">✕ cancel</span>`
-          : `${p.ordered_qty} ${p.ordered_unit} · ${p.status}`}</div>`).join('') : '';
-      return `<div class="card"><div class="row">
-        <div class="ico">${it.icon}</div>
-        <div style="flex:1"><div class="iname">${it.name}${it.counter?' <span style="font-size:9px;color:var(--gold);font-weight:800">· COUNTER CHECK</span>':''}</div><div class="imeta">unit: ${it.unit}</div>${placedTxt}</div>
-        <input class="qin" type="number" inputmode="numeric" placeholder="—" id="q-${it.code}">
-      </div></div>`;
+  const r=await fetch(`${API}?action=orders&date=${date}`).then(x=>x.json()).catch(()=>({lines:[]}));
+  S.placed=r.lines||[];
+  const mine=(S.person==='Bashir')?'pickup':'delivers';
+  const sections=[[mine==='pickup'?'🛵 Your go-collect rounds':'📦 You order, they deliver',mine],
+                  [mine==='pickup'?'📦 Ordered & delivered (Zoya)':'🛵 Go-collect (Bashir)',mine==='pickup'?'delivers':'pickup']];
+  const codeVendor={};VENDORS.forEach(v=>v.items.forEach(i=>codeVendor[i.code]=v.key));
+  el('vlist').innerHTML=sections.map(([title,ch])=>
+    `<div class="sect">${title}</div>`+
+    VENDORS.filter(v=>v.ch===ch||v.ch==='both').map(v=>{
+      const lines=S.placed.filter(p=>p.status==='pending'&&(codeVendor[p.item_code]===v.key||(v.key==='other'&&!codeVendor[p.item_code])));
+      return `<div class="vcard" onclick="openVendor('${v.key}')">
+        <div class="vico">${v.icon}</div>
+        <div style="flex:1"><div class="vname">${v.name}</div><div class="vmeta">${v.meta}</div>
+        ${lines.length?`<div class="vbadge">✓ ${lines.length} line${lines.length>1?'s':''} placed</div>`:''}</div>
+        <div class="varrow">›</div>
+      </div>`;
     }).join('')
   ).join('');
 }
 
-// Wrong line? Cancel it (stays in the record as cancelled), re-enter the right qty.
-async function cancelLine(id, name){
-  if(!confirm(`Cancel the placed ${name} line?`))return;
-  const r=await fetch(`${API}?action=cancel-line`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:S.pin,id})}).then(x=>x.json());
-  if(!r.success||!r.cancelled){toast(r.error||'could not cancel',true);return;}
-  toast('✕ line cancelled'); renderLines();
+/* ── STEP 2: the vendor's plan ── */
+function openVendor(key){
+  S.vendor=VENDORS.find(v=>v.key===key);
+  el('bTitle').textContent=S.vendor.name;
+  el('bSub').textContent=`${S.vendor.meta} · for ${istDate(S.dayOffset)===istDate(0)?'TODAY':'TOMORROW'}`;
+  const codeSet=new Set(S.vendor.items.map(i=>i.code));
+  const mineLines=S.placed.filter(p=>codeSet.has(p.item_code)||(S.vendor.key==='other'&&!VENDORS.some(v=>v.items.some(i=>i.code===p.item_code))));
+  let h='';
+  h+=S.vendor.items.map(it=>{
+    const prev=mineLines.filter(p=>p.item_code===it.code);
+    return `<div class="card"><div class="row">
+      <div style="flex:1"><div class="iname">${it.name}${it.counter?' <span style="font-size:9px;color:var(--gold);font-weight:800">· COUNTER CHECK</span>':''}</div>
+      <div class="imeta">unit: ${it.unit}</div>
+      ${prev.map(p=>`<div class="placed">${p.status==='pending'?`✓ placed: ${p.ordered_qty} ${p.ordered_unit} <span style="color:var(--red);font-weight:800;margin-left:8px;cursor:pointer" onclick="cancelLine(${p.id})">✕</span>`:`${p.ordered_qty} ${p.ordered_unit} · ${p.status}`}</div>`).join('')}</div>
+      <input class="qin" type="number" inputmode="numeric" placeholder="—" data-code="${it.code}" data-name="${esc(it.name)}" data-unit="${esc(it.unit)}">
+    </div></div>`;
+  }).join('');
+  // every vendor takes an extra line — zero rigidity
+  h+=`<div class="sect">Anything extra from ${esc(S.vendor.name)}</div>
+    <div class="card"><div class="row" style="flex-wrap:wrap;gap:8px">
+      <input class="qin" style="flex:2;min-width:140px;text-align:left;font-size:14px;font-weight:600" id="x-name" placeholder="item name">
+      <input class="qin" style="width:70px" id="x-qty" type="number" inputmode="numeric" placeholder="qty">
+      <input class="qin" style="width:80px;font-size:13px;font-weight:600" id="x-unit" placeholder="unit">
+    </div></div>`;
+  el('bBody').innerHTML=h;
+  show('s-basket');
 }
 
-async function placeOrder(){
+async function placeBasket(){
   const date=istDate(S.dayOffset);
-  const lines=ITEMS.map(it=>({code:it.code, name:it.name, qty:parseFloat(el('q-'+it.code).value||'0'), unit:it.unit})).filter(l=>l.qty>0);
-  if(!lines.length){toast('Enter at least one quantity',true);return;}
-  el('place-btn').disabled=true;
+  const lines=[...document.querySelectorAll('#bBody .qin[data-code]')]
+    .map(i=>({code:i.dataset.code,name:i.dataset.name,unit:i.dataset.unit,qty:parseFloat(i.value||'0')}))
+    .filter(l=>l.qty>0);
+  const xn=(el('x-name')?.value||'').trim(), xq=parseFloat(el('x-qty')?.value||'0');
+  if(xn&&xq>0){
+    lines.push({code:'PO-'+xn.toUpperCase().replace(/[^A-Z0-9]+/g,'-').slice(0,28),name:`${xn} — ${S.vendor.name}`,unit:(el('x-unit').value||'unit').trim(),qty:xq});
+  }
+  if(!lines.length){toast('Nothing entered',true);return;}
+  el('bPlace').disabled=true;
   try{
     const r=await fetch(`${API}?action=place-order`,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({pin:S.pin,po_date:date,lines})}).then(x=>x.json());
     if(!r.success)throw new Error(r.error);
-    toast(`✓ ${r.placed} lines placed for ${date}`);
-    renderLines();
+    toast(`✓ ${r.placed} line${r.placed>1?'s':''} placed with ${S.vendor.name}`);
+    const dr=await fetch(`${API}?action=orders&date=${date}`).then(x=>x.json());S.placed=dr.lines||[];
+    openVendor(S.vendor.key);
   }catch(e){toast(e.message||'failed',true);}
-  finally{el('place-btn').disabled=false;}
+  finally{el('bPlace').disabled=false;}
 }
 
-if(S.pin){ fetch(`/api/sauda-pay?action=verify-pin&pin=${S.pin}`).then(x=>x.json()).then(r=>{ if(r.success){S.person=r.person;enter();} }); }
+async function cancelLine(id){
+  if(!confirm('Cancel this placed line?'))return;
+  const r=await fetch(`${API}?action=cancel-line`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:S.pin,id})}).then(x=>x.json());
+  if(!r.success||!r.cancelled){toast(r.error||'could not cancel',true);return;}
+  toast('✕ cancelled');
+  const dr=await fetch(`${API}?action=orders&date=${istDate(S.dayOffset)}`).then(x=>x.json());S.placed=dr.lines||[];
+  openVendor(S.vendor.key);
+}
+
+if(S.pin){fetch(`/api/sauda-pay?action=verify-pin&pin=${S.pin}`).then(x=>x.json()).then(r=>{if(r.success){S.person=r.person;goVendors();}});}
 </script>
 </body>
 </html>
