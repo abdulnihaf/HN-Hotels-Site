@@ -2,6 +2,16 @@
 // Receives delivery receipts + inbound replies. Captures opt-in YES/NO into comms_optin
 // and ack actions (RESOLVE/SNOOZE) into comms_outbox.
 // Forwards everything else to brand site so existing whatsapp.js flows keep working.
+//
+// THE BRAIN (glasses path): a free-form question from the OWNER on the Sparksol
+// line (the dedicated, no-customer-flow WABA) is routed to answerBrainQuery() —
+// Claude reads live ops data and replies. This is how the Ray-Ban Meta glasses
+// ask-and-hear loop works: dictated question in, spoken answer read aloud. Gated
+// to OWNER_PHONE + sparksol, so it can never touch HE/NCH customer messaging.
+// The webhook acks Meta IMMEDIATELY and thinks in the background (waitUntil) —
+// a slow ack makes Meta redeliver and the answer would arrive twice.
+
+import { answerBrainQuery } from './_lib/brain.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -25,7 +35,7 @@ const NO_RX  = /^\s*(no|n|stop|nahi|nahin|opt[\s_-]?out|cancel|unsubscribe)\s*\.
 const ACK_RX = /^\s*(resolved?|done|fixed|cleared|ack(nowledge)?d?|✅)\s*\.?\s*$/i;
 const SNOOZE_RX = /^\s*(snooze|later|busy|wait|hold)\s*\.?\s*$/i;
 
-async function handleInboundMessage(env, { from_phone, msg_text, msg_id, business_phone_id }) {
+async function handleInboundMessage(env, { from_phone, msg_text, msg_id, business_phone_id, originBase, waitUntil }) {
   const recipient = normalizePhone(from_phone);
 
   // Determine brand by which business phone the message came in to.
@@ -70,6 +80,29 @@ async function handleInboundMessage(env, { from_phone, msg_text, msg_id, busines
       }
     }
     return { handled: hrAbsence ? 'hr-absence-button' : 'hr-ghost-button', token };
+  }
+
+  // 0.5 THE BRAIN — owner's free-form question on the Sparksol line → Claude.
+  //     Sits BEFORE the opt-in flow on purpose: a pending opt-in row swallows
+  //     ANY inbound as consent, which would eat a dictated question. Short
+  //     control words (yes/no/stop/done/snooze) are excluded so opt-in and ack
+  //     flows keep working for the owner too. Hard-gated to OWNER_PHONE +
+  //     sparksol, so customer HE/NCH flows are untouched by construction.
+  //     We ack Meta now and answer in the background — the brain takes seconds.
+  const ownerPhone = env.OWNER_PHONE ? normalizePhone(env.OWNER_PHONE) : null;
+  if (brand === 'sparksol' && ownerPhone && recipient === ownerPhone && body
+      && !YES_RX.test(body) && !NO_RX.test(body) && !ACK_RX.test(body) && !SNOOZE_RX.test(body)) {
+    const think = (async () => {
+      try {
+        const answer = await answerBrainQuery(env, { question: body, originBase });
+        await sendSparksolText(env, recipient, answer);
+      } catch (e) {
+        console.error('brain failed:', e?.message || e);
+        await sendSparksolText(env, recipient, `Brain hit an error: ${String(e?.message || e).slice(0, 150)}`);
+      }
+    })();
+    if (waitUntil) waitUntil(think); else await think;
+    return { handled: 'brain', recipient };
   }
 
   // 1. Opt-in flow: pending row exists for this phone?
@@ -147,6 +180,23 @@ async function handleInboundMessage(env, { from_phone, msg_text, msg_id, busines
   }
 
   return { handled: 'none' };
+}
+
+// Free-form text out on the Sparksol line. Used by the brain to speak its answer
+// back. Allowed because the owner just messaged us (24h window is open).
+async function sendSparksolText(env, to, body) {
+  const phoneId = env.WA_SPARKSOL_PHONE_ID;
+  const token   = env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN;
+  if (!phoneId || !token) { console.error('sendSparksolText: missing sparksol creds'); return; }
+  try {
+    await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body } }),
+    });
+  } catch (e) {
+    console.error('sendSparksolText failed:', e?.message || e);
+  }
 }
 
 async function sendWelcomeReply(env, to, brand, staffName) {
@@ -427,6 +477,8 @@ export async function onRequest(context) {
           || '';
         const result = await handleInboundMessage(env, {
           from_phone, msg_text, msg_id, business_phone_id,
+          originBase: `${url.protocol}//${url.host}`,
+          waitUntil: (p) => context.waitUntil(p),
         });
         handled.push({ type: 'message', from: from_phone, ...result });
       }
