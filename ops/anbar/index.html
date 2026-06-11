@@ -220,12 +220,19 @@ function startFlow(kind) {
 }
 function pickItem(code) {
   S.item = S.live.find(i => i.code === code);
+  // Issues of packed items happen by the PACK — the server multiplies, humans never do.
+  const byPack = S.flow === 'issue' && S.item.pack;
+  const ask = S.flow === 'receipt' ? 'how many arrived?'
+    : byPack ? `how many ${S.item.pack.name}s? (1 ${S.item.pack.name} = ${S.item.pack.size} ${S.item.uom}s)`
+    : 'how many going to the counter?';
   el('flow-body').innerHTML = `
     <div class="card" style="text-align:center;padding:22px">
       <div style="font-size:40px;margin-bottom:8px">${ICONS[code] || '📦'}</div>
       <div class="item-name" style="font-size:18px">${S.item.name}</div>
-      <div class="item-meta" style="margin-bottom:18px">${S.flow === 'receipt' ? 'how many arrived?' : 'how many going to the counter?'}</div>
-      <input id="qty-one" class="qty-input" type="number" inputmode="numeric" placeholder="0" autofocus>
+      <div class="item-meta" style="margin-bottom:18px">${ask}</div>
+      <input id="qty-one" class="qty-input" type="number" inputmode="numeric" placeholder="0" autofocus
+        ${byPack ? `oninput="el('pack-conv').textContent = this.value ? this.value + ' × ' + ${S.item.pack.size} + ' = ' + (this.value * ${S.item.pack.size}) + ' ${S.item.uom}s' : ''"` : ''}>
+      ${byPack ? '<div id="pack-conv" class="item-meta" style="margin-top:10px;color:var(--gold);font-weight:700"></div>' : ''}
     </div>`;
   el('flow-actions').style.display = 'flex';
 }
@@ -242,9 +249,10 @@ async function submitFlow() {
       const qty = parseFloat(el('qty-one')?.value || '0');
       if (!(qty > 0)) { toast('Enter quantity', true); return; }
       const action = S.flow === 'receipt' ? 'record-receipt' : 'record-issue';
-      const r = await fetch(`${API}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.pin, loc: S.loc, code: S.item.code, qty }) }).then(x => x.json());
+      const byPack = S.flow === 'issue' && S.item.pack;
+      const r = await fetch(`${API}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.pin, loc: S.loc, code: S.item.code, qty, unit: byPack ? 'pack' : 'unit' }) }).then(x => x.json());
       if (!r.success) throw new Error(r.error);
-      toast(`✓ ${S.item.name} ${S.flow === 'receipt' ? 'received' : 'issued'}: ${qty} · ${istTime(r.at)}`);
+      toast(`✓ ${S.item.name} ${S.flow === 'receipt' ? 'received' : 'issued'}: ${r.qty} ${S.item.uom}s · ${istTime(r.at)}`);
     }
     goHome();
   } catch (e) { toast(e.message || 'failed', true); }
