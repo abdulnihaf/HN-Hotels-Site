@@ -310,7 +310,7 @@ async function monthBoard(db, url) {
   const start = month + '-01', end = month + '-31';
   const rows = await db.prepare(
     `SELECT e.id, e.pin, COALESCE(e.known_as, e.name) AS name, e.brand_label AS brand,
-            e.pay_type, e.monthly_salary, e.daily_rate, e.is_active, e.track_attendance, COALESCE(e.pay_lane,'monthly') AS pay_lane,
+            e.pay_type, e.monthly_salary, e.daily_rate, e.is_active, e.track_attendance, COALESCE(e.pay_lane,'monthly') AS pay_lane, e.start_date, COALESCE(e.presence_confirmed,0) AS presence_confirmed,
             (SELECT COUNT(*) FROM hr_attendance_daily ad  WHERE ad.employee_id=e.id  AND ad.date BETWEEN ?1 AND ?2 AND ad.punch_count > 0) AS days_worked,
             (SELECT COUNT(*) FROM hr_attendance_daily ad2 WHERE ad2.employee_id=e.id AND ad2.date BETWEEN ?1 AND ?2 AND ad2.punch_count > 0 AND ad2.punch_count % 2 = 1) AS days_error,
             (SELECT COALESCE(SUM(a.amount),0)  FROM hr_advances a  WHERE a.employee_id=e.id  AND COALESCE(a.pay_period,  substr(a.advance_date,1,7))  = ?3 AND COALESCE(a.source,'')  != 'settlement') AS advances,
