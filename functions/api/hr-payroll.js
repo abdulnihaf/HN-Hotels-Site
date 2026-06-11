@@ -582,7 +582,7 @@ export async function onRequest({ request, env }) {
 
     return json({
       ok: true,
-      employee: { id: emp.id, name: emp.name, brand: emp.brand_label, pay_type: emp.pay_type, monthly_salary: monthly, daily_rate: daily, phone: emp.phone || '' },
+      employee: { id: emp.id, name: emp.name, brand: emp.brand_label, pay_type: emp.pay_type, monthly_salary: monthly, daily_rate: daily, phone: emp.phone || '', pay_lane: emp.pay_lane, start_date: emp.start_date, presence_confirmed: emp.presence_confirmed, is_active: emp.is_active, track_attendance: emp.track_attendance },
       month,
       attendance: {
         present: Number(att?.present || 0), irregular: Number(att?.irregular || 0),
