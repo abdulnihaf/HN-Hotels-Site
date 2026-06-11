@@ -125,7 +125,7 @@ const API = '/api/anbar';
    NOTHING is ever pushed from the backend — people create every line. */
 const VENDORS = [
   /* ═══ NAWABI CHAI HOUSE — union of 12 days of real POs (30 May–11 Jun) ═══ */
-  { brand:'NCH', key:'ganga',   ch:'delivers', icon:'🍞', name:'Ganga Bakery',  meta:'buns · PREPAID · WE book the Porter',
+  { brand:'NCH', key:'ganga',   ch:'delivers', icon:'🍞', name:'Ganga Bakery',  meta:'buns · PREPAID · WE book the Porter', timing:'prepaid',
     items:[{code:'NCH-BUN',name:'Buns',unit:'no',counter:true}] },
   { brand:'NCH', key:'suhail',  ch:'delivers', icon:'🍗', name:'Abdul Suhail',  meta:'cutlets · order → delivers · 1 box = 10 pcs',
     items:[{code:'NCH-CC',name:'Chicken Cutlet',unit:'box (10 pcs)',counter:true}] },
@@ -430,6 +430,11 @@ async function placeBasket(){
       body:JSON.stringify({pin:S.pin,po_date:date,brand:S.brand,lines})}).then(x=>x.json());
     if(!r.success)throw new Error(r.error);
     toast(`✓ ${r.placed} line${r.placed>1?'s':''} placed with ${S.vendor.name}`);
+    // payment-timing intelligence: PREPAID vendors are paid AT ORDER — the app
+    // walks Zoya straight into the payment request, nothing left to remember.
+    if(S.vendor.timing==='prepaid'){
+      setTimeout(()=>{ if(confirm(`${S.vendor.name} is PREPAID — request the payment now?`)) location.href='/requests/'; },400);
+    }
     const dr=await fetch(`${API}?action=orders&date=${date}&brand=${S.brand}`).then(x=>x.json());S.placed=dr.lines||[];
     openVendor(S.vendor.key);
   }catch(e){toast(e.message||'failed',true);}
