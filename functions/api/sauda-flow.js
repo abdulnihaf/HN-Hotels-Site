@@ -247,6 +247,19 @@ export async function onRequest(context) {
       await DB.prepare(
         `UPDATE sauda_purchase SET status='RAISED', pay_amount_paise=?, pay_requested_at=?, pay_requested_by=?, updated_at=datetime('now') WHERE id=?`
       ).bind(Math.round(amount * 100), nowIso(), b.by || 'staff', id).run();
+      // WABA ping to the owner the moment the dock raises a payment (bill in hand).
+      try {
+        const WA_TOKEN = env.WA_ACCESS_TOKEN, WA_PHONE = env.WA_PHONE_ID;
+        if (WA_TOKEN && WA_PHONE) {
+          const det = await DB.prepare('SELECT vendor_name, brand FROM sauda_purchase WHERE id=?').bind(id).first();
+          const msg = `💸 *Payment raised at receiving*\n${det?.vendor_name || 'vendor'} — ₹${amount.toLocaleString('en-IN')}\nby ${b.by || 'staff'} · ${det?.brand || ''}\n\nOpen the pay queue:\nhttps://sauda.hnhotels.in/pay`;
+          context.waitUntil(fetch(`https://graph.facebook.com/v21.0/${WA_PHONE}/messages`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messaging_product: 'whatsapp', to: '917010426808', type: 'text', text: { body: msg } }),
+          }).catch(() => {}));
+        }
+      } catch (_) { /* notification must never block the raise */ }
       return json({ success: true, id, status: 'RAISED' });
     }
 
