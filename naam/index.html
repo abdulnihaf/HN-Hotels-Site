@@ -477,15 +477,28 @@ async function injectLive(id){
       $('#liveGrid').innerHTML=g;
       $('#liveNote').textContent='Conversions hidden by doctrine (platform column broken) — judge by POS-spike correlation. Cached ≤10 min.';
     }else{
-      const d=await fetch(`https://hnhotels.in/api/gbp-cockpit?brand=${state.brand}&period=7d`).then(r=>r.json());
-      if(!d.ok)throw new Error('gbp fetch failed');
-      const daily=d.daily||[];
-      const imp=daily.reduce((s,x)=>s+(x.impressions||0),0), act=daily.reduce((s,x)=>s+(x.actions||0),0);
-      $('#liveGrid').innerHTML=`
-        <div class="dcard"><div class="dv">${imp.toLocaleString('en-IN')}</div><div class="dl">GBP impressions · 7d</div></div>
-        <div class="dcard"><div class="dv">${act.toLocaleString('en-IN')}</div><div class="dl">GBP actions · 7d</div></div>
-        <div class="dcard"><div class="dv">${d.summary&&d.summary.actionRate!=null?d.summary.actionRate+'%':'—'}</div><div class="dl">action rate${d.summary&&d.summary.actionRatePrior!=null?' (prior '+d.summary.actionRatePrior+'%)':''}</div></div>`;
-      $('#liveNote').textContent=(d.freshness&&d.freshness.performance?d.freshness.performance+' · ':'')+'Ads campaign live-pull pending Google Ads developer token — campaign card below is snapshot.';
+      const [d,ads]=await Promise.all([
+        fetch(`https://hnhotels.in/api/gbp-cockpit?brand=${state.brand}&period=7d`).then(r=>r.json()).catch(()=>({})),
+        fetch('https://hnhotels.in/api/google-ads-live?period=7d').then(r=>r.json()).catch(()=>({})),
+      ]);
+      if(!d.ok&&!ads.ok)throw new Error('google fetch failed');
+      let g='';
+      if(ads.ok){
+        g+=`<div class="dcard"><div class="dv">₹${ads.totals.spend.toLocaleString('en-IN')}</div><div class="dl">Ads spend · 7d</div></div>
+          <div class="dcard"><div class="dv">${ads.totals.clicks.toLocaleString('en-IN')}</div><div class="dl">Ads clicks</div></div>`;
+        for(const c of ads.campaigns.slice(0,3)){
+          g+=`<div class="dcard" style="grid-column:1/-1"><div class="dv" style="font-size:14px">${esc(c.name)}</div><div class="dl">₹${c.spend.toLocaleString('en-IN')} · ${c.clicks} clicks · CTR ${c.ctr}% · ${esc(c.status)}</div></div>`;
+        }
+      }
+      if(d.ok){
+        const daily=d.daily||[];
+        const imp=daily.reduce((s,x)=>s+(x.impressions||0),0), act=daily.reduce((s,x)=>s+(x.actions||0),0);
+        g+=`<div class="dcard"><div class="dv">${imp.toLocaleString('en-IN')}</div><div class="dl">GBP impressions · 7d</div></div>
+          <div class="dcard"><div class="dv">${act.toLocaleString('en-IN')}</div><div class="dl">GBP actions</div></div>
+          <div class="dcard"><div class="dv">${d.summary&&d.summary.actionRate!=null?d.summary.actionRate+'%':'—'}</div><div class="dl">action rate${d.summary&&d.summary.actionRatePrior!=null?' (prior '+d.summary.actionRatePrior+'%)':''}</div></div>`;
+      }
+      $('#liveGrid').innerHTML=g||'<div class="dcard"><div class="dl">no live data</div></div>';
+      $('#liveNote').textContent=(ads.ok?'Ads LIVE via GAQL · ':'Ads live-pull error: '+(ads.error||'')+' · ')+(d.freshness&&d.freshness.performance?d.freshness.performance:'')+' · conversions omitted by doctrine — judge by POS correlation.';
     }
   }catch(e){
     $('#liveGrid').innerHTML='<div class="dcard"><div class="dl">live fetch failed — snapshot below stands</div></div>';
