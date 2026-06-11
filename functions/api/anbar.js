@@ -32,7 +32,7 @@ const ITEMS = [
   // 1 OB box = 20 packets = 480 pieces · 1 cutlet box = 30 pieces.
   // made_in_house: produced in the kitchen — receive = "made & moved to counter".
   { code: 'NCH-OB',  name: 'Osmania Biscuit', uom: 'piece',  locs: ['counter', 'store'], pack: { name: 'packet', size: 24 }, ccase: { name: 'box', size: 480 }, pos: [{ tmpl: 1030, f: 1 }, { tmpl: 1033, f: 3 }] },
-  { code: 'NCH-WTR', name: 'Water Bottle',    uom: 'bottle', locs: ['counter'],          pos: [{ tmpl: 1076, f: 1 }] },
+  { code: 'NCH-WTR', name: 'Water Bottle',    uom: 'bottle', locs: ['counter'],          ccase: { name: 'case', size: 24 }, pos: [{ tmpl: 1076, f: 1 }] },
   { code: 'NCH-KH',  name: 'Khajoor',         uom: 'piece',  locs: ['counter'],          made_in_house: true, pos: [{ tmpl: 1435, f: 1 }] },
   { code: 'NCH-BUN', name: 'Bun (all types)', uom: 'bun',    locs: ['counter'],          pos: [{ tmpl: 1029, f: 1 }, { tmpl: 1644, f: 1 }, { tmpl: 1645, f: 1 }, { tmpl: 1643, f: 1 }] },
   { code: 'NCH-CC',  name: 'Chicken Cutlet',  uom: 'piece',  locs: ['counter'],          ccase: { name: 'box', size: 10 }, pos: [{ tmpl: 1031, f: 1 }] },
