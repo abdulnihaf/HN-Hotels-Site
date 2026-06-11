@@ -35,7 +35,7 @@ const ITEMS = [
   { code: 'NCH-WTR', name: 'Water Bottle',    uom: 'bottle', locs: ['counter'],          pos: [{ tmpl: 1076, f: 1 }] },
   { code: 'NCH-KH',  name: 'Khajoor',         uom: 'piece',  locs: ['counter'],          made_in_house: true, pos: [{ tmpl: 1435, f: 1 }] },
   { code: 'NCH-BUN', name: 'Bun (all types)', uom: 'bun',    locs: ['counter'],          pos: [{ tmpl: 1029, f: 1 }, { tmpl: 1644, f: 1 }, { tmpl: 1645, f: 1 }, { tmpl: 1643, f: 1 }] },
-  { code: 'NCH-CC',  name: 'Chicken Cutlet',  uom: 'piece',  locs: ['counter'],          ccase: { name: 'box', size: 30 }, pos: [{ tmpl: 1031, f: 1 }] },
+  { code: 'NCH-CC',  name: 'Chicken Cutlet',  uom: 'piece',  locs: ['counter'],          ccase: { name: 'box', size: 10 }, pos: [{ tmpl: 1031, f: 1 }] },
   { code: 'NCH-PS',  name: 'Pyaaz Samosa',    uom: 'piece',  locs: ['counter'],          pos: [{ tmpl: 1097, f: 1 }] },
   // Store-only items (layer 2 ingredients): tracked at the store door from the
   // moment anything exits. No POS term — store law is count + received − issued.
