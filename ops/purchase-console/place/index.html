@@ -89,32 +89,45 @@
 
 <script>
 const API = '/api/anbar';
-// THE WHOLE DAY'S PO lives in Sauda. Items marked counter:true are Anbar-tracked —
-// they surface as CONFIRM cards on the counter receive screen. PO-only lines
-// (milk, butter, LPG…) are recorded here and stay out of the counter's way.
+// THE ORDER'S REAL UNIT IS THE VENDOR'S BASKET — one basket = one WhatsApp.
+// Zoya fills baskets vendor by vendor, exactly as she messages them. Nothing
+// is ever pushed from the backend. Items marked counter:true are Anbar-tracked
+// (they become CONFIRM cards at the counter); the rest are PO-only records.
+// Vendor↔item mapping from the verified UPI-fingerprint work; baskets marked
+// (assumed) need the owner's one-glance check.
 const GROUPS = [
-  { title:'Bakery & Snacks', items:[
-    { code:'NCH-BUN', name:'Buns',            icon:'🍞', unit:'no', counter:true },
-    { code:'NCH-CC',  name:'Chicken Cutlet',  icon:'🍗', unit:'box (30 pcs)', counter:true },
-    { code:'NCH-PS',  name:'Pyaaz Samosa',    icon:'🥟', unit:'no', counter:true },
-    { code:'NCH-OB',  name:'Osmania Biscuit', icon:'🍪', unit:'box (480 pcs)', counter:true },
-    { code:'NCH-KH',  name:'Khajoor',         icon:'🌴', unit:'pack', counter:true },
+  { title:'Ganga Bakery — buns · delivers daily · PREPAID at order', items:[
+    { code:'NCH-BUN', name:'Buns', icon:'🍞', unit:'no', counter:true },
   ]},
-  { title:'Dairy & Fresh', items:[
-    { code:'PO-MILK-AM',  name:'Milk — morning', icon:'🥛', unit:'L' },
-    { code:'PO-MILK-PM',  name:'Milk — evening', icon:'🥛', unit:'L' },
-    { code:'PO-BUTTER',   name:'Butter',         icon:'🧈', unit:'pkt' },
-    { code:'PO-LEMON',    name:'Lemon',          icon:'🍋', unit:'no' },
-    { code:'PO-PUDINA',   name:'Pudina (mint)',  icon:'🌿', unit:'bundle' },
+  { title:'Abdul Suhail — cutlets · order → delivers', items:[
+    { code:'NCH-CC', name:'Chicken Cutlet', icon:'🍗', unit:'box (30 pcs)', counter:true },
   ]},
-  { title:'Pantry & Provisions', items:[
+  { title:'Krishnamoorthi — samosa · Bashir go-collects', items:[
+    { code:'NCH-PS', name:'Pyaaz Samosa', icon:'🥟', unit:'no', counter:true },
+  ]},
+  { title:'Nazeer Nadeem — water · delivers fresh', items:[
+    { code:'NCH-WTR', name:'Water (Bisleri)', icon:'💧', unit:'case', counter:true },
+  ]},
+  { title:'Bootha Narayana — buffalo milk', items:[
+    { code:'PO-MILK-AM', name:'Milk — morning', icon:'🥛', unit:'L' },
+    { code:'PO-MILK-PM', name:'Milk — evening', icon:'🥛', unit:'L' },
+  ]},
+  { title:'M Farooq Siddique — Osmania · bulk → store room', items:[
+    { code:'NCH-OB', name:'Osmania Biscuit', icon:'🍪', unit:'box (480 pcs)', counter:true },
+    { code:'NCH-KH', name:'Khajoor', icon:'🌴', unit:'pack', counter:true },
+  ]},
+  { title:'Market / Bashir pickup — (vendor mapping assumed, correct me)', items:[
+    { code:'PO-BUTTER',   name:'Butter',                    icon:'🧈', unit:'pkt' },
+    { code:'PO-LEMON',    name:'Lemon',                     icon:'🍋', unit:'no' },
+    { code:'PO-PUDINA',   name:'Pudina (mint)',             icon:'🌿', unit:'bundle' },
     { code:'PO-MILKMAID', name:'Milkmaid (condensed milk)', icon:'🥫', unit:'kg' },
   ]},
-  { title:'Packaging & Other', items:[
-    { code:'NCH-WTR',   name:'Water (Bisleri)',   icon:'💧', unit:'case', counter:true },
-    { code:'PO-CUPS',   name:'Use-&-throw cups',  icon:'🥤', unit:'no' },
-    { code:'PO-TISSUE', name:'Tissue paper',      icon:'🧻', unit:'bundle' },
-    { code:'PO-LPG',    name:'LPG cylinder',      icon:'🔥', unit:'no' },
+  { title:'Rupnath Traders — packaging (assumed)', items:[
+    { code:'PO-CUPS',   name:'Use-&-throw cups', icon:'🥤', unit:'no' },
+    { code:'PO-TISSUE', name:'Tissue paper',     icon:'🧻', unit:'bundle' },
+  ]},
+  { title:'A M Ruba Bharat Gas — LPG', items:[
+    { code:'PO-LPG', name:'LPG cylinder', icon:'🔥', unit:'no' },
   ]},
 ];
 const ITEMS = GROUPS.flatMap(g=>g.items);
