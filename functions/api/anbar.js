@@ -27,7 +27,9 @@ const PINS = {
 // Layer-1 NCH items. pos = product.template ids + factor (units consumed per line qty).
 // All bun SKUs consume the same physical bun → one Anbar item, factor 1 each.
 const ITEMS = [
-  { code: 'NCH-OB',  name: 'Osmania Biscuit', uom: 'piece',  locs: ['counter', 'store'], pos: [{ tmpl: 1030, f: 1 }, { tmpl: 1033, f: 3 }] },
+  // Store hierarchy: 1 box = 20 packets, 1 packet = 24 pieces. Issues to the
+  // counter happen BY THE PACKET — the app converts; humans never multiply.
+  { code: 'NCH-OB',  name: 'Osmania Biscuit', uom: 'piece',  locs: ['counter', 'store'], pack: { name: 'packet', size: 24 }, pos: [{ tmpl: 1030, f: 1 }, { tmpl: 1033, f: 3 }] },
   { code: 'NCH-WTR', name: 'Water Bottle',    uom: 'bottle', locs: ['counter'],          pos: [{ tmpl: 1076, f: 1 }] },
   { code: 'NCH-KH',  name: 'Khajoor',         uom: 'piece',  locs: ['counter', 'store'], pos: [{ tmpl: 1435, f: 1 }] },
   { code: 'NCH-BUN', name: 'Bun (all types)', uom: 'bun',    locs: ['counter'],          pos: [{ tmpl: 1029, f: 1 }, { tmpl: 1644, f: 1 }, { tmpl: 1645, f: 1 }, { tmpl: 1643, f: 1 }] },
@@ -98,13 +100,13 @@ export async function onRequest(context) {
     }
 
     if (action === 'items') {
-      return json({ success: true, items: ITEMS.map(({ code, name, uom, locs }) => ({ code, name, uom, locs })) });
+      return json({ success: true, items: ITEMS.map(({ code, name, uom, locs, pack }) => ({ code, name, uom, locs, pack: pack || null })) });
     }
 
     // ── LIVE BOARD: per item per location — expected vs last count ──
     if (action === 'live') {
       const out = [];
-      for (const item of ITEMS) out.push({ code: item.code, name: item.name, uom: item.uom, locs: item.locs });
+      for (const item of ITEMS) out.push({ code: item.code, name: item.name, uom: item.uom, locs: item.locs, pack: item.pack || null });
 
       // last count per (item, outlet)
       const counts = (await DB.prepare(
@@ -204,12 +206,18 @@ export async function onRequest(context) {
       if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
       const item = ITEMS.find(i => i.code === body.code);
       if (!item || !(body.qty > 0)) return json({ success: false, error: 'item/qty invalid' });
+      // Pack-unit issue: server does the multiplication — humans never convert.
+      let pieces = body.qty, note = body.notes || '';
+      if (item.pack && body.unit === 'pack') {
+        pieces = body.qty * item.pack.size;
+        note = `${body.qty} ${item.pack.name}(s) × ${item.pack.size} = ${pieces} ${item.uom}s. ${note}`.trim();
+      }
       const now = new Date().toISOString();
       await DB.prepare(
         `INSERT INTO rm_outlet_issues (brand, outlet, item_code, item_name, qty, uom, issued_at, issued_by, notes)
          VALUES ('NCH', 'NCH-COUNTER', ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(item.code, item.name, body.qty, item.uom, now, person, body.notes || '').run();
-      return json({ success: true, at: now, by: person, code: item.code, qty: body.qty });
+      ).bind(item.code, item.name, pieces, item.uom, now, person, note).run();
+      return json({ success: true, at: now, by: person, code: item.code, qty: pieces, packs: item.pack && body.unit === 'pack' ? body.qty : null });
     }
 
     // ── HISTORY (audit trail per item) ──
