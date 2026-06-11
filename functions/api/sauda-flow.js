@@ -186,7 +186,7 @@ export async function onRequest(context) {
       const b = await request.json();
       const id = Number(b.id || 0);
       if (!id) return json({ success: false, error: 'id required' }, 400);
-      const cur = await DB.prepare('SELECT id, status FROM sauda_purchase WHERE id=?').bind(id).first();
+      const cur = await DB.prepare('SELECT id, status, brand, for_date FROM sauda_purchase WHERE id=?').bind(id).first();
       if (!cur) return json({ success: false, error: 'order not found' }, 404);
       const station = b.station || '';
       const recvItems = b.received_items ? JSON.stringify(b.received_items) : null;
@@ -198,6 +198,40 @@ export async function onRequest(context) {
            received_items_json=COALESCE(?,received_items_json), receive_note=?,
            has_bill=MAX(has_bill,?), has_goods=MAX(has_goods,?), updated_at=datetime('now') WHERE id=?`
       ).bind(nowIso(), b.received_by || 'staff', station, recvItems, b.note || null, hasBill, hasGoods, id).run();
+
+      // ── SAUDA→ANBAR AUTO-BRIDGE (owner rule 2026-06-11: NO manual second step).
+      // Any Anbar-tracked item received at this dock lands in rm_outlet_receipts
+      // (inventory add, timestamped NOW) and closes its pending rm_po_expected
+      // card. Additive + fail-safe: a bridge error never blocks the dock.
+      try {
+        if ((cur.brand || 'NCH') === 'NCH' && Array.isArray(b.received_items)) {
+          const MAP = [
+            [/bun/i, 'NCH-BUN', 'Bun (all types)', 'bun'],
+            [/cutlet/i, 'NCH-CC', 'Chicken Cutlet', 'piece'],
+            [/samosa/i, 'NCH-PS', 'Pyaaz Samosa', 'piece'],
+            [/bisleri|water/i, 'NCH-WTR', 'Water Bottle', 'bottle'],
+            [/osmania|usmania/i, 'NCH-OB', 'Osmania Biscuit', 'piece'],
+            [/khajoor|khajur/i, 'NCH-KH', 'Khajoor', 'piece'],
+          ];
+          const ts = nowIso();
+          for (const e of b.received_items) {
+            const nm = String(e.name || e.item || e.item_key || e.key || '');
+            const qty = Number(e.qty ?? e.count ?? e.received_qty ?? e.pieces ?? e.weight_kg ?? 0);
+            if (!nm || !(qty > 0)) continue;
+            const hit = MAP.find(([re]) => re.test(nm));
+            if (!hit) continue;
+            await DB.prepare(
+              `INSERT INTO rm_outlet_receipts (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes)
+               VALUES ('NCH', 'counter', ?, ?, ?, ?, ?, ?, 'vendor', ?)`
+            ).bind(hit[1], hit[2], qty, hit[3], ts, b.received_by || 'staff', `auto-bridge from Sauda dock #${id} (${nm})`).run();
+            await DB.prepare(
+              `UPDATE rm_po_expected SET status='received'
+               WHERE id = (SELECT id FROM rm_po_expected WHERE brand='NCH' AND item_code=? AND status='pending' AND po_date=? ORDER BY id LIMIT 1)`
+            ).bind(hit[1], cur.for_date || istToday()).run();
+          }
+        }
+      } catch (bridgeErr) { /* never block the dock — Anbar daily count still catches it */ }
+
       return json({ success: true, id, status: 'RECEIVED' });
     }
 
