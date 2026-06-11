@@ -89,16 +89,17 @@ const SURFACES = {
   milk:     { href:'/milk',          icon:'🥛', name:'Milk',                meta:'buffalo milk AM/PM standing order' },
   browse:   { href:'/browse',        icon:'🔍', name:'Browse Prices',       meta:'catalog across portals' },
   portals:  { href:'/portals',       icon:'📡', name:'Portal Health',       meta:'price-scrape sessions' },
-  anbar:    { href:'https://anbar.hnhotels.in/', icon:'📦', name:'Anbar — inventory', meta:'counts · issues · the conservation board' },
-  takht:    { href:'https://takht.hnhotels.in/', icon:'👑', name:'Takht — settlement', meta:'runner & counter cash' },
 };
+// Chamber purity (owner rule 2026-06-11): Sauda holds ONLY purchase surfaces.
+// Takht (settlement) and Anbar (inventory) are their own chambers with their
+// own home-screen doors — never cross-linked inside Sauda.
 
 // Role views (owner-stated 2026-06-11): Zoya orders + pays · Bashir places,
 // picks up, receives, store room · owner views everything.
 const VIEWS = {
   'Zoya':    { sections: [['Order', ['today','place','milk','ration']], ['Money', ['pay','requests']], ['Tools', ['browse','portals']]] },
-  'Bashir':  { sections: [['Order', ['place','ration']], ['Goods', ['receive','anbar']], ['Money', ['pay']]] },
-  'OWNER':   { sections: [['Order', ['today','place','milk','ration']], ['Goods', ['receive','anbar']], ['Money', ['pay','requests']], ['Tools', ['browse','portals','takht']]] },
+  'Bashir':  { sections: [['Order', ['place','ration']], ['Goods', ['receive']], ['Money', ['pay']]] },
+  'OWNER':   { sections: [['Order', ['today','place','milk','ration']], ['Goods', ['receive']], ['Money', ['pay','requests']], ['Tools', ['browse','portals']]] },
 };
 const OWNER_PEOPLE = ['Nihaf', 'Tanveer', 'Naveen'];
 
