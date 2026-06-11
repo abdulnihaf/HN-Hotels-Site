@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Sauda · Place Order</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,700;1,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#000; --card:#13131a; --card2:#1b1b24; --border:rgba(255,255,255,.09);
+    --text:#f7f7fa; --muted:#9a9aa3; --gold:#d4a24c; --gold-dim:rgba(212,162,76,.16);
+    --gold-bd:rgba(212,162,76,.42); --green:#37d399; --green-dim:rgba(55,211,153,.14);
+    --red:#ff5c5c; --serif:'Cormorant Garamond', Georgia, serif;
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif; font-size:14px; }
+  .screen { display:none; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
+  .screen.active { display:flex; }
+  .scroll { overflow-y:auto; flex:1; padding:0 16px calc(20px + var(--safe-bot)); }
+  .nav { padding:calc(14px + var(--safe-top)) 16px 10px; border-bottom:1px solid var(--border); }
+  .nav-title { font-size:15px; font-weight:700; }
+  .nav-sub { font-size:11px; color:var(--muted); }
+  .gate { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:24px; }
+  .tile { width:72px; height:72px; border-radius:16px; background:var(--card); border:1px solid var(--gold-bd); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--gold); margin-bottom:18px; font-family:var(--serif); }
+  .brand { font-family:var(--serif); font-size:48px; font-weight:700; }
+  .brand-sub { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--gold); margin:2px 0 26px; }
+  .pin-dots { display:flex; gap:14px; margin:4px 0 22px; }
+  .pin-dot { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(212,162,76,.6); }
+  .pin-dot.filled { background:var(--gold); border-color:var(--gold); }
+  .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; justify-items:center; width:100%; max-width:280px; }
+  .key { background:var(--card2); border:1px solid var(--border); border-radius:50%; width:66px; height:66px; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; }
+  .key:active { background:var(--gold-dim); border-color:var(--gold); transform:scale(.96); }
+  .key.del { color:var(--red); font-size:18px; }
+  .err { color:var(--red); font-size:13px; min-height:18px; margin-top:12px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:13px; margin-top:11px; }
+  .row { display:flex; align-items:center; gap:11px; }
+  .ico { width:42px; height:42px; border-radius:12px; background:var(--card2); display:flex; align-items:center; justify-content:center; font-size:19px; }
+  .iname { font-size:15px; font-weight:700; }
+  .imeta { font-size:11px; color:var(--muted); margin-top:2px; }
+  .qin { width:88px; background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:11px 8px; color:var(--text); font-size:20px; font-weight:800; text-align:center; outline:none; }
+  .qin:focus { border-color:var(--gold); }
+  .datechips { display:flex; gap:8px; margin-top:12px; }
+  .chip { flex:1; text-align:center; padding:11px; border-radius:11px; background:var(--card); border:1px solid var(--border); font-weight:800; font-size:13px; cursor:pointer; color:var(--muted); }
+  .chip.on { color:var(--gold); border-color:var(--gold-bd); background:var(--gold-dim); }
+  .actions { padding:10px 16px calc(12px + var(--safe-bot)); border-top:1px solid var(--border); }
+  .btn { width:100%; border:none; border-radius:12px; padding:16px; font-size:15px; font-weight:800; cursor:pointer; background:var(--gold); color:#1a1206; font-family:inherit; }
+  .btn:disabled { opacity:.35; }
+  .placed { font-size:12px; color:var(--green); margin-top:6px; }
+  .toast { position:fixed; bottom:calc(28px + var(--safe-bot)); left:50%; transform:translateX(-50%); padding:12px 22px; border-radius:12px; font-size:14px; font-weight:700; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; background:var(--green-dim); color:var(--green); border:1px solid rgba(55,211,153,.4); white-space:nowrap; }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<div id="s-gate" class="screen active">
+  <div class="gate">
+    <div class="tile">سودا</div>
+    <div class="brand">Sauda</div>
+    <div class="brand-sub">Place the order — the foundation of receiving</div>
+    <div class="pin-dots"><div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div><div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div></div>
+    <div class="pad">
+      <div class="key" onclick="key('1')">1</div><div class="key" onclick="key('2')">2</div><div class="key" onclick="key('3')">3</div>
+      <div class="key" onclick="key('4')">4</div><div class="key" onclick="key('5')">5</div><div class="key" onclick="key('6')">6</div>
+      <div class="key" onclick="key('7')">7</div><div class="key" onclick="key('8')">8</div><div class="key" onclick="key('9')">9</div>
+      <div class="key" style="opacity:0"></div><div class="key" onclick="key('0')">0</div><div class="key del" onclick="del()">⌫</div>
+    </div>
+    <div class="err" id="gate-err"></div>
+  </div>
+</div>
+
+<div id="s-order" class="screen">
+  <div class="nav">
+    <div class="nav-title">Place Order · Nawabi Chai House</div>
+    <div class="nav-sub" id="who"></div>
+    <div class="datechips">
+      <div class="chip" id="chip-today" onclick="setDate(0)">Deliver TODAY</div>
+      <div class="chip on" id="chip-tmrw" onclick="setDate(1)">Deliver TOMORROW</div>
+    </div>
+  </div>
+  <div class="scroll" id="lines"></div>
+  <div class="actions"><button class="btn" id="place-btn" onclick="placeOrder()">Place order →</button></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/anbar';
+const ITEMS = [
+  { code:'NCH-BUN', name:'Buns',            icon:'🍞', unit:'no' },
+  { code:'NCH-CC',  name:'Chicken Cutlet',  icon:'🍗', unit:'box (30 pcs)' },
+  { code:'NCH-PS',  name:'Pyaaz Samosa',    icon:'🥟', unit:'no' },
+  { code:'NCH-WTR', name:'Water (Bisleri)', icon:'💧', unit:'case' },
+  { code:'NCH-OB',  name:'Osmania Biscuit', icon:'🍪', unit:'box (480 pcs)' },
+  { code:'NCH-KH',  name:'Khajoor',         icon:'🌴', unit:'pack' },
+];
+const S = { pin: localStorage.getItem('sauda_pin')||'', person:'', entry:'', dayOffset:1 };
+function el(id){return document.getElementById(id);}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));el(id).classList.add('active');}
+function toast(m,bad){const t=el('toast');t.textContent=m;t.style.color=bad?'var(--red)':'var(--green)';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+function istDate(offset){ const d=new Date(Date.now()+5.5*3600e3+offset*86400e3); return d.toISOString().slice(0,10); }
+
+function key(k){if(S.entry.length>=4)return;S.entry+=k;dots();if(S.entry.length===4)verify();}
+function del(){S.entry=S.entry.slice(0,-1);dots();el('gate-err').textContent='';}
+function dots(){for(let i=0;i<4;i++)el('d'+i).classList.toggle('filled',i<S.entry.length);}
+async function verify(){
+  const r=await fetch(`/api/sauda-pay?action=verify-pin&pin=${S.entry}`).then(x=>x.json()).catch(()=>({}));
+  if(!r.success){el('gate-err').textContent='Wrong PIN';S.entry='';dots();return;}
+  S.pin=S.entry;S.person=r.person;S.entry='';localStorage.setItem('sauda_pin',S.pin);
+  enter();
+}
+function enter(){ el('who').textContent=`${S.person} · qty empty = not ordered`; show('s-order'); renderLines(); }
+
+function setDate(off){ S.dayOffset=off; el('chip-today').classList.toggle('on',off===0); el('chip-tmrw').classList.toggle('on',off===1); renderLines(); }
+
+async function renderLines(){
+  const date=istDate(S.dayOffset);
+  const r=await fetch(`${API}?action=orders&date=${date}`).then(x=>x.json()).catch(()=>({}));
+  const placed=(r.lines||[]);
+  el('lines').innerHTML = ITEMS.map(it=>{
+    const prev=placed.filter(p=>p.item_code===it.code);
+    const placedTxt = prev.length ? `<div class="placed">✓ already placed for ${date}: ${prev.map(p=>p.ordered_qty+' '+p.ordered_unit+(p.status!=='pending'?' ('+p.status+')':'')).join(', ')}</div>` : '';
+    return `<div class="card"><div class="row">
+      <div class="ico">${it.icon}</div>
+      <div style="flex:1"><div class="iname">${it.name}</div><div class="imeta">unit: ${it.unit}</div>${placedTxt}</div>
+      <input class="qin" type="number" inputmode="numeric" placeholder="—" id="q-${it.code}">
+    </div></div>`;
+  }).join('');
+}
+
+async function placeOrder(){
+  const date=istDate(S.dayOffset);
+  const lines=ITEMS.map(it=>({code:it.code, qty:parseFloat(el('q-'+it.code).value||'0'), unit:it.unit})).filter(l=>l.qty>0);
+  if(!lines.length){toast('Enter at least one quantity',true);return;}
+  el('place-btn').disabled=true;
+  try{
+    const r=await fetch(`${API}?action=place-order`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pin:S.pin,po_date:date,lines})}).then(x=>x.json());
+    if(!r.success)throw new Error(r.error);
+    toast(`✓ ${r.placed} lines placed for ${date}`);
+    renderLines();
+  }catch(e){toast(e.message||'failed',true);}
+  finally{el('place-btn').disabled=false;}
+}
+
+if(S.pin){ fetch(`/api/sauda-pay?action=verify-pin&pin=${S.pin}`).then(x=>x.json()).then(r=>{ if(r.success){S.person=r.person;enter();} }); }
+</script>
+</body>
+</html>
