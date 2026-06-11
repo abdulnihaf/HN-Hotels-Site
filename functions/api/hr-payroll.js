@@ -524,7 +524,7 @@ export async function onRequest({ request, env }) {
     const employeeId = url.searchParams.get('employee_id');
     const month = url.searchParams.get('month') || new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
     if (!employeeId) return json({ error: 'employee_id required' }, 400);
-    const emp = await db.prepare(`SELECT id, COALESCE(known_as,name) AS name, brand_label, pay_type, monthly_salary, daily_rate, phone FROM hr_employees WHERE id = ?`).bind(employeeId).first();
+    const emp = await db.prepare(`SELECT id, COALESCE(known_as,name) AS name, brand_label, pay_type, monthly_salary, daily_rate, phone, COALESCE(pay_lane,'monthly') AS pay_lane, notes FROM hr_employees WHERE id = ?`).bind(employeeId).first();
     if (!emp) return json({ error: 'employee not found' }, 404);
     const { start, end } = monthBounds(month);
 

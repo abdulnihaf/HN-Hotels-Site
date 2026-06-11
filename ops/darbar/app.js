@@ -542,6 +542,7 @@ async function openMonthBoard() {
    *  · Left → dues written off, no pending. Untracked / no-rate → listed, not counted. */
   const est = r => {
     if (!r.is_active) return { lo: null, why: 'left' };
+    if (r.pay_lane === 'daily') return { lo: null, why: 'daily lane' };
     const sal = r.monthly_salary || 0, rate = r.daily_rate || 0;
     if ((r.pay_type || '').toLowerCase() === 'monthly' && sal > 0) {
       if (r.track_attendance !== 0 && (r.days_worked || 0) === 0) return { lo: null, why: 'no punches' };
@@ -555,6 +556,11 @@ async function openMonthBoard() {
     }
     return { lo: null, why: 'no rate' };
   };
+  /* Daily lane (Mujib's chai team): paid day by day, NEVER part of the monthly
+   * cycle — own section, own paid total, zero contribution to monthly pending. */
+  const daily = rows.filter(r => r.pay_lane === 'daily');
+  rows = rows.filter(r => r.pay_lane !== 'daily');
+  const dailyPaid = daily.reduce((s, r) => s + (r.advances || 0) + (r.settled || 0), 0);
   let paid = 0, pendLo = 0, pendHi = 0; const skipped = [];
   for (const r of rows) {
     paid += (r.advances || 0) + (r.settled || 0);
@@ -582,6 +588,11 @@ async function openMonthBoard() {
       <div><div class="nm">${esc(r.name)} <span class="pill ${(r.brand || '').toLowerCase()}">${r.brand || ''}</span>${r.is_active ? '' : ' <span class="pill grey">left</span>'}</div>
       <div class="role">worked <b>${r.days_worked}</b>d${r.days_error ? ` · ${r.days_error} punch-missing` : ''} · adv ${inr(r.advances)}${estLine(r)}</div></div>
       ${chip(r)}</div></div>`).join('')}
+    ${daily.length ? `<div class="sd" style="margin-top:14px">Daily lane — paid day by day, separate from the monthly cycle${dailyPaid ? ` · ${inr(dailyPaid)} given this month` : ''}</div>
+    ${daily.map(r => `<div class="arow" onclick='closeSheet();loadPayCtx("advance", ${r.id}, ${JSON.stringify(b.month)})' style="margin-bottom:8px"><div class="top">
+      <div><div class="nm">${esc(r.name)} <span class="pill ${(r.brand || '').toLowerCase()}">${r.brand || ''}</span> <span class="pill gold">daily</span></div>
+      <div class="role">${r.daily_rate ? `${inr(r.daily_rate)}/day · ` : 'paid via team line · '}given ${inr((r.advances || 0) + (r.settled || 0))} this month</div></div>
+    </div></div>`).join('')}` : ''}
     <div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`);
 }
 
@@ -667,8 +678,10 @@ async function loadPayCtx(mode, empId, month) {
   const setts = ((c.settlements && c.settlements.rows) || []).map(payLine).join('') || 'none';
   const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
   const verb = mode === 'settle' ? 'Record settlement' : 'Give advance';
+  const dailyLane = emp.pay_lane === 'daily';
   sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'} — ${esc(emp.name)}</h2>
     <div class="sd">${esc(emp.brand || '')} · ${esc(emp.pay_type || '')} · ${salaryLbl}</div>
+    ${dailyLane ? `<div class="card" style="border-color:var(--gold-bd);background:var(--gold-soft)"><b>DAILY LANE</b><div class="xc-meta" style="margin-top:4px">Paid day by day — separate from the monthly salary cycle. Money recorded here is the day's team cost, not a salary advance against a month.</div></div>` : ''}
     <div class="mchips">${chips}</div>
     <div class="card"><div class="xc-meta"><b>1 · Attendance</b> — ${esc(monthLabel(month))}</div>
       ${attGridHTML(c)}
