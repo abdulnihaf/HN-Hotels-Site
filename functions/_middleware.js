@@ -31,6 +31,24 @@ export async function onRequest(context) {
     return next();
   }
 
+  // ── anbar.hnhotels.in — the storehouse chamber (inventory). App at /ops/anbar/ ──
+  if (host === 'anbar.hnhotels.in') {
+    const MAP = {
+      '/': '/ops/anbar/index.html',
+      '/index.html': '/ops/anbar/index.html',
+      '/manifest.json': '/ops/anbar/manifest.json',
+      '/icon-192.png': '/ops/anbar/icon-192.png',
+      '/icon-512.png': '/ops/anbar/icon-512.png',
+    };
+    const target = MAP[url.pathname];
+    if (target) {
+      const t = new URL(target, url);
+      t.search = url.search;   // preserve ?loc= QR-door scoping
+      return rewriteTo(request, t);
+    }
+    return next();
+  }
+
   // Only intervene for the trade subdomain
   if (host !== 'trade.hnhotels.in') {
     return next();
