@@ -215,6 +215,19 @@ export async function onRequest(context) {
       return json({ success: true, placed: n, po_date: poDate, by: person, at: now });
     }
 
+    // ── CANCEL ORDER LINE (Zoya/Bashir own the order — wrong lines die honestly) ──
+    // Cancelled lines keep their row (audit), vanish from the receive screen.
+    if (action === 'cancel-line' && context.request.method === 'POST') {
+      const ORDER_PLACERS = ['Zoya', 'Bashir', 'Nihaf', 'Tanveer', 'Naveen'];
+      const body = await context.request.json();
+      const person = PINS[body.pin];
+      if (!person || !ORDER_PLACERS.includes(person)) return json({ success: false, error: 'Not authorised' }, 401);
+      const r = await DB.prepare(
+        `UPDATE rm_po_expected SET status='cancelled', expect_note = expect_note || ' · CANCELLED by ' || ? || ' ' || ? WHERE id=? AND status='pending'`
+      ).bind(person, new Date().toISOString(), body.id).run();
+      return json({ success: true, cancelled: r.meta.changes > 0 });
+    }
+
     // ── ORDERS for a date (order page shows what's already placed) ──
     if (action === 'orders') {
       const date = url.searchParams.get('date');

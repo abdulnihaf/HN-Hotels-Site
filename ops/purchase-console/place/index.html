@@ -122,13 +122,24 @@ async function renderLines(){
   const placed=(r.lines||[]);
   el('lines').innerHTML = ITEMS.map(it=>{
     const prev=placed.filter(p=>p.item_code===it.code);
-    const placedTxt = prev.length ? `<div class="placed">✓ already placed for ${date}: ${prev.map(p=>p.ordered_qty+' '+p.ordered_unit+(p.status!=='pending'?' ('+p.status+')':'')).join(', ')}</div>` : '';
+    const placedTxt = prev.length ? prev.map(p=>
+      `<div class="placed">${p.status==='pending'
+        ? `✓ placed: ${p.ordered_qty} ${p.ordered_unit} <span style="color:var(--red);font-weight:800;margin-left:8px;cursor:pointer" onclick="cancelLine(${p.id},'${it.name.replace(/'/g,"\\'")}')">✕ cancel</span>`
+        : `${p.ordered_qty} ${p.ordered_unit} · ${p.status}`}</div>`).join('') : '';
     return `<div class="card"><div class="row">
       <div class="ico">${it.icon}</div>
       <div style="flex:1"><div class="iname">${it.name}</div><div class="imeta">unit: ${it.unit}</div>${placedTxt}</div>
       <input class="qin" type="number" inputmode="numeric" placeholder="—" id="q-${it.code}">
     </div></div>`;
   }).join('');
+}
+
+// Wrong line? Cancel it (stays in the record as cancelled), re-enter the right qty.
+async function cancelLine(id, name){
+  if(!confirm(`Cancel the placed ${name} line?`))return;
+  const r=await fetch(`${API}?action=cancel-line`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:S.pin,id})}).then(x=>x.json());
+  if(!r.success||!r.cancelled){toast(r.error||'could not cancel',true);return;}
+  toast('✕ line cancelled'); renderLines();
 }
 
 async function placeOrder(){
