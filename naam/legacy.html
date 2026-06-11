@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0">
+<title>Naam · HN Hotels</title>
+<meta name="description" content="Naam — how the world comes to know I exist. View-only marketing surface for HN Hotels.">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#020205">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Naam">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,500;1,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --bg-elev-1:#14141c; --bg-elev-2:#1c1c26; --bg-elev-3:#26262f;
+  --text:#f8f8fa; --text-dim:#a8a8b2; --text-mute:#868690;
+  --line:rgba(255,255,255,.10); --line-soft:rgba(255,255,255,.05);
+  --hn-gold:#d4a24c; --hn-gold-soft:rgba(212,162,76,.18); --hn-gold-border:rgba(212,162,76,.45); --hn-gold-deep:#b8893a;
+  --green:#34d399; --blue:#5e9eff; --yellow:#fbbf24; --red:#ff5c5c; --purple:#a78bfa;
+  --wa:#25d366;
+  --naam:#ff8a5b; --naam-deep:#e8703f;   /* Naam chamber accent (Figma DIWAN) */
+  --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px); --safe-right:env(safe-area-inset-right,0px);
+  --tab-bar-h:76px; --nav-bar-h:46px;
+  --spring:cubic-bezier(.34,1.56,.64,1); --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;
+  height:100dvh;overflow:hidden;overscroll-behavior-y:contain;
+  font-variant-numeric:tabular-nums;
+}
+input{-webkit-appearance:none;border:none;outline:none;font-family:inherit}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{color:inherit;text-decoration:none}
+::-webkit-scrollbar{display:none}
+
+/* ---------- PIN GATE — LOCKED SHELL (mirrors Figma DIWAN 16:99) ---------- */
+.pin-gate{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;padding:0 24px;transition:opacity .3s var(--ease);
+  background:#020205;background-image:radial-gradient(120% 78% at 50% 36%, #0e0e16 0%, #020205 72%)}
+.pin-gate::after{content:'';position:absolute;inset:7px;border:1px solid rgba(212,162,76,.18);border-radius:30px;pointer-events:none}
+.pin-icon{width:72px;height:72px;border-radius:16px;background:#1c1c26;border:1.5px solid rgba(255,138,91,.5);display:flex;align-items:center;justify-content:center;margin-top:calc(var(--safe-top) + 76px);box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.pin-icon span{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:42px;color:var(--naam);line-height:1}
+.pin-name{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:56px;color:#f8f8fa;margin-top:24px;line-height:1;text-shadow:0 6px 20px rgba(0,0,0,.55)}
+.pin-tag{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:500;font-size:15px;color:var(--hn-gold);margin-top:14px;text-align:center}
+.pin-dots{display:flex;gap:24px;margin-top:36px}
+.pin-dot{width:12px;height:12px;border-radius:50%;border:1.5px solid rgba(212,162,76,.6);transition:all .18s var(--spring)}
+.pin-dot.filled{background:var(--naam);border-color:var(--naam);box-shadow:0 0 10px rgba(255,138,91,.5)}
+.pin-gate.err .pin-dots{animation:shake .42s}
+.pin-gate.err .pin-dot{border-color:var(--red)}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+.pin-pad{display:grid;grid-template-columns:repeat(3,68px);gap:18px;margin-top:52px}
+.pin-key{width:68px;height:68px;border-radius:50%;background:#1c1c26;font-family:'Inter',sans-serif;font-weight:400;font-size:28px;color:#f8f8fa;display:flex;align-items:center;justify-content:center;transition:transform .1s,background .15s}
+.pin-key:active{transform:scale(.9);background:#2a2a36}
+.pin-key.blank{background:none;pointer-events:none}
+.pin-key.back{font-size:24px;color:var(--text-dim)}
+.pin-foot{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:11px;color:rgba(212,162,76,.5);position:absolute;bottom:calc(var(--safe-bot) + 20px)}
+.hide{display:none!important}
+
+/* ---------- APP SHELL ---------- */
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+.status-bar-haze{position:fixed;top:0;left:0;right:0;height:calc(var(--safe-top) + 4px);background:linear-gradient(to bottom,rgba(0,0,0,.9),transparent);z-index:60;pointer-events:none}
+.top-nav{position:sticky;top:0;z-index:40;display:grid;grid-template-columns:1fr auto;align-items:center;padding:calc(var(--safe-top) + 6px) 16px 6px;min-height:calc(var(--safe-top) + var(--nav-bar-h));transition:background .2s,border-color .2s}
+.top-nav.condensed{background:rgba(10,10,16,.72);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);border-bottom:.5px solid var(--line)}
+.nav-title{font-size:17px;font-weight:700;opacity:0;transition:opacity .2s}
+.top-nav.condensed .nav-title{opacity:1}
+.nav-brand-pill{justify-self:end;display:flex;align-items:center;gap:6px;background:var(--bg-elev-2);border:.5px solid var(--line);border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600}
+.nav-brand-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--hn-gold)}
+
+.tab-pane{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--tab-bar-h) + var(--safe-bot) + 8px)}
+.large-title-wrap{padding:4px 18px 8px}
+.large-title{font-size:34px;font-weight:800;letter-spacing:-.5px;margin:0}
+.large-sub{color:var(--text-dim);font-size:14px;margin-top:2px}
+
+/* brand segmented */
+.brand-seg{display:grid;grid-template-columns:1fr 1fr;gap:0;background:var(--bg-elev-1);border-radius:12px;padding:3px;margin:6px 18px 12px}
+.brand-seg button{padding:9px 8px;border-radius:9px;font-size:14px;font-weight:600;color:var(--text-dim);transition:all .2s}
+.brand-seg button.on{background:var(--bg-elev-3);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.brand-seg button .em{font-weight:400;font-size:11px;color:var(--text-mute);display:block;margin-top:1px}
+.brand-seg button.on .em{color:var(--text-dim)}
+
+/* section header */
+.section-header{position:sticky;top:calc(var(--safe-top) + var(--nav-bar-h));z-index:20;padding:14px 18px 6px;font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--text-mute);background:linear-gradient(to bottom,rgba(0,0,0,.85),rgba(0,0,0,.4));backdrop-filter:blur(8px)}
+
+/* ---------- LANE CARD (Today + Lanes) ---------- */
+.lane-card{margin:0 14px 12px;background:var(--bg-elev-1);border:.5px solid var(--line);border-radius:18px;padding:16px;transition:transform .12s var(--spring)}
+.lane-card:active{transform:scale(.985)}
+.lane-card.risk-money{border-left:3px solid var(--yellow)}
+.lane-card.risk-production{border-left:3px solid var(--red)}
+.lane-card.risk-comms{border-left:3px solid var(--blue)}
+.lane-card.risk-creative{border-left:3px solid var(--purple)}
+.lc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.lc-title{font-size:17px;font-weight:700}
+.lc-subtitle{font-size:12.5px;color:var(--text-dim);margin-top:1px}
+.lc-pill{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:4px 8px;border-radius:7px;white-space:nowrap}
+.pill-live{background:rgba(52,211,153,.16);color:var(--green)}
+.pill-ready{background:var(--hn-gold-soft);color:var(--hn-gold)}
+.pill-completed{background:rgba(94,158,255,.16);color:var(--blue)}
+.pill-idle{background:var(--bg-elev-3);color:var(--text-mute)}
+.pill-stale{background:rgba(255,92,92,.12);color:var(--red)}
+
+.lc-glance{display:flex;gap:10px;margin-top:14px;overflow-x:auto;padding-bottom:2px}
+.glance-chip{flex:0 0 auto;min-width:108px;background:var(--bg-elev-2);border-radius:12px;padding:10px 12px}
+.glance-val{font-size:18px;font-weight:800;letter-spacing:-.3px}
+.glance-val.good{color:var(--green)} .glance-val.warn{color:var(--yellow)} .glance-val.bad{color:var(--red)}
+.glance-label{font-size:10.5px;color:var(--text-dim);margin-top:3px;line-height:1.25}
+.glance-sub{font-size:9.5px;color:var(--text-mute);margin-top:2px}
+
+.lc-action{margin-top:14px;background:var(--bg-elev-2);border-radius:13px;padding:12px 13px;display:flex;gap:10px;align-items:flex-start}
+.lc-action.u-high{background:rgba(255,92,92,.10);border:.5px solid rgba(255,92,92,.3)}
+.lc-action.u-medium{background:var(--hn-gold-soft);border:.5px solid var(--hn-gold-border)}
+.lc-action-icon{flex:0 0 auto;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;margin-top:1px}
+.u-high .lc-action-icon{background:var(--red);color:#fff}
+.u-medium .lc-action-icon{background:var(--hn-gold);color:#1a1208}
+.u-low .lc-action-icon{background:var(--bg-elev-3);color:var(--text-dim)}
+.lc-action-body{flex:1}
+.lc-action-text{font-size:13.5px;line-height:1.4;color:var(--text)}
+.lc-action-where{font-size:11px;color:var(--hn-gold);margin-top:6px;font-weight:600}
+.lc-freshness{font-size:11px;color:var(--text-mute);margin-top:10px}
+
+/* pulse strip */
+.pulse-row{display:flex;gap:12px;margin:0 14px 6px;overflow-x:auto}
+.pulse-card{flex:0 0 auto;min-width:140px;background:linear-gradient(135deg,var(--bg-elev-1),var(--bg-elev-2));border:.5px solid var(--line);border-radius:16px;padding:14px}
+.pulse-card .pv{font-size:24px;font-weight:800;letter-spacing:-.5px}
+.pulse-card .pl{font-size:11px;color:var(--text-dim);margin-top:4px}
+.pulse-card .ps{font-size:10px;color:var(--text-mute);margin-top:2px}
+.pulse-card.live .pl::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:5px;animation:blink 2s infinite}
+@keyframes blink{50%{opacity:.3}}
+
+.empty{padding:50px 30px;text-align:center;color:var(--text-mute);font-size:14px;line-height:1.5}
+
+/* ---------- LANE DETAIL PANE ---------- */
+.detail-pane{position:fixed;inset:0;z-index:70;background:var(--bg);transform:translateX(100%);transition:transform .3s var(--ease);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-bot) + 30px)}
+.detail-pane.open{transform:translateX(0)}
+.detail-nav{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:6px;padding:calc(var(--safe-top) + 8px) 14px 10px;background:rgba(10,10,16,.8);backdrop-filter:blur(20px);border-bottom:.5px solid var(--line)}
+.back-btn{display:flex;align-items:center;gap:3px;color:var(--hn-gold);font-size:16px;font-weight:500}
+.detail-body{padding:8px 18px}
+.detail-title{font-size:28px;font-weight:800;letter-spacing:-.5px;margin:10px 0 2px}
+.detail-sub{color:var(--text-dim);font-size:14px}
+.detail-section{margin-top:22px}
+.detail-section h3{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--text-mute);margin:0 0 10px}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dcard{background:var(--bg-elev-1);border:.5px solid var(--line);border-radius:14px;padding:13px}
+.dcard .dv{font-size:20px;font-weight:800}
+.dcard .dl{font-size:11px;color:var(--text-dim);margin-top:4px}
+.dcard .dsub{font-size:10px;color:var(--text-mute);margin-top:2px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:.5px solid var(--line-soft);font-size:13px}
+.kv .k{color:var(--text-dim);flex:0 0 auto}
+.kv .v{text-align:right;color:var(--text);word-break:break-word}
+.link-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg-elev-1);border:.5px solid var(--line);border-radius:13px;padding:14px;margin-bottom:8px;min-height:46px}
+.link-row .lr-label{font-size:14.5px;font-weight:500}
+.link-row .lr-arrow{color:var(--text-mute);font-size:13px}
+.action-hero{background:linear-gradient(135deg,var(--hn-gold-soft),rgba(212,162,76,.06));border:.5px solid var(--hn-gold-border);border-radius:16px;padding:16px}
+.action-hero.u-high{background:linear-gradient(135deg,rgba(255,92,92,.14),rgba(255,92,92,.04));border-color:rgba(255,92,92,.4)}
+.action-hero .ah-label{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--hn-gold)}
+.action-hero.u-high .ah-label{color:var(--red)}
+.action-hero .ah-text{font-size:15px;line-height:1.5;margin-top:8px}
+.action-hero .ah-where{font-size:12px;color:var(--text-dim);margin-top:10px}
+
+/* ---------- CREATIVE GRID ---------- */
+.filter-rail{display:flex;gap:8px;overflow-x:auto;padding:4px 18px 10px;-webkit-mask-image:linear-gradient(to right,transparent,#000 14px,#000 calc(100% - 14px),transparent)}
+.chip{flex:0 0 auto;background:var(--bg-elev-1);border:.5px solid var(--line);border-radius:18px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text-dim);min-height:32px;transition:all .15s}
+.chip.on{background:var(--hn-gold-soft);border-color:var(--hn-gold-border);color:var(--hn-gold)}
+.cv-search{margin:0 18px 8px;background:var(--bg-elev-1);border-radius:11px;padding:10px 14px;display:flex;align-items:center;gap:8px}
+.cv-search input{background:none;color:var(--text);font-size:15px;flex:1}
+.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px 8px}
+.ctile{position:relative;aspect-ratio:1/1;background:var(--bg-elev-1);border-radius:10px;overflow:hidden;border:.5px solid var(--line-soft)}
+.ctile img{width:100%;height:100%;object-fit:cover;display:block}
+.ctile .badge{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--text-mute);font-size:10px;padding:6px;text-align:center}
+.ctile .badge .bt{font-size:22px}
+.ctile .st{position:absolute;top:5px;right:5px;font-size:8px;font-weight:800;text-transform:uppercase;padding:2px 5px;border-radius:5px;letter-spacing:.3px}
+.st-deployed{background:rgba(52,211,153,.9);color:#04130c} .st-final{background:rgba(212,162,76,.9);color:#1a1208} .st-rejected{background:rgba(255,92,92,.9);color:#fff} .st-draft{background:rgba(120,120,130,.85);color:#fff}
+.ctile .tp{position:absolute;bottom:5px;left:5px;font-size:8px;background:rgba(0,0,0,.6);padding:2px 5px;border-radius:5px;color:#fff}
+.cv-count{padding:8px 18px;font-size:12px;color:var(--text-mute)}
+
+/* creative detail sheet */
+.sheet{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .25s;display:flex;align-items:flex-end}
+.sheet.open{opacity:1;pointer-events:auto}
+.sheet-card{width:100%;background:var(--bg-elev-1);border-radius:22px 22px 0 0;padding:8px 18px calc(var(--safe-bot) + 24px);transform:translateY(100%);transition:transform .3s var(--spring);max-height:88dvh;overflow-y:auto}
+.sheet.open .sheet-card{transform:translateY(0)}
+.sheet-grab{width:38px;height:5px;border-radius:3px;background:var(--bg-elev-3);margin:8px auto 14px}
+.sheet-img{width:100%;border-radius:14px;background:var(--bg-elev-2);margin-bottom:14px;max-height:46dvh;object-fit:contain}
+.sheet-title{font-size:18px;font-weight:700}
+
+/* ---------- YOU ---------- */
+.you-group{margin:14px;background:var(--bg-elev-1);border:.5px solid var(--line);border-radius:16px;overflow:hidden}
+.you-row{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:.5px solid var(--line-soft);min-height:46px}
+.you-row:last-child{border-bottom:none}
+.you-row .yl{font-size:15px}
+.you-row .yv{font-size:14px;color:var(--text-dim)}
+.you-row .yv.ok{color:var(--green)} .you-row .yv.warn{color:var(--yellow)} .you-row .yv.bad{color:var(--red)}
+.you-row.tap:active{background:var(--bg-elev-2)}
+.health-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px}
+
+/* ---------- BOTTOM TAB BAR ---------- */
+.tab-bar{position:fixed;bottom:0;left:0;right:0;z-index:50;display:grid;grid-template-columns:repeat(4,1fr);background:rgba(20,20,28,.82);backdrop-filter:saturate(180%) blur(28px);-webkit-backdrop-filter:saturate(180%) blur(28px);border-top:.5px solid var(--line);padding-bottom:var(--safe-bot)}
+.tab-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 0 6px;color:var(--text-mute);transition:color .15s}
+.tab-btn.on{color:var(--hn-gold)}
+.tab-btn svg{width:24px;height:24px}
+.tab-btn .tl{font-size:10px;font-weight:600}
+.tab-btn:active{transform:scale(.92)}
+
+.toast{position:fixed;bottom:calc(var(--tab-bar-h) + var(--safe-bot) + 14px);left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg-elev-3);border:.5px solid var(--line);border-radius:12px;padding:11px 18px;font-size:13px;z-index:90;opacity:0;transition:all .25s;pointer-events:none;max-width:84%;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.skel{background:linear-gradient(90deg,var(--bg-elev-1),var(--bg-elev-2),var(--bg-elev-1));background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:14px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ===== Phase-1 hardening ===== */
+/* boot loader + offline screen */
+#bootLoader{position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px;text-align:center;background:#020205;background-image:radial-gradient(120% 78% at 50% 40%,#0e0e16,#020205 72%)}
+#bootLoader .bl-mark{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:44px;color:var(--naam);text-shadow:0 6px 20px rgba(0,0,0,.55)}
+#bootLoader .bl-msg{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:15px;color:var(--hn-gold);max-width:280px;line-height:1.5}
+#bootLoader .bl-retry{margin-top:8px;background:var(--bg-elev-2);border:.5px solid var(--hn-gold-border);color:var(--hn-gold);border-radius:12px;padding:13px 24px;font-size:14px;min-height:44px}
+#bootLoader .bl-retry:active{transform:scale(.95)}
+.spinner{width:22px;height:22px;border:2px solid var(--bg-elev-3);border-top-color:var(--naam);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* the ONE structural detail carrying the chamber hue past the gate */
+.tab-btn.on{color:var(--naam)}
+/* staleness banner (snapshot not refreshed) */
+.stale-banner{margin:2px 14px 12px;background:rgba(251,191,36,.10);border:.5px solid rgba(251,191,36,.30);border-radius:12px;padding:10px 13px;font-size:12px;color:var(--yellow);display:flex;gap:8px;align-items:flex-start;line-height:1.4}
+/* Mughal-court empty state */
+.empty{padding:54px 30px;text-align:center;color:var(--text-dim)}
+.empty .em-mark{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:19px;color:var(--hn-gold);margin-bottom:8px;line-height:1.4}
+.empty .em-sub{font-size:13px;color:var(--text-mute);line-height:1.55}
+/* tap targets ≥44px on filter chips */
+.chip{min-height:40px;display:inline-flex;align-items:center}
+/* keyboard focus ring (VoiceOver / external kbd) */
+.lane-card:focus-visible,.ctile:focus-visible,.tab-btn:focus-visible,.chip:focus-visible,.pin-key:focus-visible,.you-row:focus-visible,.link-row:focus-visible{outline:2px solid var(--naam);outline-offset:2px}
+/* iPad / large screens — Naam is iPhone-first; cap to a phone column, centred */
+@media (min-width:600px){
+  #app,#bootLoader{left:50%;right:auto;width:560px;transform:translateX(-50%)}
+  .tab-bar{left:50%;right:auto;width:560px;transform:translateX(-50%)}
+  .sheet-card{max-width:560px;margin-left:auto;margin-right:auto}
+}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<!-- PIN GATE -->
+<section id="pinGate" class="pin-gate">
+  <div class="pin-icon"><span>n</span></div>
+  <div class="pin-name">Naam</div>
+  <div class="pin-tag">how the world comes to know I exist</div>
+  <div class="pin-dots" id="pinDots"></div>
+  <div class="pin-pad" id="pinPad"></div>
+  <div class="pin-foot">HN Hotels · since 1918</div>
+</section>
+
+<!-- APP -->
+<div id="app" class="hide">
+  <div class="status-bar-haze"></div>
+  <div id="bootLoader" class="hide" role="status" aria-live="polite"></div>
+
+  <!-- TODAY -->
+  <main class="tab-pane" id="tab-today">
+    <div class="top-nav" id="nav-today"><div class="nav-title">Today</div>
+      <div class="nav-brand-pill" id="brandPill1"><span class="dot"></span><span>HE</span></div></div>
+    <div class="large-title-wrap"><h1 class="large-title">Today</h1><div class="large-sub" id="todaySub">Marketing pulse</div></div>
+    <div class="brand-seg" id="brandSeg1"></div>
+    <div class="pulse-row" id="pulseRow"></div>
+    <div class="section-header">Needs you</div>
+    <div id="todayCards"></div>
+  </main>
+
+  <!-- LANES -->
+  <main class="tab-pane hide" id="tab-lanes">
+    <div class="top-nav" id="nav-lanes"><div class="nav-title">Lanes</div>
+      <div class="nav-brand-pill" id="brandPill2"><span class="dot"></span><span>HE</span></div></div>
+    <div class="large-title-wrap"><h1 class="large-title">Lanes</h1><div class="large-sub" id="lanesSub">Every marketing surface</div></div>
+    <div class="brand-seg" id="brandSeg2"></div>
+    <div id="lanesList"></div>
+  </main>
+
+  <!-- CREATIVE -->
+  <main class="tab-pane hide" id="tab-creative">
+    <div class="top-nav" id="nav-creative"><div class="nav-title">Creative</div>
+      <div class="nav-brand-pill" id="brandPill3"><span class="dot"></span><span>HE</span></div></div>
+    <div class="large-title-wrap"><h1 class="large-title">Creative</h1><div class="large-sub" id="creativeSub">Library</div></div>
+    <div class="cv-search"><span style="color:var(--text-mute)">⌕</span><input id="cvSearch" placeholder="Search creatives" inputmode="search"></div>
+    <div class="filter-rail" id="laneFilters"></div>
+    <div class="filter-rail" id="statusFilters"></div>
+    <div class="cv-count" id="cvCount"></div>
+    <div class="cgrid" id="creativeGrid"></div>
+  </main>
+
+  <!-- YOU -->
+  <main class="tab-pane hide" id="tab-you">
+    <div class="top-nav" id="nav-you"><div class="nav-title">You</div></div>
+    <div class="large-title-wrap"><h1 class="large-title">You</h1><div class="large-sub">Settings & health</div></div>
+    <div id="youBody"></div>
+  </main>
+
+  <!-- TAB BAR -->
+  <nav class="tab-bar" id="tabBar" role="tablist" aria-label="Naam sections">
+    <button class="tab-btn on" data-tab="today" role="tab" aria-label="Today" aria-selected="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span class="tl">Today</span></button>
+    <button class="tab-btn" data-tab="lanes" role="tab" aria-label="Lanes" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg><span class="tl">Lanes</span></button>
+    <button class="tab-btn" data-tab="creative" role="tab" aria-label="Creative library" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="tl">Creative</span></button>
+    <button class="tab-btn" data-tab="you" role="tab" aria-label="You — settings and health" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span class="tl">You</span></button>
+  </nav>
+</div>
+
+<!-- LANE DETAIL PANE -->
+<div class="detail-pane" id="detailPane">
+  <div class="detail-nav"><button class="back-btn" id="detailBack">‹ Back</button></div>
+  <div class="detail-body" id="detailBody"></div>
+</div>
+
+<!-- CREATIVE SHEET -->
+<div class="sheet" id="creativeSheet"><div class="sheet-card" id="sheetCard"></div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PINS = ['0305','1918']; // owner PIN + heritage-year soft lock
+const LS = { pin:'naamPin', brand:'naamBrand' };
+const state = { brand: localStorage.getItem(LS.brand) || 'HE', tab:'today', data:null, creative:null, cLane:'all', cStatus:'all', cSearch:'' };
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
+
+/* ---------- PIN ---------- */
+let pinBuf='';
+function renderPin(){
+  $('#pinDots').innerHTML=[0,1,2,3].map(i=>`<div class="pin-dot ${i<pinBuf.length?'filled':''}"></div>`).join('');
+  if(!$('#pinPad').children.length){
+    const keys=['1','2','3','4','5','6','7','8','9','','0','⌫'];
+    $('#pinPad').setAttribute('role','group');$('#pinPad').setAttribute('aria-label','PIN keypad');
+    $('#pinPad').innerHTML=keys.map(k=>k===''?'<div class="pin-key blank" aria-hidden="true"></div>':`<button class="pin-key${k==='⌫'?' back':''}" data-k="${k}" aria-label="${k==='⌫'?'Delete':k}">${k}</button>`).join('');
+    $('#pinPad').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(!b)return;const k=b.dataset.k;
+      if(k==='⌫'){pinBuf=pinBuf.slice(0,-1);} else if(pinBuf.length<4){pinBuf+=k;}
+      renderPin();
+      if(pinBuf.length===4){
+        if(PINS.includes(pinBuf)){localStorage.setItem(LS.pin,'1');unlock();}
+        else {navigator.vibrate&&navigator.vibrate(80);$('#pinGate').classList.add('err');setTimeout(()=>{pinBuf='';$('#pinGate').classList.remove('err');renderPin();},460);}
+      }
+    });
+  }
+}
+function unlock(){ $('#pinGate').style.opacity='0'; setTimeout(()=>{$('#pinGate').classList.add('hide');$('#app').classList.remove('hide');boot();},300); }
+
+/* ---------- BRAND ---------- */
+function brandSegHTML(){
+  const b=state.data.brands;
+  return ['HE','NCH'].map(k=>`<button data-brand="${k}" class="${state.brand===k?'on':''}" aria-pressed="${state.brand===k}" aria-label="Show ${esc(b[k].label)}">${esc(b[k].label)}<span class="em">${esc(b[k].short)} · ${esc(b[k].tagline)}</span></button>`).join('');
+}
+function wireBrandSegs(){
+  ['#brandSeg1','#brandSeg2'].forEach(sel=>{const el=$(sel);el.innerHTML=brandSegHTML();
+    el.onclick=e=>{const b=e.target.closest('[data-brand]');if(!b)return;setBrand(b.dataset.brand);};});
+}
+function setBrand(b){ state.brand=b; localStorage.setItem(LS.brand,b); $$('.nav-brand-pill span:last-child').forEach(s=>s.textContent=b); wireBrandSegs(); renderAll(); }
+
+/* ---------- helpers ---------- */
+function lanesForBrand(){ return state.data.lanes.map(l=>({lane:l,b:l.brands[state.brand]})).filter(x=>x.b); }
+const URANK={high:0,medium:1,low:2};
+function pillClass(s){return 'pill-'+(s||'idle');}
+function glanceTone(t){return t&&t!=='neutral'?t:'';}
+
+/* ---------- TODAY ---------- */
+async function renderToday(){
+  const items=lanesForBrand().filter(x=>x.b.next_action).sort((a,b)=>{
+    const ua=URANK[a.b.next_action.urgency]??3, ub=URANK[b.b.next_action.urgency]??3;
+    if(ua!==ub)return ua-ub;
+    return (a.b.freshness_days??999)-(b.b.freshness_days??999);
+  });
+  $('#todaySub').textContent=`${state.data.brands[state.brand].label} · marketing pulse`;
+  let banner='';
+  const gen=state.data.generated_at?new Date(state.data.generated_at):null;
+  if(gen&&!isNaN(gen)){const days=Math.floor((Date.now()-gen.getTime())/86400000);
+    if(days>2)banner=`<div class="stale-banner"><span>⚠</span><span>This snapshot is ${days} days old. Run <b>naam-snapshot.js</b> on the laptop for fresh counts.</span></div>`;}
+  const body=items.map(x=>laneCard(x.lane,x.b,true)).join('')
+    || '<div class="empty"><div class="em-mark">This house keeps no marketing lanes.</div><div class="em-sub">Switch the seal above to the other brand.</div></div>';
+  $('#todayCards').innerHTML=banner+body;
+  renderPulse();
+}
+function laneCard(lane,b,showAction){
+  const g=(b.glance||[]).slice(0,4).map(c=>`<div class="glance-chip"><div class="glance-val ${glanceTone(c.tone)}">${esc(c.value)}</div><div class="glance-label">${esc(c.label)}</div>${c.sub?`<div class="glance-sub">${esc(c.sub)}</div>`:''}</div>`).join('');
+  const na=b.next_action;
+  const u=na?na.urgency:'low';
+  const action= showAction&&na ? `<div class="lc-action u-${u}"><div class="lc-action-icon">${u==='high'?'!':u==='medium'?'→':'·'}</div><div class="lc-action-body"><div class="lc-action-text">${esc(na.text)}</div>${na.where?`<div class="lc-action-where">↳ ${esc(na.where)}</div>`:''}</div></div>`:'';
+  const fresh = b.freshness_days!=null ? `<div class="lc-freshness">Updated ${b.freshness_days===0?'today':b.freshness_days+'d ago'}</div>` : (b.status==='idle'?'<div class="lc-freshness">Not run yet</div>':'');
+  return `<div class="lane-card risk-${lane.risk}" data-lane="${lane.id}" role="button" tabindex="0" aria-label="${esc(lane.title)}, ${esc(b.status)}${na?'. Next action: '+esc(na.text):''}">
+    <div class="lc-head"><div><div class="lc-title">${esc(lane.title)}</div><div class="lc-subtitle">${esc(lane.subtitle)}</div></div><div class="lc-pill ${pillClass(b.status)}">${esc(b.status)}</div></div>
+    ${g?`<div class="lc-glance">${g}</div>`:''}
+    ${action}${fresh}
+  </div>`;
+}
+let counterTimer=null;
+async function renderPulse(){
+  const bd=state.data.brands[state.brand];
+  const tgt = state.brand==='HE'?state.data.targets.HE_paise:state.data.targets.NCH_paise;
+  let html=`<div class="pulse-card"><div class="pv">₹${(tgt/100000/100).toFixed(0)}L</div><div class="pl">${esc(state.data.targets.month)} target</div><div class="ps">${esc(bd.label)}</div></div>`;
+  html+=`<div class="pulse-card live" id="pulseCounter"><div class="pv">…</div><div class="pl">Counter UPI today</div><div class="ps">live</div></div>`;
+  $('#pulseRow').innerHTML=html;
+  // live counter fetch
+  try{
+    const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),6000);
+    const r=await fetch(`${bd.counter_origin}/api/counter-recent?qr=${bd.counter_qr}&limit=1`,{cache:'no-store',signal:ctrl.signal});
+    clearTimeout(t);
+    const j=await r.json();
+    if(j&&j.success){const c=$('#pulseCounter');if(c)c.querySelector('.pv').textContent='₹'+Math.round(j.total_amount||0).toLocaleString('en-IN');if(c)c.querySelector('.ps').textContent=(j.count||0)+' payments · live';}
+  }catch(e){const c=$('#pulseCounter');if(c){c.querySelector('.pv').textContent='—';c.querySelector('.ps').textContent=e.name==='AbortError'?'timed out':'offline';}}
+}
+
+/* ---------- LANES ---------- */
+function renderLanes(){
+  $('#lanesSub').textContent=`${state.data.brands[state.brand].label} · every surface`;
+  const groups={};
+  lanesForBrand().forEach(x=>{(groups[x.lane.group]=groups[x.lane.group]||[]).push(x);});
+  let html='';
+  Object.keys(groups).forEach(gk=>{
+    html+=`<div class="section-header">${esc(gk)}</div>`;
+    html+=groups[gk].map(x=>laneCard(x.lane,x.b,false)).join('');
+  });
+  $('#lanesList').innerHTML=html||'<div class="empty"><div class="em-mark">No lanes under this house.</div><div class="em-sub">Switch the seal above to the other brand.</div></div>';
+}
+
+/* ---------- LANE DETAIL ---------- */
+function openLane(id){
+  const lane=state.data.lanes.find(l=>l.id===id); if(!lane)return;
+  const b=lane.brands[state.brand]; if(!b){toast('Not run for '+state.brand);return;}
+  const na=b.next_action;
+  let html=`<div class="detail-title">${esc(lane.title)}</div><div class="detail-sub">${esc(lane.subtitle)} · ${esc(state.data.brands[state.brand].short)}</div>`;
+  if(na) html+=`<div class="detail-section"><div class="action-hero u-${na.urgency}"><div class="ah-label">Next action${na.urgency==='high'?' · do now':''}</div><div class="ah-text">${esc(na.text)}</div>${na.where?`<div class="ah-where">↳ Execute in: ${esc(na.where)}</div>`:''}</div></div>`;
+  if(b.glance&&b.glance.length){html+=`<div class="detail-section"><h3>At a glance</h3><div class="dgrid">`+b.glance.map(c=>`<div class="dcard"><div class="dv ${glanceTone(c.tone)}">${esc(c.value)}</div><div class="dl">${esc(c.label)}</div>${c.sub?`<div class="dsub">${esc(c.sub)}</div>`:''}</div>`).join('')+`</div></div>`;}
+  if(b.summary) html+=`<div class="detail-section"><h3>What's the state</h3><div style="font-size:14px;line-height:1.55;color:var(--text-dim)">${esc(b.summary)}</div></div>`;
+  if(b.deep&&Object.keys(b.deep).length){html+=`<div class="detail-section"><h3>Detail</h3>`+Object.entries(b.deep).map(([k,v])=>{
+    let val = (typeof v==='object'&&v!==null)? Object.entries(v).map(([kk,vv])=>`${esc(kk)}: ${esc(typeof vv==='object'?JSON.stringify(vv):vv)}`).join(' · ') : esc(v);
+    return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${val}</span></div>`;}).join('')+`</div>`;}
+  // related creatives
+  const rl=lane.related_creative_lane;
+  if(rl&&state.creative){const n=state.creative.assets.filter(a=>a.brand===state.brand&&a.lane===rl).length;
+    if(n) html+=`<div class="detail-section"><div class="link-row" data-creative-lane="${rl}"><span class="lr-label">${n} ${esc(rl)} creatives</span><span class="lr-arrow">View ›</span></div></div>`;}
+  if(b.links&&b.links.length){html+=`<div class="detail-section"><h3>Open live cockpit</h3>`+b.links.map(l=>`<a class="link-row" href="${esc(l.url)}" target="_blank" rel="noopener"><span class="lr-label">${esc(l.label)}</span><span class="lr-arrow">↗</span></a>`).join('')+`</div>`;}
+  html+=`<div style="height:30px"></div>`;
+  $('#detailBody').innerHTML=html;
+  $('#detailBody').scrollTop=0;
+  $('#detailPane').classList.add('open');
+  injectLive(id);
+}
+$('#detailBack').onclick=()=>$('#detailPane').classList.remove('open');
+
+/* ── LIVE PLUMBING — Meta + Google lanes fetch real numbers on open ──
+   Meta: /api/meta-ads (Graph insights, edge-cached 10 min). NO conversions
+   shown by doctrine — Meta's conversion column is broken for HN; impact is
+   judged by POS-spike correlation. Google: GBP performance is live; Ads
+   campaign GAQL stays snapshot until the MCC developer token is obtained. */
+async function injectLive(id){
+  if(id!=='meta'&&id!=='google')return;
+  const box=document.createElement('div');
+  box.className='detail-section';
+  box.innerHTML=`<h3>Live right now</h3><div class="dgrid" id="liveGrid"><div class="dcard"><div class="dl">fetching live…</div></div></div><div id="liveNote" style="font-size:10.5px;color:var(--text-mute);margin-top:8px"></div>`;
+  const body=$('#detailBody');
+  body.insertBefore(box, body.children[2]||null);
+  try{
+    if(id==='meta'){
+      const d=await fetch('https://hnhotels.in/api/meta-ads?period=7d').then(r=>r.json());
+      if(!d.ok)throw new Error(d.error||'meta fetch failed');
+      let g=`<div class="dcard"><div class="dv">₹${d.totals.spend.toLocaleString('en-IN')}</div><div class="dl">spend · 7d</div></div>
+        <div class="dcard"><div class="dv">${d.totals.clicks.toLocaleString('en-IN')}</div><div class="dl">clicks · 7d</div></div>
+        <div class="dcard"><div class="dv">${(d.totals.impressions/1000).toFixed(1)}k</div><div class="dl">impressions</div></div>`;
+      for(const c of d.campaigns.slice(0,4)){
+        g+=`<div class="dcard" style="grid-column:1/-1"><div class="dv" style="font-size:14px">${esc(c.name)}</div><div class="dl">₹${c.spend.toLocaleString('en-IN')} · ${c.clicks} clicks · CTR ${c.ctr}% · freq ${c.frequency}</div></div>`;
+      }
+      $('#liveGrid').innerHTML=g;
+      $('#liveNote').textContent='Conversions hidden by doctrine (platform column broken) — judge by POS-spike correlation. Cached ≤10 min.';
+    }else{
+      const [d,ads]=await Promise.all([
+        fetch(`https://hnhotels.in/api/gbp-cockpit?brand=${state.brand}&period=7d`).then(r=>r.json()).catch(()=>({})),
+        fetch('https://hnhotels.in/api/google-ads-live?period=7d').then(r=>r.json()).catch(()=>({})),
+      ]);
+      if(!d.ok&&!ads.ok)throw new Error('google fetch failed');
+      let g='';
+      if(ads.ok){
+        g+=`<div class="dcard"><div class="dv">₹${ads.totals.spend.toLocaleString('en-IN')}</div><div class="dl">Ads spend · 7d</div></div>
+          <div class="dcard"><div class="dv">${ads.totals.clicks.toLocaleString('en-IN')}</div><div class="dl">Ads clicks</div></div>`;
+        for(const c of ads.campaigns.slice(0,3)){
+          g+=`<div class="dcard" style="grid-column:1/-1"><div class="dv" style="font-size:14px">${esc(c.name)}</div><div class="dl">₹${c.spend.toLocaleString('en-IN')} · ${c.clicks} clicks · CTR ${c.ctr}% · ${esc(c.status)}</div></div>`;
+        }
+      }
+      if(d.ok){
+        const daily=d.daily||[];
+        const imp=daily.reduce((s,x)=>s+(x.impressions||0),0), act=daily.reduce((s,x)=>s+(x.actions||0),0);
+        g+=`<div class="dcard"><div class="dv">${imp.toLocaleString('en-IN')}</div><div class="dl">GBP impressions · 7d</div></div>
+          <div class="dcard"><div class="dv">${act.toLocaleString('en-IN')}</div><div class="dl">GBP actions</div></div>
+          <div class="dcard"><div class="dv">${d.summary&&d.summary.actionRate!=null?d.summary.actionRate+'%':'—'}</div><div class="dl">action rate${d.summary&&d.summary.actionRatePrior!=null?' (prior '+d.summary.actionRatePrior+'%)':''}</div></div>`;
+      }
+      $('#liveGrid').innerHTML=g||'<div class="dcard"><div class="dl">no live data</div></div>';
+      $('#liveNote').textContent=(ads.ok?'Ads LIVE via GAQL · ':'Ads live-pull error: '+(ads.error||'')+' · ')+(d.freshness&&d.freshness.performance?d.freshness.performance:'')+' · conversions omitted by doctrine — judge by POS correlation.';
+    }
+  }catch(e){
+    $('#liveGrid').innerHTML='<div class="dcard"><div class="dl">live fetch failed — snapshot below stands</div></div>';
+  }
+}
+
+/* ---------- CREATIVE ---------- */
+const LANE_ICON={meta:'📣',flyers:'📄',packaging:'📦',reel:'🎬',pisignage:'📺',tv:'📺',menu:'🍽',brand:'✦',hero:'🔥',qr:'▦',other:'◆'};
+function renderCreativeFilters(){
+  if(!state.creative){return;}
+  const lanes=['all',...state.creative.lanes];
+  $('#laneFilters').innerHTML=lanes.map(l=>`<button class="chip ${state.cLane===l?'on':''}" data-lane="${l}">${l==='all'?'All lanes':esc(l)}</button>`).join('');
+  const sts=['all','deployed','final','draft','rejected'];
+  $('#statusFilters').innerHTML=sts.map(s=>`<button class="chip ${state.cStatus===s?'on':''}" data-status="${s}">${s==='all'?'All status':esc(s)}</button>`).join('');
+}
+function renderCreative(){
+  $('#creativeSub').textContent=`${state.data.brands[state.brand].label} · library`;
+  if(!state.creative){$('#creativeGrid').innerHTML='<div class="empty" style="grid-column:1/-1"><div class="em-mark">The library is not yet drawn.</div><div class="em-sub">Run build-creative-manifest.py on the laptop.</div></div>';$('#cvCount').textContent='';return;}
+  renderCreativeFilters();
+  let list=state.creative.assets.filter(a=>a.brand===state.brand);
+  if(state.cLane!=='all') list=list.filter(a=>a.lane===state.cLane);
+  if(state.cStatus!=='all') list=list.filter(a=>a.status===state.cStatus);
+  if(state.cSearch){const q=state.cSearch.toLowerCase();list=list.filter(a=>(a.title||'').toLowerCase().includes(q)||(a.tags||[]).join(' ').toLowerCase().includes(q));}
+  $('#cvCount').textContent=`${list.length} creatives`;
+  $('#creativeGrid').innerHTML=list.slice(0,300).map((a,i)=>{
+    const img=a.thumb_url?`<img loading="lazy" decoding="async" alt="${esc(a.title||a.lane)}" src="${esc(a.thumb_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:'';
+    const badge=`<div class="badge" ${a.thumb_url?'style="display:none"':''}><div class="bt" aria-hidden="true">${LANE_ICON[a.lane]||'◆'}</div><div>${esc(a.title||a.lane)}</div></div>`;
+    return `<div class="ctile" data-cid="${esc(a.id)}" role="button" tabindex="0" aria-label="${esc(a.title||a.lane)}, ${esc(a.lane)}, ${esc(a.status)}">${img}${badge}<div class="st st-${a.status}">${a.status[0].toUpperCase()}</div>${a.aspect_ratio?`<div class="tp">${esc(a.aspect_ratio)}</div>`:''}</div>`;
+  }).join('') || '<div class="empty" style="grid-column:1/-1"><div class="em-mark">The world has not yet seen us in this voice.</div><div class="em-sub">No creatives in this category yet.</div></div>';
+}
+function openCreative(id){
+  const a=state.creative.assets.find(x=>x.id===id);if(!a)return;
+  const img=a.thumb_url?`<img class="sheet-img" src="${esc(a.thumb_url)}" onerror="this.remove()">`:'';
+  let kv='';
+  const add=(k,v)=>{if(v!=null&&v!=='')kv+=`<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`;};
+  add('Brand',a.brand);add('Lane',a.lane);add('Type',a.type);add('Status',a.status);
+  if(a.dimensions)add('Dimensions',`${a.dimensions.w}×${a.dimensions.h}`);
+  add('Aspect',a.aspect_ratio);if(a.bytes)add('Size',(a.bytes/1024).toFixed(0)+' KB');add('Created',a.created_date);
+  if(a.tags&&a.tags.length)add('Tags',a.tags.join(', '));
+  if(a.reel_intel){const r=a.reel_intel;add('Tier',r.tier);add('Dish',(r.menu_match||[]).join(', '));add('Mood',r.mood);add('Viral',r.viral);}
+  if(a.deployment&&a.deployment.url)add('Deployed',a.deployment.url);
+  const open = a.deployment&&a.deployment.url ? `<a class="link-row" href="${esc(a.deployment.url)}" target="_blank" rel="noopener" style="margin-top:14px"><span class="lr-label">Open deployment</span><span class="lr-arrow">↗</span></a>` :
+    `<div class="link-row" id="copyPath" style="margin-top:14px"><span class="lr-label">Copy laptop path</span><span class="lr-arrow">⧉</span></div>`;
+  $('#sheetCard').innerHTML=`<div class="sheet-grab"></div>${img}<div class="sheet-title">${esc(a.title||a.lane)}</div><div style="margin-top:12px">${kv}</div>${open}`;
+  $('#creativeSheet').classList.add('open');
+  const cp=$('#copyPath');if(cp)cp.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(a.full_url_or_path||'');toast('Path copied — open on laptop');};
+}
+$('#creativeSheet').onclick=e=>{if(e.target.id==='creativeSheet')$('#creativeSheet').classList.remove('open');};
+
+/* ---------- YOU ---------- */
+function renderYou(){
+  const meta=state.data;
+  const lanes=state.data.lanes;
+  // portal health = freshness per lane that has live status
+  const healthRows=lanes.map(l=>{const b=l.brands[state.brand];if(!b)return '';
+    let cls='ok',label='current';
+    if(b.status==='idle'){cls='';label='not run';}
+    else if(b.freshness_days==null){label='live';}
+    else if(b.freshness_days>14){cls='bad';label=b.freshness_days+'d stale';}
+    else if(b.freshness_days>5){cls='warn';label=b.freshness_days+'d ago';}
+    else label=(b.freshness_days===0?'today':b.freshness_days+'d ago');
+    const col=cls==='bad'?'var(--red)':cls==='warn'?'var(--yellow)':cls===''?'var(--text-mute)':'var(--green)';
+    return `<div class="you-row"><span class="yl"><span class="health-dot" style="background:${col}"></span>${esc(l.title)}</span><span class="yv ${cls}">${esc(label)}</span></div>`;}).join('');
+  $('#youBody').innerHTML=`
+    <div class="section-header">Default brand</div>
+    <div class="you-group"><div class="brand-seg" id="brandSegYou" style="margin:10px"></div></div>
+    <div class="section-header">Data freshness</div>
+    <div class="you-group">
+      <div class="you-row"><span class="yl">Snapshot run</span><span class="yv">${esc(state.data.generated_at.slice(0,10))}</span></div>
+      <div class="you-row"><span class="yl">Codex memory</span><span class="yv ${(()=>{if(!state.data.memory_updated_at)return '';const d=Math.floor((Date.now()-new Date(state.data.memory_updated_at).getTime())/86400000);return d>7?'warn':d>14?'bad':'';})()} ">${(()=>{if(!state.data.memory_updated_at)return 'unknown';const d=Math.floor((Date.now()-new Date(state.data.memory_updated_at).getTime())/86400000);return esc(state.data.memory_updated_at.slice(0,10))+(d>0?' · '+d+'d ago':'');})()}</span></div>
+      <div class="you-row"><span class="yl">Creative library</span><span class="yv">${state.creative?esc((state.creative.generated_at||'').slice(0,10))+' · '+state.creative.counts.total+' assets':'not built'}</span></div>
+    </div>
+    <div class="section-header">Lane health · ${esc(state.brand)}</div>
+    <div class="you-group">${healthRows}</div>
+    <div class="section-header">App</div>
+    <div class="you-group">
+      <div class="you-row tap" id="installRow"><span class="yl">Add to Home Screen</span><span class="yv">Install ›</span></div>
+      <div class="you-row tap" id="refreshRow"><span class="yl">Hard refresh</span><span class="yv">↻</span></div>
+      <div class="you-row tap" id="signOut"><span class="yl" style="color:var(--red)">Sign out</span></div>
+    </div>
+    <div style="text-align:center;padding:24px;color:var(--text-mute);font-size:12px">Naam · view-only · execute in Claude on laptop<br>${esc(state.data.standing_direction)}</div>`;
+  const seg=$('#brandSegYou');seg.innerHTML=brandSegHTML();seg.onclick=e=>{const b=e.target.closest('[data-brand]');if(b)setBrand(b.dataset.brand);};
+  $('#signOut').onclick=()=>{localStorage.removeItem(LS.pin);location.reload();};
+  $('#refreshRow').onclick=async()=>{toast('Summoning fresh counsel…');await loadData(true);state.creative=null;renderAll();if(state.tab==='creative')loadCreative();toast('Refreshed');};
+  $('#installRow').onclick=()=>{if(window._deferredPrompt){window._deferredPrompt.prompt();}else{toast('Tap Share → Add to Home Screen');}};
+}
+
+/* ---------- TABS + NAV ---------- */
+function switchTab(t){
+  state.tab=t;
+  $$('.tab-pane').forEach(p=>p.classList.add('hide'));
+  $('#tab-'+t).classList.remove('hide');
+  $$('.tab-btn').forEach(b=>{const on=b.dataset.tab===t;b.classList.toggle('on',on);b.setAttribute('aria-selected',on?'true':'false');});
+  if(t==='creative'&&!state.creative)loadCreative();
+}
+$('#tabBar').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)switchTab(b.dataset.tab);};
+// keyboard / VoiceOver activation for non-native buttons
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('[role="button"][tabindex]')){e.preventDefault();e.target.click();}});
+// lane card taps
+document.addEventListener('click',e=>{
+  const lc=e.target.closest('.lane-card[data-lane]');if(lc&&!e.target.closest('a')){openLane(lc.dataset.lane);return;}
+  const ct=e.target.closest('[data-cid]');if(ct){openCreative(ct.dataset.cid);return;}
+  const rl=e.target.closest('[data-creative-lane]');if(rl){$('#detailPane').classList.remove('open');state.cLane=rl.dataset.creativeLane;switchTab('creative');renderCreative();return;}
+});
+// filter chips
+$('#laneFilters').onclick=e=>{const c=e.target.closest('[data-lane]');if(c){state.cLane=c.dataset.lane;renderCreative();}};
+$('#statusFilters').onclick=e=>{const c=e.target.closest('[data-status]');if(c){state.cStatus=c.dataset.status;renderCreative();}};
+$('#cvSearch').oninput=e=>{state.cSearch=e.target.value;clearTimeout(window._cs);window._cs=setTimeout(renderCreative,180);};
+// condensed nav on scroll
+['today','lanes','creative','you'].forEach(t=>{const p=$('#tab-'+t),n=$('#nav-'+t);if(p&&n)p.addEventListener('scroll',()=>n.classList.toggle('condensed',p.scrollTop>30));});
+
+/* ---------- DATA ---------- */
+async function loadData(bust){
+  const r=await fetch('./data/naam-data.json'+(bust?'?_='+Date.now():''),{cache:bust?'no-store':'default'});
+  state.data=await r.json();
+}
+async function loadCreative(){
+  try{const r=await fetch('./data/creative-manifest.json',{cache:'default'});if(r.ok){state.creative=await r.json();renderCreative();}}
+  catch(e){/* manifest may not exist yet */}
+}
+function renderAll(){ renderToday(); renderLanes(); if(state.tab==='creative')renderCreative(); if(state.tab==='you')renderYou(); }
+function showBoot(msg){const el=$('#bootLoader');el.innerHTML=`<div class="bl-mark">Naam</div><div class="spinner"></div><div class="bl-msg">${esc(msg)}</div>`;el.classList.remove('hide');}
+function bootError(){const el=$('#bootLoader');el.innerHTML=`<div class="bl-mark">Naam</div><div class="bl-msg">The court is beyond reach.<br>No signal to the realm.</div><button class="bl-retry" id="blRetry">Try again</button>`;el.classList.remove('hide');$('#blRetry').onclick=()=>{el.classList.add('hide');boot();};}
+function hideBoot(){$('#bootLoader').classList.add('hide');}
+let _booted=false;
+async function boot(){
+  if(!state.data){
+    showBoot('Summoning the court…');
+    try{ await loadData(); }
+    catch(e){ bootError(); return; }   // offline cold-start: no data, no SW cache — fail loudly, not blank
+  }
+  hideBoot();
+  $$('.nav-brand-pill span:last-child').forEach(s=>s.textContent=state.brand);
+  wireBrandSegs();
+  renderAll();
+  loadCreative();
+  if(!_booted){
+    _booted=true;
+    setInterval(()=>{if(state.tab==='today'&&!$('#detailPane').classList.contains('open'))renderPulse();},45000);
+    $('[data-tab="you"]').addEventListener('click',()=>setTimeout(renderYou,0));
+  }
+}
+
+/* ---------- PWA ---------- */
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window._deferredPrompt=e;});
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
+
+/* ---------- INIT ---------- */
+renderPin();
+if(localStorage.getItem(LS.pin)==='1'){ $('#pinGate').classList.add('hide'); $('#app').classList.remove('hide'); boot(); }
+</script>
+</body>
+</html>
