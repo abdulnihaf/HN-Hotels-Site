@@ -44,3 +44,8 @@ database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"
 [[kv_namespaces]]
 binding = "SESSIONS"
 id = "1aa1acbca55544e59e428d248b928a67"
+
+# R2 — Anbar photo-settlement evidence (one JPEG per station per settle)
+[[r2_buckets]]
+binding = "EVIDENCE"
+bucket_name = "anbar-evidence"
