@@ -114,8 +114,9 @@
   <div class="actions">
     <button class="btn btn-green" onclick="startFlow('receipt')">📥 Receive</button>
     <button class="btn btn-gold" id="issue-btn" onclick="startFlow('issue')">📤 Taking to counter</button>
+    <button class="btn btn-gold" id="settle-btn" onclick="startSettle()">📸 Settle</button>
     <button class="btn btn-dark" id="waste-btn" onclick="startFlow('waste')" style="flex:.7">🗑️</button>
-    <button class="btn" id="count-btn" onclick="startFlow('count')">📋 Count</button>
+    <button class="btn btn-dark" id="count-btn" onclick="startFlow('count')">📋</button>
   </div>
 </div>
 
@@ -131,6 +132,7 @@
   </div>
 </div>
 
+<input type="file" accept="image/*" capture="environment" id="settle-cam" style="display:none" onchange="settleShot(this)">
 <div class="toast" id="toast"></div>
 
 <script>
@@ -167,9 +169,8 @@ function renderHomeChrome() {
   el('home-sub').textContent = `${S.person} · tap location chip to switch`;
   el('issue-btn').classList.toggle('hidden', S.loc !== 'store');
   el('waste-btn').classList.toggle('hidden', S.loc !== 'counter');  // waste is a counter event (layer 1)
-  // At the store door the hero action is the MOVE; counting is secondary.
-  el('count-btn').classList.toggle('btn-gold', S.loc !== 'store');
-  el('count-btn').classList.toggle('btn-dark', S.loc === 'store');
+  // Hero per door: store = the MOVE, counter = the photo SETTLE. Manual count is fallback.
+  el('settle-btn').classList.toggle('hidden', S.loc !== 'counter');
 }
 function goHome() { renderHomeChrome(); show('s-home'); loadLive(); }
 async function loadLive() {
@@ -202,6 +203,7 @@ async function loadLive() {
 // ── FLOWS ──
 async function startFlow(kind) {
   S.flow = kind; S.item = null; S.countEntries = {}; S.expectedId = null;
+  el('flow-submit').textContent = 'Record';
   el('flow-title').textContent = kind === 'receipt' ? '📥 Receive delivery' : kind === 'issue' ? '📤 Issue to counter' : kind === 'waste' ? '🗑️ Record waste' : '📋 Count stock';
   el('flow-sub').textContent = `${S.loc.toUpperCase()} · ${S.person}`;
   el('flow-actions').style.display = kind === 'count' ? 'flex' : 'none';
@@ -292,7 +294,111 @@ function qtyConv(v) {
   for (let n = 1; n <= 4; n++) { const b = el('pre-' + n); if (b) b.style.background = String(n) === String(v) ? 'rgba(212,162,76,.35)' : 'rgba(212,162,76,.08)'; }
 }
 function setQty(n) { el('qty-one').value = n; qtyConv(n); }
+// ── PHOTO SETTLEMENT — staff take photos, Fable reads the numbers ──
+let SETTLE = null;
+async function startSettle() {
+  const r = await fetch(`${API.replace('anbar', 'anbar-settle')}?action=settle-stations`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) { toast('settle unavailable', true); return; }
+  S.flow = 'settle';
+  SETTLE = { id: 'S' + Date.now().toString(36), stations: r.stations, status: {} };
+  renderSettle();
+  show('s-flow');
+}
+function fmtCounts(counts) {
+  const parts = Object.entries(counts || {}).map(([c, q]) => `${ICONS[c] || c} ${q}`);
+  return parts.length ? parts.join(' · ') : 'nothing counted';
+}
+function renderSettle() {
+  el('flow-title').textContent = '📸 Photo Settlement';
+  el('flow-sub').textContent = `${S.person} · one photo per station`;
+  const allDone = SETTLE.stations.every(st => SETTLE.status[st.id]?.ok);
+  el('flow-body').innerHTML = SETTLE.stations.map(st => {
+    const s = SETTLE.status[st.id];
+    const msg = s?.busy ? '⏳ Fable is reading…'
+      : s?.ok ? (s.skipped ? '✓ none today' : `✓ ${fmtCounts(s.counts)}${(s.warnings || []).map(w => ' · ⚠ ' + w).join('')}`)
+      : s?.reject ? `✗ ${s.reject}`
+      : st.law;
+    const color = s?.busy ? 'var(--gold)' : s?.ok ? 'var(--green)' : s?.reject ? 'var(--red)' : 'var(--dim)';
+    return `<div class="card"><div class="item-row" onclick="settleStation('${st.id}')">
+      <div class="item-ico">${st.icon}</div>
+      <div style="flex:1"><div class="item-name">${st.name}</div><div class="item-meta" style="color:${color}">${msg}</div></div>
+      <div style="color:var(--gold);font-size:22px">${s?.ok ? '↻' : '📷'}</div>
+    </div>${st.skippable && !s?.ok ? `<div class="item-meta" style="text-align:right;padding:0 6px 8px;color:var(--gold)" onclick="settleSkip('${st.id}')">none today ›</div>` : ''}</div>`;
+  }).join('');
+  el('flow-actions').style.display = allDone ? 'flex' : 'none';
+  el('flow-submit').textContent = allDone ? '✓ Finish settlement' : 'Record';
+}
+function settleStation(id) { SETTLE.current = id; el('settle-cam').value = ''; el('settle-cam').click(); }
+function shrink(file, cb) {
+  const img = new Image();
+  img.onload = () => {
+    const MAX = 1568, sc = Math.min(1, MAX / Math.max(img.width, img.height));
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    URL.revokeObjectURL(img.src);
+    cb(cv.toDataURL('image/jpeg', 0.8).split(',')[1]);
+  };
+  img.src = URL.createObjectURL(file);
+}
+function settleShot(input) {
+  const file = input.files && input.files[0];
+  if (!file || !SETTLE.current) return;
+  const id = SETTLE.current;
+  SETTLE.status[id] = { busy: true }; renderSettle();
+  shrink(file, async (b64) => {
+    try {
+      const r = await fetch(`${API.replace('anbar', 'anbar-settle')}?action=settle-photo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: S.pin, settle_id: SETTLE.id, station: id, image: b64 }),
+      }).then(x => x.json());
+      if (!r.success) throw new Error(r.error);
+      SETTLE.status[id] = r.conforms ? { ok: true, counts: r.counts, warnings: r.warnings } : { reject: r.reject_reason || 'photo rejected — retake' };
+    } catch (e) { SETTLE.status[id] = { reject: e.message || 'failed — retake' }; }
+    renderSettle();
+  });
+}
+async function settleSkip(id) {
+  SETTLE.status[id] = { busy: true }; renderSettle();
+  const r = await fetch(`${API.replace('anbar', 'anbar-settle')}?action=settle-photo`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: S.pin, settle_id: SETTLE.id, station: id, skip: true }),
+  }).then(x => x.json()).catch(() => ({}));
+  SETTLE.status[id] = r.success ? { ok: true, skipped: true, counts: {} } : { reject: 'skip failed' };
+  renderSettle();
+}
+async function settleFinish() {
+  el('flow-submit').disabled = true;
+  try {
+    const r = await fetch(`${API.replace('anbar', 'anbar-settle')}?action=settle-finish`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: S.pin, settle_id: SETTLE.id }),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error);
+    // verdict screen: photo total vs what the math expected
+    el('flow-title').textContent = '⚖️ Settlement';
+    el('flow-sub').textContent = `${istTime(r.at)} · counts written`;
+    el('flow-actions').style.display = 'none';
+    el('flow-body').innerHTML = Object.entries(r.totals).map(([code, qty]) => {
+      const it = S.live.find(i => i.code === code);
+      const exp = it?.counter?.expected;
+      const gap = exp != null ? Math.round((qty - exp) * 100) / 100 : null;
+      const gcol = gap === null ? 'var(--dim)' : gap === 0 ? 'var(--green)' : 'var(--red)';
+      return `<div class="card"><div class="item-row">
+        <div class="item-ico">${ICONS[code] || '📦'}</div>
+        <div style="flex:1"><div class="item-name">${it?.name || code}</div>
+        <div class="item-meta">photo ${qty} · expected ${exp ?? '—'}</div></div>
+        <div class="item-num" style="color:${gcol}">${gap === null ? '—' : gap > 0 ? '+' + gap : gap}</div>
+      </div></div>`;
+    }).join('') + (r.warnings || []).map(w => `<div class="item-meta" style="margin:8px 6px;color:var(--gold)">⚠ ${w}</div>`).join('');
+    toast(`✓ photo settlement done ${istTime(r.at)}`);
+    loadLive();
+  } catch (e) { toast(e.message || 'finish failed', true); }
+  finally { el('flow-submit').disabled = false; }
+}
+
 async function submitFlow() {
+  if (S.flow === 'settle') return settleFinish();
   el('flow-submit').disabled = true;
   try {
     if (S.flow === 'count') {
