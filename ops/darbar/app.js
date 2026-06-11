@@ -516,6 +516,47 @@ async function loadPay() {
     }).join('');
   } catch (e) { $('advList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
+/* ━━━ Shared rough-band estimator (board rows + pay sheet) ━━━━━━━━━━━━━━━━
+ * Owner rules 2026-06-12:
+ *  · Always a RANGE, never a definitive number — the owner is the calculator.
+ *  · First punch / start_date = the day they started: never project the full
+ *    month for a mid-month starter (Sabir Khan, Nurah). activeDays = their
+ *    real window in this month.
+ *  · presence_confirmed=1 = owner has said "they ARE working, they just don't
+ *    punch" (Azeem, Reyaj, Nurah): NEVER zero them out — estimate their full
+ *    window and FLAG "not punching". Gaps between punches may be forgetting,
+ *    so the band's high end covers the window.
+ *  · Daily lane / left / untracked / no-rate → not estimable (caller decides). */
+function estBand(p, month) {
+  if (p.is_active === 0) return { lo: null, why: 'left' };
+  if (p.pay_lane === 'daily') return { lo: null, why: 'daily lane' };
+  const sal = p.monthly_salary || 0, rate = p.daily_rate || 0, dw = p.days_worked || 0;
+  const [y, m] = month.split('-').map(Number);
+  const mdays = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const startDay = (p.start_date || '').slice(0, 7) === month ? Number(p.start_date.slice(8, 10)) : 1;
+  const win = mdays - startDay + 1;
+  const conf = p.presence_confirmed === 1;
+  const flagFor = () => conf && dw < win * 0.5 ? 'not punching'
+    : dw < win * 0.5 ? 'punches thin'
+    : startDay > 1 ? `joined ${startDay}/${m}` : '';
+  if ((p.pay_type || '').toLowerCase() === 'monthly' && sal > 0) {
+    if (p.track_attendance !== 0 && dw === 0 && !conf) return { lo: null, why: 'no punches' };
+    const v = Math.round(sal * win / mdays);
+    return { lo: v, hi: v, flag: flagFor() };
+  }
+  if (rate > 0) {
+    if (p.track_attendance === 0 && !conf) return { lo: null, why: 'untracked' };
+    const lo = dw * rate;
+    const hi = Math.max(lo, Math.min(sal || rate * win, rate * win));
+    return { lo, hi, flag: flagFor() };
+  }
+  return { lo: null, why: 'no rate' };
+}
+function leftBand(e2, given) {
+  const l1 = Math.max(0, e2.lo - given), l2 = Math.max(0, e2.hi - given);
+  return l1 === l2 ? `≈ ${inr(l1)}` : `≈ ${inr(l1)} – ${inr(l2)}`;
+}
+
 /* ━━━ MONTH BOARD — who's done, who's left, facts only ━━━ */
 async function openMonthBoard() {
   if (needToken()) return;
@@ -531,31 +572,6 @@ async function openMonthBoard() {
     : `<span class="pill grey">nothing yet</span>`;
   const done = rows.filter(r => r.settled > 0).length;
 
-  /* Rough wage estimate per person — for the gauge only, never the settle sheet.
-   * Returns a LOW–HIGH band, because punches aren't gospel:
-   *  · Monthly with any punch in the month → contract salary (presence pays full day).
-   *  · Monthly, tracked, ZERO punches in the month → not estimable (joined later /
-   *    didn't work that month — assuming a full contract would overcount).
-   *  · Contract/daily, solid punches → days × rate.
-   *  · Contract/daily, thin punches (<8d) → band: days×rate up to the contract month
-   *    (the Azeem case — barely punches but works the month).
-   *  · Left → dues written off, no pending. Untracked / no-rate → listed, not counted. */
-  const est = r => {
-    if (!r.is_active) return { lo: null, why: 'left' };
-    if (r.pay_lane === 'daily') return { lo: null, why: 'daily lane' };
-    const sal = r.monthly_salary || 0, rate = r.daily_rate || 0;
-    if ((r.pay_type || '').toLowerCase() === 'monthly' && sal > 0) {
-      if (r.track_attendance !== 0 && (r.days_worked || 0) === 0) return { lo: null, why: 'no punches' };
-      return { lo: sal, hi: sal, why: 'contract' };
-    }
-    if (rate > 0) {
-      if (r.track_attendance === 0) return { lo: null, why: 'untracked' };
-      const lo = (r.days_worked || 0) * rate;
-      if ((r.days_worked || 0) < 8 && sal > lo) return { lo, hi: sal, why: 'thin' };
-      return { lo, hi: lo, why: 'days' };
-    }
-    return { lo: null, why: 'no rate' };
-  };
   /* Daily lane (Mujib's chai team): paid day by day, NEVER part of the monthly
    * cycle — own section, own paid total, zero contribution to monthly pending. */
   const daily = rows.filter(r => r.pay_lane === 'daily');
@@ -564,7 +580,7 @@ async function openMonthBoard() {
   let paid = 0, pendLo = 0, pendHi = 0; const skipped = [];
   for (const r of rows) {
     paid += (r.advances || 0) + (r.settled || 0);
-    const e2 = est(r);
+    const e2 = estBand(r, month);
     if (r.settled > 0) continue;                       // month closed for them — owner decided
     if (e2.lo == null) { if (e2.why !== 'left') skipped.push(`${r.name} (${e2.why})`); continue; }
     pendLo += Math.max(0, e2.lo - (r.advances || 0));
@@ -572,16 +588,17 @@ async function openMonthBoard() {
   }
   const band = (lo, hi) => lo === hi ? `≈ ${inr(lo)}` : `≈ ${inr(lo)} – ${inr(hi)}`;
   const estLine = r => {
-    const e2 = est(r);
-    if (r.settled > 0 || e2.lo == null) return '';
-    return ` · est ${band(e2.lo, e2.hi)}${e2.why === 'thin' ? ' ⚠ punches thin' : ''}`;
+    if (r.settled > 0) return '';
+    const e2 = estBand(r, month);
+    if (e2.lo == null) return '';
+    return ` · left ${leftBand(e2, r.advances || 0)}${e2.flag ? ` ⚠ ${e2.flag}` : ''}`;
   };
 
   sheet(`<h2>${esc(monthLabel(month))} — board</h2>
     <div class="arow" style="margin-bottom:10px"><div class="top">
       <div><div class="role">paid for ${esc(monthLabel(month))}</div><div class="nm">${inr(paid)}</div>
       <div class="role" style="margin-top:6px">left to pay (rough)</div><div class="nm" style="color:var(--gold,#c9a227)">${band(pendLo, pendHi)}</div>
-      <div class="role" style="margin-top:6px">paid is exact · pending = contract for monthly, days×rate for daily, minus advances · thin punches widen the band${skipped.length ? `<br>not counted: ${esc(skipped.join(', '))}` : ''}</div></div>
+      <div class="role" style="margin-top:6px">paid is exact · pending is a range from each person's real window (start day → month end), minus advances · not-punching people are flagged, never zeroed${skipped.length ? `<br>not counted: ${esc(skipped.join(', '))}` : ''}</div></div>
     </div></div>
     <div class="sd">${done}/${rows.length} settled · tap a row — facts come up, you decide</div>
     ${rows.map(r => `<div class="arow" onclick='closeSheet();loadPayCtx("settle", ${r.id}, ${JSON.stringify(b.month)})' style="margin-bottom:8px"><div class="top">
@@ -694,6 +711,15 @@ async function loadPayCtx(mode, empId, month) {
       <div class="xc-meta">${advs}</div></div>
     <div class="card"><div class="xc-top"><div><b>3 · Settled</b></div><div class="num" style="font-weight:800">${inr((c.settlements && c.settlements.total) || 0)}</div></div>
       <div class="xc-meta">${setts}</div></div>
+    ${(() => {
+      // Rough-left card — an approximation RANGE from the person's real window,
+      // never a verdict. The owner's typed number below is the only truth.
+      const eb = estBand({ ...emp, days_worked: a.present || 0 }, month);
+      if (eb.lo == null) return '';
+      const given = (c.advances.total || 0) + ((c.settlements && c.settlements.total) || 0);
+      return `<div class="card" style="border-color:var(--gold-bd)"><div class="xc-top"><div><b>≈ Rough left — ${esc(monthLabel(month))}</b></div><div class="num" style="font-weight:800;color:var(--gold)">${leftBand(eb, given)}</div></div>
+        <div class="xc-meta">approximation from their window (${eb.flag ? `⚠ ${esc(eb.flag)} — ` : ''}attendance is a guide, not gospel) · your number below is what counts</div></div>`;
+    })()}
     <div class="fld"><label>${mode === 'settle' ? 'You paid ₹ — your number' : 'Advance amount ₹'}</label><input id="payAmt" type="number" inputmode="numeric" placeholder="your number"></div>
     <div class="fld"><label>📲 Receipt goes to — confirm ${esc(emp.name)}'s number</label><input id="payPhone" type="tel" inputmode="numeric" value="${esc(emp.phone || '')}" placeholder="10-digit WhatsApp number"></div>
     <div class="fld"><label>Paid via</label><select id="payVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
