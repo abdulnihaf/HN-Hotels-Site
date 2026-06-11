@@ -80,11 +80,11 @@
 // One door, one PIN — the person decides the tiles. Every surface that exists
 // stays exactly where it was built; this home only routes to them.
 const SURFACES = {
-  today:    { href:'/today',         icon:'🗓️', name:"Today's Order",      meta:'build the day order by vendor · WhatsApp send' },
-  place:    { href:'/place/',        icon:'🧺', name:'Place NCH Items',     meta:'buns · cutlets · samosa · water · osmania · khajoor → feeds receiving' },
+  today:    { href:'/today',         icon:'📈', name:'Prices & WhatsApp hub', meta:'live portal prices · per-vendor WhatsApp sends' },
+  place:    { href:'/place/',        icon:'🧺', name:'Place Order — NCH + HE', meta:'pick the vendor → fill the plan · feeds receiving' },
   receive:  { href:'/receive',       icon:'📥', name:'Receive Dock',        meta:'log arrivals, photos, raise payment' },
-  pay:      { href:'/pay',           icon:'💸', name:'Payments',            meta:'pay queue · UPI · vendor balances · reconcile' },
-  requests: { href:'/requests/',     icon:'🧾', name:'Payment Requests',    meta:'all 49 vendors · request → PhonePe deep link' },
+  pay:      { href:'/pay',           icon:'💸', name:'Pay Queue',           meta:'raised at receiving · UPI · balances · reconcile' },
+  requests: { href:'/requests/',     icon:'🧾', name:'Request a Payment',   meta:'any of 49 vendors · PhonePe deep link · decoupled from receiving' },
   ration:   { href:'/ration/',       icon:'🛒', name:'Ration / Pickup',     meta:'departmental vs quick-commerce · Bashir list' },
   milk:     { href:'/milk',          icon:'🥛', name:'Milk',                meta:'buffalo milk AM/PM standing order' },
   browse:   { href:'/browse',        icon:'🔍', name:'Browse Prices',       meta:'catalog across portals' },
@@ -96,10 +96,10 @@ const SURFACES = {
 
 // Role views (owner-stated 2026-06-11): Zoya orders + pays · Bashir places,
 // picks up, receives, store room · owner views everything.
-const VIEWS = {
-  'Zoya':    { sections: [['Order', ['today','place','milk','ration']], ['Money', ['pay','requests']], ['Tools', ['browse','portals']]] },
-  'Bashir':  { sections: [['Order', ['place','ration']], ['Goods', ['receive']], ['Money', ['pay']]] },
-  'OWNER':   { sections: [['Order', ['today','place','milk','ration']], ['Goods', ['receive']], ['Money', ['pay','requests']], ['Tools', ['browse','portals']]] },
+const VIEWS = {  // ONE flow: 1·Order → 2·Receive → 3·Pay (tools last)
+  'Zoya':    { sections: [['1 · Order', ['place','milk','ration']], ['2 · Receive', ['receive']], ['3 · Pay', ['pay','requests']], ['Tools', ['today','browse','portals']]] },
+  'Bashir':  { sections: [['1 · Order', ['place','ration']], ['2 · Receive', ['receive']], ['3 · Pay', ['pay']], ['Tools', ['today']]] },
+  'OWNER':   { sections: [['1 · Order', ['place','milk','ration']], ['2 · Receive', ['receive']], ['3 · Pay', ['pay','requests']], ['Tools', ['today','browse','portals']]] },
 };
 const OWNER_PEOPLE = ['Nihaf', 'Tanveer', 'Naveen'];
 

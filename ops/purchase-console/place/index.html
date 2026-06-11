@@ -159,11 +159,11 @@ const VENDORS = [
     items:[{code:'PO-LEMON',name:'Lemon',unit:'pcs'},{code:'PO-PUDINA',name:'Pudina (mint)',unit:'bundle'}] },
   { brand:'NCH', key:'rupnath', ch:'pickup', icon:'📦', name:'Rupnath Traders', meta:'packaging · go-collect',
     items:[
-      {code:'PO-CUPS',name:'Small use-&-throw cups',unit:'packet'},
-      {code:'PO-TEACUPS-100',name:'100 ml tea cups',unit:'packet'},
+      {code:'PO-CUPS',hint:'1 packet = ? cups — confirm with Rupnath',name:'Small use-&-throw cups',unit:'packet'},
+      {code:'PO-TEACUPS-100',hint:'pcs per packet unconfirmed',name:'100 ml tea cups',unit:'packet'},
       {code:'PO-TEAGLASS',name:'Tea glass (disposable)',unit:'pkts'},
-      {code:'PO-SILVER-57',name:'Silver pouch 5/7',unit:'packet'},
-      {code:'PO-SILVER-68',name:'Silver pouch 6/8',unit:'packet'},
+      {code:'PO-SILVER-57',hint:'packet vs loose pcs — confirm',name:'Silver pouch 5/7',unit:'packet'},
+      {code:'PO-SILVER-68',hint:'packet vs loose pcs — confirm',name:'Silver pouch 6/8',unit:'packet'},
       {code:'PO-CARRY-S',name:'Small carry bags',unit:'packet'},
       {code:'PO-CARRY-M',name:'Medium carry bags',unit:'packet'},
       {code:'PO-TISSUE',name:'Tissue paper',unit:'bundle'},
@@ -171,7 +171,7 @@ const VENDORS = [
       {code:'PO-SAUCERS',name:'Saucers',unit:'no'},
       {code:'PO-CELLOTAPE',name:'Cello tape',unit:'pc'},
       {code:'PO-RUBBERBAND',name:'Rubber band',unit:'packet'},
-      {code:'PO-STICK',name:'Stick (stirrer?)',unit:'packet'},
+      {code:'PO-STICK',hint:'stirrer or skewer? — confirm',name:'Stick (stirrer?)',unit:'packet'},
     ] },
 
   /* ═══ HAMZA EXPRESS — union of 13 days of real POs · source: Azeem chef ═══ */
@@ -202,11 +202,11 @@ const VENDORS = [
       {code:'HEPO-BEANS',name:'Beans',unit:'gm'},
       {code:'HEPO-PUDINA',name:'Pudina patta',unit:'bunch'},
       {code:'HEPO-KADDU',name:'Pumpkin (kaddu)',unit:'kg'},
-      {code:'HEPO-ONION',name:'Onion',unit:'bora'},
+      {code:'HEPO-ONION',hint:'bora weight unconfirmed',name:'Onion',unit:'bora'},
       {code:'HEPO-SALADPATA',name:'Salad leaves',unit:'bunch'},
       {code:'HEPO-GINGER',name:'Ginger',unit:'kg'},
       {code:'HEPO-ALOO',name:'Potato (aloo)',unit:'kg'},
-      {code:'HEPO-PALAK',name:'Palak',unit:'katta'},
+      {code:'HEPO-PALAK',hint:'katta size unconfirmed',name:'Palak',unit:'katta'},
       {code:'HEPO-CELERY',name:'Celery leaves',unit:'bunch'},
       {code:'HEPO-BEETROOT',name:'Beetroot',unit:'gm'},
       {code:'HEPO-KARELA',name:'Karela',unit:'gm'},
@@ -232,10 +232,10 @@ const VENDORS = [
   { brand:'HE', key:'bharat-he', ch:'delivers', icon:'🔥', name:'A M Ruba Bharat Gas', meta:'LPG · serves BOTH outlets',
     items:[{code:'HEPO-LPG',name:'LPG cylinder',unit:'cylinder'}] },
   { brand:'HE', key:'siraj-eggs', ch:'pickup', icon:'🥚', name:'Syed Siraj', meta:'eggs · go-collect',
-    items:[{code:'HEPO-EGG',name:'Eggs',unit:'crate'}] },
+    items:[{code:'HEPO-EGG',hint:'1 crate = 30 eggs (confirm)',name:'Eggs',unit:'crate'}] },
   { brand:'HE', key:'ashrafia-he', ch:'pickup', icon:'🏪', name:'Ashrafia', meta:'dry goods · spices · dairy · cleaning · go-collect',
     items:[
-      {code:'HEPO-OIL-GOLD',name:'Oil (Gold/Richigold)',unit:'L'},
+      {code:'HEPO-OIL-GOLD',hint:'sometimes billed as BOX — litres per box unconfirmed',name:'Oil (Gold/Richigold)',unit:'L'},
       {code:'HEPO-SUNFLOWEROIL',name:'Sunflower oil',unit:'L'},
       {code:'HEPO-SOFTOIL',name:'Soft oil (refined)',unit:'L'},
       {code:'HEPO-SALADOIL',name:'Salad oil',unit:'L'},
@@ -250,7 +250,7 @@ const VENDORS = [
       {code:'HEPO-MAIDA',name:'Maida',unit:'kg'},
       {code:'HEPO-WHITEATTA',name:'White atta',unit:'kg'},
       {code:'HEPO-AATTA',name:'Aashirvaad atta',unit:'kg'},
-      {code:'HEPO-STAFFRICE',name:'Staff rice',unit:'bora'},
+      {code:'HEPO-STAFFRICE',hint:'bora = sack, weight unconfirmed',name:'Staff rice',unit:'bora'},
       {code:'HEPO-GHEERICE',name:'Ghee rice (sack)',unit:'sack'},
       {code:'HEPO-MOONGDAL',name:'Moong dal',unit:'kg'},
       {code:'HEPO-MASURDAL',name:'Masur dal',unit:'kg'},
@@ -278,14 +278,14 @@ const VENDORS = [
       {code:'HEPO-STARANISE',name:'Star anise',unit:'gm'},
       {code:'HEPO-JUNGLIELAICHI',name:'Jungli elaichi',unit:'gm'},
       {code:'HEPO-MARATHIMOGGU',name:'Marathi moggu',unit:'gm'},
-      {code:'HEPO-SAUNF',name:'Sweet saunf / fennel',unit:'gm'},
+      {code:'HEPO-SAUNF',hint:'sweet saunf = fennel? confirm same item',name:'Sweet saunf / fennel',unit:'gm'},
       {code:'HEPO-KASURIMETHI',name:'Kasuri methi',unit:'kg'},
       {code:'HEPO-WHITETIL',name:'White til',unit:'gm'},
       {code:'HEPO-SALT',name:'Salt (whole)',unit:'kg'},
       {code:'HEPO-BLACKSALT',name:'Black salt',unit:'gm'},
       {code:'HEPO-LEMONSALT',name:'Lemon salt',unit:'gm'},
       {code:'HEPO-MSG',name:'Aginomoto (tasting salt)',unit:'gm'},
-      {code:'HEPO-KISAN',name:'Tomato sauce (Kisan)',unit:'bottle'},
+      {code:'HEPO-KISAN',hint:'PO units varied: bottle/container/kg/L — bottle assumed',name:'Tomato sauce (Kisan)',unit:'bottle'},
       {code:'HEPO-CHILLISAUCE',name:'Chilli sauce',unit:'kg'},
       {code:'HEPO-SOYASAUCE',name:'Soya sauce',unit:'pc'},
       {code:'HEPO-NOODLES',name:'Noodles',unit:'pack'},
@@ -321,7 +321,7 @@ const VENDORS = [
       {code:'HEPO-WRAPFOIL',name:'Wrap foil',unit:'pc'},
       {code:'HEPO-CELLOTAPE',name:'Cello tape',unit:'pc'},
       {code:'HEPO-DUSTBINCOVER',name:'Dustbin cover',unit:'packet'},
-      {code:'HEPO-NAR',name:'"Nar" steel/plastic (?)',unit:'pc'},
+      {code:'HEPO-NAR',hint:'item unidentified — tell Nihaf what this is',name:'"Nar" steel/plastic (?)',unit:'pc'},
       {code:'HEPO-NOTEBOOK',name:'Notebook',unit:'pc'},
     ] },
 
@@ -389,7 +389,7 @@ function openVendor(key){
     return `<div class="lrow" id="lr-${it.code}">
       <div style="flex:1;min-width:0">
         <div class="ln">${it.name}${it.counter?' <span style="font-size:8.5px;color:var(--gold);font-weight:800">●</span>':''}</div>
-        <div class="lu">${it.unit}</div>
+        <div class="lu">${it.unit}${it.hint?` · <span style=\"color:var(--amber)\">⚠ ${it.hint}</span>`:''}</div>
         ${prev.map(p=>`<div class="lp">${p.status==='pending'?`✓ ${p.ordered_qty} ${p.ordered_unit} <span style="color:var(--red);font-weight:800;margin-left:6px;cursor:pointer" onclick="cancelLine(${p.id})">✕</span>`:`${p.ordered_qty} ${p.ordered_unit} · ${p.status}`}</div>`).join('')}
       </div>
       <input class="lqty" type="number" inputmode="decimal" placeholder="—" data-code="${it.code}" data-name="${esc(it.name)}" data-unit="${esc(it.unit)}"
