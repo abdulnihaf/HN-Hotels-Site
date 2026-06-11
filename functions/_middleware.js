@@ -34,8 +34,8 @@ export async function onRequest(context) {
   // ── anbar.hnhotels.in — the storehouse chamber (inventory). App at /ops/anbar/ ──
   if (host === 'anbar.hnhotels.in') {
     const MAP = {
-      '/': '/ops/anbar/index.html',
-      '/index.html': '/ops/anbar/index.html',
+      '/': '/ops/anbar/',
+      '/index.html': '/ops/anbar/',
       '/manifest.json': '/ops/anbar/manifest.json',
       '/icon-192.png': '/ops/anbar/icon-192.png',
       '/icon-512.png': '/ops/anbar/icon-512.png',
