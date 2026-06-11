@@ -188,7 +188,18 @@ export async function onRequest(context) {
       return json({ success: true, recorded: results.length, at: now, by: person, items: results });
     }
 
+    // ── EXPECTED TODAY (from the day's PO — receiver confirms against these) ──
+    if (action === 'expected') {
+      const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10); // IST date
+      const rows = (await DB.prepare(
+        `SELECT * FROM rm_po_expected WHERE brand='NCH' AND po_date=? ORDER BY id`
+      ).bind(today).all()).results || [];
+      return json({ success: true, po_date: today, expected: rows });
+    }
+
     // ── RECORD RECEIPT (delivery arrives — counter fresh items, or store bulk) ──
+    // The receive timestamp IS the inventory-add moment. If expected_id is sent,
+    // the receiver is confirming a PO line — it gets marked received and linked.
     if (action === 'record-receipt' && context.request.method === 'POST') {
       const body = await context.request.json();
       const person = PINS[body.pin];
@@ -197,10 +208,15 @@ export async function onRequest(context) {
       if (!item || !(body.qty > 0)) return json({ success: false, error: 'item/qty invalid' });
       const loc = body.loc === 'store' ? 'store' : 'counter';
       const now = new Date().toISOString();
-      await DB.prepare(
+      const r = await DB.prepare(
         `INSERT INTO rm_outlet_receipts (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes)
          VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?, 'vendor', ?)`
       ).bind(loc, item.code, item.name, body.qty, item.uom, now, person, body.notes || '').run();
+      if (body.expected_id) {
+        await DB.prepare(
+          `UPDATE rm_po_expected SET status='received', received_receipt_id=? WHERE id=? AND status='pending'`
+        ).bind(r.meta.last_row_id, body.expected_id).run();
+      }
       return json({ success: true, at: now, by: person, code: item.code, qty: body.qty, loc });
     }
 

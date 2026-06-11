@@ -195,12 +195,37 @@ async function loadLive() {
 }
 
 // ── FLOWS ──
-function startFlow(kind) {
-  S.flow = kind; S.item = null; S.countEntries = {};
+async function startFlow(kind) {
+  S.flow = kind; S.item = null; S.countEntries = {}; S.expectedId = null;
   el('flow-title').textContent = kind === 'receipt' ? '📥 Receive delivery' : kind === 'issue' ? '📤 Issue to counter' : '📋 Count stock';
   el('flow-sub').textContent = `${S.loc.toUpperCase()} · ${S.person}`;
   el('flow-actions').style.display = kind === 'count' ? 'flex' : 'none';
   const items = S.live.filter(it => S.loc === 'counter' ? true : it.locs.includes('store'));
+  if (kind === 'receipt' && S.loc === 'counter') {
+    // Today's PO expectations first — the receiver just CONFIRMS what was ordered.
+    const ex = await fetch(`${API}?action=expected`).then(x => x.json()).catch(() => ({}));
+    const pending = (ex.expected || []).filter(e => e.status === 'pending');
+    let html = '';
+    if (pending.length) {
+      html += '<div class="item-meta" style="margin:14px 4px 2px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.05em">Ordered for today — tap to confirm arrival</div>';
+      html += pending.map(e => `
+        <div class="card" style="border-color:var(--gold-bd)"><div class="item-row" onclick="confirmExpected(${e.id},'${e.item_code}')">
+          <div class="item-ico">${ICONS[e.item_code] || '📦'}</div>
+          <div style="flex:1"><div class="item-name">${e.item_name}</div><div class="item-meta">ordered: ${e.ordered_qty} ${e.ordered_unit} · ${e.expect_note || ''}</div></div>
+          <div style="color:var(--gold);font-size:13px;font-weight:800">CONFIRM ›</div>
+        </div></div>`).join('');
+      html += '<div class="item-meta" style="margin:18px 4px 2px;text-transform:uppercase;letter-spacing:.05em">Or receive anything else</div>';
+    }
+    html += items.map(it => `
+      <div class="card"><div class="item-row" onclick="pickItem('${it.code}')">
+        <div class="item-ico">${ICONS[it.code] || '📦'}</div>
+        <div style="flex:1"><div class="item-name">${it.name}</div><div class="item-meta">tap to enter quantity</div></div>
+        <div style="color:var(--gold);font-size:20px">›</div>
+      </div></div>`).join('');
+    el('flow-body').innerHTML = html;
+    show('s-flow');
+    return;
+  }
   if (kind === 'count') {
     el('flow-body').innerHTML = items.map(it => `
       <div class="card"><div style="display:flex;align-items:center;gap:12px">
@@ -218,7 +243,12 @@ function startFlow(kind) {
   }
   show('s-flow');
 }
+function confirmExpected(expectedId, code) {
+  pickItem(code);
+  S.expectedId = expectedId;  // set AFTER pickItem (which clears it for ad-hoc receives)
+}
 function pickItem(code) {
+  S.expectedId = null;
   S.item = S.live.find(i => i.code === code);
   // Issues of packed items happen by the PACK — the server multiplies, humans never do.
   const byPack = S.flow === 'issue' && S.item.pack;
@@ -250,7 +280,7 @@ async function submitFlow() {
       if (!(qty > 0)) { toast('Enter quantity', true); return; }
       const action = S.flow === 'receipt' ? 'record-receipt' : 'record-issue';
       const byPack = S.flow === 'issue' && S.item.pack;
-      const r = await fetch(`${API}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.pin, loc: S.loc, code: S.item.code, qty, unit: byPack ? 'pack' : 'unit' }) }).then(x => x.json());
+      const r = await fetch(`${API}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.pin, loc: S.loc, code: S.item.code, qty, unit: byPack ? 'pack' : 'unit', expected_id: S.expectedId || undefined }) }).then(x => x.json());
       if (!r.success) throw new Error(r.error);
       toast(`✓ ${S.item.name} ${S.flow === 'receipt' ? 'received' : 'issued'}: ${r.qty} ${S.item.uom}s · ${istTime(r.at)}`);
     }

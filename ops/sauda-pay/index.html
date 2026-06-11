@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Sauda · Payments</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#000; --card:#13131a; --card2:#1b1b24; --border:rgba(255,255,255,.09);
+    --text:#f7f7fa; --muted:#9a9aa3; --dim:#5c5c66;
+    --gold:#d4a24c; --gold-dim:rgba(212,162,76,.16); --gold-bd:rgba(212,162,76,.42);
+    --green:#37d399; --green-dim:rgba(55,211,153,.14);
+    --red:#ff5c5c; --amber:#fbbf24; --amber-dim:rgba(251,191,36,.15);
+    --serif:'Cormorant Garamond', Georgia, serif;
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif; font-size:14px; }
+  .screen { display:none; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
+  .screen.active { display:flex; }
+  .scroll { overflow-y:auto; flex:1; padding:0 16px calc(20px + var(--safe-bot)); -webkit-overflow-scrolling:touch; }
+  .nav { display:flex; align-items:center; gap:10px; padding:calc(14px + var(--safe-top)) 16px 10px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .nav-title { font-size:15px; font-weight:700; flex:1; }
+  .tabbar { display:flex; gap:8px; padding:10px 16px 4px; }
+  .tab { flex:1; text-align:center; padding:9px; border-radius:10px; font-size:12px; font-weight:800; color:var(--muted); background:var(--card); border:1px solid var(--border); cursor:pointer; text-transform:uppercase; letter-spacing:.04em; }
+  .tab.on { color:var(--gold); border-color:var(--gold-bd); background:var(--gold-dim); }
+  .gate { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:24px; }
+  .tile { width:72px; height:72px; border-radius:16px; background:var(--card); border:1px solid var(--gold-bd); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--gold); margin-bottom:18px; font-family:var(--serif); }
+  .brand { font-family:var(--serif); font-size:50px; font-weight:700; }
+  .brand-sub { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--gold); margin:2px 0 28px; }
+  .pin-dots { display:flex; gap:14px; margin:4px 0 22px; }
+  .pin-dot { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(212,162,76,.6); }
+  .pin-dot.filled { background:var(--gold); border-color:var(--gold); }
+  .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; justify-items:center; width:100%; max-width:280px; }
+  .key { background:var(--card2); border:1px solid var(--border); border-radius:50%; width:66px; height:66px; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; }
+  .key:active { background:var(--gold-dim); border-color:var(--gold); transform:scale(.96); }
+  .key.del { color:var(--red); font-size:18px; }
+  .err { color:var(--red); font-size:13px; min-height:18px; margin-top:12px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:14px; margin-top:12px; }
+  .row { display:flex; align-items:center; gap:12px; }
+  .ico { width:42px; height:42px; border-radius:12px; background:var(--card2); display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; }
+  .vname { font-size:15px; font-weight:700; }
+  .vmeta { font-size:11px; color:var(--muted); margin-top:2px; }
+  .amt { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .btn { border:none; border-radius:11px; padding:12px 16px; font-size:13px; font-weight:800; cursor:pointer; font-family:inherit; }
+  .btn-gold { background:var(--gold); color:#1a1206; }
+  .btn-green { background:var(--green-dim); color:var(--green); border:1px solid rgba(55,211,153,.4); }
+  .btn-dark { background:var(--card2); color:var(--text); border:1px solid var(--border); }
+  .input { width:100%; background:var(--card2); border:1px solid var(--border); border-radius:11px; padding:13px; color:var(--text); font-size:16px; outline:none; margin-top:10px; }
+  .input:focus { border-color:var(--gold); }
+  .toast { position:fixed; bottom:calc(28px + var(--safe-bot)); left:50%; transform:translateX(-50%); padding:12px 22px; border-radius:12px; font-size:14px; font-weight:700; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; background:var(--green-dim); color:var(--green); border:1px solid rgba(55,211,153,.4); white-space:nowrap; }
+  .toast.show { opacity:1; }
+  .pill { font-size:10px; font-weight:800; padding:3px 8px; border-radius:8px; text-transform:uppercase; }
+</style>
+</head>
+<body>
+
+<div id="s-gate" class="screen active">
+  <div class="gate">
+    <div class="tile">سودا</div>
+    <div class="brand">Sauda</div>
+    <div class="brand-sub">The bargain sealed, the vendor paid</div>
+    <div class="pin-dots"><div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div><div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div></div>
+    <div class="pad">
+      <div class="key" onclick="key('1')">1</div><div class="key" onclick="key('2')">2</div><div class="key" onclick="key('3')">3</div>
+      <div class="key" onclick="key('4')">4</div><div class="key" onclick="key('5')">5</div><div class="key" onclick="key('6')">6</div>
+      <div class="key" onclick="key('7')">7</div><div class="key" onclick="key('8')">8</div><div class="key" onclick="key('9')">9</div>
+      <div class="key" style="opacity:0"></div><div class="key" onclick="key('0')">0</div><div class="key del" onclick="del()">⌫</div>
+    </div>
+    <div class="err" id="gate-err"></div>
+  </div>
+</div>
+
+<div id="s-main" class="screen">
+  <div class="nav"><div class="nav-title">Sauda · Payments</div><div class="vmeta" id="who"></div></div>
+  <div class="tabbar">
+    <div class="tab on" id="tab-pending" onclick="setTab('pending')">To Pay</div>
+    <div class="tab" id="tab-request" onclick="setTab('request')">Request</div>
+    <div class="tab" id="tab-history" onclick="setTab('history')">Done</div>
+  </div>
+  <div class="scroll" id="body"><div class="vmeta" style="text-align:center;padding:40px 0">Loading…</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/sauda-pay';
+const S = { pin: localStorage.getItem('sauda_pin') || '', person: '', canRequest: false, canPay: false, entry: '', tab: 'pending', vendors: [] };
+function el(id){ return document.getElementById(id); }
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); el(id).classList.add('active'); }
+function toast(m,bad){ const t=el('toast'); t.textContent=m; t.style.color=bad?'var(--red)':'var(--green)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+function ist(iso){ return new Date(iso).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'}); }
+function fmt(n){ return Number(n).toLocaleString('en-IN'); }
+
+function key(k){ if(S.entry.length>=4)return; S.entry+=k; dots(); if(S.entry.length===4)verify(); }
+function del(){ S.entry=S.entry.slice(0,-1); dots(); el('gate-err').textContent=''; }
+function dots(){ for(let i=0;i<4;i++) el('d'+i).classList.toggle('filled', i<S.entry.length); }
+async function verify(){
+  const r = await fetch(`${API}?action=verify-pin&pin=${S.entry}`).then(x=>x.json()).catch(()=>({}));
+  if(!r.success){ el('gate-err').textContent=r.error||'Wrong PIN'; S.entry=''; dots(); return; }
+  S.pin=S.entry; S.person=r.person; S.canRequest=r.canRequest; S.canPay=r.canPay; S.entry='';
+  localStorage.setItem('sauda_pin', S.pin);
+  enter();
+}
+function enter(){ el('who').textContent=S.person; show('s-main'); setTab(S.canRequest && !S.canPay ? 'request' : 'pending'); }
+
+function setTab(t){
+  S.tab=t;
+  ['pending','request','history'].forEach(x=>el('tab-'+x).classList.toggle('on', x===t));
+  if(t==='pending') loadPending();
+  if(t==='request') loadRequest();
+  if(t==='history') loadHistory();
+}
+
+async function loadPending(){
+  el('body').innerHTML='<div class="vmeta" style="text-align:center;padding:40px 0">Loading…</div>';
+  const r = await fetch(`${API}?action=pending`).then(x=>x.json()).catch(()=>({}));
+  const rows = r.requests||[];
+  if(!rows.length){ el('body').innerHTML='<div class="vmeta" style="text-align:center;padding:40px 0">Nothing waiting to be paid ✓</div>'; return; }
+  el('body').innerHTML = rows.map(q=>`
+    <div class="card">
+      <div class="row">
+        <div style="flex:1"><div class="vname">${q.vendor_name}</div>
+        <div class="vmeta">${q.note||''} · asked by ${q.requested_by} · ${ist(q.requested_at)}</div>
+        <div class="vmeta">${q.vpa ? q.vpa : '<span style="color:var(--amber)">no VPA on file — pay manually in PhonePe</span>'}</div></div>
+        <div class="amt">₹${fmt(q.amount)}</div>
+      </div>
+      ${S.canPay ? `<div style="display:flex;gap:8px;margin-top:12px">
+        ${q.upi_link ? `<a class="btn btn-gold" style="flex:2;text-align:center;text-decoration:none" href="${q.upi_link}">PAY · opens UPI app</a>` : ''}
+        <button class="btn btn-green" style="flex:1" onclick="markPaid(${q.id})">✓ Paid</button>
+      </div>` : ''}
+    </div>`).join('');
+}
+
+async function markPaid(id){
+  const r = await fetch(`${API}?action=mark-paid`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:S.pin,id})}).then(x=>x.json());
+  if(!r.success){ toast(r.error||'failed',true); return; }
+  toast('✓ marked paid'); loadPending();
+}
+
+async function loadRequest(){
+  if(!S.canRequest){ el('body').innerHTML='<div class="vmeta" style="text-align:center;padding:40px 0">Your PIN can pay, not request.</div>'; return; }
+  if(!S.vendors.length){
+    const r = await fetch(`${API}?action=vendors`).then(x=>x.json()).catch(()=>({}));
+    S.vendors = r.vendors||[];
+  }
+  el('body').innerHTML = `
+    <input class="input" id="vsearch" placeholder="Search vendor…" oninput="renderVendors(this.value)">
+    <div id="vlist"></div>`;
+  renderVendors('');
+}
+function renderVendors(q){
+  const ql=(q||'').toLowerCase();
+  const list = S.vendors.filter(v=>!ql || v.name.toLowerCase().includes(ql) || (v.supplies||'').toLowerCase().includes(ql)).slice(0,30);
+  el('vlist').innerHTML = list.map((v,i)=>`
+    <div class="card"><div class="row" onclick="askAmount('${v.name.replace(/'/g,"\\'")}','${v.key||''}','${v.vpa||''}')">
+      <div class="ico">${v.icon||'🏪'}</div>
+      <div style="flex:1"><div class="vname">${v.name}</div>
+      <div class="vmeta">${v.supplies||''}${v.channel?' · '+v.channel:''}${v.vpa?'':' · <span style=\"color:var(--amber)\">no VPA</span>'}</div></div>
+      <div style="color:var(--gold);font-size:18px">›</div>
+    </div></div>`).join('');
+}
+function askAmount(name,key,vpa){
+  el('body').innerHTML = `
+    <div class="card" style="text-align:center;padding:22px">
+      <div class="vname" style="font-size:18px">${name}</div>
+      <div class="vmeta" style="margin-bottom:14px">${vpa||'no VPA on file — payment will be manual'}</div>
+      <input class="input" id="amt" type="number" inputmode="decimal" placeholder="₹ amount" style="font-size:26px;font-weight:800;text-align:center">
+      <input class="input" id="note" placeholder="note (what is this for?)">
+      <button class="btn btn-gold" style="width:100%;margin-top:14px;padding:15px" onclick="submitRequest('${name.replace(/'/g,"\\'")}','${key}','${vpa}')">Request payment</button>
+    </div>`;
+}
+async function submitRequest(name,key,vpa){
+  const amount = parseFloat(el('amt').value||'0');
+  if(!(amount>0)){ toast('Enter amount',true); return; }
+  const r = await fetch(`${API}?action=request`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pin:S.pin,vendor_name:name,vendor_key:key,vpa:vpa||undefined,amount,note:el('note').value||''})}).then(x=>x.json());
+  if(!r.success){ toast(r.error||'failed',true); return; }
+  toast('✓ payment requested'); setTab('pending');
+}
+
+async function loadHistory(){
+  const r = await fetch(`${API}?action=history`).then(x=>x.json()).catch(()=>({}));
+  el('body').innerHTML = (r.requests||[]).map(q=>`
+    <div class="card"><div class="row">
+      <div style="flex:1"><div class="vname">${q.vendor_name}</div>
+      <div class="vmeta">${q.status==='paid'?`paid by ${q.paid_by} · ${ist(q.paid_at)}`:'cancelled'} · asked by ${q.requested_by}</div></div>
+      <div class="amt" style="color:${q.status==='paid'?'var(--green)':'var(--dim)'}">₹${fmt(q.amount)}</div>
+    </div></div>`).join('') || '<div class="vmeta" style="text-align:center;padding:40px 0">No history yet</div>';
+}
+
+if(S.pin){ fetch(`${API}?action=verify-pin&pin=${S.pin}`).then(x=>x.json()).then(r=>{ if(r.success){ S.person=r.person; S.canRequest=r.canRequest; S.canPay=r.canPay; enter(); } }); }
+</script>
+</body>
+</html>
