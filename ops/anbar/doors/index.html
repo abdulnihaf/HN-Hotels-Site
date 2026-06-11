@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anbar — Door Stickers (print)</title>
+<style>
+  /* Print-first page: two A6-ish stickers per A4 sheet. */
+  body { font-family: Georgia, 'Times New Roman', serif; margin: 0; background: #fff; color: #111; }
+  .sheet { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px; }
+  .sticker {
+    width: 105mm; border: 3px solid #111; border-radius: 12px; padding: 10mm 8mm;
+    text-align: center; page-break-inside: avoid;
+  }
+  .brand { font-size: 13px; letter-spacing: .25em; text-transform: uppercase; color: #8a6a2f; }
+  h1 { font-size: 30px; margin: 4px 0 2px; }
+  .urdu { font-size: 22px; color: #8a6a2f; margin-bottom: 6mm; }
+  img { width: 62mm; height: 62mm; }
+  .law { font-size: 14px; line-height: 1.5; margin-top: 6mm; text-align: left; }
+  .law b { display: block; text-align: center; font-size: 15px; margin-bottom: 2mm; }
+  .noprint { padding: 14px 24px; background: #f5efe2; font-size: 14px; }
+  @media print { .noprint { display: none; } .sheet { padding: 0; gap: 12mm; } }
+</style>
+</head>
+<body>
+<div class="noprint">Print this page (Cmd+P) → cut the two stickers → laminate or tape → STORE sticker on the store-room door at hand height, COUNTER sticker beside the display fridge. Scanning opens Anbar already scoped to that door.</div>
+<div class="sheet">
+  <div class="sticker">
+    <div class="brand">Anbar · Nawabi Chai House</div>
+    <h1>STORE ROOM</h1>
+    <div class="urdu">انبار</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=2&data=https%3A%2F%2Fanbar.hnhotels.in%2F%3Floc%3Dstore" alt="store QR">
+    <div class="law">
+      <b>Taking anything downstairs?</b>
+      1 · Scan this code<br>
+      2 · Tap the item<br>
+      3 · Tap how many packets<br>
+      <span style="color:#8a6a2f">Nothing leaves this room without a scan.</span>
+    </div>
+  </div>
+  <div class="sticker">
+    <div class="brand">Anbar · Nawabi Chai House</div>
+    <h1>COUNTER</h1>
+    <div class="urdu">انبار</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=2&data=https%3A%2F%2Fanbar.hnhotels.in%2F%3Floc%3Dcounter" alt="counter QR">
+    <div class="law">
+      <b>Delivery arrived? Something thrown?</b>
+      1 · Scan this code<br>
+      2 · Receive / Waste / Count<br>
+      3 · Tap the number<br>
+      <span style="color:#8a6a2f">The timestamp is the truth — scan at the moment it happens.</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
