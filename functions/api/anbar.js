@@ -35,6 +35,11 @@ const ITEMS = [
   { code: 'NCH-BUN', name: 'Bun (all types)', uom: 'bun',    locs: ['counter'],          pos: [{ tmpl: 1029, f: 1 }, { tmpl: 1644, f: 1 }, { tmpl: 1645, f: 1 }, { tmpl: 1643, f: 1 }] },
   { code: 'NCH-CC',  name: 'Chicken Cutlet',  uom: 'piece',  locs: ['counter'],          pos: [{ tmpl: 1031, f: 1 }] },
   { code: 'NCH-PS',  name: 'Pyaaz Samosa',    uom: 'piece',  locs: ['counter'],          pos: [{ tmpl: 1097, f: 1 }] },
+  // Store-only items (layer 2 ingredients): tracked at the store door from the
+  // moment anything exits. No POS term — store law is count + received − issued.
+  // Consumption joins later via the chai recipe lane.
+  { code: 'HN-RM-202', name: 'Tea Powder',          uom: 'kg', locs: ['store'], pos: [] },
+  { code: 'HN-RM-201', name: 'Skimmed Milk Powder', uom: 'kg', locs: ['store'], pos: [] },
 ];
 
 const cors = {
