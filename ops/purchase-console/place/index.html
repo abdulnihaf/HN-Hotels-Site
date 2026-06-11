@@ -89,14 +89,35 @@
 
 <script>
 const API = '/api/anbar';
-const ITEMS = [
-  { code:'NCH-BUN', name:'Buns',            icon:'🍞', unit:'no' },
-  { code:'NCH-CC',  name:'Chicken Cutlet',  icon:'🍗', unit:'box (30 pcs)' },
-  { code:'NCH-PS',  name:'Pyaaz Samosa',    icon:'🥟', unit:'no' },
-  { code:'NCH-WTR', name:'Water (Bisleri)', icon:'💧', unit:'case' },
-  { code:'NCH-OB',  name:'Osmania Biscuit', icon:'🍪', unit:'box (480 pcs)' },
-  { code:'NCH-KH',  name:'Khajoor',         icon:'🌴', unit:'pack' },
+// THE WHOLE DAY'S PO lives in Sauda. Items marked counter:true are Anbar-tracked —
+// they surface as CONFIRM cards on the counter receive screen. PO-only lines
+// (milk, butter, LPG…) are recorded here and stay out of the counter's way.
+const GROUPS = [
+  { title:'Bakery & Snacks', items:[
+    { code:'NCH-BUN', name:'Buns',            icon:'🍞', unit:'no', counter:true },
+    { code:'NCH-CC',  name:'Chicken Cutlet',  icon:'🍗', unit:'box (30 pcs)', counter:true },
+    { code:'NCH-PS',  name:'Pyaaz Samosa',    icon:'🥟', unit:'no', counter:true },
+    { code:'NCH-OB',  name:'Osmania Biscuit', icon:'🍪', unit:'box (480 pcs)', counter:true },
+    { code:'NCH-KH',  name:'Khajoor',         icon:'🌴', unit:'pack', counter:true },
+  ]},
+  { title:'Dairy & Fresh', items:[
+    { code:'PO-MILK-AM',  name:'Milk — morning', icon:'🥛', unit:'L' },
+    { code:'PO-MILK-PM',  name:'Milk — evening', icon:'🥛', unit:'L' },
+    { code:'PO-BUTTER',   name:'Butter',         icon:'🧈', unit:'pkt' },
+    { code:'PO-LEMON',    name:'Lemon',          icon:'🍋', unit:'no' },
+    { code:'PO-PUDINA',   name:'Pudina (mint)',  icon:'🌿', unit:'bundle' },
+  ]},
+  { title:'Pantry & Provisions', items:[
+    { code:'PO-MILKMAID', name:'Milkmaid (condensed milk)', icon:'🥫', unit:'kg' },
+  ]},
+  { title:'Packaging & Other', items:[
+    { code:'NCH-WTR',   name:'Water (Bisleri)',   icon:'💧', unit:'case', counter:true },
+    { code:'PO-CUPS',   name:'Use-&-throw cups',  icon:'🥤', unit:'no' },
+    { code:'PO-TISSUE', name:'Tissue paper',      icon:'🧻', unit:'bundle' },
+    { code:'PO-LPG',    name:'LPG cylinder',      icon:'🔥', unit:'no' },
+  ]},
 ];
+const ITEMS = GROUPS.flatMap(g=>g.items);
 const S = { pin: localStorage.getItem('sauda_pin')||'', person:'', entry:'', dayOffset:1 };
 function el(id){return document.getElementById(id);}
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));el(id).classList.add('active');}
@@ -120,18 +141,21 @@ async function renderLines(){
   const date=istDate(S.dayOffset);
   const r=await fetch(`${API}?action=orders&date=${date}`).then(x=>x.json()).catch(()=>({}));
   const placed=(r.lines||[]);
-  el('lines').innerHTML = ITEMS.map(it=>{
-    const prev=placed.filter(p=>p.item_code===it.code);
-    const placedTxt = prev.length ? prev.map(p=>
-      `<div class="placed">${p.status==='pending'
-        ? `✓ placed: ${p.ordered_qty} ${p.ordered_unit} <span style="color:var(--red);font-weight:800;margin-left:8px;cursor:pointer" onclick="cancelLine(${p.id},'${it.name.replace(/'/g,"\\'")}')">✕ cancel</span>`
-        : `${p.ordered_qty} ${p.ordered_unit} · ${p.status}`}</div>`).join('') : '';
-    return `<div class="card"><div class="row">
-      <div class="ico">${it.icon}</div>
-      <div style="flex:1"><div class="iname">${it.name}</div><div class="imeta">unit: ${it.unit}</div>${placedTxt}</div>
-      <input class="qin" type="number" inputmode="numeric" placeholder="—" id="q-${it.code}">
-    </div></div>`;
-  }).join('');
+  el('lines').innerHTML = GROUPS.map(g=>
+    `<div style="font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin:18px 4px 0">${g.title}</div>`+
+    g.items.map(it=>{
+      const prev=placed.filter(p=>p.item_code===it.code);
+      const placedTxt = prev.length ? prev.map(p=>
+        `<div class="placed">${p.status==='pending'
+          ? `✓ placed: ${p.ordered_qty} ${p.ordered_unit} <span style="color:var(--red);font-weight:800;margin-left:8px;cursor:pointer" onclick="cancelLine(${p.id},'${it.name.replace(/'/g,"\\'")}')">✕ cancel</span>`
+          : `${p.ordered_qty} ${p.ordered_unit} · ${p.status}`}</div>`).join('') : '';
+      return `<div class="card"><div class="row">
+        <div class="ico">${it.icon}</div>
+        <div style="flex:1"><div class="iname">${it.name}${it.counter?' <span style="font-size:9px;color:var(--gold);font-weight:800">· COUNTER CHECK</span>':''}</div><div class="imeta">unit: ${it.unit}</div>${placedTxt}</div>
+        <input class="qin" type="number" inputmode="numeric" placeholder="—" id="q-${it.code}">
+      </div></div>`;
+    }).join('')
+  ).join('');
 }
 
 // Wrong line? Cancel it (stays in the record as cancelled), re-enter the right qty.
@@ -144,7 +168,7 @@ async function cancelLine(id, name){
 
 async function placeOrder(){
   const date=istDate(S.dayOffset);
-  const lines=ITEMS.map(it=>({code:it.code, qty:parseFloat(el('q-'+it.code).value||'0'), unit:it.unit})).filter(l=>l.qty>0);
+  const lines=ITEMS.map(it=>({code:it.code, name:it.name, qty:parseFloat(el('q-'+it.code).value||'0'), unit:it.unit})).filter(l=>l.qty>0);
   if(!lines.length){toast('Enter at least one quantity',true);return;}
   el('place-btn').disabled=true;
   try{
