@@ -201,23 +201,24 @@ export async function onRequest(context) {
       if (!person || !ORDER_PLACERS.includes(person)) return json({ success: false, error: 'Not authorised to place orders' }, 401);
       const poDate = body.po_date;  // 'YYYY-MM-DD' IST delivery date
       if (!/^\d{4}-\d{2}-\d{2}$/.test(poDate || '')) return json({ success: false, error: 'po_date invalid' });
+      const brand = body.brand === 'HE' ? 'HE' : 'NCH';   // both houses place here
       const now = new Date().toISOString();
       let n = 0;
       for (const l of (body.lines || [])) {
         if (!(l.qty > 0) || !l.code) continue;
-        // Sauda owns the WHOLE day's PO. Tracked items canonicalize against
-        // Anbar's ITEMS; everything else (milk, butter, LPG…) is a PO-only
-        // line — recorded here, never surfaced on the counter receive screen.
-        const item = ITEMS.find(i => i.code === l.code);
+        // Sauda owns the WHOLE day's PO for BOTH houses. NCH tracked items
+        // canonicalize against Anbar's ITEMS (they become counter confirm
+        // cards); everything else is a PO-only line.
+        const item = brand === 'NCH' ? ITEMS.find(i => i.code === l.code) : null;
         const name = item ? item.name : (l.name || l.code);
         const unit = l.unit || (item ? item.uom : 'unit');
         await DB.prepare(
           `INSERT INTO rm_po_expected (brand, po_date, item_code, item_name, ordered_qty, ordered_unit, expect_note, created_at)
-           VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(poDate, l.code, name, l.qty, unit, `placed by ${person}${l.note ? ' · ' + l.note : ''}`, now).run();
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(brand, poDate, l.code, name, l.qty, unit, `placed by ${person}${l.note ? ' · ' + l.note : ''}`, now).run();
         n++;
       }
-      return json({ success: true, placed: n, po_date: poDate, by: person, at: now });
+      return json({ success: true, placed: n, po_date: poDate, brand, by: person, at: now });
     }
 
     // ── CANCEL ORDER LINE (Zoya/Bashir own the order — wrong lines die honestly) ──
@@ -236,10 +237,11 @@ export async function onRequest(context) {
     // ── ORDERS for a date (order page shows what's already placed) ──
     if (action === 'orders') {
       const date = url.searchParams.get('date');
+      const brand = url.searchParams.get('brand') === 'HE' ? 'HE' : 'NCH';
       const rows = (await DB.prepare(
-        `SELECT * FROM rm_po_expected WHERE brand='NCH' AND po_date=? ORDER BY id`
-      ).bind(date).all()).results || [];
-      return json({ success: true, po_date: date, lines: rows });
+        `SELECT * FROM rm_po_expected WHERE brand=? AND po_date=? ORDER BY id`
+      ).bind(brand, date).all()).results || [];
+      return json({ success: true, po_date: date, brand, lines: rows });
     }
 
     // ── EXPECTED TODAY (counter receive confirms TRACKED items only — the
