@@ -204,12 +204,17 @@ export async function onRequest(context) {
       const now = new Date().toISOString();
       let n = 0;
       for (const l of (body.lines || [])) {
+        if (!(l.qty > 0) || !l.code) continue;
+        // Sauda owns the WHOLE day's PO. Tracked items canonicalize against
+        // Anbar's ITEMS; everything else (milk, butter, LPG…) is a PO-only
+        // line — recorded here, never surfaced on the counter receive screen.
         const item = ITEMS.find(i => i.code === l.code);
-        if (!item || !(l.qty > 0)) continue;
+        const name = item ? item.name : (l.name || l.code);
+        const unit = l.unit || (item ? item.uom : 'unit');
         await DB.prepare(
           `INSERT INTO rm_po_expected (brand, po_date, item_code, item_name, ordered_qty, ordered_unit, expect_note, created_at)
            VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(poDate, item.code, item.name, l.qty, l.unit || item.uom, `placed by ${person}${l.note ? ' · ' + l.note : ''}`, now).run();
+        ).bind(poDate, l.code, name, l.qty, unit, `placed by ${person}${l.note ? ' · ' + l.note : ''}`, now).run();
         n++;
       }
       return json({ success: true, placed: n, po_date: poDate, by: person, at: now });
@@ -237,12 +242,14 @@ export async function onRequest(context) {
       return json({ success: true, po_date: date, lines: rows });
     }
 
-    // ── EXPECTED TODAY (from the day's PO — receiver confirms against these) ──
+    // ── EXPECTED TODAY (counter receive confirms TRACKED items only — the
+    // full PO lives in Sauda; milk/LPG/etc never clutter the counter door) ──
     if (action === 'expected') {
       const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10); // IST date
-      const rows = (await DB.prepare(
+      const tracked = ITEMS.map(i => i.code);
+      const rows = ((await DB.prepare(
         `SELECT * FROM rm_po_expected WHERE brand='NCH' AND po_date=? ORDER BY id`
-      ).bind(today).all()).results || [];
+      ).bind(today).all()).results || []).filter(r => tracked.includes(r.item_code));
       return json({ success: true, po_date: today, expected: rows });
     }
 
