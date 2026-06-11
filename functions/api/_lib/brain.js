@@ -33,12 +33,21 @@ const SOURCES = {
   sales_daily:    { path: '/api/sales',           action: 'daily',    desc: 'Day-by-day sales reconciliation rows for a brand.' },
   money_cockpit:  { path: '/api/money',           action: 'cockpit',  desc: 'Finance: pending + overdue vendor bills, open purchase orders, cash paid, orphans, duplicate-payment alerts. Money in paise.' },
   owner_overview: { path: '/api/owner-dashboard', action: 'overview', desc: 'Owner summary: spend by category, POs, bills, totals split by brand.' },
-  may_execution:  { path: '/api/may-execution',   action: null,       desc: 'Live intraday HE sales feed (freshest HE number). CAUTION: its target/pace fields are hardcoded to MAY 2026 and are stale — use this ONLY for the live HE sales number, never for current-month pace or targets.' },
+  he_live:        { url: 'https://hamzaexpress.in/api/sales-insights', action: null, desc: 'LIVE intraday Hamza Express sales straight from the POS — revenue, order count, hourly curve, top products for a from/to window. HE ONLY. Values in RUPEES (not paise). Freshest HE number; the reconciled sales_overview syncs later.' },
   open_findings:  { path: '/api/agents',          action: 'findings', desc: 'Open agent findings — money/ops risks that were flagged but not yet resolved.' },
 };
 
 function buildUrl(originBase, source, { from, to, brand }) {
   const s = SOURCES[source];
+  if (s.url) {
+    // External live feed (public, no PIN). Takes full datetimes; we expand the
+    // brain's IST dates to whole calendar days. Without from/to it serves a
+    // rolling last-24h window — which reads as "today" but isn't. Always pin it.
+    const u = new URL(s.url);
+    u.searchParams.set('from', `${from}T00:00:00`);
+    u.searchParams.set('to', `${to}T23:59:59`);
+    return u.toString();
+  }
   const u = new URL(originBase + s.path);
   if (s.action) u.searchParams.set('action', s.action);
   if (from)  u.searchParams.set('from', from);
