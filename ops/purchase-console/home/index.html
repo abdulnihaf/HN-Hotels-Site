@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Sauda — HN Hotels</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sauda">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,700;1,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#000; --card:#13131a; --card2:#1b1b24; --border:rgba(255,255,255,.09);
+    --text:#f7f7fa; --muted:#9a9aa3; --gold:#d4a24c; --gold-dim:rgba(212,162,76,.16);
+    --gold-bd:rgba(212,162,76,.42); --green:#37d399; --red:#ff5c5c;
+    --serif:'Cormorant Garamond', Georgia, serif;
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif; font-size:14px; }
+  .screen { display:none; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
+  .screen.active { display:flex; }
+  .scroll { overflow-y:auto; flex:1; padding:0 16px calc(24px + var(--safe-bot)); }
+  .gate { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:24px; }
+  .tile { width:72px; height:72px; border-radius:16px; background:var(--card); border:1px solid var(--gold-bd); display:flex; align-items:center; justify-content:center; font-size:26px; color:var(--gold); margin-bottom:18px; font-family:var(--serif); }
+  .brand { font-family:var(--serif); font-size:52px; font-weight:700; }
+  .brand-sub { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--gold); margin:2px 0 28px; }
+  .gate-foot { font-family:var(--serif); font-style:italic; font-size:13px; color:rgba(212,162,76,.5); margin-top:26px; }
+  .pin-dots { display:flex; gap:14px; margin:4px 0 22px; }
+  .pin-dot { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(212,162,76,.6); }
+  .pin-dot.filled { background:var(--gold); border-color:var(--gold); }
+  .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; justify-items:center; width:100%; max-width:280px; }
+  .key { background:var(--card2); border:1px solid var(--border); border-radius:50%; width:66px; height:66px; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; }
+  .key:active { background:var(--gold-dim); border-color:var(--gold); transform:scale(.96); }
+  .key.del { color:var(--red); font-size:18px; }
+  .err { color:var(--red); font-size:13px; min-height:18px; margin-top:12px; }
+  .nav { padding:calc(16px + var(--safe-top)) 16px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+  .nav-title { font-family:var(--serif); font-size:24px; font-weight:700; flex:1; }
+  .who { font-size:11px; color:var(--gold); font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+  .sect { font-size:11px; color:var(--muted); font-weight:800; text-transform:uppercase; letter-spacing:.06em; margin:18px 4px 2px; }
+  a.t { display:flex; align-items:center; gap:13px; background:var(--card); border:1px solid var(--border); border-radius:13px; padding:14px; margin-top:10px; text-decoration:none; color:var(--text); }
+  a.t:active { background:var(--card2); }
+  .ti { width:44px; height:44px; border-radius:12px; background:var(--card2); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .tn { font-size:15px; font-weight:700; }
+  .tm { font-size:11px; color:var(--muted); margin-top:2px; }
+  .arrow { color:var(--gold); font-size:19px; }
+  .logout { font-size:12px; color:var(--muted); text-align:center; margin-top:22px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="s-gate" class="screen active">
+  <div class="gate">
+    <div class="tile">سودا</div>
+    <div class="brand">Sauda</div>
+    <div class="brand-sub">The bargain struck, the goods received, the vendor paid</div>
+    <div class="pin-dots"><div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div><div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div></div>
+    <div class="pad">
+      <div class="key" onclick="key('1')">1</div><div class="key" onclick="key('2')">2</div><div class="key" onclick="key('3')">3</div>
+      <div class="key" onclick="key('4')">4</div><div class="key" onclick="key('5')">5</div><div class="key" onclick="key('6')">6</div>
+      <div class="key" onclick="key('7')">7</div><div class="key" onclick="key('8')">8</div><div class="key" onclick="key('9')">9</div>
+      <div class="key" style="opacity:0"></div><div class="key" onclick="key('0')">0</div><div class="key del" onclick="del()">⌫</div>
+    </div>
+    <div class="err" id="gate-err"></div>
+    <div class="gate-foot">HN Hotels · the court of trade</div>
+  </div>
+</div>
+
+<div id="s-home" class="screen">
+  <div class="nav"><div class="nav-title">Sauda</div><div class="who" id="who"></div></div>
+  <div class="scroll" id="tiles"></div>
+</div>
+
+<script>
+// One door, one PIN — the person decides the tiles. Every surface that exists
+// stays exactly where it was built; this home only routes to them.
+const SURFACES = {
+  today:    { href:'/today',         icon:'🗓️', name:"Today's Order",      meta:'build the day order by vendor · WhatsApp send' },
+  place:    { href:'/place/',        icon:'🧺', name:'Place NCH Items',     meta:'buns · cutlets · samosa · water · osmania · khajoor → feeds receiving' },
+  receive:  { href:'/receive',       icon:'📥', name:'Receive Dock',        meta:'log arrivals, photos, raise payment' },
+  pay:      { href:'/pay',           icon:'💸', name:'Payments',            meta:'pay queue · UPI · vendor balances · reconcile' },
+  requests: { href:'/requests/',     icon:'🧾', name:'Payment Requests',    meta:'all 49 vendors · request → PhonePe deep link' },
+  ration:   { href:'/ration/',       icon:'🛒', name:'Ration / Pickup',     meta:'departmental vs quick-commerce · Bashir list' },
+  milk:     { href:'/milk',          icon:'🥛', name:'Milk',                meta:'buffalo milk AM/PM standing order' },
+  browse:   { href:'/browse',        icon:'🔍', name:'Browse Prices',       meta:'catalog across portals' },
+  portals:  { href:'/portals',       icon:'📡', name:'Portal Health',       meta:'price-scrape sessions' },
+  anbar:    { href:'https://anbar.hnhotels.in/', icon:'📦', name:'Anbar — inventory', meta:'counts · issues · the conservation board' },
+  takht:    { href:'https://takht.hnhotels.in/', icon:'👑', name:'Takht — settlement', meta:'runner & counter cash' },
+};
+
+// Role views (owner-stated 2026-06-11): Zoya orders + pays · Bashir places,
+// picks up, receives, store room · owner views everything.
+const VIEWS = {
+  'Zoya':    { sections: [['Order', ['today','place','milk','ration']], ['Money', ['pay','requests']], ['Tools', ['browse','portals']]] },
+  'Bashir':  { sections: [['Order', ['place','ration']], ['Goods', ['receive','anbar']], ['Money', ['pay']]] },
+  'OWNER':   { sections: [['Order', ['today','place','milk','ration']], ['Goods', ['receive','anbar']], ['Money', ['pay','requests']], ['Tools', ['browse','portals','takht']]] },
+};
+const OWNER_PEOPLE = ['Nihaf', 'Tanveer', 'Naveen'];
+
+const S = { pin: localStorage.getItem('sauda_pin')||'', person:'', entry:'' };
+function el(id){return document.getElementById(id);}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));el(id).classList.add('active');}
+function key(k){if(S.entry.length>=4)return;S.entry+=k;dots();if(S.entry.length===4)verify();}
+function del(){S.entry=S.entry.slice(0,-1);dots();el('gate-err').textContent='';}
+function dots(){for(let i=0;i<4;i++)el('d'+i).classList.toggle('filled',i<S.entry.length);}
+async function verify(){
+  const r=await fetch(`/api/sauda-pay?action=verify-pin&pin=${S.entry}`).then(x=>x.json()).catch(()=>({}));
+  if(!r.success){el('gate-err').textContent='Wrong PIN';S.entry='';dots();return;}
+  S.pin=S.entry;S.person=r.person;S.entry='';localStorage.setItem('sauda_pin',S.pin);
+  home();
+}
+function home(){
+  el('who').textContent=S.person;
+  const view = VIEWS[S.person] || (OWNER_PEOPLE.includes(S.person) ? VIEWS.OWNER : VIEWS.Bashir);
+  el('tiles').innerHTML = view.sections.map(([title, keys]) =>
+    `<div class="sect">${title}</div>` + keys.map(k=>{
+      const s=SURFACES[k];
+      return `<a class="t" href="${s.href}"><div class="ti">${s.icon}</div>
+        <div style="flex:1"><div class="tn">${s.name}</div><div class="tm">${s.meta}</div></div>
+        <div class="arrow">›</div></a>`;
+    }).join('')
+  ).join('') + `<div class="logout" onclick="logout()">switch person</div>`;
+  show('s-home');
+}
+function logout(){ localStorage.removeItem('sauda_pin'); S.pin=''; S.person=''; dots(); show('s-gate'); }
+if(S.pin){ fetch(`/api/sauda-pay?action=verify-pin&pin=${S.pin}`).then(x=>x.json()).then(r=>{ if(r.success){S.person=r.person;home();} }); }
+</script>
+</body>
+</html>
