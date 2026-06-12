@@ -310,25 +310,32 @@ function fmtCounts(counts) {
 }
 function renderSettle() {
   el('flow-title').textContent = '📸 Photo Settlement';
-  el('flow-sub').textContent = `${S.person} · one photo per station`;
-  const allDone = SETTLE.stations.every(st => SETTLE.status[st.id]?.ok);
-  el('flow-body').innerHTML = SETTLE.stations.map(st => {
+  el('flow-sub').textContent = `${S.person} · just take clear photos — Fable identifies everything`;
+  const required = SETTLE.stations.filter(st => st.required);
+  const allDone = required.every(st => SETTLE.status[st.id]?.ok);
+  // One big camera button; the checklist below fills ITSELF as photos land.
+  let html = `<div class="card" style="text-align:center;padding:26px" onclick="settleStation()">
+    <div style="font-size:52px">📷</div>
+    <div class="item-name" style="font-size:19px;margin-top:6px">${SETTLE.busy ? '⏳ Fable is reading…' : 'Take a photo'}</div>
+    <div class="item-meta" style="margin-top:6px">every place water and snacks live — fridge, shelves, display, cases.<br>Don't choose anything. Fable knows what it's looking at.</div>
+  </div>`;
+  if (SETTLE.lastReject) html += `<div class="card" style="border-color:var(--red)"><div class="item-meta" style="color:var(--red);padding:4px">✗ ${SETTLE.lastReject}</div></div>`;
+  html += SETTLE.stations.map(st => {
     const s = SETTLE.status[st.id];
-    const msg = s?.busy ? '⏳ Fable is reading…'
-      : s?.ok ? (s.skipped ? '✓ none today' : `✓ ${fmtCounts(s.counts)}${(s.warnings || []).map(w => ' · ⚠ ' + w).join('')}`)
-      : s?.reject ? `✗ ${s.reject}`
-      : st.law;
-    const color = s?.busy ? 'var(--gold)' : s?.ok ? 'var(--green)' : s?.reject ? 'var(--red)' : 'var(--dim)';
-    return `<div class="card"><div class="item-row" onclick="settleStation('${st.id}')">
-      <div class="item-ico">${st.icon}</div>
-      <div style="flex:1"><div class="item-name">${st.name}</div><div class="item-meta" style="color:${color}">${msg}</div></div>
-      <div style="color:var(--gold);font-size:22px">${s?.ok ? '↻' : '📷'}</div>
-    </div>${st.skippable && !s?.ok ? `<div class="item-meta" style="text-align:right;padding:0 6px 8px;color:var(--gold)" onclick="settleSkip('${st.id}')">none today ›</div>` : ''}</div>`;
+    const msg = s?.ok ? (s.skipped ? '✓ none today' : `✓ ${fmtCounts(s.counts)}${(s.warnings || []).map(w => ' · ⚠ ' + w).join('')}`) : 'waiting for its photo…';
+    const color = s?.ok ? 'var(--green)' : 'var(--dim)';
+    return `<div class="card" style="padding:10px 14px"><div style="display:flex;gap:10px;align-items:center">
+      <div style="font-size:16px">${s?.ok ? '✅' : st.icon}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:700">${st.name}${st.required ? '' : ' <span style="color:var(--dim);font-weight:400">(if any)</span>'}</div>
+      <div class="item-meta" style="color:${color}">${msg}</div></div>
+      ${st.id === 'CASES' && !s?.ok ? `<div style="color:var(--gold);font-size:13px;font-weight:700" onclick="event.stopPropagation();settleSkip('CASES')">none ›</div>` : ''}
+    </div></div>`;
   }).join('');
+  el('flow-body').innerHTML = html;
   el('flow-actions').style.display = allDone ? 'flex' : 'none';
   el('flow-submit').textContent = allDone ? '✓ Finish settlement' : 'Record';
 }
-function settleStation(id) { SETTLE.current = id; el('settle-cam').value = ''; el('settle-cam').click(); }
+function settleStation() { if (SETTLE.busy) return; el('settle-cam').value = ''; el('settle-cam').click(); }
 function shrink(file, cb) {
   const img = new Image();
   img.onload = () => {
@@ -343,28 +350,28 @@ function shrink(file, cb) {
 }
 function settleShot(input) {
   const file = input.files && input.files[0];
-  if (!file || !SETTLE.current) return;
-  const id = SETTLE.current;
-  SETTLE.status[id] = { busy: true }; renderSettle();
+  if (!file) return;
+  SETTLE.busy = true; SETTLE.lastReject = null; renderSettle();
   shrink(file, async (b64) => {
     try {
       const r = await fetch(`${API.replace('anbar', 'anbar-settle')}?action=settle-photo`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: S.pin, settle_id: SETTLE.id, station: id, image: b64 }),
+        body: JSON.stringify({ pin: S.pin, settle_id: SETTLE.id, image: b64 }),
       }).then(x => x.json());
       if (!r.success) throw new Error(r.error);
-      SETTLE.status[id] = r.conforms ? { ok: true, counts: r.counts, warnings: r.warnings } : { reject: r.reject_reason || 'photo rejected — retake' };
-    } catch (e) { SETTLE.status[id] = { reject: e.message || 'failed — retake' }; }
+      if (r.conforms) SETTLE.status[r.slot] = { ok: true, counts: r.counts, warnings: r.warnings };
+      else SETTLE.lastReject = r.reject_reason || 'photo rejected — retake';
+    } catch (e) { SETTLE.lastReject = e.message || 'failed — retake'; }
+    SETTLE.busy = false;
     renderSettle();
   });
 }
 async function settleSkip(id) {
-  SETTLE.status[id] = { busy: true }; renderSettle();
   const r = await fetch(`${API.replace('anbar', 'anbar-settle')}?action=settle-photo`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin: S.pin, settle_id: SETTLE.id, station: id, skip: true }),
+    body: JSON.stringify({ pin: S.pin, settle_id: SETTLE.id, skip: id }),
   }).then(x => x.json()).catch(() => ({}));
-  SETTLE.status[id] = r.success ? { ok: true, skipped: true, counts: {} } : { reject: 'skip failed' };
+  if (r.success) SETTLE.status[id] = { ok: true, skipped: true, counts: {} };
   renderSettle();
 }
 async function settleFinish() {
