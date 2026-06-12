@@ -101,7 +101,7 @@ async function readOnce(env, imageB64) {
       method: 'POST',
       headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model, max_tokens: 700, system: VISION_SYSTEM,
+        model, max_tokens: 2000, system: VISION_SYSTEM,
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageB64 } },
           { type: 'text', text: 'Identify, count, and return the JSON now.' },
@@ -110,7 +110,8 @@ async function readOnce(env, imageB64) {
     });
     const d = await r.json();
     if (d.error) throw new Error(`${d.error.type}: ${d.error.message}`);
-    return d.content?.[0]?.text || '';
+    // Fable 5 may emit a thinking block before the text block — take all text blocks.
+    return (d.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
   };
   let text;
   try { text = await call(VISION_MODEL); }
