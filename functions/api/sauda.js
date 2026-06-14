@@ -66,6 +66,17 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await placeOrders(db, body, auth)), request);
     }
+    if (action === 'open' && request.method === 'GET') {
+      return withCors(json(await openOrders(db)), request);
+    }
+    if (action === 'request-pay' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await requestPay(db, body)), request);
+    }
+    if (action === 'mark-paid' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await markPaid(db, body, auth)), request);
+    }
     return withCors(json({ error: `unknown action: ${action}` }, 400), request);
   } catch (e) {
     return withCors(json({ error: 'server error' }, 500), request);
@@ -165,4 +176,39 @@ async function placeOrders(db, body, auth) {
     created.push({ vendor: v.name, vendorKey: vk, lines: vlines.length, id: res?.meta?.last_row_id });
   }
   return { ok: true, for_date: forDate, placed: created.length, orders: created };
+}
+
+// ── Owner "to pay": every order not yet paid, with the vendor's saved UPI ──
+async function openOrders(db) {
+  const rows = await db.prepare(
+    `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, pay_amount_paise, for_date
+       FROM sauda_purchase WHERE paid_at IS NULL ORDER BY for_date DESC, id DESC LIMIT 60`
+  ).all();
+  const orders = (rows?.results || []).map((o) => {
+    const vk = canonVendorKey(o.vendor_name);
+    const v = vendorView(vk || 'unassigned');
+    return { ...o, vendorKey: v.key, vpa: v.vpa || '', fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay };
+  });
+  return { orders };
+}
+
+// ── request payment on an order (sets the amount) ──
+async function requestPay(db, body) {
+  const id = +body.id;
+  const amt = Math.round(+body.amount_paise || 0);
+  if (!id) return { ok: false, error: 'no id' };
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  await db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=?, pay_requested_at=?, status='REQUESTED', updated_at=? WHERE id=?`)
+    .bind(amt, now, now, id).run();
+  return { ok: true, id, amount_paise: amt };
+}
+
+// ── owner marks an order paid (after the UPI app payment) ──
+async function markPaid(db, body, auth) {
+  const id = +body.id;
+  if (!id) return { ok: false, error: 'no id' };
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  await db.prepare(`UPDATE sauda_purchase SET paid_at=?, pay_method=?, status='PAID', updated_at=? WHERE id=?`)
+    .bind(now, (body.method || 'upi'), now, id).run();
+  return { ok: true, id, paid_by: auth.u || '' };
 }

@@ -51,6 +51,7 @@
   function enter(){
     gate.classList.add('hide'); app.classList.remove('hide');
     document.getElementById('topSub').textContent = S.user + ' · ' + fmtDate();
+    setMode('place');
     loadCatalog();
   }
   function fmtDate(){ var d=new Date(Date.now()+330*60000); return d.toUTCString().slice(0,11); }
@@ -180,6 +181,68 @@
     this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
     onSearch();
   });
+
+  // ── mode toggle + to-pay (owner pays via saved UPI) ──
+  function setMode(m){
+    var place=document.getElementById('viewPlace'), pay=document.getElementById('viewPay'), bar=document.getElementById('placeBar');
+    document.querySelectorAll('#modeSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.m===m); });
+    if(m==='pay'){ place.classList.add('hide'); pay.classList.remove('hide'); bar.classList.add('hide'); loadPay(); }
+    else { pay.classList.add('hide'); place.classList.remove('hide'); bar.classList.remove('hide'); }
+  }
+  document.getElementById('modeSeg').addEventListener('click', function(e){ var b=e.target.closest('button[data-m]'); if(b) setMode(b.dataset.m); });
+
+  function rupees(p){ return (Math.round(+p||0)/100).toLocaleString('en-IN'); }
+  function upiHref(vpa,vn,rs){ return vpa ? ('upi://pay?pa='+encodeURIComponent(vpa)+'&pn='+encodeURIComponent(vn)+(rs>0?'&am='+rs:'')+'&cu=INR&tn='+encodeURIComponent('Sauda')) : '#'; }
+
+  function loadPay(){
+    var list=document.getElementById('payList'), empty=document.getElementById('payEmpty');
+    list.innerHTML='<div class="empty">Loading…</div>'; empty.classList.add('hide');
+    api('open').then(function(res){
+      var orders=(res.j&&res.j.orders)||[];
+      if(!orders.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
+      var html='';
+      orders.forEach(function(o){
+        var items=[]; try{ items=JSON.parse(o.items_json||'[]'); }catch(e){}
+        var itemsTxt=items.map(function(i){ return esc(i.item)+(i.qty?(' '+esc(i.qty)+(i.unit?' '+esc(i.unit):'')):''); }).join(' · ');
+        var amt=o.pay_amount_paise?rupees(o.pay_amount_paise):'';
+        html+='<div class="basket"><div class="bh"><span class="bn">'+esc(o.vendor_name)+'</span>'+
+          '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span>'+
+          (o.for_date?'<span class="tag p">'+esc(o.for_date)+'</span>':'')+'</div>'+
+          '<div class="pb"><div class="its">'+(itemsTxt||'—')+'</div>'+
+          (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
+          '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt="'+o.id+'" value="'+esc(amt)+'" placeholder="amount"></div>'+
+          '<div class="pay-acts">'+
+            '<a class="upi'+(o.vpa?'':' dis')+'" data-vpa="'+esc(o.vpa)+'" data-vn="'+esc(o.vendor_name)+'" href="'+upiHref(o.vpa,o.vendor_name,parseFloat(amt)||0)+'">'+(o.vpa?'Pay via UPI':'No UPI saved')+'</a>'+
+            '<button class="done" data-done="'+o.id+'">Mark paid</button>'+
+          '</div></div></div>';
+      });
+      list.innerHTML=html;
+      list.querySelectorAll('input[data-amt]').forEach(function(inp){
+        inp.addEventListener('input', function(){
+          var a=inp.closest('.pb').querySelector('a[data-vpa]'); var rs=parseFloat(inp.value||'0')||0;
+          a.href=upiHref(a.dataset.vpa, a.dataset.vn, rs);
+        });
+      });
+      list.querySelectorAll('a[data-vpa]').forEach(function(a){
+        a.addEventListener('click', function(){
+          if(!a.dataset.vpa) return;
+          var pb=a.closest('.pb'); var id=+pb.querySelector('button[data-done]').dataset.done;
+          var rs=parseFloat(pb.querySelector('input[data-amt]').value||'0')||0;
+          if(rs>0) api('request-pay',{method:'POST',body:{id:id, amount_paise:Math.round(rs*100)}});
+        });
+      });
+      list.querySelectorAll('button[data-done]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var id=+b.dataset.done; var pb=b.closest('.pb'); var rs=parseFloat(pb.querySelector('input[data-amt]').value||'0')||0;
+          if(busy) return; busy=true;
+          var seq=rs>0?api('request-pay',{method:'POST',body:{id:id, amount_paise:Math.round(rs*100)}}):Promise.resolve();
+          seq.then(function(){ return api('mark-paid',{method:'POST',body:{id:id, method:'upi'}}); })
+             .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Marked paid','ok'); loadPay(); } else toast('Failed','err'); })
+             .catch(function(){ busy=false; toast('No connection','err'); });
+        });
+      });
+    }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
+  }
 
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0}; pin=''; renderDots(); app.classList.add('hide'); gate.classList.remove('hide'); }
