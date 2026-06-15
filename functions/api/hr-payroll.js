@@ -209,7 +209,7 @@ export async function onRequest({ request, env }) {
   if (!auth) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json', ...ch } });
 
   // salary-sensitive writes require admin (fin=true)
-  const FIN_WRITES = new Set(['compute-payable','approve-payable','mark-paid','delete-advance']);
+  const FIN_WRITES = new Set(['compute-payable','approve-payable','mark-paid','delete-advance','update-advance']);
   if (FIN_WRITES.has(action) && !auth.f) return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { 'content-type': 'application/json', ...ch } });
 
   let body = {};
@@ -334,15 +334,34 @@ export async function onRequest({ request, env }) {
   }
 
   if (action === 'update-advance' && method === 'POST') {
-    const { id, advance_date, amount, paid_via, reference, reason, notes } = body;
+    const { id, advance_date, amount, paid_via, reference, reason, notes, pay_period } = body;
     if (!id) return json({ error: 'id required' }, 400);
+    const PAY_VIA = ['cash', 'upi', 'bank', 'razorpay', 'paytm'];
     const sets = []; const binds = [];
     if (advance_date !== undefined) { sets.push('advance_date = ?'); binds.push(advance_date); }
-    if (amount !== undefined)       { sets.push('amount = ?');       binds.push(Number(amount)); }
-    if (paid_via !== undefined)     { sets.push('paid_via = ?');     binds.push(paid_via); }
+    // Amount must be a real, positive number — never let NaN/null/garbage corrupt
+    // a money row that then feeds the payable/settlement sums.
+    if (amount !== undefined) {
+      const n = Number(amount);
+      if (!Number.isFinite(n) || n <= 0) return json({ error: 'amount must be a positive number' }, 400);
+      sets.push('amount = ?'); binds.push(n);
+    }
+    // paid_via is a closed set — reject anything outside it (defends the inline edit handler too).
+    if (paid_via !== undefined) {
+      if (!PAY_VIA.includes(paid_via)) return json({ error: 'invalid paid_via' }, 400);
+      sets.push('paid_via = ?'); binds.push(paid_via);
+    }
     if (reference !== undefined)    { sets.push('reference = ?');    binds.push(reference); }
     if (reason !== undefined)       { sets.push('reason = ?');       binds.push(reason); }
     if (notes !== undefined)        { sets.push('notes = ?');        binds.push(notes); }
+    // pay_period = the month (YYYY-MM) this money belongs to. Lets the owner move
+    // a mis-tagged entry (e.g. a settlement logged under May that was really June)
+    // to its correct month without delete + re-add. Must be a valid YYYY-MM so the
+    // row never files into a month no view queries on.
+    if (pay_period !== undefined) {
+      if (!/^\d{4}-\d{2}$/.test(String(pay_period))) return json({ error: 'pay_period must be YYYY-MM' }, 400);
+      sets.push('pay_period = ?'); binds.push(pay_period);
+    }
     if (!sets.length) return json({ error: 'nothing to update' }, 400);
     binds.push(id);
     const r = await db.prepare(`UPDATE hr_advances SET ${sets.join(', ')} WHERE id = ?`).bind(...binds).run();
@@ -552,7 +571,8 @@ export async function onRequest({ request, env }) {
     // Every day row of the month — feeds the visual attendance grid on the
     // pay/settle sheet (the owner sees the person's whole month before paying).
     const dayRows = await db.prepare(`
-      SELECT date, status, COALESCE(punch_count,0) AS punch_count, first_in_at, last_out_at
+      SELECT date, status, COALESCE(punch_count,0) AS punch_count, first_in_at, last_out_at,
+             COALESCE(total_hours,0) AS total_hours
         FROM hr_attendance_daily
        WHERE employee_id = ? AND date BETWEEN ? AND ?
        ORDER BY date

@@ -206,7 +206,9 @@
     .mchip.on{border-color:var(--gold-bd);color:var(--gold);background:var(--gold-soft)}
     .agrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:9px}
     .agw{font-size:9px;color:var(--mute);text-align:center;padding-bottom:1px}
-    .agc{aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-variant-numeric:tabular-nums;background:var(--e2);color:var(--mute)}
+    .agc{aspect-ratio:1;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:10.5px;font-variant-numeric:tabular-nums;background:var(--e2);color:var(--mute)}
+    .agc .agc-d{line-height:1}
+    .agc .agc-h{font-size:8px;font-weight:700;line-height:1;opacity:.92}
     .agc.ok{background:var(--green-soft);color:var(--green);font-weight:700}
     .agc.err{background:var(--yellow-soft);color:var(--yellow);font-weight:700}
     .agc.absent{background:var(--red-soft);color:var(--red)}
@@ -329,6 +331,6 @@
 <div id="sheetHost"></div>
 <!-- BUMP ?v= on EVERY app.js change — the edge held a stale max-age=14400 header
      for the bare URL once, and phones ran old code for 4h after each ship. -->
-<script src="/ops/darbar/app.js?v=324"></script>
+<script src="/ops/darbar/app.js?v=325"></script>
 </body>
 </html>
