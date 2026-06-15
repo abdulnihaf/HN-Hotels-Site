@@ -165,6 +165,6 @@ See `docs/EXECUTION-CHARTER.md` for full charter. Key rules:
 - **No build pipeline.** Vanilla HTML/JS/CSS served from Cloudflare Pages. No npm/Vite/Rollup/esbuild.
 - **Money in paise (INTEGER).** Convert to rupees only at the display layer.
 - **Read before edit.** Read the full file before changing it.
-- **No production deploys from Claude.** Open draft PRs only; owner reviews + merges.
-- **One branch + one draft PR per phase.** No bundling.
+- **Claude executes merges + deploys — never hand them to Nihaf.** He is a non-technical business owner; asking him to merge a PR, run a command, add a domain, or configure a dashboard is a failure of the division of labour (he was explicit about this, 2026-06-15). Workflow: open the PR, **verify the change is safe + isolated (touches no other live surface), then merge and deploy it yourself** (gh CLI, Cloudflare API, wrangler). Report the live result. Only involve Nihaf for what *only he can physically do*: test on his phone, give ground truth, or approve moving money / an outward-facing send. See memory `execute-never-delegate-to-nihaf`.
+- **One branch + one PR per phase.** No bundling. Keep each change isolated so it's safe to merge on its own.
 - **Mobile-first.** ≥44px tap targets. Test Safari iOS + Chrome Android.
