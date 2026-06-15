@@ -15,6 +15,14 @@
 // (which fetches this catalog) picks correctly on the next run, no box change.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Applied to EVERY item on top of its own not[] — prepared/condiment forms a raw
+// commodity should never resolve to (killed jeera→"Harissa Cumin Dressing").
+export const HP_GLOBAL_NOT = [
+  'dressing','sauce','paste','dip','gravy','curry','chutney','pickle','ready to','ready-to',
+  'instant','seasoning','marinade','spread','ketchup','mayo','mayonnaise','syrup','combo',
+  'assorted','sample','flavoured','flavored','seekh','tikka','momo','nugget','patty','kebab','kabab',
+];
+
 export const HP_CATALOG = [
   { key: 'paneer',      query: 'paneer',      label: 'Paneer',           form: 'fresh block',      unit: 'kg', band: [200, 450],
     must: [['paneer']],                  not: ['tikka','momo','spread','frozen','bhurji','masala','tofu'] },
@@ -29,7 +37,7 @@ export const HP_CATALOG = [
   { key: 'sugar',       query: 'sugar',       label: 'Sugar',            form: 'bag',              unit: 'kg', band: [34, 70],
     must: [['sugar']],                   not: ['brown','jaggery','icing','cube','powdered','demerara','sachet'] },
   { key: 'cashew',      query: 'cashew',      label: 'Cashew (whole)',   form: 'whole — buy_lines: "whole cashew"', unit: 'kg', band: [500, 1050],
-    must: [['cashew','kaju']],           not: ['kani','split','pieces','broken','baby','flavoured','roasted','salted'] },
+    must: [['cashew','kaju']],           not: ['kani','split','ssp','lwp','pieces','broken','baby','roasted','salted'] },
   { key: 'jeera',       query: 'jeera',       label: 'Jeera',            form: 'whole seeds — CONFIRM (buy_lines shows "cumin powder")', unit: 'kg', band: [170, 540],
     must: [['cumin','jeera']],           not: ['powder','ground','samba','rice','masala'] },
   { key: 'dalda',       query: 'vanaspati',   label: 'Dalda (vanaspati)',form: 'tin / pouch',      unit: 'L',  band: [90, 185],
