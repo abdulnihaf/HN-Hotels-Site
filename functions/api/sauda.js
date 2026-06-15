@@ -252,15 +252,21 @@ async function hyperpureFeed(db) {
   let rows = { results: [] };
   try {
     rows = await db.prepare(
-      `SELECT item_key, query, cheapest_name, cheapest_price_paise, match_count, scraped_at
+      `SELECT item_key, query, cheapest_name, cheapest_price_paise, cheapest_image, cheapest_pack,
+              cheapest_unit, cheapest_brand, cheapest_unit_price_paise, match_count, scraped_at
          FROM hyperpure_prices WHERE cheapest_price_paise IS NOT NULL ORDER BY item_key`
     ).all();
   } catch (e) { /* table may not exist yet → empty feed */ }
   const items = (rows?.results || []).map((r) => ({
     item_key: r.item_key,
-    name: r.query || r.item_key,
-    matched: r.cheapest_name || '',
-    price_paise: r.cheapest_price_paise,
+    name: r.query || r.item_key,          // the catalog/search concept (e.g. "paneer")
+    matched: r.cheapest_name || '',       // the exact Hyperpure SKU we'd order
+    price_paise: r.cheapest_price_paise,  // pack price (what the basket charges per unit)
+    unit_price_paise: r.cheapest_unit_price_paise || r.cheapest_price_paise,
+    unit: r.cheapest_unit || '',          // kg | ltr | pc …
+    pack: r.cheapest_pack || '',          // "1 kg", "1 L" …
+    brand: r.cheapest_brand || '',
+    image: r.cheapest_image || '',
     match_count: r.match_count || 0,
     scraped_at: r.scraped_at,
   }));
@@ -286,7 +292,9 @@ async function hyperpurePlace(db, body, auth) {
     const qty = Math.max(0, Number(l.qty) || 0);
     const price = Math.max(0, Math.round(Number(l.price_paise) || 0));
     subtotal += qty * price;
-    return { item_key: l.item_key || '', item: String(l.name || l.item_key || '').trim(), qty, unit: l.unit || '', price_paise: price, matched: l.matched || '' };
+    return { item_key: l.item_key || '', item: String(l.name || l.item_key || '').trim(), qty,
+             unit: l.unit || '', price_paise: price, matched: l.matched || '',
+             pack: l.pack || '', brand: l.brand || '', image: l.image || '' };
   });
   if (subtotal < HP.MOV_PAISE) {
     return { ok: false, error: 'below_mov', subtotal_paise: subtotal, mov_paise: HP.MOV_PAISE,

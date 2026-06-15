@@ -301,14 +301,19 @@
     var rows=S.hp.feed.filter(function(it){ return !q || (it.name+' '+(it.matched||'')).toLowerCase().indexOf(q)>=0; });
     host.innerHTML = rows.map(function(it){
       var b=S.hp.basket[it.item_key]; var inb=b&&b.qty>0;
+      var title = it.matched || cap(it.name);
       var ctrl = inb
         ? '<div class="step"><button data-dec="'+esc(it.item_key)+'">−</button>'+
             '<input inputmode="decimal" data-q="'+esc(it.item_key)+'" value="'+esc(String(b.qty))+'">'+
             '<button data-inc="'+esc(it.item_key)+'">+</button></div>'
         : '<button class="add-pill" data-addhp="'+esc(it.item_key)+'" aria-label="add">+</button>';
-      return '<div class="hpitem'+(inb?' in':'')+'">'+
-        '<div class="nm"><div class="t"><b>'+esc(cap(it.name))+'</b><span class="pr">₹'+rupees(it.price_paise)+'</span></div><small>'+esc(it.matched||'—')+'</small></div>'+
-        ctrl+'</div>';
+      var photo = '<div class="ph"'+(it.image?' style="background-image:url('+esc(it.image)+')"':'')+'>'+
+                  (it.image?'':'<span>'+esc(title.slice(0,1))+'</span>')+'</div>';
+      var perUnit = (it.unit && it.unit_price_paise) ? '<span class="uu">₹'+rupees(it.unit_price_paise)+'/'+esc(it.unit)+'</span>' : '';
+      var meta = '<div class="meta">'+(it.pack?'<span class="pk">'+esc(it.pack)+'</span>':'')+perUnit+'</div>';
+      return '<div class="hpitem'+(inb?' in':'')+'">'+photo+
+        '<div class="nm"><b>'+esc(title)+'</b>'+meta+'</div>'+
+        '<div class="right"><span class="pr">₹'+rupees(it.price_paise)+'</span>'+ctrl+'</div></div>';
     }).join('');
     host.querySelectorAll('[data-addhp]').forEach(function(b){ b.addEventListener('click',function(){ setHpQty(b.dataset.addhp,1); }); });
     host.querySelectorAll('[data-inc]').forEach(function(b){ b.addEventListener('click',function(){ bumpHp(b.dataset.inc,1); }); });
@@ -339,7 +344,8 @@
   document.getElementById('hpPlaceBtn').addEventListener('click', function(){
     if(busy) return; var sub=hpSubtotal(); if(sub<S.hp.mov) return;
     var lines=Object.keys(S.hp.basket).map(function(k){ var b=S.hp.basket[k];
-      return { item_key:k, name:b.it.name, matched:b.it.matched, qty:b.qty, price_paise:b.it.price_paise }; });
+      return { item_key:k, name:b.it.name, matched:b.it.matched, qty:b.qty, price_paise:b.it.price_paise,
+               unit:b.it.unit, pack:b.it.pack, brand:b.it.brand, image:b.it.image }; });
     busy=true; var btn=this; btn.disabled=true; btn.textContent='Sending…';
     api('hyperpure-place',{method:'POST',body:{lines:lines}}).then(function(res){
       busy=false;
