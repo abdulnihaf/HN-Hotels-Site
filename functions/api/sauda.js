@@ -22,6 +22,14 @@ import { canonVendorKey, vendorView, VENDORS } from './_lib/sauda-vendors.js';
 // scraped from the owner's logged-in account into hyperpure_prices.
 const HP = { MOV_PAISE: 150000, DELIVERY_PAISE: 9900, CUTOFF_HOUR: 23 };
 
+// Each buying source carries its own rules so the comparison UX can warn about
+// minimum-cart (a ₹20 item that's cheaper on Zepto is useless if you can't meet
+// Zepto's floor). next-day = planned (Hyperpure); instant = quick-commerce.
+const SOURCES = {
+  hyperpure: { label: 'Hyperpure', kind: 'next-day', min_cart_paise: 150000, delivery_paise: 9900, free_above_paise: null },
+  zepto:     { label: 'Zepto',     kind: 'instant',  min_cart_paise: 0,      delivery_paise: 3500, free_above_paise: 19900 },
+};
+
 // Purchase-chamber PINs (mirrors Darbar's identity; unifies under Diwan SSO later).
 const SAUDA_PINS = {
   '0305': { name: 'Nihaf',   role: 'owner',    fin: true  },
@@ -85,6 +93,9 @@ export async function onRequest(context) {
     }
     if (action === 'hyperpure-feed' && request.method === 'GET') {
       return withCors(json(await hyperpureFeed(db)), request);
+    }
+    if (action === 'compare' && request.method === 'GET') {
+      return withCors(json(await sourcesCompare(db)), request);
     }
     if (action === 'hyperpure-place' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
@@ -327,6 +338,46 @@ async function hyperpureFeed(db) {
     delivery_paise: HP.DELIVERY_PAISE,
     window: hyperpureWindow(),
   };
+}
+
+// ── Multi-source comparison: every item, every source, cheapest flagged ──
+// Quick-commerce sources live in item_prices; Hyperpure is read from its own
+// table (its UI stays source of truth). The app shows where each item is
+// cheapest and which platforms clear their minimum cart.
+async function sourcesCompare(db) {
+  let ip = { results: [] }, hp = { results: [] };
+  try {
+    ip = await db.prepare(
+      `SELECT item_key, source, matched_name, brand, pack, unit, price_paise, unit_price_paise, image, url
+         FROM item_prices WHERE source != 'hyperpure'`).all();
+  } catch (e) {}
+  try {
+    hp = await db.prepare(
+      `SELECT item_key, cheapest_name, cheapest_brand, cheapest_pack, cheapest_unit,
+              cheapest_price_paise, cheapest_unit_price_paise, cheapest_image
+         FROM hyperpure_prices WHERE cheapest_price_paise IS NOT NULL`).all();
+  } catch (e) {}
+  const byItem = new Map();
+  const add = (k, s) => { if (!byItem.has(k)) byItem.set(k, []); byItem.get(k).push(s); };
+  for (const r of (ip?.results || [])) add(r.item_key, {
+    source: r.source, matched: r.matched_name, brand: r.brand, pack: r.pack, unit: r.unit,
+    price_paise: r.price_paise, unit_price_paise: r.unit_price_paise, image: r.image, url: r.url });
+  for (const r of (hp?.results || [])) add(r.item_key, {
+    source: 'hyperpure', matched: r.cheapest_name, brand: r.cheapest_brand, pack: r.cheapest_pack, unit: r.cheapest_unit,
+    price_paise: r.cheapest_price_paise, unit_price_paise: r.cheapest_unit_price_paise, image: r.cheapest_image, url: null });
+  const items = [...byItem.entries()].map(([k, srcs]) => {
+    const ranked = srcs.slice().sort((a, b) =>
+      (a.unit_price_paise ?? a.price_paise ?? 1e15) - (b.unit_price_paise ?? b.price_paise ?? 1e15));
+    const best = ranked[0];
+    const second = ranked.find((s) => s.source !== (best && best.source));
+    // saving vs the next source, on a comparable basis (per-unit ₹/kg|₹/L),
+    // since pack sizes differ wildly (Hyperpure bulk vs quick-commerce retail)
+    const bu = best && best.unit_price_paise, su = second && second.unit_price_paise;
+    const save = (bu && su && su > bu) ? su - bu : 0;
+    return { item_key: k, cheapest_source: best ? best.source : null,
+             save_paise: save, save_unit: (best && best.unit) || '', sources: ranked };
+  }).sort((a, b) => a.item_key.localeCompare(b.item_key));
+  return { items, sources: SOURCES };
 }
 
 // ── Place tomorrow's Hyperpure basket: one prepaid order the box will fill in-app ──

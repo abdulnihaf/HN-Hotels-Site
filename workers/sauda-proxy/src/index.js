@@ -19,6 +19,16 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // service worker at the subdomain root → scope '/' covers the whole app
+    if (path === '/sw.js') {
+      const r = await fetch(`${ORIGIN}${APP}/sw.js`);
+      const h = new Headers(r.headers);
+      h.set('content-type', 'application/javascript');
+      h.set('service-worker-allowed', '/');
+      h.set('cache-control', 'no-cache');
+      return new Response(r.body, { status: r.status, headers: h });
+    }
+
     // PWA manifest → rewrite so the installed app opens at the clean subdomain root
     if (path === `${APP}/manifest.json` || path === '/manifest.json') {
       const r = await fetch(`${ORIGIN}${APP}/manifest.json`);
