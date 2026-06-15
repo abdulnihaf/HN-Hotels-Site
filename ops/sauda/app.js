@@ -61,7 +61,7 @@
     api('catalog').then(function(res){
       if(!res.ok){ toast(res.j&&res.j.error||'catalog failed','err'); return; }
       S.cat = res.j;
-      renderOrder();
+      renderOrder(); renderVendorList();
     }).catch(function(){ toast('No connection','err'); });
   }
 
@@ -107,8 +107,8 @@
   function renderOrder(){
     var host=document.getElementById('baskets');
     var empty=document.getElementById('emptyState');
-    if(!S.order.length){ host.innerHTML=''; empty.classList.remove('hide'); updatePlaceBtn(); return; }
     empty.classList.add('hide');
+    if(!S.order.length){ host.innerHTML=''; renderVendorList(); updatePlaceBtn(); return; }
     // group by vendor
     var groups={};
     S.order.forEach(function(l){ (groups[l.vendorKey]=groups[l.vendorKey]||[]).push(l); });
@@ -132,6 +132,7 @@
     host.innerHTML=html;
     host.querySelectorAll('input[data-q]').forEach(function(inp){ inp.addEventListener('input',function(){ setQty(+inp.dataset.q, inp.value); }); });
     host.querySelectorAll('button[data-x]').forEach(function(b){ b.addEventListener('click',function(){ removeLine(+b.dataset.x); }); });
+    renderVendorList();
     updatePlaceBtn();
   }
   function updatePlaceBtn(){
@@ -160,6 +161,63 @@
     });
   }
 
+  // ── vendor-first: choose a vendor → add all its items in one go ──
+  function renderVendorList(){
+    var host=document.getElementById('vendorList'); if(!host) return;
+    if(!S.cat||!S.cat.vendors){ host.innerHTML=''; return; }
+    var vends=S.cat.vendors.filter(function(v){ return v.key!=='unassigned' && brandMatch(v.brand); });
+    var counts={}; S.order.forEach(function(l){ counts[l.vendorKey]=(counts[l.vendorKey]||0)+1; });
+    var html='<div class="vlist-h">Choose a vendor — add everything you’re buying from them</div>';
+    html+=vends.map(function(v){
+      var n=counts[v.key]||0;
+      return '<div class="vrow'+(n?' has':'')+'" data-vendor="'+esc(v.key)+'">'+
+        '<span class="vn">'+esc(v.name)+'</span>'+
+        '<span class="tag f">'+esc(v.fulfilmentLabel||v.fulfilment)+'</span>'+
+        '<span class="tag p">'+esc(v.payLabel||v.pay)+'</span>'+
+        (n?'<span class="vcount">'+n+'</span>':'<span class="chev">›</span>')+'</div>';
+    }).join('');
+    host.innerHTML=html;
+    host.querySelectorAll('.vrow[data-vendor]').forEach(function(r){ r.addEventListener('click',function(){ openVendorSheet(r.dataset.vendor); }); });
+  }
+  function vLineFor(key,nm){ return S.order.find(function(l){ return l.vendorKey===key && l.item.toLowerCase()===String(nm).toLowerCase(); }); }
+  function vSetQty(key,item,qty){
+    var l=vLineFor(key,item.name);
+    if(qty>0){ if(l){ l.qty=qty; } else { S.order.push({ id:++S.seq, item:item.name, qty:qty, unit:item.unit||'', vendorKey:key, vendorName:vendorMeta(key).name, brand:item.brand||S.brand }); } }
+    else if(l){ S.order=S.order.filter(function(x){return x!==l;}); }
+  }
+  function openVendorSheet(key){
+    var v=(S.cat&&S.cat.vendors||[]).find(function(x){return x.key===key;}); if(!v) return;
+    var meta=vendorMeta(key);
+    var host=document.getElementById('sheetHost');
+    function draw(){
+      var items=(v.items||[]).filter(function(it){ return brandMatch(it.brand); });
+      var rows=items.map(function(it){
+        var l=vLineFor(key,it.name); var inb=!!l; var q=(l&&String(l.qty).trim()!=='')?l.qty:(l?1:'');
+        var ctrl = inb
+          ? '<div class="step"><button data-vdec="'+esc(it.name)+'">−</button>'+
+              '<input inputmode="decimal" data-vq="'+esc(it.name)+'" value="'+esc(String(q))+'"><button data-vinc="'+esc(it.name)+'">+</button></div>'
+          : '<button class="add-pill" data-vadd="'+esc(it.name)+'">+</button>';
+        return '<div class="vitem"><div class="vinm"><b>'+esc(it.name)+(it.brand&&it.brand!=='both'?' <span class="lb">'+esc(it.brand)+'</span>':'')+'</b>'+(it.unit?'<small>'+esc(it.unit)+'</small>':'')+'</div>'+ctrl+'</div>';
+      }).join('');
+      var khata = meta.pay==='khata_roll' ? '<div class="khata" style="margin:0 0 10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>On the trip, clear <b>yesterday’s bill</b>. Today’s items are paid tomorrow.</span></div>' : '';
+      var h='<div class="ov" id="ov"><div class="sheet"><h2>'+esc(v.name)+'</h2>'+
+        '<div class="skuhint">'+esc(meta.fulfilmentLabel)+' · '+esc(meta.payLabel)+' — tap the items you need today.</div>'+khata+
+        '<div class="vlist-sheet">'+(rows||'<div class="empty" style="padding:20px">No saved items — add one below.</div>')+'</div>'+
+        '<div class="vnew"><input id="vNewName" placeholder="Add an item not listed…" autocomplete="off"><button id="vNewAdd">Add</button></div>'+
+        '<button class="btn primary" id="vDone" style="width:100%;margin-top:12px">Done</button></div></div>';
+      host.innerHTML=h;
+      document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov'){ host.innerHTML=''; renderOrder(); } });
+      document.getElementById('vDone').addEventListener('click',function(){ host.innerHTML=''; renderOrder(); });
+      function byName(nm){ return (v.items||[]).find(function(x){return x.name===nm;})||{name:nm,unit:'',brand:S.brand}; }
+      host.querySelectorAll('[data-vadd]').forEach(function(b){ b.addEventListener('click',function(){ vSetQty(key, byName(b.dataset.vadd), 1); draw(); }); });
+      host.querySelectorAll('[data-vinc]').forEach(function(b){ b.addEventListener('click',function(){ var l=vLineFor(key,b.dataset.vinc); var q=(l&&parseFloat(l.qty))||0; vSetQty(key, byName(b.dataset.vinc), Math.round((q+1)*100)/100); draw(); }); });
+      host.querySelectorAll('[data-vdec]').forEach(function(b){ b.addEventListener('click',function(){ var l=vLineFor(key,b.dataset.vdec); var q=(l&&parseFloat(l.qty))||0; vSetQty(key, byName(b.dataset.vdec), Math.max(0,Math.round((q-1)*100)/100)); draw(); }); });
+      host.querySelectorAll('input[data-vq]').forEach(function(inp){ inp.addEventListener('input',function(){ vSetQty(key, byName(inp.dataset.vq), parseFloat(inp.value)||0); }); });
+      var na=document.getElementById('vNewAdd'); na.addEventListener('click',function(){ var nm=document.getElementById('vNewName').value.trim(); if(!nm)return; vSetQty(key,{name:nm,unit:'',brand:S.brand},1); draw(); });
+    }
+    draw();
+  }
+
   // ── place ──
   document.getElementById('placeBtn').addEventListener('click', function(){
     if(!S.order.length||busy) return;
@@ -180,7 +238,7 @@
     var b=e.target.closest('button[data-b]'); if(!b) return;
     S.brand=b.dataset.b;
     this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
-    onSearch();
+    onSearch(); renderVendorList();
   });
 
   // ── mode toggle: Place · To pay · Hyperpure ──
@@ -211,18 +269,20 @@
         var items=[]; try{ items=JSON.parse(o.items_json||'[]'); }catch(e){}
         var itemsTxt=items.map(function(i){ return esc(i.item)+(i.qty?(' '+esc(i.qty)+(i.unit?' '+esc(i.unit):'')):''); }).join(' · ');
         var amt=o.pay_amount_paise?rupees(o.pay_amount_paise):'';
+        var ids=(o.ids||[]).join(',');
+        var multi=(o.order_count>1)?'<span class="tag p">'+items.length+' items · '+o.order_count+' orders</span>':'<span class="tag p">'+items.length+' item'+(items.length>1?'s':'')+'</span>';
         html+='<div class="basket"><div class="bh"><span class="bn">'+esc(o.vendor_name)+'</span>'+
-          '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span>'+
-          (o.for_date?'<span class="tag p">'+esc(o.for_date)+'</span>':'')+'</div>'+
+          '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span>'+multi+'</div>'+
           '<div class="pb"><div class="its">'+(itemsTxt||'—')+'</div>'+
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
-          '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt="'+o.id+'" value="'+esc(amt)+'" placeholder="amount"></div>'+
+          '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt value="'+esc(amt)+'" placeholder="one payment for all items"></div>'+
           '<div class="pay-acts">'+
             '<a class="upi'+(o.vpa?'':' dis')+'" data-vpa="'+esc(o.vpa)+'" data-vn="'+esc(o.vendor_name)+'" href="'+upiHref(o.vpa,o.vendor_name,parseFloat(amt)||0)+'">'+(o.vpa?'Pay via UPI':'No UPI saved')+'</a>'+
-            '<button class="done" data-done="'+o.id+'">Mark paid</button>'+
+            '<button class="done" data-ids="'+ids+'">Mark paid</button>'+
           '</div></div></div>';
       });
       list.innerHTML=html;
+      function idsOf(el){ return (el.closest('.pb').querySelector('button[data-ids]').dataset.ids||'').split(',').map(Number).filter(Boolean); }
       list.querySelectorAll('input[data-amt]').forEach(function(inp){
         inp.addEventListener('input', function(){
           var a=inp.closest('.pb').querySelector('a[data-vpa]'); var rs=parseFloat(inp.value||'0')||0;
@@ -232,17 +292,15 @@
       list.querySelectorAll('a[data-vpa]').forEach(function(a){
         a.addEventListener('click', function(){
           if(!a.dataset.vpa) return;
-          var pb=a.closest('.pb'); var id=+pb.querySelector('button[data-done]').dataset.done;
-          var rs=parseFloat(pb.querySelector('input[data-amt]').value||'0')||0;
-          if(rs>0) api('request-pay',{method:'POST',body:{id:id, amount_paise:Math.round(rs*100)}});
+          var pb=a.closest('.pb'); var rs=parseFloat(pb.querySelector('input[data-amt]').value||'0')||0;
+          if(rs>0) api('request-pay',{method:'POST',body:{ids:idsOf(a), amount_paise:Math.round(rs*100)}});
         });
       });
       list.querySelectorAll('button[data-done]').forEach(function(b){
         b.addEventListener('click', function(){
-          var id=+b.dataset.done; var pb=b.closest('.pb'); var rs=parseFloat(pb.querySelector('input[data-amt]').value||'0')||0;
-          if(busy) return; busy=true;
-          var seq=rs>0?api('request-pay',{method:'POST',body:{id:id, amount_paise:Math.round(rs*100)}}):Promise.resolve();
-          seq.then(function(){ return api('mark-paid',{method:'POST',body:{id:id, method:'upi'}}); })
+          var ids=idsOf(b); var pb=b.closest('.pb'); var rs=parseFloat(pb.querySelector('input[data-amt]').value||'0')||0;
+          if(busy||!ids.length) return; busy=true;
+          api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:'upi'}})
              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Marked paid','ok'); loadPay(); } else toast('Failed','err'); })
              .catch(function(){ busy=false; toast('No connection','err'); });
         });

@@ -198,6 +198,22 @@
     .skurow .bdg{display:block;font-size:8.5px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
     .hpsearch{display:block;text-align:center;padding:13px;border-radius:11px;background:var(--e2);border:1px solid var(--line);color:var(--gold);font-weight:700;font-size:13.5px;text-decoration:none}
     .hpsearch:active{background:var(--e3)}
+    /* vendor-first picker (Place) */
+    .vlist-h{font:800 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;padding:10px 4px 9px}
+    .vrow{display:flex;align-items:center;gap:8px;padding:13px 12px;border:1px solid var(--line-soft);border-radius:12px;margin-bottom:8px;cursor:pointer}
+    .vrow:active{background:var(--e2)}
+    .vrow.has{border-color:var(--sauda-bd);background:rgba(185,119,46,.07)}
+    .vrow .vn{flex:1;min-width:0;font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .vrow .vcount{font-size:11px;font-weight:800;color:#1a1206;background:var(--gold);border-radius:9px;padding:2px 9px;flex-shrink:0}
+    .vrow .chev{color:var(--mute);font-size:20px;flex-shrink:0;line-height:1}
+    .vitem{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line-soft)}
+    .vitem .vinm{flex:1;min-width:0}
+    .vitem .vinm b{font-size:14px;font-weight:500}
+    .vitem .vinm small{display:block;font-size:11px;color:var(--mute)}
+    .vlist-sheet{max-height:54vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px}
+    .vnew{display:flex;gap:8px;margin-top:10px}
+    .vnew input{flex:1;background:var(--e2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:14px;padding:10px 12px}
+    .vnew button{flex-shrink:0;padding:0 16px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700}
   </style>
 </head>
 <body>
@@ -255,8 +271,9 @@
       <div class="sugg hide" id="sugg"></div>
     </div>
     <main class="pane" id="pane">
-      <div class="empty" id="emptyState"><div class="big">سودا</div>Search an item above to start today's order.<br>Each item drops into its vendor's basket automatically.</div>
       <div id="baskets"></div>
+      <div id="vendorList"></div>
+      <div class="empty hide" id="emptyState"><div class="big">سودا</div>Loading vendors…</div>
     </main>
   </div>
 
@@ -299,6 +316,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=5"></script>
+<script src="/ops/sauda/app.js?v=6"></script>
 </body>
 </html>
