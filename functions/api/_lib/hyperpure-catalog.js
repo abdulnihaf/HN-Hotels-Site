@@ -36,10 +36,10 @@ export const HP_CATALOG = [
     must: [['sooji','rava','semolina']], not: ['idli mix','upma mix'] },
   { key: 'sugar',       query: 'sugar',       label: 'Sugar',            form: 'bag',              unit: 'kg', band: [34, 70],
     must: [['sugar']],                   not: ['brown','jaggery','icing','cube','powdered','demerara','sachet'] },
-  { key: 'cashew',      query: 'cashew',      label: 'Cashew (whole)',   form: 'whole — buy_lines: "whole cashew"', unit: 'kg', band: [500, 1050],
-    must: [['cashew','kaju']],           not: ['kani','split','ssp','lwp','pieces','broken','baby','roasted','salted'] },
-  { key: 'jeera',       query: 'jeera',       label: 'Jeera',            form: 'whole seeds — CONFIRM (buy_lines shows "cumin powder")', unit: 'kg', band: [170, 540],
-    must: [['cumin','jeera']],           not: ['powder','ground','samba','rice','masala'] },
+  { key: 'cashew',      query: 'cashew',      label: 'Cashew',           form: 'cheapest grade (whole/splits both ok)', unit: 'kg', band: [420, 1050],
+    must: [['cashew','kaju']],           not: ['roasted','salted'] },                  // owner: buy cheaper — allow splits/pieces
+  { key: 'jeera',       query: 'jeera',       label: 'Jeera',            form: 'cheapest (whole or powder)', unit: 'kg', band: [150, 540],
+    must: [['cumin','jeera']],           not: ['samba','rice','masala'] },             // owner: buy cheaper — allow powder
   { key: 'dalda',       query: 'vanaspati',   label: 'Dalda (vanaspati)',form: 'tin / pouch',      unit: 'L',  band: [90, 185],
     must: [['vanaspati','dalda']],       not: ['pure ghee'] },
   { key: 'honey',       query: 'honey',       label: 'Honey',            form: 'bottle',           unit: 'kg', band: [140, 560],

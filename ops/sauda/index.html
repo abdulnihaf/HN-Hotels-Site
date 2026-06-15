@@ -180,6 +180,24 @@
     .mov .fill.met{background:linear-gradient(90deg,var(--green),#5ee0a8)}
     .mov .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
     .mov .lbl b{color:var(--text)}
+    .hpitem .tap{display:flex;align-items:center;gap:11px;flex:1;min-width:0;cursor:pointer}
+    .hpitem .tap:active{opacity:.7}
+    .hpitem .nm .more{font-size:10.5px;color:var(--gold);font-weight:700}
+    /* SKU chooser sheet */
+    .skuhint{font-size:12px;color:var(--dim);line-height:1.45;margin-bottom:12px}
+    .skulist{max-height:48vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px}
+    .skurow{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line-soft);border-radius:11px;margin-bottom:7px}
+    .skurow:active{background:var(--e3)}
+    .skurow.sel{border-color:var(--gold-bd);background:rgba(212,162,76,.08)}
+    .skurow .ph.sm{width:44px;height:44px;border-radius:8px}
+    .skurow .ph.sm span{font-size:20px}
+    .skurow .si{flex:1;min-width:0}
+    .skurow .si b{font-size:13px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .skurow .si small{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+    .skurow .sp{font-size:13.5px;font-weight:700;color:var(--gold);white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+    .skurow .bdg{display:block;font-size:8.5px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+    .hpsearch{display:block;text-align:center;padding:13px;border-radius:11px;background:var(--e2);border:1px solid var(--line);color:var(--gold);font-weight:700;font-size:13.5px;text-decoration:none}
+    .hpsearch:active{background:var(--e3)}
   </style>
 </head>
 <body>
@@ -281,6 +299,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=4"></script>
+<script src="/ops/sauda/app.js?v=5"></script>
 </body>
 </html>

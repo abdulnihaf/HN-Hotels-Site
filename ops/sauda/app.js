@@ -14,7 +14,7 @@
   var pin = '', busy = false;
 
   var S = { token: null, user: '', role: '', cat: null, brand: 'both', order: [] /* lines */, seq: 0,
-            hp: { feed: [], win: null, mov: 150000, del: 9900, fresh: '', basket: {} /* item_key -> {it, qty} */, tick: null } };
+            hp: { feed: [], win: null, mov: 150000, del: 9900, fresh: '', basket: {} /* item_key -> {it, qty} */, chosen: {} /* item_key -> picked SKU override */, tick: null } };
 
   // ── token / session ──
   function tokenExp(t){ try{ var b=t.split('.')[0].replace(/-/g,'+').replace(/_/g,'/'); while(b.length%4)b+='='; return (JSON.parse(atob(b)).exp||0)*1000; }catch(e){ return 0; } }
@@ -300,33 +300,71 @@
     empty.classList.add('hide');
     var rows=S.hp.feed.filter(function(it){ return !q || (it.name+' '+(it.matched||'')).toLowerCase().indexOf(q)>=0; });
     host.innerHTML = rows.map(function(it){
-      var b=S.hp.basket[it.item_key]; var inb=b&&b.qty>0;
-      var title = it.matched || cap(it.name);
+      var k=it.item_key, sku=chosenSku(k);
+      var b=S.hp.basket[k]; var inb=b&&b.qty>0;
+      var title = sku.matched || cap(it.name);
       var ctrl = inb
-        ? '<div class="step"><button data-dec="'+esc(it.item_key)+'">−</button>'+
-            '<input inputmode="decimal" data-q="'+esc(it.item_key)+'" value="'+esc(String(b.qty))+'">'+
-            '<button data-inc="'+esc(it.item_key)+'">+</button></div>'
-        : '<button class="add-pill" data-addhp="'+esc(it.item_key)+'" aria-label="add">+</button>';
-      var photo = '<div class="ph"'+(it.image?' style="background-image:url('+esc(it.image)+')"':'')+'>'+
-                  (it.image?'':'<span>'+esc(title.slice(0,1))+'</span>')+'</div>';
-      var perUnit = (it.unit && it.unit_price_paise) ? '<span class="uu">₹'+rupees(it.unit_price_paise)+'/'+esc(it.unit)+'</span>' : '';
-      var meta = '<div class="meta">'+(it.pack?'<span class="pk">'+esc(it.pack)+'</span>':'')+perUnit+'</div>';
-      return '<div class="hpitem'+(inb?' in':'')+'">'+photo+
-        '<div class="nm"><b>'+esc(title)+'</b>'+meta+'</div>'+
-        '<div class="right"><span class="pr">₹'+rupees(it.price_paise)+'</span>'+ctrl+'</div></div>';
+        ? '<div class="step"><button data-dec="'+esc(k)+'">−</button>'+
+            '<input inputmode="decimal" data-q="'+esc(k)+'" value="'+esc(String(b.qty))+'">'+
+            '<button data-inc="'+esc(k)+'">+</button></div>'
+        : '<button class="add-pill" data-addhp="'+esc(k)+'" aria-label="add">+</button>';
+      var photo = '<div class="ph"'+(sku.image?' style="background-image:url('+esc(sku.image)+')"':'')+'>'+
+                  (sku.image?'':'<span>'+esc(title.slice(0,1))+'</span>')+'</div>';
+      var perUnit = (sku.unit && sku.unit_price_paise) ? '<span class="uu">₹'+rupees(sku.unit_price_paise)+'/'+esc(sku.unit)+'</span>' : '';
+      var nopt = (it.options&&it.options.length)||1;
+      var more = nopt>1 ? '<span class="more">⌄ '+nopt+' options</span>' : '';
+      var meta = '<div class="meta">'+(sku.pack?'<span class="pk">'+esc(sku.pack)+'</span>':'')+perUnit+more+'</div>';
+      return '<div class="hpitem'+(inb?' in':'')+'">'+
+        '<div class="tap" data-sku="'+esc(k)+'">'+photo+'<div class="nm"><b>'+esc(title)+'</b>'+meta+'</div></div>'+
+        '<div class="right"><span class="pr">₹'+rupees(sku.price_paise)+'</span>'+ctrl+'</div></div>';
     }).join('');
-    host.querySelectorAll('[data-addhp]').forEach(function(b){ b.addEventListener('click',function(){ setHpQty(b.dataset.addhp,1); }); });
-    host.querySelectorAll('[data-inc]').forEach(function(b){ b.addEventListener('click',function(){ bumpHp(b.dataset.inc,1); }); });
-    host.querySelectorAll('[data-dec]').forEach(function(b){ b.addEventListener('click',function(){ bumpHp(b.dataset.dec,-1); }); });
-    host.querySelectorAll('input[data-q]').forEach(function(inp){ inp.addEventListener('input',function(){ setHpQty(inp.dataset.q, parseFloat(inp.value)||0, true); }); });
+    host.querySelectorAll('[data-addhp]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); setHpQty(b.dataset.addhp,1); }); });
+    host.querySelectorAll('[data-inc]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); bumpHp(b.dataset.inc,1); }); });
+    host.querySelectorAll('[data-dec]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); bumpHp(b.dataset.dec,-1); }); });
+    host.querySelectorAll('input[data-q]').forEach(function(inp){ inp.addEventListener('click',function(e){e.stopPropagation();}); inp.addEventListener('input',function(){ setHpQty(inp.dataset.q, parseFloat(inp.value)||0, true); }); });
+    host.querySelectorAll('.tap[data-sku]').forEach(function(t){ t.addEventListener('click',function(){ openHpSku(t.dataset.sku); }); });
     updateMov();
   }
   function cap(s){ s=String(s||''); return s.charAt(0).toUpperCase()+s.slice(1); }
-  function findFeed(k){ return S.hp.feed.find(function(x){return x.item_key===k;}); }
-  function setHpQty(k,qty,fromInput){ var it=findFeed(k); if(!it) return;
-    if(qty>0) S.hp.basket[k]={it:it,qty:qty}; else delete S.hp.basket[k];
+  function feedItem(k){ return S.hp.feed.find(function(x){return x.item_key===k;}); }
+  // the SKU shown/ordered for an item = the picked override, else the cheapest from the feed
+  function chosenSku(k){
+    var fi=feedItem(k); if(!fi) return {};
+    var v=S.hp.chosen[k], src=v||fi;
+    return { item_key:k, name:fi.name, matched:src.matched, price_paise:src.price_paise,
+             unit_price_paise:src.unit_price_paise, unit:src.unit, pack:src.pack, brand:src.brand, image:src.image };
+  }
+  function setHpQty(k,qty,fromInput){ var sku=chosenSku(k); if(!sku.matched&&!feedItem(k)) return;
+    if(qty>0) S.hp.basket[k]={it:sku,qty:qty}; else delete S.hp.basket[k];
     if(!fromInput) renderHpFeed(); else updateMov(); }
   function bumpHp(k,d){ var b=S.hp.basket[k]; var q=(b?b.qty:0)+d; if(q<0)q=0; setHpQty(k, Math.round(q*100)/100); }
+
+  // ── the 3-tier chooser: exact cheapest SKU · related SKUs · search on Hyperpure ──
+  function chooseSku(k, opt){ S.hp.chosen[k]=opt; var b=S.hp.basket[k]; setHpQty(k, b?b.qty:1); }
+  function openHpSku(k){
+    var fi=feedItem(k); if(!fi) return;
+    var opts = (fi.options&&fi.options.length) ? fi.options.slice(0)
+      : [{matched:fi.matched,pack:fi.pack,brand:fi.brand,unit:fi.unit,price_paise:fi.price_paise,unit_price_paise:fi.unit_price_paise,image:fi.image}];
+    var curName=(S.hp.chosen[k]&&S.hp.chosen[k].matched)||fi.matched;
+    var searchUrl='https://www.hyperpure.com/in/search/'+encodeURIComponent(fi.name)+'?query='+encodeURIComponent(fi.name);
+    var rowsHtml=opts.map(function(o,i){
+      var ph='<div class="ph sm"'+(o.image?' style="background-image:url('+esc(o.image)+')"':'')+'>'+(o.image?'':'<span>'+esc((o.matched||'?').slice(0,1))+'</span>')+'</div>';
+      var pu=(o.unit&&o.unit_price_paise)?' · ₹'+rupees(o.unit_price_paise)+'/'+esc(o.unit):'';
+      var bdg=(i===0)?'<span class="bdg">cheapest</span>':'';
+      var sel=(o.matched===curName)?' sel':'';
+      return '<div class="skurow'+sel+'" data-pick="'+i+'">'+ph+
+        '<div class="si"><b>'+esc(o.matched||'—')+'</b><small>'+esc(o.pack||'')+pu+'</small></div>'+
+        '<div class="sp">₹'+rupees(o.price_paise)+bdg+'</div></div>';
+    }).join('');
+    var h='<div class="ov" id="ov"><div class="sheet"><h2>'+esc(cap(fi.name))+' · on Hyperpure</h2>'+
+      '<div class="skuhint">Cheapest is picked by default — tap another to swap, or search Hyperpure for the exact one.</div>'+
+      '<div class="skulist">'+rowsHtml+'</div>'+
+      '<a class="hpsearch" href="'+esc(searchUrl)+'" target="_blank" rel="noopener">Search “'+esc(fi.name)+'” on Hyperpure ↗</a>'+
+      '</div></div>';
+    var hostEl=document.getElementById('sheetHost'); hostEl.innerHTML=h;
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') hostEl.innerHTML=''; });
+    hostEl.querySelectorAll('.skurow[data-pick]').forEach(function(r){ r.addEventListener('click',function(){ chooseSku(k, opts[+r.dataset.pick]); hostEl.innerHTML=''; toast('Picked','info'); }); });
+  }
 
   function hpSubtotal(){ var s=0; Object.keys(S.hp.basket).forEach(function(k){ var b=S.hp.basket[k]; s+=b.qty*(b.it.price_paise||0); }); return Math.round(s); }
   function updateMov(){
@@ -357,7 +395,7 @@
 
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
-    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,hp:{feed:[],win:null,mov:150000,del:9900,fresh:'',basket:{},tick:null}};
+    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,hp:{feed:[],win:null,mov:150000,del:9900,fresh:'',basket:{},chosen:{},tick:null}};
     pin=''; renderDots(); app.classList.add('hide'); gate.classList.remove('hide'); }
   document.getElementById('lock').addEventListener('click', lock);
   function toast(msg,kind){ var h=document.getElementById('toastHost'); h.innerHTML='<div class="toast '+(kind||'info')+'">'+esc(msg)+'</div>'; setTimeout(function(){h.innerHTML='';},2200); }
