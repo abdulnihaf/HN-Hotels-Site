@@ -61,18 +61,37 @@ export async function onRequest(context) {
 
     if (request.method === 'GET') {
       const item = url.searchParams.get('item');
-      const where = item ? `WHERE item_key = ?` : '';
+      const where = item ? `WHERE item_key = ? AND source != 'hyperpure'` : `WHERE source != 'hyperpure'`;
       const binds = item ? [norm(item)] : [];
       const rows = await db.prepare(
         `SELECT item_key, source, query, matched_name, brand, pack, unit, price_paise,
                 unit_price_paise, image, url, match_count, scraped_at
            FROM item_prices ${where} ORDER BY item_key, unit_price_paise`
       ).bind(...binds).all();
-      // group by item, flag the cheapest source by per-unit price
       const byItem = new Map();
       for (const r of (rows?.results || [])) {
         if (!byItem.has(r.item_key)) byItem.set(r.item_key, []);
         byItem.get(r.item_key).push(r);
+      }
+      // Hyperpure is the canonical next-day source — read it from its own table
+      // so its live UI stays the source of truth; merge it in as a price source here.
+      const hpWhere = item ? `WHERE item_key = ? AND cheapest_price_paise IS NOT NULL` : `WHERE cheapest_price_paise IS NOT NULL`;
+      let hp = { results: [] };
+      try {
+        hp = await db.prepare(
+          `SELECT item_key, query, cheapest_name, cheapest_brand, cheapest_pack, cheapest_unit,
+                  cheapest_price_paise, cheapest_unit_price_paise, cheapest_image, scraped_at
+             FROM hyperpure_prices ${hpWhere}`
+        ).bind(...binds).all();
+      } catch (e) {}
+      for (const r of (hp?.results || [])) {
+        if (!byItem.has(r.item_key)) byItem.set(r.item_key, []);
+        byItem.get(r.item_key).push({
+          item_key: r.item_key, source: 'hyperpure', query: r.query, matched_name: r.cheapest_name,
+          brand: r.cheapest_brand, pack: r.cheapest_pack, unit: r.cheapest_unit,
+          price_paise: r.cheapest_price_paise, unit_price_paise: r.cheapest_unit_price_paise,
+          image: r.cheapest_image, url: null, match_count: 0, scraped_at: r.scraped_at,
+        });
       }
       const items = [...byItem.entries()].map(([key, srcs]) => {
         const ranked = srcs.slice().sort((a, b) =>
