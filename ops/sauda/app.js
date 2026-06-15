@@ -13,7 +13,8 @@
       errEl = document.getElementById('pinErr');
   var pin = '', busy = false;
 
-  var S = { token: null, user: '', role: '', cat: null, brand: 'both', order: [] /* lines */, seq: 0 };
+  var S = { token: null, user: '', role: '', cat: null, brand: 'both', order: [] /* lines */, seq: 0,
+            hp: { feed: [], win: null, mov: 150000, del: 9900, fresh: '', basket: {} /* item_key -> {it, qty} */, tick: null } };
 
   // ── token / session ──
   function tokenExp(t){ try{ var b=t.split('.')[0].replace(/-/g,'+').replace(/_/g,'/'); while(b.length%4)b+='='; return (JSON.parse(atob(b)).exp||0)*1000; }catch(e){ return 0; } }
@@ -182,12 +183,17 @@
     onSearch();
   });
 
-  // ── mode toggle + to-pay (owner pays via saved UPI) ──
+  // ── mode toggle: Place · To pay · Hyperpure ──
   function setMode(m){
-    var place=document.getElementById('viewPlace'), pay=document.getElementById('viewPay'), bar=document.getElementById('placeBar');
+    var place=document.getElementById('viewPlace'), pay=document.getElementById('viewPay'), hp=document.getElementById('viewHp');
+    var placeBar=document.getElementById('placeBar'), hpBar=document.getElementById('hpBar');
+    var h1=document.querySelector('.top h1');
     document.querySelectorAll('#modeSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.m===m); });
-    if(m==='pay'){ place.classList.add('hide'); pay.classList.remove('hide'); bar.classList.add('hide'); loadPay(); }
-    else { pay.classList.add('hide'); place.classList.remove('hide'); bar.classList.remove('hide'); }
+    [place,pay,hp].forEach(function(v){ v.classList.add('hide'); });
+    placeBar.classList.add('hide'); hpBar.classList.add('hide');
+    if(m==='pay'){ pay.classList.remove('hide'); if(h1) h1.textContent="To pay"; loadPay(); }
+    else if(m==='hp'){ hp.classList.remove('hide'); hpBar.classList.remove('hide'); if(h1) h1.textContent="Tomorrow · Hyperpure"; loadHp(); }
+    else { place.classList.remove('hide'); placeBar.classList.remove('hide'); if(h1) h1.textContent="Today's order"; }
   }
   document.getElementById('modeSeg').addEventListener('click', function(e){ var b=e.target.closest('button[data-m]'); if(b) setMode(b.dataset.m); });
 
@@ -244,8 +250,109 @@
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
 
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // HYPERPURE — tomorrow's planned mandi basket (next-day, ₹1,500 min, 11pm cutoff)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  function loadHp(){
+    if(S.hp.tick){ clearInterval(S.hp.tick); S.hp.tick=null; }
+    var feed=document.getElementById('hpFeed'), empty=document.getElementById('hpEmpty');
+    feed.innerHTML=''; empty.classList.add('hide');
+    document.getElementById('hpStrip').innerHTML='';
+    api('hyperpure-feed').then(function(res){
+      if(!res.ok){ toast(res.j&&res.j.error||'feed failed','err'); return; }
+      S.hp.feed = res.j.items||[]; S.hp.win = res.j.window||null; S.hp.fresh = res.j.scraped_at||'';
+      S.hp.mov = res.j.mov_paise||150000; S.hp.del = res.j.delivery_paise||9900;
+      document.getElementById('movRight').textContent = 'of ₹'+rupees(S.hp.mov)+' minimum';
+      renderHpStrip();
+      renderHpFeed();
+      // live cutoff countdown, ticking each minute
+      if(S.hp.win && S.hp.win.open){ S.hp.tick=setInterval(function(){ S.hp.win.mins_to_cutoff=Math.max(0,S.hp.win.mins_to_cutoff-1); renderHpStrip(); }, 60000); }
+    }).catch(function(){ toast('No connection','err'); });
+  }
+
+  function fmtDay(ymd){ try{ var d=new Date(ymd+'T00:00:00'); return d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'}); }catch(e){ return ymd; } }
+  function relTime(iso){ if(!iso) return ''; var ms=Date.now()-new Date(iso).getTime(); var h=Math.floor(ms/3600000);
+    if(h<1) return 'just now'; if(h<24) return h+'h ago'; return Math.floor(h/24)+'d ago'; }
+  function isStale(iso){ if(!iso) return true; return (Date.now()-new Date(iso).getTime())>36*3600000; }
+
+  function renderHpStrip(){
+    var w=S.hp.win; if(!w){ return; }
+    var strip=document.getElementById('hpStrip'); var pill='';
+    var clock='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+    if(w.open){
+      var hh=Math.floor(w.mins_to_cutoff/60), mm=w.mins_to_cutoff%60;
+      var left=hh>0?(hh+'h '+mm+'m'):(mm+'m');
+      pill='<span class="hp-pill">'+clock+'Delivers '+esc(fmtDay(w.for_date))+' · order within '+left+'</span>';
+    } else {
+      pill='<span class="hp-pill warn">'+clock+'Cutoff passed · delivers '+esc(fmtDay(w.for_date))+'</span>';
+    }
+    var stale=isStale(S.hp.fresh);
+    var fresh='<span class="hp-fresh'+(stale?' stale':'')+'">prices '+(S.hp.fresh?relTime(S.hp.fresh):'—')+(stale?' · stale':'')+'</span>';
+    strip.innerHTML=pill+fresh;
+  }
+
+  document.getElementById('hpSearch').addEventListener('input', renderHpFeed);
+
+  function renderHpFeed(){
+    var host=document.getElementById('hpFeed'), empty=document.getElementById('hpEmpty');
+    var q=(document.getElementById('hpSearch').value||'').trim().toLowerCase();
+    if(!S.hp.feed.length){ host.innerHTML=''; empty.classList.remove('hide'); updateMov(); return; }
+    empty.classList.add('hide');
+    var rows=S.hp.feed.filter(function(it){ return !q || (it.name+' '+(it.matched||'')).toLowerCase().indexOf(q)>=0; });
+    host.innerHTML = rows.map(function(it){
+      var b=S.hp.basket[it.item_key]; var inb=b&&b.qty>0;
+      var ctrl = inb
+        ? '<div class="step"><button data-dec="'+esc(it.item_key)+'">−</button>'+
+            '<input inputmode="decimal" data-q="'+esc(it.item_key)+'" value="'+esc(String(b.qty))+'">'+
+            '<button data-inc="'+esc(it.item_key)+'">+</button></div>'
+        : '<button class="add-pill" data-addhp="'+esc(it.item_key)+'" aria-label="add">+</button>';
+      return '<div class="hpitem'+(inb?' in':'')+'">'+
+        '<div class="nm"><div class="t"><b>'+esc(cap(it.name))+'</b><span class="pr">₹'+rupees(it.price_paise)+'</span></div><small>'+esc(it.matched||'—')+'</small></div>'+
+        ctrl+'</div>';
+    }).join('');
+    host.querySelectorAll('[data-addhp]').forEach(function(b){ b.addEventListener('click',function(){ setHpQty(b.dataset.addhp,1); }); });
+    host.querySelectorAll('[data-inc]').forEach(function(b){ b.addEventListener('click',function(){ bumpHp(b.dataset.inc,1); }); });
+    host.querySelectorAll('[data-dec]').forEach(function(b){ b.addEventListener('click',function(){ bumpHp(b.dataset.dec,-1); }); });
+    host.querySelectorAll('input[data-q]').forEach(function(inp){ inp.addEventListener('input',function(){ setHpQty(inp.dataset.q, parseFloat(inp.value)||0, true); }); });
+    updateMov();
+  }
+  function cap(s){ s=String(s||''); return s.charAt(0).toUpperCase()+s.slice(1); }
+  function findFeed(k){ return S.hp.feed.find(function(x){return x.item_key===k;}); }
+  function setHpQty(k,qty,fromInput){ var it=findFeed(k); if(!it) return;
+    if(qty>0) S.hp.basket[k]={it:it,qty:qty}; else delete S.hp.basket[k];
+    if(!fromInput) renderHpFeed(); else updateMov(); }
+  function bumpHp(k,d){ var b=S.hp.basket[k]; var q=(b?b.qty:0)+d; if(q<0)q=0; setHpQty(k, Math.round(q*100)/100); }
+
+  function hpSubtotal(){ var s=0; Object.keys(S.hp.basket).forEach(function(k){ var b=S.hp.basket[k]; s+=b.qty*(b.it.price_paise||0); }); return Math.round(s); }
+  function updateMov(){
+    var sub=hpSubtotal(), mov=S.hp.mov, del=S.hp.del;
+    var fill=document.getElementById('movFill'), left=document.getElementById('movLeft'), right=document.getElementById('movRight'), btn=document.getElementById('hpPlaceBtn');
+    var pct=Math.min(100, mov?Math.round(sub/mov*100):0);
+    fill.style.width=pct+'%'; fill.classList.toggle('met', sub>=mov);
+    var n=Object.keys(S.hp.basket).length;
+    if(!n){ left.textContent='₹0'; right.textContent='of ₹'+rupees(mov)+' minimum'; btn.disabled=true; btn.textContent='Add items to start'; return; }
+    left.textContent='₹'+rupees(sub)+' · '+n+' item'+(n>1?'s':'');
+    if(sub<mov){ right.textContent='₹'+rupees(mov-sub)+' to go'; btn.disabled=true; btn.textContent='Add ₹'+rupees(mov-sub)+' more to reach minimum'; }
+    else { right.textContent='+ ₹'+rupees(del)+' delivery = ₹'+rupees(sub+del); btn.disabled=false; btn.textContent='Send tomorrow’s order · ₹'+rupees(sub+del); }
+  }
+
+  document.getElementById('hpPlaceBtn').addEventListener('click', function(){
+    if(busy) return; var sub=hpSubtotal(); if(sub<S.hp.mov) return;
+    var lines=Object.keys(S.hp.basket).map(function(k){ var b=S.hp.basket[k];
+      return { item_key:k, name:b.it.name, matched:b.it.matched, qty:b.qty, price_paise:b.it.price_paise }; });
+    busy=true; var btn=this; btn.disabled=true; btn.textContent='Sending…';
+    api('hyperpure-place',{method:'POST',body:{lines:lines}}).then(function(res){
+      busy=false;
+      if(!res.ok||!res.j||!res.j.ok){ toast(res.j&&res.j.j&&res.j.j.error||res.j&&res.j.error||'Place failed','err'); updateMov(); return; }
+      toast('Queued for '+fmtDay(res.j.for_date)+' — confirm & pay in Hyperpure','ok');
+      S.hp.basket={}; renderHpFeed();
+    }).catch(function(){ busy=false; toast('No connection','err'); updateMov(); });
+  });
+
   // ── misc ──
-  function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0}; pin=''; renderDots(); app.classList.add('hide'); gate.classList.remove('hide'); }
+  function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
+    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,hp:{feed:[],win:null,mov:150000,del:9900,fresh:'',basket:{},tick:null}};
+    pin=''; renderDots(); app.classList.add('hide'); gate.classList.remove('hide'); }
   document.getElementById('lock').addEventListener('click', lock);
   function toast(msg,kind){ var h=document.getElementById('toastHost'); h.innerHTML='<div class="toast '+(kind||'info')+'">'+esc(msg)+'</div>'; setTimeout(function(){h.innerHTML='';},2200); }
   function esc(s){ return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
