@@ -101,6 +101,109 @@ async function odoo(apiKey, model, method, args = [], kwargs = {}) {
   return d.result;
 }
 
+// ── LIVE POS (source of truth) ─────────────────────────────────────────────
+// Sales/payments/items are queried LIVE from the POS Odoo instances so the
+// assistant never reads a stale mirror. read_group keeps it to 1-3 cheap
+// aggregate calls regardless of order volume. HE → test.hamzahotel.com,
+// NCH → ops.hamzahotel.com (both already hold the keys on this Pages project).
+const POS_INSTANCES = {
+  HE:  { host: 'https://test.hamzahotel.com/jsonrpc', keys: ['POS_ODOO_KEY', 'TEST_ODOO_KEY', 'ODOO_API_KEY'], uids: ['POS_ODOO_UID', 'TEST_ODOO_UID'] },
+  NCH: { host: 'https://ops.hamzahotel.com/jsonrpc',  keys: ['ODOO_NCH_POS_KEY', 'OPS_ODOO_KEY', 'ODOO_API_KEY'], uids: ['OPS_ODOO_UID', 'POS_ODOO_UID'] },
+};
+const POS_STATES = ['paid', 'done', 'invoiced'];
+
+function posCreds(env, brand) {
+  const c = POS_INSTANCES[brand];
+  if (!c) return null;
+  const key = c.keys.map(k => env[k]).find(Boolean);
+  if (!key) return null;
+  const uid = parseInt(c.uids.map(u => env[u]).find(Boolean) || '2', 10);
+  return { host: c.host, db: 'main', uid, key };
+}
+
+async function posRpc(creds, model, method, args = [], kwargs = {}) {
+  const r = await fetch(creds.host, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'call',
+      params: { service: 'object', method: 'execute_kw',
+        args: [creds.db, creds.uid, creds.key, model, method, args, kwargs] } }),
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.data?.message || d.error.message || 'POS Odoo error');
+  return d.result;
+}
+
+function classifyPM(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('complimentary') || n.includes('comp')) return 'complimentary';
+  if (n.includes('cash')) return 'cash';
+  if (n.includes('card')) return 'card';
+  if (n.includes('upi') || n.includes('razorpay') || n.includes('paytm') || n.includes('online') || n.includes('gpay')) return 'upi';
+  if (n.includes('token') || n.includes('runner')) return 'runner';
+  return 'other';
+}
+
+// Payment split via one read_group on pos.payment (dotted-path domain on the order).
+async function posPaymentSplit(creds, from, to) {
+  const rows = await posRpc(creds, 'pos.payment', 'read_group',
+    [[['pos_order_id.date_order', '>=', `${from} 00:00:00`],
+      ['pos_order_id.date_order', '<=', `${to} 23:59:59`],
+      ['pos_order_id.state', 'in', POS_STATES]],
+     ['amount:sum'], ['payment_method_id']]);
+  const buckets = { cash: 0, upi: 0, card: 0, complimentary: 0, runner: 0, other: 0 };
+  const by_method = [];
+  for (const r of (rows || [])) {
+    const name = r.payment_method_id?.[1] || 'unknown';
+    const amt = r.amount || 0;
+    buckets[classifyPM(name)] += amt;
+    by_method.push({ method: name, rupees: Math.round(amt * 100) / 100, count: r.__count || 0 });
+  }
+  by_method.sort((a, b) => b.rupees - a.rupees);
+  return { buckets, by_method };
+}
+
+async function liveRevenue(creds, brand, from, to) {
+  const og = await posRpc(creds, 'pos.order', 'read_group',
+    [[['date_order', '>=', `${from} 00:00:00`], ['date_order', '<=', `${to} 23:59:59`], ['state', 'in', POS_STATES]],
+     ['amount_total:sum'], []]);
+  const gross = og?.[0]?.amount_total || 0;
+  const orders = og?.[0]?.__count || 0;
+  const { buckets } = await posPaymentSplit(creds, from, to);
+  const comp = buckets.complimentary || 0;
+  return {
+    ok: true, resource: 'revenue', brand, range: { from, to },
+    totals: {
+      gross_sales_rupees: Math.round(gross * 100) / 100,
+      complimentary_rupees: Math.round(comp * 100) / 100,
+      net_of_complimentary_rupees: Math.round((gross - comp) * 100) / 100,
+      cash_rupees: Math.round(buckets.cash * 100) / 100,
+      upi_rupees: Math.round(buckets.upi * 100) / 100,
+      card_rupees: Math.round(buckets.card * 100) / 100,
+      runner_ledger_rupees: Math.round(buckets.runner * 100) / 100,
+      order_count: orders,
+      avg_ticket_rupees: orders ? Math.round((gross / orders) * 100) / 100 : 0,
+    },
+    meta: { source: 'odoo-live (POS source of truth)', instance: creds.host, generated_at: istNow().toISOString() },
+  };
+}
+
+async function liveItems(creds, brand, from, to, limit) {
+  const rows = await posRpc(creds, 'pos.order.line', 'read_group',
+    [[['order_id.date_order', '>=', `${from} 00:00:00`], ['order_id.date_order', '<=', `${to} 23:59:59`], ['order_id.state', 'in', POS_STATES]],
+     ['qty:sum', 'price_subtotal_incl:sum'], ['product_id']],
+    { orderby: 'price_subtotal_incl desc', limit });
+  return {
+    ok: true, resource: 'items', brand, range: { from, to },
+    items: (rows || []).map(r => ({
+      product: r.product_id?.[1] || 'unknown',
+      qty: r.qty || 0,
+      lines: r.__count || 0,
+      revenue_rupees: Math.round((r.price_subtotal_incl || 0) * 100) / 100,
+    })),
+    meta: { source: 'odoo-live (POS source of truth)', instance: creds.host, generated_at: istNow().toISOString() },
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY
 // ═══════════════════════════════════════════════════════════════════════════
@@ -200,8 +303,20 @@ function brandUpper(url, def = null) {
   return b ? b.toUpperCase() : def;
 }
 
-// ── REVENUE: roll-up of POS sales from sales_recon_daily (paise) ──
+// ── REVENUE: LIVE from POS Odoo; falls back to the (stale) D1 mirror ──
 async function revenue(url, env) {
+  const { from, to } = rng(url);
+  const brand = brandUpper(url, 'NCH');
+  const creds = posCreds(env, brand);
+  if (creds) {
+    try { return json(await liveRevenue(creds, brand, from, to)); }
+    catch (e) { return await revenueMirror(url, env, `live POS query failed: ${e.message}`); }
+  }
+  return await revenueMirror(url, env, 'no POS Odoo key configured on this deployment');
+}
+
+// Stale fallback: the D1 reconciliation mirror (frozen until the sync ships).
+async function revenueMirror(url, env, why) {
   const { from, to } = rng(url);
   const brand = brandUpper(url, 'NCH'); // sales_recon_daily uses HE / NCH
   const r = await env.DB.prepare(`
@@ -241,7 +356,7 @@ async function revenue(url, env) {
       counter_upi_rzp: paiseRupees(r?.counter_upi_rzp),
       runner_sales: paiseRupees(r?.runner_sales),
     },
-    meta: { source: 'D1 sales_recon_daily (POS reconciliation mirror)', generated_at: istNow().toISOString() },
+    meta: { source: 'd1-mirror (STALE — frozen until sync ships)', stale_reason: why, generated_at: istNow().toISOString() },
   });
 }
 
@@ -271,8 +386,35 @@ async function revenueDaily(url, env) {
   });
 }
 
-// ── PAYMENTS: split by POS payment method + Razorpay QR (UPI vs cash vs card) ──
+// ── PAYMENTS: LIVE split (UPI vs cash vs card) from POS Odoo; mirror fallback ──
 async function payments(url, env) {
+  const { from, to } = rng(url);
+  const brand = brandUpper(url, 'NCH');
+  const creds = posCreds(env, brand);
+  if (creds) {
+    try {
+      const { buckets, by_method } = await posPaymentSplit(creds, from, to);
+      const total = Object.values(buckets).reduce((s, v) => s + v, 0) - (buckets.complimentary || 0);
+      return json({
+        ok: true, resource: 'payments', brand, range: { from, to },
+        split_rupees: {
+          cash: Math.round(buckets.cash * 100) / 100,
+          upi: Math.round(buckets.upi * 100) / 100,
+          card: Math.round(buckets.card * 100) / 100,
+          runner_ledger: Math.round(buckets.runner * 100) / 100,
+          other: Math.round(buckets.other * 100) / 100,
+          complimentary: Math.round(buckets.complimentary * 100) / 100,
+        },
+        upi_share_pct: total ? Math.round((buckets.upi / total) * 1000) / 10 : 0,
+        by_method,
+        meta: { source: 'odoo-live (POS source of truth)', instance: creds.host, generated_at: istNow().toISOString() },
+      });
+    } catch (e) { return await paymentsMirror(url, env, `live POS query failed: ${e.message}`); }
+  }
+  return await paymentsMirror(url, env, 'no POS Odoo key configured on this deployment');
+}
+
+async function paymentsMirror(url, env, why) {
   const { from, to } = rng(url);
   const brand = brandUpper(url, 'NCH');
   const pm = await env.DB.prepare(
@@ -302,12 +444,24 @@ async function payments(url, env) {
     razorpay_qr: (qr.results || []).map(r => ({
       method: r.method, captures: r.captures, fee: paiseRupees(r.fee_paise), ...paiseRupees(r.amount_paise),
     })),
-    meta: { source: 'D1 pos_payments_mirror + razorpay_qr_collections', generated_at: istNow().toISOString() },
+    meta: { source: 'd1-mirror (STALE — frozen until sync ships)', stale_reason: why, generated_at: istNow().toISOString() },
   });
 }
 
-// ── ITEMS: top menu items by revenue ──
+// ── ITEMS: LIVE top menu items by revenue from POS Odoo; mirror fallback ──
 async function items(url, env) {
+  const { from, to } = rng(url);
+  const brand = brandUpper(url, 'NCH');
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 500);
+  const creds = posCreds(env, brand);
+  if (creds && !url.searchParams.get('search')) {
+    try { return json(await liveItems(creds, brand, from, to, limit)); }
+    catch (e) { return await itemsMirror(url, env, `live POS query failed: ${e.message}`); }
+  }
+  return await itemsMirror(url, env, creds ? 'search= uses the mirror' : 'no POS Odoo key configured on this deployment');
+}
+
+async function itemsMirror(url, env, why) {
   const { from, to } = rng(url);
   const brand = brandUpper(url, 'NCH');
   const search = (url.searchParams.get('search') || '').trim();
@@ -330,7 +484,7 @@ async function items(url, env) {
     items: (r.results || []).map(x => ({
       product: x.product_name, qty: x.qty, orders: x.orders, ...paiseRupees(x.revenue_paise),
     })),
-    meta: { source: 'D1 pos_lines_mirror', generated_at: istNow().toISOString() },
+    meta: { source: 'd1-mirror (STALE — frozen until sync ships)', stale_reason: why, generated_at: istNow().toISOString() },
   });
 }
 
@@ -607,10 +761,10 @@ function manifest(url, token) {
       health:           { auth: false, desc: 'Liveness probe, no business data.', example: `${base}?resource=health` },
       manifest:         { auth: true,  desc: 'This document.', example: `${base}?resource=manifest${k}` },
       catalog:          { auth: true,  desc: 'Stable entity catalog: legal entity, brands/outlets, company-id maps, channel economics, expense taxonomy, targets, menu fingerprint, staff roles.', example: `${base}?resource=catalog${k}` },
-      revenue:          { auth: true,  desc: 'POS sales roll-up (gross, cash, UPI, card, order count, avg ticket).', params: ['from', 'to', 'brand'], example: `${base}?resource=revenue&brand=HE&from=2026-06-01&to=2026-06-15${k}` },
-      'revenue.daily':  { auth: true,  desc: 'Per-day sales rows.', params: ['from', 'to', 'brand'], example: `${base}?resource=revenue.daily&brand=NCH${k}` },
-      payments:         { auth: true,  desc: 'Payment-method split (UPI vs cash vs card) from POS + Razorpay QR.', params: ['from', 'to', 'brand'], example: `${base}?resource=payments&brand=NCH${k}` },
-      items:            { auth: true,  desc: 'Top menu items by revenue.', params: ['from', 'to', 'brand', 'search', 'limit'], example: `${base}?resource=items&brand=HE&limit=20${k}` },
+      revenue:          { auth: true,  desc: 'LIVE POS sales (gross, cash, UPI, card, complimentary, orders, avg ticket). Queried live from the POS Odoo; mirror only as fallback.', params: ['from', 'to', 'brand'], example: `${base}?resource=revenue&brand=HE&from=2026-06-01&to=2026-06-15${k}` },
+      'revenue.daily':  { auth: true,  desc: 'Per-day sales rows (D1 mirror — may be stale until sync ships).', params: ['from', 'to', 'brand'], example: `${base}?resource=revenue.daily&brand=NCH${k}` },
+      payments:         { auth: true,  desc: 'LIVE payment-method split (UPI vs cash vs card) from POS Odoo.', params: ['from', 'to', 'brand'], example: `${base}?resource=payments&brand=NCH${k}` },
+      items:            { auth: true,  desc: 'LIVE top menu items by revenue from POS Odoo.', params: ['from', 'to', 'brand', 'limit'], example: `${base}?resource=items&brand=HE&limit=20${k}` },
       attendance:       { auth: true,  desc: 'Who was present / absent / on leave on a date.', params: ['date', 'brand'], example: `${base}?resource=attendance&date=2026-06-14&brand=HE${k}` },
       cash:             { auth: true,  desc: 'Live cash balances per pile (counters + manager + owner).', example: `${base}?resource=cash${k}` },
       aggregator:       { auth: true,  desc: 'Swiggy + Zomato order/revenue/payout summary.', params: ['from', 'to', 'brand', 'platform'], example: `${base}?resource=aggregator&brand=he&platform=swiggy${k}` },
