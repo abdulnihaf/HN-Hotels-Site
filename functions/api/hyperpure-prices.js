@@ -11,7 +11,7 @@
 // rates from the owner's real logged-in account — accurate by construction.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { HP_CATALOG } from './_lib/hyperpure-catalog.js';
+import { HP_CATALOG, HP_GLOBAL_NOT } from './_lib/hyperpure-catalog.js';
 
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json' } });
 const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -59,7 +59,7 @@ export async function onRequest(context) {
     }
     if (request.method === 'GET') {
       // the scout fetches the buying spec so it picks the right FORM per item
-      if (url.searchParams.get('catalog')) return json({ ok: true, catalog: HP_CATALOG });
+      if (url.searchParams.get('catalog')) return json({ ok: true, catalog: HP_CATALOG, global_not: HP_GLOBAL_NOT });
       const item = url.searchParams.get('item');
       if (item) {
         const r = await db.prepare(`SELECT * FROM hyperpure_prices WHERE item_key = ?`).bind(norm(item)).first();
