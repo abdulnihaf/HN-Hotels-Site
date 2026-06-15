@@ -31,6 +31,18 @@ x-spine-key: <SPINE_TOKEN>
 
 `resource=health` is the only open resource (no business data). Everything else needs the token.
 
+### One-link onboarding for the cloud chat (no token-pasting)
+
+Hand the cloud chat a **single bootstrap link** — the manifest with the key embedded:
+
+```
+https://hnhotels.in/api/spine?resource=manifest&key=<SPINE_TOKEN>
+```
+
+When the chat fetches it, the manifest comes back with a `cloud_chat_setup` block and with the
+key already baked into **every** example URL. The chat reuses that key on all subsequent calls,
+so the owner never pastes a raw token — one link is the entire setup.
+
 > Rotation / revocation: update the `spine_keys` row (`active=0` to revoke). A new token = insert a
 > new SHA-256 hash. If `SPINE_API_KEY` is ever set as a Pages secret, it takes precedence.
 

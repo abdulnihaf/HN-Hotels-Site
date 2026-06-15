@@ -127,7 +127,7 @@ export async function onRequest(context) {
 
   try {
     switch (resource) {
-      case 'manifest':         return json(manifest(url));
+      case 'manifest':         return json(manifest(url, extractToken(request, url)));
       case 'catalog':          return json({ ok: true, resource, generated_at: istNow().toISOString(), data: CATALOG });
       case 'revenue':          return await revenue(url, env);
       case 'revenue.daily':    return await revenueDaily(url, env);
@@ -153,12 +153,16 @@ export async function onRequest(context) {
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTH — SHA-256(token) must match an active row in spine_keys (or env override)
 // ═══════════════════════════════════════════════════════════════════════════
+function extractToken(request, url) {
+  const hdr = request.headers.get('authorization') || '';
+  const bearer = hdr.toLowerCase().startsWith('bearer ') ? hdr.slice(7).trim() : '';
+  return bearer || request.headers.get('x-spine-key') || url.searchParams.get('key') || '';
+}
+
 async function authenticate(context) {
   const { request, env } = context;
   const url = new URL(request.url);
-  const hdr = request.headers.get('authorization') || '';
-  const bearer = hdr.toLowerCase().startsWith('bearer ') ? hdr.slice(7).trim() : '';
-  const token = bearer || request.headers.get('x-spine-key') || url.searchParams.get('key') || '';
+  const token = extractToken(request, url);
   if (!token) return null;
 
   // env override (preferred if ever provisioned as a Pages secret)
@@ -564,14 +568,30 @@ async function bills(url, env) {
 // ═══════════════════════════════════════════════════════════════════════════
 // MANIFEST — self-describing grammar
 // ═══════════════════════════════════════════════════════════════════════════
-function manifest(url) {
+function manifest(url, token) {
   const base = `${url.origin}/api/spine`;
+  // Bake the caller's own key into every example so a single bootstrap link is
+  // fully self-propagating: the cloud chat reuses the key it already holds and
+  // never has to ask the user to paste a token.
+  const k = token ? `&key=${token}` : '';
   return {
     ok: true,
     service: 'SPINE — HN Hotels Operational Intelligence',
     version: VERSION,
     read_only: true,
     generated_at: istNow().toISOString(),
+    cloud_chat_setup: {
+      you_are_authenticated: !!token,
+      bootstrap_link: token ? `${base}?resource=manifest&key=${token}` : null,
+      how_to_call: token
+        ? 'You already hold a valid SPINE key (it is in every example URL below). Reuse it on EVERY request by appending the same &key=<key>, or send header "Authorization: Bearer <key>". Do NOT ask the user to paste a token — you already have it.'
+        : 'Open the bootstrap link the owner gives you; it carries the key. Then reuse that key on every request.',
+      rules: [
+        'SPINE is READ-ONLY. For anything that changes state (execution), hand off to Claude Code.',
+        'To answer a question, pick a resource below, fill from/to/brand, and append the key.',
+        'Dates are YYYY-MM-DD in IST. Money: read the *_rupees / .rupees fields.',
+      ],
+    },
     auth: {
       how: 'Present the SPINE token as Authorization: Bearer <token>, or x-spine-key: <token>, or ?key=<token>.',
       note: 'A dedicated token (NOT DASHBOARD_KEY). Hash stored in D1 spine_keys; raw token held only by owner.',
@@ -585,20 +605,20 @@ function manifest(url) {
     },
     resources: {
       health:           { auth: false, desc: 'Liveness probe, no business data.', example: `${base}?resource=health` },
-      manifest:         { auth: true,  desc: 'This document.', example: `${base}?resource=manifest` },
-      catalog:          { auth: true,  desc: 'Stable entity catalog: legal entity, brands/outlets, company-id maps, channel economics, expense taxonomy, targets, menu fingerprint, staff roles.', example: `${base}?resource=catalog` },
-      revenue:          { auth: true,  desc: 'POS sales roll-up (gross, cash, UPI, card, order count, avg ticket).', params: ['from', 'to', 'brand'], example: `${base}?resource=revenue&brand=HE&from=2026-06-01&to=2026-06-15` },
-      'revenue.daily':  { auth: true,  desc: 'Per-day sales rows.', params: ['from', 'to', 'brand'], example: `${base}?resource=revenue.daily&brand=NCH` },
-      payments:         { auth: true,  desc: 'Payment-method split (UPI vs cash vs card) from POS + Razorpay QR.', params: ['from', 'to', 'brand'], example: `${base}?resource=payments&brand=NCH` },
-      items:            { auth: true,  desc: 'Top menu items by revenue.', params: ['from', 'to', 'brand', 'search', 'limit'], example: `${base}?resource=items&brand=HE&limit=20` },
-      attendance:       { auth: true,  desc: 'Who was present / absent / on leave on a date.', params: ['date', 'brand'], example: `${base}?resource=attendance&date=2026-06-14&brand=HE` },
-      cash:             { auth: true,  desc: 'Live cash balances per pile (counters + manager + owner).', example: `${base}?resource=cash` },
-      aggregator:       { auth: true,  desc: 'Swiggy + Zomato order/revenue/payout summary.', params: ['from', 'to', 'brand', 'platform'], example: `${base}?resource=aggregator&brand=he&platform=swiggy` },
-      expenses:         { auth: true,  desc: 'Spend roll-up by category + payment method, plus Odoo PO total and outstanding bills.', params: ['from', 'to', 'brand'], example: `${base}?resource=expenses&brand=NCH` },
-      vendors:          { auth: true,  desc: 'Active vendor directory.', params: ['brand'], example: `${base}?resource=vendors` },
-      purchase_orders:  { auth: true,  desc: 'Odoo purchase orders in range.', params: ['from', 'to', 'brand'], example: `${base}?resource=purchase_orders&brand=HE` },
-      bills:            { auth: true,  desc: 'Odoo vendor bills (add &outstanding=1 for unpaid only).', params: ['from', 'to', 'brand', 'outstanding'], example: `${base}?resource=bills&outstanding=1` },
-      credentials:      { auth: true,  desc: 'Credential REFERENCE layer — names + locations only, never values.', example: `${base}?resource=credentials` },
+      manifest:         { auth: true,  desc: 'This document.', example: `${base}?resource=manifest${k}` },
+      catalog:          { auth: true,  desc: 'Stable entity catalog: legal entity, brands/outlets, company-id maps, channel economics, expense taxonomy, targets, menu fingerprint, staff roles.', example: `${base}?resource=catalog${k}` },
+      revenue:          { auth: true,  desc: 'POS sales roll-up (gross, cash, UPI, card, order count, avg ticket).', params: ['from', 'to', 'brand'], example: `${base}?resource=revenue&brand=HE&from=2026-06-01&to=2026-06-15${k}` },
+      'revenue.daily':  { auth: true,  desc: 'Per-day sales rows.', params: ['from', 'to', 'brand'], example: `${base}?resource=revenue.daily&brand=NCH${k}` },
+      payments:         { auth: true,  desc: 'Payment-method split (UPI vs cash vs card) from POS + Razorpay QR.', params: ['from', 'to', 'brand'], example: `${base}?resource=payments&brand=NCH${k}` },
+      items:            { auth: true,  desc: 'Top menu items by revenue.', params: ['from', 'to', 'brand', 'search', 'limit'], example: `${base}?resource=items&brand=HE&limit=20${k}` },
+      attendance:       { auth: true,  desc: 'Who was present / absent / on leave on a date.', params: ['date', 'brand'], example: `${base}?resource=attendance&date=2026-06-14&brand=HE${k}` },
+      cash:             { auth: true,  desc: 'Live cash balances per pile (counters + manager + owner).', example: `${base}?resource=cash${k}` },
+      aggregator:       { auth: true,  desc: 'Swiggy + Zomato order/revenue/payout summary.', params: ['from', 'to', 'brand', 'platform'], example: `${base}?resource=aggregator&brand=he&platform=swiggy${k}` },
+      expenses:         { auth: true,  desc: 'Spend roll-up by category + payment method, plus Odoo PO total and outstanding bills.', params: ['from', 'to', 'brand'], example: `${base}?resource=expenses&brand=NCH${k}` },
+      vendors:          { auth: true,  desc: 'Active vendor directory.', params: ['brand'], example: `${base}?resource=vendors${k}` },
+      purchase_orders:  { auth: true,  desc: 'Odoo purchase orders in range.', params: ['from', 'to', 'brand'], example: `${base}?resource=purchase_orders&brand=HE${k}` },
+      bills:            { auth: true,  desc: 'Odoo vendor bills (add &outstanding=1 for unpaid only).', params: ['from', 'to', 'brand', 'outstanding'], example: `${base}?resource=bills&outstanding=1${k}` },
+      credentials:      { auth: true,  desc: 'Credential REFERENCE layer — names + locations only, never values.', example: `${base}?resource=credentials${k}` },
     },
     entity_catalog_summary: {
       brands: ['HE (Hamza Express — QSR biryani/kabab)', 'NCH (Nawabi Chai House — Irani chai cafe)'],
