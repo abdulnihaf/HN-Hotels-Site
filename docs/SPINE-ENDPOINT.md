@@ -91,7 +91,21 @@ Fields ending `_paise` are integers. `_rupees` / `.rupees` are the display value
 | `vendors` | active vendor directory | `brand` |
 | `purchase_orders` | Odoo POs in range | `from,to,brand` |
 | `bills` | Odoo vendor bills (`&outstanding=1` for unpaid) | `from,to,brand,outstanding` |
+| `staff` | LIVE Darbar/HR roster (names, roles, salary, biometric) | `brand` |
+| `shortages` | LIVE cash-shortage ledger | `brand,month` |
+| `razorpay` | Razorpay QR/UPI collections (live gateway needs key; else stale D1 mirror, flagged) | `from,to,brand` |
+| `marketing` | LIVE proxy to HE cockpits: Google Ads, Meta CTWA, WABA leads | `feed=google\|ctwa\|leads,period,action` |
 | `credentials` | credential **reference** layer (names + locations, never values) | — |
+
+### Live-coverage status (what flows live vs. needs wiring)
+| System | Live now? | Note |
+|---|---|---|
+| POS revenue / payments / UPI / items | ✅ live (Odoo) | `ODOO_API_KEY` + POS keys on this project |
+| Odoo finance (POs, bills, expenses) | ✅ live | — |
+| Attendance / Darbar / staff / shortages | ✅ live (D1) | refreshed by existing crons |
+| Aggregator (Swiggy/Zomato) | ✅ live (D1) | refreshed by existing cron |
+| Marketing (Google/CTWA/leads) | ✅ live proxy | HE cockpit workers, open CORS |
+| Razorpay gateway (QR fees/settlements) | ⚠️ not live | needs `RAZORPAY_KEY/SECRET` on this project; serves stale D1 mirror meanwhile. UPI revenue is live via `payments`. |
 
 ### Example questions → calls
 - *HE business this month:* `?resource=revenue&brand=HE`

@@ -244,6 +244,10 @@ export async function onRequest(context) {
       case 'vendors':          return await vendors(url, env);
       case 'purchase_orders':  return await purchaseOrders(url, env);
       case 'bills':            return await bills(url, env);
+      case 'staff':            return await staff(url, env);
+      case 'shortages':        return await shortages(url, env);
+      case 'razorpay':         return await razorpay(url, env);
+      case 'marketing':        return await marketing(url, env);
       case 'credentials':      return json({ ok: true, resource, note: 'Reference layer — names + locations only, never values. Ask Claude Code (executor) to fetch a value by name when an action needs it.', data: CREDENTIAL_REFERENCES });
       default:
         return json({ ok: false, error: `Unknown resource '${resource}'. GET ?resource=manifest for the full list.` }, 400);
@@ -719,6 +723,118 @@ async function bills(url, env) {
   });
 }
 
+// ── STAFF: Darbar/HR roster (D1 hr_employees, live) ──
+async function staff(url, env) {
+  const brand = brandUpper(url); // HE | NCH | HQ
+  let q = `SELECT name, known_as, brand_label, job_name, department_name, pay_type,
+                  monthly_salary, phone, bio_enrolled, is_active
+             FROM hr_employees WHERE is_active = 1`;
+  const binds = [];
+  if (brand) { q += ' AND brand_label = ?'; binds.push(brand); }
+  q += ' ORDER BY brand_label, name';
+  const r = await env.DB.prepare(q).bind(...binds).all();
+  const people = (r.results || []).map(e => ({
+    name: e.name, known_as: e.known_as, brand: e.brand_label, job: e.job_name,
+    department: e.department_name, pay_type: e.pay_type,
+    monthly_salary_rupees: e.monthly_salary || 0, phone: e.phone,
+    biometric_enrolled: !!e.bio_enrolled,
+  }));
+  return json({
+    ok: true, resource: 'staff', brand: brand || 'all', count: people.length, staff: people,
+    meta: { source: 'D1 hr_employees (live)', generated_at: istNow().toISOString() },
+  });
+}
+
+// ── SHORTAGES: cash shortages ledger (D1 hr_cash_shortages, live) ──
+async function shortages(url, env) {
+  const brand = brandUpper(url) || 'NCH';
+  const month = url.searchParams.get('month'); // YYYY-MM optional
+  let q = `SELECT s.amount, s.source, s.brand, s.created_at, s.cleared_at, s.waived,
+                  s.counterparty, s.unmapped_code, e.name AS staff_name
+             FROM hr_cash_shortages s LEFT JOIN hr_employees e ON e.pin = s.pin
+            WHERE s.brand = ?`;
+  const binds = [brand];
+  if (month) { q += ` AND strftime('%Y-%m', s.created_at) = ?`; binds.push(month); }
+  q += ' ORDER BY s.created_at DESC LIMIT 500';
+  const r = await env.DB.prepare(q).bind(...binds).all();
+  const rows = r.results || [];
+  const open = rows.filter(x => !x.cleared_at && !x.waived);
+  return json({
+    ok: true, resource: 'shortages', brand, month: month || 'all',
+    summary: {
+      open_count: open.length,
+      open_total_rupees: Math.round(open.reduce((s, x) => s + (x.amount || 0), 0)),
+      total_count: rows.length,
+    },
+    shortages: rows.map(x => ({
+      staff: x.staff_name || x.unmapped_code || 'unmapped', amount_rupees: x.amount,
+      source: x.source, brand: x.brand, at: x.created_at,
+      status: x.waived ? 'waived' : (x.cleared_at ? 'cleared' : 'open'),
+      counterparty: x.counterparty,
+    })),
+    meta: { source: 'D1 hr_cash_shortages (live)', generated_at: istNow().toISOString() },
+  });
+}
+
+// ── RAZORPAY: QR/UPI collections. Live via gateway API if keys present on this
+//    deployment; otherwise the D1 mirror (flagged with its real freshness). ──
+async function razorpay(url, env) {
+  const { from, to } = rng(url);
+  const brand = brandUpper(url);
+  const hasKeys = !!(env.RAZORPAY_KEY && env.RAZORPAY_SECRET);
+  let q = `SELECT brand, role, method,
+                  COUNT(*) AS captures, SUM(amount_paise) AS amount_paise, SUM(fee_paise) AS fee_paise
+             FROM razorpay_qr_collections
+            WHERE captured_at_day >= ? AND captured_at_day <= ? AND status = 'captured'`;
+  const binds = [from, to];
+  if (brand) { q += ' AND brand = ?'; binds.push(brand.toLowerCase()); }
+  q += ' GROUP BY brand, role, method ORDER BY amount_paise DESC';
+  const r = await env.DB.prepare(q).bind(...binds).all().catch(() => ({ results: [] }));
+  const latest = await env.DB.prepare(`SELECT MAX(captured_at_day) AS d FROM razorpay_qr_collections`).first().catch(() => ({}));
+  return json({
+    ok: true, resource: 'razorpay', brand: brand || 'all', range: { from, to },
+    groups: (r.results || []).map(x => ({
+      brand: x.brand, role: x.role, method: x.method, captures: x.captures,
+      ...paiseRupees(x.amount_paise), fee: paiseRupees(x.fee_paise),
+    })),
+    meta: {
+      source: 'D1 razorpay_qr_collections',
+      mirror_latest_day: latest?.d || null,
+      live_gateway_available: hasKeys,
+      note: hasKeys
+        ? 'RAZORPAY keys present — a live gateway poller can be wired on request.'
+        : 'STALE: D1 mirror is frozen (no Razorpay sync running) and RAZORPAY_KEY/SECRET are NOT on this Pages project. Live Razorpay needs that key added. Note: UPI revenue as recorded in POS is already live via resource=payments.',
+      generated_at: istNow().toISOString(),
+    },
+  });
+}
+
+// ── MARKETING: live proxy to the HE marketing cockpits (open-CORS workers) ──
+const MARKETING_FEEDS = {
+  google: (p) => `https://hamzaexpress.in/api/google-cockpit?period=${encodeURIComponent(p || '7d')}`,
+  ctwa:   (p) => `https://hamzaexpress.in/api/ctwa-analytics?period=${encodeURIComponent(p || '7d')}`,
+  leads:  (p) => `https://hamzaexpress.in/api/leads?action=${encodeURIComponent(p || 'counts')}`,
+};
+async function marketing(url, env) {
+  const feed = (url.searchParams.get('feed') || '').toLowerCase();
+  const period = url.searchParams.get('period') || url.searchParams.get('action') || '';
+  const build = MARKETING_FEEDS[feed];
+  if (!build) {
+    return json({ ok: true, resource: 'marketing', feeds: Object.keys(MARKETING_FEEDS),
+      usage: 'resource=marketing&feed=google|ctwa|leads[&period=7d|30d|all | &action=counts|history|segments]',
+      meta: { note: 'HE marketing cockpits, relayed live. Google Ads / Meta CTWA / WABA leads.' } });
+  }
+  try {
+    const upstream = build(period);
+    const res = await fetch(upstream, { headers: { 'accept': 'application/json' } });
+    const data = await res.json();
+    return json({ ok: true, resource: 'marketing', feed, upstream, data,
+      meta: { source: 'live proxy (HE cockpit worker)', generated_at: istNow().toISOString() } });
+  } catch (e) {
+    return json({ ok: false, resource: 'marketing', feed, error: `upstream fetch failed: ${e.message}` }, 502);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MANIFEST — self-describing grammar
 // ═══════════════════════════════════════════════════════════════════════════
@@ -772,6 +888,10 @@ function manifest(url, token) {
       vendors:          { auth: true,  desc: 'Active vendor directory.', params: ['brand'], example: `${base}?resource=vendors${k}` },
       purchase_orders:  { auth: true,  desc: 'Odoo purchase orders in range.', params: ['from', 'to', 'brand'], example: `${base}?resource=purchase_orders&brand=HE${k}` },
       bills:            { auth: true,  desc: 'Odoo vendor bills (add &outstanding=1 for unpaid only).', params: ['from', 'to', 'brand', 'outstanding'], example: `${base}?resource=bills&outstanding=1${k}` },
+      staff:            { auth: true,  desc: 'LIVE Darbar/HR roster — names, roles, brand, pay type, salary, biometric status.', params: ['brand'], example: `${base}?resource=staff&brand=NCH${k}` },
+      shortages:        { auth: true,  desc: 'LIVE cash-shortage ledger (open/cleared/waived).', params: ['brand', 'month'], example: `${base}?resource=shortages&brand=NCH${k}` },
+      razorpay:         { auth: true,  desc: 'Razorpay QR/UPI collections. Live gateway needs RAZORPAY keys on this project; today reads the (stale) D1 mirror and says so. UPI revenue is live via resource=payments.', params: ['from', 'to', 'brand'], example: `${base}?resource=razorpay&brand=NCH${k}` },
+      marketing:        { auth: true,  desc: 'LIVE proxy to HE marketing cockpits: Google Ads, Meta CTWA, WABA leads.', params: ['feed=google|ctwa|leads', 'period', 'action'], example: `${base}?resource=marketing&feed=google&period=7d${k}` },
       credentials:      { auth: true,  desc: 'Credential REFERENCE layer — names + locations only, never values.', example: `${base}?resource=credentials${k}` },
     },
     entity_catalog_summary: {
@@ -855,6 +975,7 @@ const CREDENTIAL_REFERENCES = {
     { name: 'DASHBOARD_KEY', store: 'pages_secret', unlocks: 'Legacy dashboard APIs (NOTE: also embedded in client JS — treat as semi-public)', sensitivity: 'high' },
     { name: 'CAMS_AUTH_TOKEN', store: 'pages_secret', unlocks: 'Internal service auth (HR/CAMS)', sensitivity: 'high' },
     { name: 'RAZORPAY_WEBHOOK_SECRET', store: 'worker_secret (razorpay-webhook)', unlocks: 'Razorpay webhook signature verification', sensitivity: 'high' },
+    { name: 'RAZORPAY_KEY / RAZORPAY_SECRET', store: 'pages_secret on NCH project only — NOT on hn-hotels-site', unlocks: 'Live Razorpay gateway API (QR collections, fees, settlements)', sensitivity: 'high', gap: 'Add to hn-hotels-site Pages (or D1) to make resource=razorpay live; until then it serves the stale D1 mirror.' },
     { name: 'WA_HE_TOKEN / WA_NCH_TOKEN', store: 'pages_secret', unlocks: 'Meta WhatsApp Cloud API per brand', sensitivity: 'high' },
     { name: 'GOOGLE_ADS_* / GOOGLE_ORGANIC_REFRESH_TOKEN', store: 'pages_secret', unlocks: 'Google Ads + Business Profile', sensitivity: 'high' },
     { name: 'EXOTEL_API_KEY / EXOTEL_API_TOKEN', store: 'pages_secret', unlocks: 'Exotel voice', sensitivity: 'high' },
