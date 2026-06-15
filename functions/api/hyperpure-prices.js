@@ -34,14 +34,22 @@ export async function onRequest(context) {
       for (const it of items) {
         const key = norm(it.item_key || it.query);
         if (!key) continue;
-        const price = it.cheapest && it.cheapest.price ? Math.round(Number(it.cheapest.price) * 100) : null;
+        const c = it.cheapest || {};
+        const toPaise = (v) => (v || v === 0) ? Math.round(Number(v) * 100) : null;
+        const price = toPaise(c.price);
+        const unitPrice = toPaise(c.unit_price != null ? c.unit_price : c.price);
         await db.prepare(
-          `INSERT INTO hyperpure_prices (item_key, query, cheapest_name, cheapest_price_paise, options_json, match_count, scraped_at)
-           VALUES (?,?,?,?,?,?,?)
+          `INSERT INTO hyperpure_prices (item_key, query, cheapest_name, cheapest_price_paise,
+             cheapest_image, cheapest_pack, cheapest_unit, cheapest_brand, cheapest_unit_price_paise,
+             options_json, match_count, scraped_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(item_key) DO UPDATE SET query=excluded.query, cheapest_name=excluded.cheapest_name,
-             cheapest_price_paise=excluded.cheapest_price_paise, options_json=excluded.options_json,
-             match_count=excluded.match_count, scraped_at=excluded.scraped_at`
-        ).bind(key, it.query || key, it.cheapest ? it.cheapest.name : null, price,
+             cheapest_price_paise=excluded.cheapest_price_paise, cheapest_image=excluded.cheapest_image,
+             cheapest_pack=excluded.cheapest_pack, cheapest_unit=excluded.cheapest_unit,
+             cheapest_brand=excluded.cheapest_brand, cheapest_unit_price_paise=excluded.cheapest_unit_price_paise,
+             options_json=excluded.options_json, match_count=excluded.match_count, scraped_at=excluded.scraped_at`
+        ).bind(key, it.query || key, c.name || null, price,
+               c.image || null, c.pack || null, c.unit || null, c.brand || null, unitPrice,
                JSON.stringify(it.options || []), it.match_count || 0, nowIso).run();
         saved++;
       }
