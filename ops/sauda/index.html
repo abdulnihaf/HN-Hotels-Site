@@ -214,6 +214,60 @@
     .vnew{display:flex;gap:8px;margin-top:10px}
     .vnew input{flex:1;background:var(--e2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:14px;padding:10px 12px}
     .vnew button{flex-shrink:0;padding:0 16px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700}
+    /* scrollable mode tabs */
+    .seg.scrollx{max-width:calc(100vw - 32px);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .seg.scrollx::-webkit-scrollbar{display:none}
+    .seg.scrollx button{white-space:nowrap;flex:0 0 auto}
+    /* Compare view */
+    .cmp-h{padding:10px 16px 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .cmp-h .ttl{font-size:13px;color:var(--dim)}
+    .cmp-h .fresh{font-size:11px;color:var(--mute);margin-left:auto}
+    .cmprow{display:flex;align-items:center;gap:11px;padding:10px 11px;border:1px solid var(--line-soft);border-radius:13px;margin-bottom:9px;background:var(--e1);cursor:pointer}
+    .cmprow:active{background:var(--e2)}
+    .cmprow .ph{width:50px;height:50px;border-radius:9px;flex-shrink:0;background:var(--e3) center/cover no-repeat;display:grid;place-items:center;overflow:hidden;border:1px solid var(--line-soft)}
+    .cmprow .ph span{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--mute)}
+    .cmprow .ci{flex:1;min-width:0}
+    .cmprow .ci .nm{font-size:14px;font-weight:600;text-transform:capitalize}
+    .cmprow .ci .src{display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap}
+    .src-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:7px;text-transform:uppercase;letter-spacing:.03em}
+    .src-badge.hyperpure{background:var(--gold-soft);color:var(--gold)}
+    .src-badge.zepto{background:rgba(124,77,255,.16);color:#b39dff}
+    .src-badge.amazon{background:rgba(255,153,0,.16);color:#ffb74d}
+    .src-badge.blinkit{background:rgba(245,210,0,.16);color:#e6c200}
+    .cmprow .ci .save{font-size:10.5px;color:var(--green);font-weight:700}
+    .cmprow .cr{text-align:right;flex-shrink:0}
+    .cmprow .cr .pr{font-size:15px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+    .cmprow .cr .pu{font-size:10.5px;color:var(--mute);font-variant-numeric:tabular-nums}
+    .cmprow .cr .chev{font-size:11px;color:var(--gold);font-weight:700;margin-top:2px}
+    /* swipe platform cards */
+    .pcards{display:flex;gap:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding:2px 2px 14px;margin:0 -2px}
+    .pcards::-webkit-scrollbar{display:none}
+    .pcard{flex:0 0 78%;scroll-snap-align:center;border:1px solid var(--line);border-radius:15px;background:var(--e1);overflow:hidden}
+    .pcard.best{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
+    .pcard .pc-top{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid var(--line-soft)}
+    .pcard .pc-top .sb{flex:1}
+    .pcard .pc-ph{width:100%;height:150px;background:var(--e3) center/contain no-repeat;display:grid;place-items:center}
+    .pcard .pc-ph span{font-family:'Cormorant Garamond',serif;font-size:44px;color:var(--mute)}
+    .pcard .pc-body{padding:11px 13px}
+    .pcard .pc-nm{font-size:13.5px;font-weight:600;line-height:1.3;min-height:35px}
+    .pcard .pc-meta{display:flex;align-items:center;gap:7px;margin-top:6px}
+    .pcard .pc-pack{font-size:10.5px;font-weight:700;color:var(--dim);background:rgba(255,255,255,.06);padding:1.5px 7px;border-radius:6px}
+    .pcard .pc-price{display:flex;align-items:baseline;gap:8px;margin-top:9px}
+    .pcard .pc-price b{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums}
+    .pcard .pc-price small{font-size:11px;color:var(--mute)}
+    .pcard .pc-buy{display:block;text-align:center;margin-top:11px;padding:11px;border-radius:10px;font-weight:700;font-size:13px;text-decoration:none}
+    .pcard .pc-buy.pick{background:var(--gold);color:#1a1206}
+    .pcard .pc-buy.open{background:var(--e2);color:var(--gold);border:1px solid var(--gold-bd)}
+    .pc-cut{font-size:10.5px;color:var(--amber);margin-top:8px}
+    /* per-platform cart summary */
+    .psum{display:flex;gap:8px;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .psum::-webkit-scrollbar{display:none}
+    .pchip{flex:0 0 auto;border:1px solid var(--line);border-radius:11px;padding:8px 11px;min-width:120px}
+    .pchip .ph-n{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+    .pchip .ph-t{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
+    .pchip .ph-s{font-size:10px;margin-top:2px}
+    .pchip.ok .ph-s{color:var(--green)}
+    .pchip.under .ph-s{color:var(--amber)}
   </style>
 </head>
 <body>
@@ -249,10 +303,11 @@
       </div>
       <button class="lock" id="lock" aria-label="Lock">⏻</button>
     </div>
-    <div class="seg" id="modeSeg">
+    <div class="seg scrollx" id="modeSeg">
       <button data-m="place" class="on">Place</button>
       <button data-m="pay">To pay</button>
       <button data-m="hp">Hyperpure</button>
+      <button data-m="cmp">Compare</button>
     </div>
   </div>
 
@@ -311,11 +366,21 @@
     </div>
     <button class="btn primary" id="hpPlaceBtn" disabled style="width:100%">Add items to start</button>
   </div>
+
+  <!-- COMPARE VIEW (cheapest across platforms, per product) -->
+  <div id="viewCompare" class="hide">
+    <div class="cmp-h" id="cmpHead"></div>
+    <main class="pane" id="cmpPane">
+      <div class="empty hide" id="cmpEmpty">No price comparison yet.<br>The scout compares Hyperpure &amp; Zepto each night.</div>
+      <div id="cmpList"></div>
+    </main>
+  </div>
+  <div class="bottom hide" id="cmpBar"><div class="psum" id="cmpSummary"></div></div>
 </div>
 
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=6"></script>
+<script src="/ops/sauda/app.js?v=7"></script>
 </body>
 </html>
