@@ -253,23 +253,35 @@ async function hyperpureFeed(db) {
   try {
     rows = await db.prepare(
       `SELECT item_key, query, cheapest_name, cheapest_price_paise, cheapest_image, cheapest_pack,
-              cheapest_unit, cheapest_brand, cheapest_unit_price_paise, match_count, scraped_at
+              cheapest_unit, cheapest_brand, cheapest_unit_price_paise, options_json, match_count, scraped_at
          FROM hyperpure_prices WHERE cheapest_price_paise IS NOT NULL ORDER BY item_key`
     ).all();
   } catch (e) { /* table may not exist yet → empty feed */ }
-  const items = (rows?.results || []).map((r) => ({
-    item_key: r.item_key,
-    name: r.query || r.item_key,          // the catalog/search concept (e.g. "paneer")
-    matched: r.cheapest_name || '',       // the exact Hyperpure SKU we'd order
-    price_paise: r.cheapest_price_paise,  // pack price (what the basket charges per unit)
-    unit_price_paise: r.cheapest_unit_price_paise || r.cheapest_price_paise,
-    unit: r.cheapest_unit || '',          // kg | ltr | pc …
-    pack: r.cheapest_pack || '',          // "1 kg", "1 L" …
-    brand: r.cheapest_brand || '',
-    image: r.cheapest_image || '',
-    match_count: r.match_count || 0,
-    scraped_at: r.scraped_at,
-  }));
+  // a scraped option object (price in rupees) → a feed-item-shaped SKU (paise)
+  const toSku = (o) => ({
+    matched: o.name || '', pack: o.pack || '', brand: o.brand || '', unit: o.unit || '',
+    price_paise: Math.round((o.price || 0) * 100),
+    unit_price_paise: Math.round((o.unit_price || o.price || 0) * 100),
+    image: o.image || '',
+  });
+  const items = (rows?.results || []).map((r) => {
+    let opts = [];
+    try { opts = (JSON.parse(r.options_json || '[]') || []).map(toSku); } catch (e) {}
+    return {
+      item_key: r.item_key,
+      name: r.query || r.item_key,          // the catalog/search concept (e.g. "paneer")
+      matched: r.cheapest_name || '',       // the exact Hyperpure SKU we'd order (cheapest)
+      price_paise: r.cheapest_price_paise,  // pack price (what the basket charges per unit)
+      unit_price_paise: r.cheapest_unit_price_paise || r.cheapest_price_paise,
+      unit: r.cheapest_unit || '',          // kg | ltr | pc …
+      pack: r.cheapest_pack || '',          // "1 kg", "1 L" …
+      brand: r.cheapest_brand || '',
+      image: r.cheapest_image || '',
+      options: opts,                        // related SKUs (tier 2) — choose from these
+      match_count: r.match_count || 0,
+      scraped_at: r.scraped_at,
+    };
+  });
   const freshest = items.reduce((m, it) => (it.scraped_at && it.scraped_at > m ? it.scraped_at : m), '');
   return {
     items,
