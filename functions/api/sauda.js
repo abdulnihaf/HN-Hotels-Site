@@ -191,41 +191,77 @@ async function placeOrders(db, body, auth) {
   return { ok: true, for_date: forDate, placed: created.length, orders: created };
 }
 
-// ── Owner "to pay": every order not yet paid, with the vendor's saved UPI ──
-// Hyperpure orders are prepaid online at checkout, so they never enter the UPI list.
+// ── Owner "to pay": ONE consolidated payment per vendor ──
+// All of a vendor's unpaid items (across every order placed that day) merge into
+// a single card with one summed amount and one UPI — never per-item payments.
+// Hyperpure orders are prepaid online at checkout, so they never enter the list.
 async function openOrders(db) {
   const rows = await db.prepare(
-    `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, pay_amount_paise, for_date
+    `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, pay_amount_paise, expected_amount_paise, for_date
        FROM sauda_purchase WHERE paid_at IS NULL AND (pay_timing IS NULL OR pay_timing != 'online')
-        ORDER BY for_date DESC, id DESC LIMIT 60`
+        ORDER BY for_date DESC, id DESC LIMIT 200`
   ).all();
-  const orders = (rows?.results || []).map((o) => {
-    const vk = canonVendorKey(o.vendor_name);
-    const v = vendorView(vk || 'unassigned');
-    return { ...o, vendorKey: v.key, vpa: v.vpa || '', fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay };
-  });
+  // group every unpaid row under its canonical vendor
+  const byVendor = new Map();
+  for (const o of (rows?.results || [])) {
+    const vk = canonVendorKey(o.vendor_name) || 'unassigned';
+    if (!byVendor.has(vk)) byVendor.set(vk, []);
+    byVendor.get(vk).push(o);
+  }
+  const orders = [];
+  for (const [vk, list] of byVendor.entries()) {
+    const v = vendorView(vk);
+    let items = [], amount = 0; const ids = []; const dates = new Set();
+    for (const o of list) {
+      ids.push(o.id);
+      try { items = items.concat(JSON.parse(o.items_json || '[]')); } catch (e) {}
+      amount += (o.pay_amount_paise || o.expected_amount_paise || 0);
+      if (o.for_date) dates.add(o.for_date);
+    }
+    const forDates = [...dates].sort();
+    orders.push({
+      ids, order_count: list.length,
+      vendorKey: v.key, vendor_name: v.name, brand: list[0].brand,
+      vpa: v.vpa || '', fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
+      items_json: JSON.stringify(items),
+      pay_amount_paise: amount,                       // summed; 0 if not yet known
+      for_date: forDates[forDates.length - 1] || '', for_dates: forDates,
+    });
+  }
+  orders.sort((a, b) => (b.for_date || '').localeCompare(a.for_date || ''));
   return { orders };
 }
 
-// ── request payment on an order (sets the amount) ──
-async function requestPay(db, body) {
-  const id = +body.id;
-  const amt = Math.round(+body.amount_paise || 0);
-  if (!id) return { ok: false, error: 'no id' };
-  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
-  await db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=?, pay_requested_at=?, status='REQUESTED', updated_at=? WHERE id=?`)
-    .bind(amt, now, now, id).run();
-  return { ok: true, id, amount_paise: amt };
+// accept either a single id or a vendor's whole set of ids
+function idList(body) {
+  if (Array.isArray(body.ids)) return body.ids.map((x) => +x).filter(Boolean);
+  return body.id ? [+body.id] : [];
 }
 
-// ── owner marks an order paid (after the UPI app payment) ──
-async function markPaid(db, body, auth) {
-  const id = +body.id;
-  if (!id) return { ok: false, error: 'no id' };
+// ── request payment for a vendor (records the total on the vendor's first order) ──
+async function requestPay(db, body) {
+  const ids = idList(body);
+  const amt = Math.round(+body.amount_paise || 0);
+  if (!ids.length) return { ok: false, error: 'no id' };
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
-  await db.prepare(`UPDATE sauda_purchase SET paid_at=?, pay_method=?, status='PAID', updated_at=? WHERE id=?`)
-    .bind(now, (body.method || 'upi'), now, id).run();
-  return { ok: true, id, paid_by: auth.u || '' };
+  await db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=?, pay_requested_at=?, status='REQUESTED', updated_at=? WHERE id=?`)
+    .bind(amt, now, now, ids[0]).run();
+  return { ok: true, ids, amount_paise: amt };
+}
+
+// ── owner marks a vendor's order(s) paid — one tap clears all that vendor's items ──
+async function markPaid(db, body, auth) {
+  const ids = idList(body);
+  if (!ids.length) return { ok: false, error: 'no id' };
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const amt = Math.round(+body.amount_paise || 0);
+  const ph = ids.map(() => '?').join(',');
+  if (amt > 0) {
+    await db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=? WHERE id=?`).bind(amt, ids[0]).run();
+  }
+  await db.prepare(`UPDATE sauda_purchase SET paid_at=?, pay_method=?, status='PAID', updated_at=? WHERE id IN (${ph})`)
+    .bind(now, (body.method || 'upi'), now, ...ids).run();
+  return { ok: true, ids, paid_by: auth.u || '' };
 }
 
 // ── Hyperpure delivery window from the cutoff (IST). Order before 23:00 → tomorrow. ──

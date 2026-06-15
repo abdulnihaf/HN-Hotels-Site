@@ -52,12 +52,12 @@ export const VENDORS = {
                 aliases: ['sameer hamza samosa vendor', 'krishnamoorthi', 'krishnamurthy', 'samosa vendor'] },
   eggs:       { name: 'Eggs (Syed Lais)',       cat: 'Eggs (go & buy, UPI tracked)',       fulfilment: 'collect',  pay: 'per',            brand: 'HE',   vpa: '9916374699ssa@ybl',
                 aliases: ['eggs (syed lais)', 'syed siraj ahmed', 'syed lais', 'eggs'] },
-  gas:        { name: 'Ahmed (Gas)',            cat: 'LPG cylinder',                       fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: '',
-                aliases: ['ahmed - gas cylinder', 'ahmed gas', 'ahmed'] },
-  osmania:    { name: 'Rehan (Osmania)',        cat: 'Osmania biscuits (occasional)',      fulfilment: 'deliver',  pay: 'per',            brand: 'NCH',  vpa: '',
-                aliases: ['rehan osmania', 'rehan'] },
-  charcoal:   { name: 'Mudassir (Charcoal)',    cat: 'Charcoal',                           fulfilment: 'collect',  pay: 'per',            brand: 'HE',   vpa: '',
-                aliases: ['mudassir pasha', 'mudassir', 'muda sir'] },
+  gas:        { name: 'Ahmed (Gas)',            cat: 'LPG cylinder',                       fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: '9845956333@ibl',
+                aliases: ['ahmed - gas cylinder', 'ahmed gas', 'ahmed', 'a m ruba bharat gas', 'am ruba bharat gas'] },  // bank: A M Ruba Bharat Gas
+  osmania:    { name: 'Rehan (Osmania)',        cat: 'Osmania biscuits (occasional)',      fulfilment: 'deliver',  pay: 'per',            brand: 'NCH',  vpa: '7259834218@ybl',
+                aliases: ['rehan osmania', 'rehan', 'farook', 'farooq', 'm farooq ahmed siddique'] },  // bank: paid to Farook (M Farooq Ahmed Siddique)
+  charcoal:   { name: 'Mudassir (Charcoal)',    cat: 'Charcoal',                           fulfilment: 'collect',  pay: 'per',            brand: 'HE',   vpa: 'muddu14321@axl',
+                aliases: ['mudassir pasha', 'mudassir', 'muda sir'] },  // bank: Mudassir Pasha
   jayjay:     { name: 'Jay & Jay',              cat: 'Milk powder',                        fulfilment: 'deliver',  pay: 'per',            brand: 'NCH',  vpa: 'vyapar.177783669496@hdfcbank',
                 aliases: ['jay & jay', 'jay and jay', 'j&j'] },
 };
