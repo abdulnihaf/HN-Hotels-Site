@@ -16,6 +16,12 @@
 import { mintToken, verifyToken, corsHeaders } from './_lib/darbar-auth.js';
 import { canonVendorKey, vendorView, VENDORS } from './_lib/sauda-vendors.js';
 
+// ── Hyperpure: the planned next-day B2B basket (distinct from local trip vendors) ──
+// Bangalore rules (researched 2026-06-15): order by ~23:00 IST → next-day delivery,
+// minimum order value ₹1,500, standard delivery ₹99. Prices are live mandi rates
+// scraped from the owner's logged-in account into hyperpure_prices.
+const HP = { MOV_PAISE: 150000, DELIVERY_PAISE: 9900, CUTOFF_HOUR: 23 };
+
 // Purchase-chamber PINs (mirrors Darbar's identity; unifies under Diwan SSO later).
 const SAUDA_PINS = {
   '0305': { name: 'Nihaf',   role: 'owner',    fin: true  },
@@ -76,6 +82,13 @@ export async function onRequest(context) {
     if (action === 'mark-paid' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await markPaid(db, body, auth)), request);
+    }
+    if (action === 'hyperpure-feed' && request.method === 'GET') {
+      return withCors(json(await hyperpureFeed(db)), request);
+    }
+    if (action === 'hyperpure-place' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await hyperpurePlace(db, body, auth)), request);
     }
     return withCors(json({ error: `unknown action: ${action}` }, 400), request);
   } catch (e) {
@@ -179,10 +192,12 @@ async function placeOrders(db, body, auth) {
 }
 
 // ── Owner "to pay": every order not yet paid, with the vendor's saved UPI ──
+// Hyperpure orders are prepaid online at checkout, so they never enter the UPI list.
 async function openOrders(db) {
   const rows = await db.prepare(
     `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, pay_amount_paise, for_date
-       FROM sauda_purchase WHERE paid_at IS NULL ORDER BY for_date DESC, id DESC LIMIT 60`
+       FROM sauda_purchase WHERE paid_at IS NULL AND (pay_timing IS NULL OR pay_timing != 'online')
+        ORDER BY for_date DESC, id DESC LIMIT 60`
   ).all();
   const orders = (rows?.results || []).map((o) => {
     const vk = canonVendorKey(o.vendor_name);
@@ -211,4 +226,82 @@ async function markPaid(db, body, auth) {
   await db.prepare(`UPDATE sauda_purchase SET paid_at=?, pay_method=?, status='PAID', updated_at=? WHERE id=?`)
     .bind(now, (body.method || 'upi'), now, id).run();
   return { ok: true, id, paid_by: auth.u || '' };
+}
+
+// ── Hyperpure delivery window from the cutoff (IST). Order before 23:00 → tomorrow. ──
+function hyperpureWindow() {
+  const ist = new Date(Date.now() + 330 * 60000);
+  const hour = ist.getUTCHours();           // ist already shifted, so getUTC* = IST clock
+  const minute = ist.getUTCMinutes();
+  const open = hour < HP.CUTOFF_HOUR;        // still before tonight's cutoff
+  const deliverOffset = open ? 1 : 2;        // before 11pm → tomorrow, after → day-after
+  const deliver = new Date(ist.getTime() + deliverOffset * 86400000);
+  // minutes left until tonight's 23:00 (0 if already past)
+  const minsToCutoff = open ? ((HP.CUTOFF_HOUR - hour) * 60 - minute) : 0;
+  return {
+    nowIstIso: ist.toISOString(),
+    cutoff_hour: HP.CUTOFF_HOUR,
+    open,
+    mins_to_cutoff: minsToCutoff,
+    for_date: deliver.toISOString().slice(0, 10),
+  };
+}
+
+// ── Hyperpure live price feed (read-side; the price-token never reaches the client) ──
+async function hyperpureFeed(db) {
+  let rows = { results: [] };
+  try {
+    rows = await db.prepare(
+      `SELECT item_key, query, cheapest_name, cheapest_price_paise, match_count, scraped_at
+         FROM hyperpure_prices WHERE cheapest_price_paise IS NOT NULL ORDER BY item_key`
+    ).all();
+  } catch (e) { /* table may not exist yet → empty feed */ }
+  const items = (rows?.results || []).map((r) => ({
+    item_key: r.item_key,
+    name: r.query || r.item_key,
+    matched: r.cheapest_name || '',
+    price_paise: r.cheapest_price_paise,
+    match_count: r.match_count || 0,
+    scraped_at: r.scraped_at,
+  }));
+  const freshest = items.reduce((m, it) => (it.scraped_at && it.scraped_at > m ? it.scraped_at : m), '');
+  return {
+    items,
+    count: items.length,
+    scraped_at: freshest,
+    mov_paise: HP.MOV_PAISE,
+    delivery_paise: HP.DELIVERY_PAISE,
+    window: hyperpureWindow(),
+  };
+}
+
+// ── Place tomorrow's Hyperpure basket: one prepaid order the box will fill in-app ──
+// body = { lines: [{ item_key, name, qty, unit, price_paise }] }
+async function hyperpurePlace(db, body, auth) {
+  const lines = Array.isArray(body.lines) ? body.lines : [];
+  if (!lines.length) return { ok: false, error: 'no lines' };
+  const win = hyperpureWindow();
+  let subtotal = 0;
+  const clean = lines.map((l) => {
+    const qty = Math.max(0, Number(l.qty) || 0);
+    const price = Math.max(0, Math.round(Number(l.price_paise) || 0));
+    subtotal += qty * price;
+    return { item_key: l.item_key || '', item: String(l.name || l.item_key || '').trim(), qty, unit: l.unit || '', price_paise: price, matched: l.matched || '' };
+  });
+  if (subtotal < HP.MOV_PAISE) {
+    return { ok: false, error: 'below_mov', subtotal_paise: subtotal, mov_paise: HP.MOV_PAISE,
+             short_paise: HP.MOV_PAISE - subtotal };
+  }
+  const total = subtotal + HP.DELIVERY_PAISE;
+  const nowIso = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const res = await db.prepare(
+    `INSERT INTO sauda_purchase (brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, expected_amount_paise, ordered_at, ordered_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    'both', 'Hyperpure', win.for_date, 'deliver', 'online',
+    JSON.stringify(clean), 'QUEUED', total, nowIso, auth.u || ''
+  ).run();
+  return { ok: true, id: res?.meta?.last_row_id, for_date: win.for_date,
+           subtotal_paise: subtotal, delivery_paise: HP.DELIVERY_PAISE, total_paise: total,
+           lines: clean.length };
 }
