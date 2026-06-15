@@ -107,7 +107,7 @@ Fields ending `_paise` are integers. `_rupees` / `.rupees` are the display value
 
 | domain | source |
 |---|---|
-| revenue / payments / items | D1 `sales_recon_daily`, `pos_payments_mirror`, `pos_lines_mirror`, `razorpay_qr_collections` |
+| revenue / payments / items | **LIVE** POS Odoo via `read_group` — HE `test.hamzahotel.com`, NCH `ops.hamzahotel.com` (1-3 aggregate calls, volume-independent). Falls back to the D1 mirror (`sales_recon_daily` etc.) only if a live call fails — flagged `source: d1-mirror (STALE…)` with the reason. |
 | attendance | D1 `hr_attendance_daily` ⋈ `hr_employees` (CAMS biometric) |
 | cash | D1 `cash_events` (anchor + delta) |
 | aggregator | D1 `aggregator_orders` (Swiggy + Zomato pull) |
