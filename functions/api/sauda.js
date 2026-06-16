@@ -27,7 +27,15 @@ const HP = { MOV_PAISE: 150000, DELIVERY_PAISE: 9900, CUTOFF_HOUR: 23 };
 // Zepto's floor). next-day = planned (Hyperpure); instant = quick-commerce.
 const SOURCES = {
   hyperpure: { label: 'Hyperpure', kind: 'next-day', min_cart_paise: 150000, delivery_paise: 9900, free_above_paise: null },
-  zepto:     { label: 'Zepto',     kind: 'instant',  min_cart_paise: 0,      delivery_paise: 3500, free_above_paise: 19900 },
+  // quick-commerce — only relevant when an item is cheaper here than Hyperpure.
+  // free_above = the cart value above which delivery is free (the "worth-it" floor).
+  zepto:     { label: 'Zepto',     kind: 'instant', min_cart_paise: 0, delivery_paise: 3500, free_above_paise: 19900 },
+  blinkit:   { label: 'Blinkit',   kind: 'instant', min_cart_paise: 0, delivery_paise: 3000, free_above_paise: 19900 },
+  instamart: { label: 'Instamart', kind: 'instant', min_cart_paise: 0, delivery_paise: 3500, free_above_paise: 19900 },
+  bigbasket: { label: 'BigBasket', kind: 'instant', min_cart_paise: 0, delivery_paise: 3000, free_above_paise: 20000 },
+  jiomart:   { label: 'JioMart',   kind: 'instant', min_cart_paise: 0, delivery_paise: 0,    free_above_paise: 25000 },
+  amazon:    { label: 'Amazon',    kind: 'instant', min_cart_paise: 0, delivery_paise: 3000, free_above_paise: 0 },
+  flipkart:  { label: 'Flipkart',  kind: 'instant', min_cart_paise: 0, delivery_paise: 3000, free_above_paise: 0 },
 };
 
 // Purchase-chamber PINs (mirrors Darbar's identity; unifies under Diwan SSO later).
