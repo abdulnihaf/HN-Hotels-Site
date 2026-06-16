@@ -17,24 +17,26 @@
 
 // prepared/condiment forms a raw commodity should never resolve to (esp. on
 // quick-commerce, which is decoy-heavy: meals, drinks, gift packs, flavoured…)
+// NOTE: do NOT put 'sauce'/'ketchup' here — they are legitimate items (tomato
+// ketchup, soya sauce). Keep this to clearly-prepared/decoy forms only.
 export const HP_GLOBAL_NOT = [
-  'dressing','sauce','paste','dip','gravy','curry','chutney','pickle','ready to','ready-to',
-  'instant','seasoning','marinade','spread','ketchup','mayo','mayonnaise','syrup','combo',
+  'dressing','dip','gravy','chutney','pickle','ready to','ready-to',
+  'seasoning','marinade','mayo','mayonnaise','combo',
   'assorted','sample','flavoured','flavored','seekh','tikka','momo','nugget','patty','kebab','kabab',
-  'soda','drink','juice','meal','chapati','makhani','infused','gift','twigs','namkeen','cookie','biscuit',
+  'soda','soft drink','juice','meal','chapati','makhani','infused','gift','twigs','namkeen','cookie','biscuit',
 ];
 
 export const HP_CATALOG = [
   { key:'sugar', query:'sugar', label:'Sugar', unit:'kg', band:[18,130], buy:{pack:'50 kg',qty:50,base_paise:222000},
     must:[['sugar']], not:['brown','jaggery','icing','cube','powdered','demerara','sachet'] },
   { key:'butter_unsalted', query:'unsalted butter', label:'Butter (unsalted)', unit:'kg', band:[250,1500], buy:{pack:'500 g',qty:0.5,base_paise:28500},
-    must:[['butter']], not:['garlic','peanut','cocoa','chocolate'] },
+    must:[['butter'],['unsalted','white butter']], not:['garlic','peanut','cocoa','chocolate'] },
   { key:'atta', query:'atta', label:'Atta', unit:'kg', band:[16,130], buy:{pack:'1 kg',qty:1,base_paise:4000},
     must:[['atta','whole wheat']], not:['maida','multigrain','besan','mix'] },
   { key:'maida', query:'maida', label:'Maida', unit:'kg', band:[16,130], buy:{pack:'1 kg',qty:1,base_paise:4000},
     must:[['maida']], not:['mix','premix','instant'] },
   { key:'milk', query:'milk', label:'Milk', unit:'L', band:[20,160], buy:{pack:'1 L',qty:1,base_paise:5000},
-    must:[['milk']], not:['powder','condensed','shake','badam','almond','soy','masala'] },
+    must:[['milk']], not:['powder','condensed','shake','badam','almond','soy','masala','butter milk','buttermilk','chaas','lassi'] },
   { key:'curd', query:'curd', label:'Curd', unit:'L', band:[24,190], buy:{pack:'1 L',qty:1,base_paise:5800},
     must:[['curd','dahi','yogurt','yoghurt']], not:['shrikhand','greek','flavoured'] },
   { key:'honey', query:'honey', label:'Honey', unit:'kg', band:[240,1800], buy:{pack:'400 g',qty:0.4,base_paise:23800},
@@ -58,7 +60,7 @@ export const HP_CATALOG = [
   { key:'magaj', query:'magaj seeds', label:'Magas/magaj seeds — CONFIRM', unit:'kg', band:[200,1600], buy:{pack:'1 kg',qty:1,base_paise:62000},
     must:[['magaj','magaz','melon seed','char']], not:[] },
   { key:'amul_cream', query:'amul fresh cream', label:'Amul cream', unit:'L', band:[90,600], buy:{pack:'1 L',qty:1,base_paise:22000},
-    must:[['cream']], not:['ice cream','sour','body','face'] },
+    must:[['cream']], not:['ice cream','sour','body','face','full cream milk','milk'] },
   { key:'salted_butter', query:'salted butter', label:'Salted butter', unit:'kg', band:[250,1500], buy:{pack:'500 g',qty:0.5,base_paise:30000},
     must:[['butter']], not:['garlic','peanut','unsalted'] },
   { key:'tomato_ketchup', query:'tomato ketchup', label:'Tomato sauce/ketchup', unit:'L', band:[24,220], buy:{pack:'1 L',qty:1,base_paise:6000},
