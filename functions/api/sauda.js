@@ -16,6 +16,7 @@
 import { mintToken, verifyToken, corsHeaders } from './_lib/darbar-auth.js';
 import { canonVendorKey, vendorView, VENDORS } from './_lib/sauda-vendors.js';
 import { HP_CATALOG } from './_lib/hyperpure-catalog.js';
+import { DECODE_SYSTEM } from './_lib/decode-ruleset.js';
 
 // ── Hyperpure: the planned next-day B2B basket (distinct from local trip vendors) ──
 // Bangalore rules (researched 2026-06-15): order by ~23:00 IST → next-day delivery,
@@ -121,6 +122,11 @@ export async function onRequest(context) {
       const status = url.searchParams.get('status') || '';
       return withCors(json(await getRequisition(db, forDate, status)), request);
     }
+    // decode: raw WhatsApp dump (text or screenshot) → clean structured PO via Claude
+    if (action === 'decode' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await decodePO(env, body)), request);
+    }
     return withCors(json({ error: `unknown action: ${action}` }, 400), request);
   } catch (e) {
     return withCors(json({ error: 'server error' }, 500), request);
@@ -186,6 +192,94 @@ async function getRequisition(db, forDate, status) {
     ok: true,
     requisition: { id: row.id, for_date: row.for_date, need_by: row.for_date === todayIST() ? 'today' : 'tomorrow', items, by_user: row.by_user, status: row.status, created_at: row.created_at },
   };
+}
+
+// ── Decode: raw WhatsApp dump → clean structured PO (Claude API, no SDK in Worker) ──
+const DECODE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    orders: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          brand: { type: 'string' },
+          sender: { type: 'string' },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                raw: { type: 'string' },
+                item: { type: 'string' },
+                qty: { type: 'string' },
+                unit: { type: 'string' },
+                category: { type: 'string' },
+                flag: { type: 'string' },
+              },
+              required: ['raw', 'item', 'qty', 'unit', 'category', 'flag'],
+            },
+          },
+        },
+        required: ['brand', 'sender', 'items'],
+      },
+    },
+    notes: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['orders', 'notes'],
+};
+
+async function decodePO(env, body) {
+  const key = env.ANTHROPIC_API_KEY;
+  if (!key) return { ok: false, error: 'decode unavailable — API key not configured' };
+  const text = body && typeof body.text === 'string' ? body.text.trim() : '';
+  const image = body && typeof body.image === 'string' ? body.image : '';
+  if (!text && !image) return { ok: false, error: 'paste the WhatsApp text or attach a screenshot' };
+
+  const content = [];
+  if (image) {
+    const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(image);
+    if (!m) return { ok: false, error: 'unsupported image — use PNG/JPEG' };
+    content.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+    content.push({ type: 'text', text: 'Decode the order(s) in this WhatsApp screenshot.' });
+  }
+  if (text) content.push({ type: 'text', text });
+
+  const payload = {
+    model: 'claude-opus-4-8',
+    max_tokens: 16000,
+    thinking: { type: 'adaptive' },
+    system: DECODE_SYSTEM,
+    output_config: { format: { type: 'json_schema', schema: DECODE_SCHEMA } },
+    messages: [{ role: 'user', content }],
+  };
+
+  let resp;
+  try {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    return { ok: false, error: 'decode service unreachable' };
+  }
+  if (!resp.ok) {
+    let detail = '';
+    try { const j = await resp.json(); detail = (j && j.error && j.error.message) || ''; } catch (e) {}
+    return { ok: false, error: `decode failed (${resp.status})`, detail };
+  }
+  let data;
+  try { data = await resp.json(); } catch (e) { return { ok: false, error: 'decode bad response' }; }
+  if (data.stop_reason === 'refusal') return { ok: false, error: 'decode refused' };
+  const tb = (data.content || []).find((b) => b.type === 'text');
+  if (!tb || !tb.text) return { ok: false, error: 'decode returned nothing' };
+  let parsed;
+  try { parsed = JSON.parse(tb.text); } catch (e) { return { ok: false, error: 'decode parse error' }; }
+  return { ok: true, orders: Array.isArray(parsed.orders) ? parsed.orders : [], notes: Array.isArray(parsed.notes) ? parsed.notes : [] };
 }
 
 // ── Build the live item master from the last 30 days, routed to canonical vendors ──
