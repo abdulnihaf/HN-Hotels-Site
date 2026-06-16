@@ -582,17 +582,15 @@
       var k=it.item_key, best=it.sources&&it.sources[0];
       var img=(best&&best.image)?' style="background-image:url('+esc(best.image)+')"':'';
       var qv=S.buy.qty[k]||0, inb=qv>0;
-      var hintLine = it.beats_baseline
-        ? '<span class="more" style="color:var(--green)">cheaper on '+esc(srcLabel(it.cheapest_source))+' · save ₹'+rupees(it.save_unit_paise)+'/'+esc(it.unit)+'</span>'
-        : '<span class="uu">your vendor · ₹'+rupees(it.your_unit_paise||it.your_paise)+'/'+esc(it.unit||'')+'</span>';
       var ctrl = inb
         ? '<div class="step"><button data-bdec="'+esc(k)+'">−</button><input inputmode="decimal" data-bq="'+esc(k)+'" value="'+esc(String(qv))+'"><button data-binc="'+esc(k)+'">+</button></div>'
         : '<button class="add-pill" data-badd="'+esc(k)+'" aria-label="add">+</button>';
       var photo='<div class="ph"'+img+'>'+((best&&best.image)?'':'<span>'+esc((it.label||k).slice(0,1))+'</span>')+'</div>';
+      // pure input — no prices here; photo + name + pack for clarity only
       return '<div class="hpitem'+(inb?' in':'')+'">'+
         '<div class="tap" style="cursor:default">'+photo+'<div class="nm"><b>'+esc(it.label||k)+'</b>'+
-          '<div class="meta">'+(it.your_pack?'<span class="pk">'+esc(it.your_pack)+'</span>':'')+hintLine+'</div></div></div>'+
-        '<div class="right"><span class="pr" style="color:var(--text)">₹'+rupees(it.your_paise)+'</span>'+ctrl+'</div></div>';
+          (it.your_pack?'<div class="meta"><span class="pk">'+esc(it.your_pack)+'</span></div>':'')+'</div></div>'+
+        '<div class="right">'+ctrl+'</div></div>';
     }).join('');
     host.querySelectorAll('[data-badd]').forEach(function(b){ b.addEventListener('click',function(){ setBuyQty(b.dataset.badd,1); }); });
     host.querySelectorAll('[data-binc]').forEach(function(b){ b.addEventListener('click',function(){ bumpBuy(b.dataset.binc,1); }); });
@@ -605,10 +603,9 @@
   function buyKeys(){ return Object.keys(S.buy.qty).filter(function(k){ return S.buy.qty[k]>0; }); }
   function updateBuyBar(){
     var keys=buyKeys(), tot=document.getElementById('buyTot'), btn=document.getElementById('buySendBtn');
-    var sum=0; keys.forEach(function(k){ var it=S.cmp.items.find(function(x){return x.item_key===k;}); if(it) sum+=(it.your_paise||0)*S.buy.qty[k]; });
     var wl = S.buy.when==='tomorrow' ? 'tomorrow' : 'today';
     if(!keys.length){ tot.textContent=''; btn.disabled=true; btn.textContent='Add items for '+wl; return; }
-    tot.innerHTML=keys.length+' item'+(keys.length>1?'s':'')+' · about ₹'+rupees(sum)+' at your price';
+    tot.innerHTML=keys.length+' item'+(keys.length>1?'s':'')+' to buy '+wl;
     btn.disabled=false; btn.textContent='Send '+wl+'’s list · '+keys.length+' item'+(keys.length>1?'s':'');
   }
   document.getElementById('buySendBtn').addEventListener('click', function(){
