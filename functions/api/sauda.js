@@ -151,7 +151,11 @@ async function ensureRequisitionTable(db) {
   ).run();
 }
 async function saveRequisition(db, body, auth) {
-  const forDate = (body && body.for_date) || nextDayIST();
+  // WHEN is a dimension, not a constant — it decides which sources are feasible.
+  // today  → instant quick-commerce + the morning market trip (Hyperpure is out, it's next-day)
+  // tomorrow → adds Hyperpure's cheaper next-day rates
+  const needBy = (body && body.need_by) === 'today' ? 'today' : 'tomorrow';
+  const forDate = (body && body.for_date) || (needBy === 'today' ? todayIST() : nextDayIST());
   const raw = Array.isArray(body && body.items) ? body.items : [];
   const items = raw
     .map((i) => ({ item_key: String((i && i.item_key) || '').trim(), qty: Number(i && i.qty) || 0 }))
@@ -162,7 +166,7 @@ async function saveRequisition(db, body, auth) {
     .prepare(`INSERT INTO sauda_requisition (for_date, items_json, by_user, status, created_at) VALUES (?,?,?,?,?)`)
     .bind(forDate, JSON.stringify(items), (auth && auth.name) || '', 'NEW', new Date().toISOString())
     .run();
-  return { ok: true, for_date: forDate, count: items.length };
+  return { ok: true, for_date: forDate, need_by: needBy, count: items.length };
 }
 async function getRequisition(db, forDate, status) {
   await ensureRequisitionTable(db);
@@ -180,7 +184,7 @@ async function getRequisition(db, forDate, status) {
   try { items = JSON.parse(row.items_json); } catch (e) {}
   return {
     ok: true,
-    requisition: { id: row.id, for_date: row.for_date, items, by_user: row.by_user, status: row.status, created_at: row.created_at },
+    requisition: { id: row.id, for_date: row.for_date, need_by: row.for_date === todayIST() ? 'today' : 'tomorrow', items, by_user: row.by_user, status: row.status, created_at: row.created_at },
   };
 }
 

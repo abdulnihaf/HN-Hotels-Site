@@ -318,6 +318,10 @@
 
   <!-- BUY LIST VIEW — need-first: add what to buy for tomorrow; the engine routes where -->
   <div id="viewBuy" class="hide">
+    <div class="seg" id="whenSeg" style="margin:10px 16px 0">
+      <button data-w="today" class="on">For today</button>
+      <button data-w="tomorrow">For tomorrow</button>
+    </div>
     <div class="hp-strip" id="buyHint"></div>
     <div class="search">
       <div class="box">
@@ -406,6 +410,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=10"></script>
+<script src="/ops/sauda/app.js?v=11"></script>
 </body>
 </html>
