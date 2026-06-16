@@ -16,7 +16,7 @@
   var S = { token: null, user: '', role: '', cat: null, brand: 'both', order: [] /* lines */, seq: 0,
             hp: { feed: [], win: null, mov: 150000, del: 9900, fresh: '', basket: {} /* item_key -> {it, qty} */, chosen: {} /* item_key -> picked SKU override */, tick: null },
             cmp: { items: [], sources: {}, pick: {} /* item_key -> chosen source */ },
-            buy: { qty: {} /* item_key -> qty wanted for tomorrow */ } };
+            buy: { qty: {} /* item_key -> qty */, when: 'today' /* today | tomorrow — decides feasible sources */ } };
 
   // ── token / session ──
   function tokenExp(t){ try{ var b=t.split('.')[0].replace(/-/g,'+').replace(/_/g,'/'); while(b.length%4)b+='='; return (JSON.parse(atob(b)).exp||0)*1000; }catch(e){ return 0; } }
@@ -62,11 +62,11 @@
 
   // ── persist in-progress work so a Safari/iOS reload never loses it ──
   function saveWork(){ try{ localStorage.setItem('sauda_work', JSON.stringify({
-    order:S.order, seq:S.seq, hpBasket:S.hp.basket, hpChosen:S.hp.chosen, cmpPick:S.cmp.pick, buyQty:S.buy.qty })); }catch(e){} }
+    order:S.order, seq:S.seq, hpBasket:S.hp.basket, hpChosen:S.hp.chosen, cmpPick:S.cmp.pick, buyQty:S.buy.qty, buyWhen:S.buy.when })); }catch(e){} }
   function restoreWork(){ try{ var w=JSON.parse(localStorage.getItem('sauda_work')||'null'); if(!w) return;
     if(Array.isArray(w.order)) S.order=w.order; if(w.seq) S.seq=w.seq;
     if(w.hpBasket) S.hp.basket=w.hpBasket; if(w.hpChosen) S.hp.chosen=w.hpChosen;
-    if(w.cmpPick) S.cmp.pick=w.cmpPick; if(w.buyQty) S.buy.qty=w.buyQty; }catch(e){} }
+    if(w.cmpPick) S.cmp.pick=w.cmpPick; if(w.buyQty) S.buy.qty=w.buyQty; if(w.buyWhen) S.buy.when=w.buyWhen; }catch(e){} }
   var _persist;
   function startPersist(){ if(_persist) return; _persist=setInterval(saveWork,3000);
     window.addEventListener('pagehide', saveWork);
@@ -552,7 +552,9 @@
   // (v1: Claude, manually from the box) routes each line to its cheapest workable
   // source. Reuses Compare data: your price + cheapest source already computed.
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  function syncWhenSeg(){ document.querySelectorAll('#whenSeg button').forEach(function(x){ x.classList.toggle('on', x.dataset.w===(S.buy.when||'today')); }); }
   function loadBuy(){
+    syncWhenSeg();
     if(S.cmp.items.length){ renderBuy(); return; }
     document.getElementById('buyEmpty').textContent='Loading items…';
     api('compare').then(function(res){
@@ -562,12 +564,19 @@
     }).catch(function(){ toast('No connection','err'); });
   }
   document.getElementById('buySearch').addEventListener('input', renderBuy);
+  document.getElementById('whenSeg').addEventListener('click', function(e){
+    var b=e.target.closest('button[data-w]'); if(!b) return;
+    S.buy.when=b.dataset.w; syncWhenSeg(); renderBuy();
+  });
   function renderBuy(){
     var host=document.getElementById('buyFeed'), empty=document.getElementById('buyEmpty'), hint=document.getElementById('buyHint');
     var q=(document.getElementById('buySearch').value||'').trim().toLowerCase();
     if(!S.cmp.items.length){ host.innerHTML=''; empty.textContent='No items yet.'; empty.classList.remove('hide'); updateBuyBar(); return; }
     empty.classList.add('hide');
-    hint.innerHTML='<span class="hp-pill">Add what you need — I’ll find where each is cheapest</span>';
+    var whenTxt = S.buy.when==='tomorrow'
+      ? 'For tomorrow — adds Hyperpure’s cheaper next-day rates'
+      : 'For today — instant delivery + your morning market trip';
+    hint.innerHTML='<span class="hp-pill">'+esc(whenTxt)+'</span>';
     var rows=S.cmp.items.filter(function(it){ return !q || (it.label||it.item_key).toLowerCase().indexOf(q)>=0; });
     host.innerHTML=rows.map(function(it){
       var k=it.item_key, best=it.sources&&it.sources[0];
@@ -597,15 +606,16 @@
   function updateBuyBar(){
     var keys=buyKeys(), tot=document.getElementById('buyTot'), btn=document.getElementById('buySendBtn');
     var sum=0; keys.forEach(function(k){ var it=S.cmp.items.find(function(x){return x.item_key===k;}); if(it) sum+=(it.your_paise||0)*S.buy.qty[k]; });
-    if(!keys.length){ tot.textContent=''; btn.disabled=true; btn.textContent='Add items for tomorrow'; return; }
+    var wl = S.buy.when==='tomorrow' ? 'tomorrow' : 'today';
+    if(!keys.length){ tot.textContent=''; btn.disabled=true; btn.textContent='Add items for '+wl; return; }
     tot.innerHTML=keys.length+' item'+(keys.length>1?'s':'')+' · about ₹'+rupees(sum)+' at your price';
-    btn.disabled=false; btn.textContent='Send tomorrow’s list · '+keys.length+' item'+(keys.length>1?'s':'');
+    btn.disabled=false; btn.textContent='Send '+wl+'’s list · '+keys.length+' item'+(keys.length>1?'s':'');
   }
   document.getElementById('buySendBtn').addEventListener('click', function(){
     if(busy) return; var keys=buyKeys(); if(!keys.length) return;
     var items=keys.map(function(k){ return { item_key:k, qty:S.buy.qty[k] }; });
     busy=true; var btn=this; btn.disabled=true; btn.textContent='Sending…';
-    api('requisition',{method:'POST',body:{ items:items }}).then(function(res){
+    api('requisition',{method:'POST',body:{ items:items, need_by:S.buy.when }}).then(function(res){
       busy=false;
       if(!res.ok||!res.j||!res.j.ok){ toast((res.j&&res.j.error)||'Send failed','err'); updateBuyBar(); return; }
       toast('Sent '+res.j.count+' items for '+(res.j.for_date||'tomorrow')+' — finding cheapest','ok');
@@ -616,7 +626,7 @@
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
     try{ localStorage.removeItem('sauda_work'); }catch(e){}
-    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,hp:{feed:[],win:null,mov:150000,del:9900,fresh:'',basket:{},chosen:{},tick:null},cmp:{items:[],sources:{},pick:{}},buy:{qty:{}}};
+    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,hp:{feed:[],win:null,mov:150000,del:9900,fresh:'',basket:{},chosen:{},tick:null},cmp:{items:[],sources:{},pick:{}},buy:{qty:{},when:'today'}};
     pin=''; renderDots(); app.classList.add('hide'); gate.classList.remove('hide'); }
   document.getElementById('lock').addEventListener('click', lock);
   function toast(msg,kind){ var h=document.getElementById('toastHost'); h.innerHTML='<div class="toast '+(kind||'info')+'">'+esc(msg)+'</div>'; setTimeout(function(){h.innerHTML='';},2200); }
