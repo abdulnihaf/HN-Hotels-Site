@@ -472,14 +472,12 @@
   // COMPARE — cheapest across platforms, per product (swipe to see each source)
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   function srcLabel(k){ var s=S.cmp.sources[k]; return (s&&s.label)||cap(k); }
-  function srcOf(it,key){ return (it.sources||[]).find(function(s){return s.source===key;}); }
   function loadCompare(){
     var list=document.getElementById('cmpList');
     list.innerHTML='<div class="empty">Loading…</div>'; document.getElementById('cmpEmpty').classList.add('hide');
     api('compare').then(function(res){
       if(!res.ok){ toast(res.j&&res.j.error||'compare failed','err'); return; }
       S.cmp.items=res.j.items||[]; S.cmp.sources=res.j.sources||{};
-      S.cmp.items.forEach(function(it){ if(!S.cmp.pick[it.item_key]) S.cmp.pick[it.item_key]=it.cheapest_source; });
       renderCompare();
     }).catch(function(){ toast('No connection','err'); });
   }
@@ -487,61 +485,64 @@
     var host=document.getElementById('cmpList'), empty=document.getElementById('cmpEmpty'), head=document.getElementById('cmpHead');
     if(!S.cmp.items.length){ host.innerHTML=''; empty.classList.remove('hide'); renderSummary(); return; }
     empty.classList.add('hide');
-    head.innerHTML='<span class="ttl">Cheapest per item — tap to swipe across platforms</span>';
+    var wins=S.cmp.items.filter(function(it){return it.beats_baseline;}).length;
+    head.innerHTML='<span class="ttl">'+S.cmp.items.length+' items · your price vs every platform</span>'+
+      (wins?'<span class="fresh" style="color:var(--green)">'+wins+' cheaper online</span>':'');
     host.innerHTML=S.cmp.items.map(function(it){
-      var pick=S.cmp.pick[it.item_key]||it.cheapest_source; var s=srcOf(it,pick)||it.sources[0]; if(!s) return '';
-      var img=s.image?' style="background-image:url('+esc(s.image)+')"':'';
-      var other=(it.sources.find(function(x){return x.source!==pick;})||{}).source;
-      var save=(it.save_paise>0 && pick===it.cheapest_source && other)?'<span class="save">₹'+rupees(it.save_paise)+'/'+esc(it.save_unit||'')+' cheaper</span>':'';
-      var more=it.sources.length>1?'<span class="lb" style="font-size:10.5px;color:var(--mute)">+'+(it.sources.length-1)+' more</span>':'';
-      return '<div class="cmprow" data-cmp="'+esc(it.item_key)+'">'+
-        '<div class="ph"'+img+'>'+(s.image?'':'<span>'+esc(cap(it.item_key).slice(0,1))+'</span>')+'</div>'+
-        '<div class="ci"><div class="nm">'+esc(it.item_key)+'</div>'+
-          '<div class="src"><span class="src-badge '+esc(pick)+'">'+esc(srcLabel(pick))+'</span>'+more+save+'</div></div>'+
-        '<div class="cr"><div class="pr">₹'+rupees(s.price_paise)+'</div>'+
-          (s.unit&&s.unit_price_paise?'<div class="pu">₹'+rupees(s.unit_price_paise)+'/'+esc(s.unit)+'</div>':'')+
-          '<div class="chev">compare ›</div></div></div>';
+      var best=it.sources[0];
+      var img=(best&&best.image)?' style="background-image:url('+esc(best.image)+')"':'';
+      var line;
+      if(it.beats_baseline){ line='<span class="src-badge '+esc(it.cheapest_source)+'">'+esc(srcLabel(it.cheapest_source))+'</span><span class="save">save ₹'+rupees(it.save_unit_paise)+'/'+esc(it.unit)+'</span>'; }
+      else if(best){ line='<span class="lb" style="font-size:11px;color:var(--mute)">best online ₹'+rupees(best.unit_price_paise)+'/'+esc(it.unit)+' · not cheaper</span>'; }
+      else { line='<span class="lb" style="font-size:11px;color:var(--mute)">no online price yet</span>'; }
+      return '<div class="cmprow'+(it.beats_baseline?' win':'')+'" data-cmp="'+esc(it.item_key)+'">'+
+        '<div class="ph"'+img+'>'+((best&&best.image)?'':'<span>'+esc((it.label||it.item_key).slice(0,1))+'</span>')+'</div>'+
+        '<div class="ci"><div class="nm">'+esc(it.label||it.item_key)+'</div><div class="src">'+line+'</div></div>'+
+        '<div class="cr"><div class="pu" style="font-size:9.5px">you pay</div><div class="pr">₹'+rupees(it.your_paise)+'</div>'+
+          '<div class="pu">'+esc(it.your_pack||'')+'</div><div class="chev">compare ›</div></div></div>';
     }).join('');
     host.querySelectorAll('.cmprow[data-cmp]').forEach(function(r){ r.addEventListener('click',function(){ openCompareSheet(r.dataset.cmp); }); });
     renderSummary();
   }
   function renderSummary(){
-    var host=document.getElementById('cmpSummary'); var tot={}, cnt={};
-    S.cmp.items.forEach(function(it){ var p=S.cmp.pick[it.item_key]; if(!p) return; var s=srcOf(it,p); if(!s) return; tot[p]=(tot[p]||0)+(s.price_paise||0); cnt[p]=(cnt[p]||0)+1; });
-    var keys=Object.keys(tot);
-    if(!keys.length){ host.innerHTML='<div class="pchip"><div class="ph-n">Pick items to plan carts</div></div>'; return; }
-    host.innerHTML=keys.map(function(k){
-      var cfg=S.cmp.sources[k]||{}; var t=tot[k];
-      var floor=cfg.min_cart_paise||cfg.free_above_paise||0; var ok=!floor||t>=floor;
-      var status=!floor?(cnt[k]+' item'+(cnt[k]>1?'s':'')):(ok?'✓ over ₹'+rupees(floor):'add ₹'+rupees(floor-t));
-      return '<div class="pchip '+(ok?'ok':'under')+'"><div class="ph-n">'+esc(srcLabel(k))+'</div>'+
-        '<div class="ph-t">₹'+rupees(t)+'</div><div class="ph-s">'+status+'</div></div>';
-    }).join('');
+    var host=document.getElementById('cmpSummary');
+    var wins=S.cmp.items.filter(function(it){return it.beats_baseline;});
+    if(!S.cmp.items.length){ host.innerHTML=''; return; }
+    if(!wins.length){ host.innerHTML='<div class="pchip ok"><div class="ph-n">Your prices hold</div><div class="ph-s">no platform beats you yet</div></div>'; return; }
+    var byp={}; wins.forEach(function(it){ byp[it.cheapest_source]=(byp[it.cheapest_source]||0)+1; });
+    host.innerHTML='<div class="pchip ok"><div class="ph-n">'+wins.length+' cheaper online</div>'+
+      '<div class="ph-s">'+Object.keys(byp).map(function(k){return srcLabel(k)+' '+byp[k];}).join(' · ')+'</div></div>';
   }
   function openCompareSheet(key){
     var it=S.cmp.items.find(function(x){return x.item_key===key;}); if(!it) return;
-    var pick=S.cmp.pick[key]||it.cheapest_source;
-    var cards=it.sources.map(function(s){
-      var cfg=S.cmp.sources[s.source]||{}; var best=(s.source===it.cheapest_source); var picked=(s.source===pick);
+    var cards=[];
+    // tier 0 — your current price (the bar to beat)
+    cards.push('<div class="pcard"><div class="pc-top"><span class="src-badge" style="background:rgba(255,255,255,.08);color:var(--text)">Your price</span></div>'+
+      '<div class="pc-ph"><span>₹</span></div>'+
+      '<div class="pc-body"><div class="pc-nm">What you pay now</div>'+
+      '<div class="pc-meta">'+(it.your_pack?'<span class="pc-pack">'+esc(it.your_pack)+'</span>':'')+(it.your_unit_paise?'<span style="font-size:10.5px;color:var(--mute)">₹'+rupees(it.your_unit_paise)+'/'+esc(it.unit)+'</span>':'')+'</div>'+
+      '<div class="pc-price"><b>₹'+rupees(it.your_paise)+'</b><small>current vendor</small></div></div></div>');
+    it.sources.forEach(function(s){
+      var cfg=S.cmp.sources[s.source]||{}; var win=(s.source===it.cheapest_source && it.beats_baseline);
       var ph=s.image?' style="background-image:url('+esc(s.image)+')"':'';
-      var kind=cfg.kind==='next-day'?'next-day · order by 11pm':(cfg.kind==='instant'?'instant delivery':'');
+      var kind=cfg.kind==='next-day'?'next-day':'instant';
+      var cmp=(it.your_unit_paise&&s.unit_price_paise)?(s.unit_price_paise<it.your_unit_paise?'<span class="save">₹'+rupees(it.your_unit_paise-s.unit_price_paise)+'/'+esc(it.unit)+' cheaper</span>':'<span style="font-size:10px;color:var(--mute)">dearer than you</span>'):'';
       var buy=s.url?'<a class="pc-buy open" href="'+esc(s.url)+'" target="_blank" rel="noopener">Open on '+esc(srcLabel(s.source))+' ↗</a>':'';
-      return '<div class="pcard'+(best?' best':'')+'">'+
+      cards.push('<div class="pcard'+(win?' best':'')+'">'+
         '<div class="pc-top"><span class="src-badge '+esc(s.source)+'">'+esc(srcLabel(s.source))+'</span><span class="sb"></span>'+
-          (best?'<span class="src-badge" style="background:var(--green-soft);color:var(--green)">cheapest</span>':'')+'</div>'+
-        '<div class="pc-ph"'+ph+'>'+(s.image?'':'<span>'+esc(cap(key).slice(0,1))+'</span>')+'</div>'+
-        '<div class="pc-body"><div class="pc-nm">'+esc(s.matched||cap(key))+'</div>'+
+          (win?'<span class="src-badge" style="background:var(--green-soft);color:var(--green)">cheapest</span>':'')+'</div>'+
+        '<div class="pc-ph"'+ph+'>'+(s.image?'':'<span>'+esc((it.label||key).slice(0,1))+'</span>')+'</div>'+
+        '<div class="pc-body"><div class="pc-nm">'+esc(s.matched||it.label)+'</div>'+
           '<div class="pc-meta">'+(s.pack?'<span class="pc-pack">'+esc(s.pack)+'</span>':'')+
             (s.unit&&s.unit_price_paise?'<span style="font-size:10.5px;color:var(--mute)">₹'+rupees(s.unit_price_paise)+'/'+esc(s.unit)+'</span>':'')+'</div>'+
-          '<div class="pc-price"><b>₹'+rupees(s.price_paise)+'</b>'+(kind?'<small>'+esc(kind)+'</small>':'')+'</div>'+
-          '<button class="pc-buy pick" data-pick="'+esc(s.source)+'">'+(picked?'✓ Buying here':'Buy from '+esc(srcLabel(s.source)))+'</button>'+buy+'</div></div>';
-    }).join('');
-    var h='<div class="ov" id="ov"><div class="sheet"><h2 style="text-transform:capitalize">'+esc(key)+'</h2>'+
-      '<div class="skuhint">Swipe across platforms — pick where to buy. Cheapest is highlighted.</div>'+
-      '<div class="pcards">'+cards+'</div></div></div>';
+          '<div class="pc-price"><b>₹'+rupees(s.price_paise)+'</b><small>'+esc(kind)+'</small></div>'+cmp+buy+'</div></div>');
+    });
+    if(!it.sources.length){ cards.push('<div class="pcard"><div class="pc-body" style="padding:34px 13px;text-align:center;color:var(--mute)">No online price scraped yet —<br>the scout checks tonight.</div></div>'); }
+    var h='<div class="ov" id="ov"><div class="sheet"><h2>'+esc(it.label||key)+'</h2>'+
+      '<div class="skuhint">Your price vs each platform — swipe. Green means cheaper than you pay now.</div>'+
+      '<div class="pcards">'+cards.join('')+'</div></div></div>';
     var host=document.getElementById('sheetHost'); host.innerHTML=h;
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
-    host.querySelectorAll('[data-pick]').forEach(function(b){ b.addEventListener('click',function(){ S.cmp.pick[key]=b.dataset.pick; host.innerHTML=''; renderCompare(); toast('Buying '+key+' from '+srcLabel(b.dataset.pick),'info'); }); });
   }
 
   // ── misc ──

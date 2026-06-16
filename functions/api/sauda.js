@@ -15,6 +15,7 @@
 
 import { mintToken, verifyToken, corsHeaders } from './_lib/darbar-auth.js';
 import { canonVendorKey, vendorView, VENDORS } from './_lib/sauda-vendors.js';
+import { HP_CATALOG } from './_lib/hyperpure-catalog.js';
 
 // ── Hyperpure: the planned next-day B2B basket (distinct from local trip vendors) ──
 // Bangalore rules (researched 2026-06-15): order by ~23:00 IST → next-day delivery,
@@ -365,26 +366,32 @@ async function sourcesCompare(db) {
               cheapest_price_paise, cheapest_unit_price_paise, cheapest_image
          FROM hyperpure_prices WHERE cheapest_price_paise IS NOT NULL`).all();
   } catch (e) {}
-  const byItem = new Map();
-  const add = (k, s) => { if (!byItem.has(k)) byItem.set(k, []); byItem.get(k).push(s); };
+  const scraped = new Map();
+  const add = (k, s) => { if (!scraped.has(k)) scraped.set(k, []); scraped.get(k).push(s); };
   for (const r of (ip?.results || [])) add(r.item_key, {
     source: r.source, matched: r.matched_name, brand: r.brand, pack: r.pack, unit: r.unit,
     price_paise: r.price_paise, unit_price_paise: r.unit_price_paise, image: r.image, url: r.url });
   for (const r of (hp?.results || [])) add(r.item_key, {
     source: 'hyperpure', matched: r.cheapest_name, brand: r.cheapest_brand, pack: r.cheapest_pack, unit: r.cheapest_unit,
     price_paise: r.cheapest_price_paise, unit_price_paise: r.cheapest_unit_price_paise, image: r.cheapest_image, url: null });
-  const items = [...byItem.entries()].map(([k, srcs]) => {
-    const ranked = srcs.slice().sort((a, b) =>
+  // spine off the REAL catalog so every item shows with the owner's baseline price,
+  // even before a platform has scraped it. A platform "wins" only when its per-unit
+  // beats what the owner currently pays.
+  const items = HP_CATALOG.map((c) => {
+    const yourUnit = (c.buy && c.buy.qty) ? Math.round(c.buy.base_paise / c.buy.qty) : null;
+    const ranked = (scraped.get(c.key) || []).slice().sort((a, b) =>
       (a.unit_price_paise ?? a.price_paise ?? 1e15) - (b.unit_price_paise ?? b.price_paise ?? 1e15));
-    const best = ranked[0];
-    const second = ranked.find((s) => s.source !== (best && best.source));
-    // saving vs the next source, on a comparable basis (per-unit ₹/kg|₹/L),
-    // since pack sizes differ wildly (Hyperpure bulk vs quick-commerce retail)
-    const bu = best && best.unit_price_paise, su = second && second.unit_price_paise;
-    const save = (bu && su && su > bu) ? su - bu : 0;
-    return { item_key: k, cheapest_source: best ? best.source : null,
-             save_paise: save, save_unit: (best && best.unit) || '', sources: ranked };
-  }).sort((a, b) => a.item_key.localeCompare(b.item_key));
+    const best = ranked[0] || null;
+    const beats = !!(best && yourUnit && best.unit_price_paise && best.unit_price_paise < yourUnit);
+    return {
+      item_key: c.key, label: c.label, unit: c.unit,
+      your_pack: (c.buy && c.buy.pack) || '', your_paise: (c.buy && c.buy.base_paise) || null, your_unit_paise: yourUnit,
+      sources: ranked,
+      cheapest_source: best ? best.source : null,
+      beats_baseline: beats,
+      save_unit_paise: beats ? (yourUnit - best.unit_price_paise) : 0,
+    };
+  });
   return { items, sources: SOURCES };
 }
 
