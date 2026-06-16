@@ -85,4 +85,17 @@ export const HP_CATALOG = [
     must:[['masoor','masur'],['dal','dhal']], not:['snack','roasted'] },
   { key:'rice', query:'sona masoori rice', label:'Staff rice', unit:'kg', band:[30,220], buy:{pack:'26 kg',qty:26,base_paise:168000},
     must:[['rice']], not:['basmati','poha','flakes','puffed','brown'] },
+  // ── water · soft drinks · eggs (count/case items) ──
+  { key:'water_bisleri_500', query:'bisleri 500 ml water', label:'Bisleri water 500ml', unit:'L', band:[5,90], buy:{pack:'case · 24×500ml',qty:12,base_paise:18000},
+    must:[['bisleri']], not:['soda','flavoured','copper'] },
+  { key:'water_aquaking_500', query:'aqua king water', label:'Aqua King 500ml — CONFIRM (local brand?)', unit:'L', band:[3,90], buy:{pack:'case · 24×500ml',qty:12,base_paise:14000},
+    must:[['aqua']], not:['soda','flavoured'] },
+  { key:'water_bisleri_1l', query:'bisleri 1 litre water', label:'Bisleri water 1L', unit:'L', band:[5,90], buy:{pack:'case · 12×1L',qty:12,base_paise:14000},
+    must:[['bisleri']], not:['soda','flavoured','copper'] },
+  { key:'coke', query:'coca cola', label:'Coke — glass case (form differs online)', unit:'pc', band:[5,80], buy:{pack:'case · 24 bottles',qty:24,base_paise:21500},
+    must:[['coca cola','coca-cola','coke']], not:['zero','diet'] },
+  { key:'thumsup', query:'thums up', label:'Thums Up — glass case (form differs online)', unit:'pc', band:[5,80], buy:{pack:'case · 24 bottles',qty:24,base_paise:21500},
+    must:[['thums']], not:['zero','charged'] },
+  { key:'egg', query:'eggs', label:'Eggs', unit:'pc', band:[3,20], buy:{pack:'tray · 30',qty:30,base_paise:21000},
+    must:[['egg']], not:['liquid','boiled','pickle','plant','chocolate','noodle'] },
 ];
