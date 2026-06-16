@@ -308,11 +308,27 @@
       <button class="lock" id="lock" aria-label="Lock">⏻</button>
     </div>
     <div class="seg scrollx" id="modeSeg">
-      <button data-m="place" class="on">Place</button>
+      <button data-m="buy" class="on">Buy list</button>
+      <button data-m="place">Place</button>
       <button data-m="pay">To pay</button>
       <button data-m="hp">Hyperpure</button>
       <button data-m="cmp">Compare</button>
     </div>
+  </div>
+
+  <!-- BUY LIST VIEW — need-first: add what to buy for tomorrow; the engine routes where -->
+  <div id="viewBuy" class="hide">
+    <div class="hp-strip" id="buyHint"></div>
+    <div class="search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="buySearch" type="text" placeholder="Filter items… (paneer, oil, rice)" autocomplete="off">
+      </div>
+    </div>
+    <main class="pane" id="buyPane">
+      <div class="empty" id="buyEmpty">Loading items…</div>
+      <div id="buyFeed"></div>
+    </main>
   </div>
 
   <!-- PLACE VIEW -->
@@ -359,6 +375,11 @@
     </main>
   </div>
 
+  <div class="bottom hide" id="buyBar" style="flex-direction:column;gap:8px">
+    <div id="buyTot" style="width:100%;font-size:12.5px;color:var(--dim);text-align:center"></div>
+    <button class="btn primary" id="buySendBtn" disabled style="width:100%">Add items for tomorrow</button>
+  </div>
+
   <div class="bottom" id="placeBar">
     <button class="btn primary" id="placeBtn" disabled>Place order</button>
   </div>
@@ -385,6 +406,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=9"></script>
+<script src="/ops/sauda/app.js?v=10"></script>
 </body>
 </html>
