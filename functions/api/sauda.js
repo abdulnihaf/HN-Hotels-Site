@@ -110,6 +110,17 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await hyperpurePlace(db, body, auth)), request);
     }
+    // need-first buy list: staff add item_key+qty for tomorrow; the routing engine
+    // (v1: Claude, manually from the box) decides where each line is cheapest.
+    if (action === 'requisition' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await saveRequisition(db, body, auth)), request);
+    }
+    if (action === 'requisition' && request.method === 'GET') {
+      const forDate = url.searchParams.get('for_date') || '';
+      const status = url.searchParams.get('status') || '';
+      return withCors(json(await getRequisition(db, forDate, status)), request);
+    }
     return withCors(json({ error: `unknown action: ${action}` }, 400), request);
   } catch (e) {
     return withCors(json({ error: 'server error' }, 500), request);
@@ -120,6 +131,57 @@ function todayIST() {
   // YYYY-MM-DD in IST (UTC+5:30)
   const t = new Date(Date.now() + 330 * 60000);
   return t.toISOString().slice(0, 10);
+}
+function nextDayIST() {
+  const t = new Date(Date.now() + 330 * 60000 + 24 * 3600000);
+  return t.toISOString().slice(0, 10);
+}
+
+// ── Requisition: the day's need-first buy LIST (what to buy, not where) ──
+async function ensureRequisitionTable(db) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS sauda_requisition (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       for_date TEXT NOT NULL,
+       items_json TEXT NOT NULL,
+       by_user TEXT,
+       status TEXT DEFAULT 'NEW',
+       created_at TEXT NOT NULL
+     )`
+  ).run();
+}
+async function saveRequisition(db, body, auth) {
+  const forDate = (body && body.for_date) || nextDayIST();
+  const raw = Array.isArray(body && body.items) ? body.items : [];
+  const items = raw
+    .map((i) => ({ item_key: String((i && i.item_key) || '').trim(), qty: Number(i && i.qty) || 0 }))
+    .filter((i) => i.item_key && i.qty > 0);
+  if (!items.length) return { ok: false, error: 'empty list' };
+  await ensureRequisitionTable(db);
+  await db
+    .prepare(`INSERT INTO sauda_requisition (for_date, items_json, by_user, status, created_at) VALUES (?,?,?,?,?)`)
+    .bind(forDate, JSON.stringify(items), (auth && auth.name) || '', 'NEW', new Date().toISOString())
+    .run();
+  return { ok: true, for_date: forDate, count: items.length };
+}
+async function getRequisition(db, forDate, status) {
+  await ensureRequisitionTable(db);
+  const where = [];
+  const args = [];
+  if (forDate) { where.push('for_date = ?'); args.push(forDate); }
+  if (status) { where.push('status = ?'); args.push(status); }
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const stmt = db.prepare(
+    `SELECT id, for_date, items_json, by_user, status, created_at FROM sauda_requisition ${clause} ORDER BY id DESC LIMIT 1`
+  );
+  const row = args.length ? await stmt.bind(...args).first() : await stmt.first();
+  if (!row) return { ok: true, requisition: null };
+  let items = [];
+  try { items = JSON.parse(row.items_json); } catch (e) {}
+  return {
+    ok: true,
+    requisition: { id: row.id, for_date: row.for_date, items, by_user: row.by_user, status: row.status, created_at: row.created_at },
+  };
 }
 
 // ── Build the live item master from the last 30 days, routed to canonical vendors ──
