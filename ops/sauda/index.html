@@ -338,6 +338,14 @@
     .srow .modet{font-size:10px;font-weight:700;padding:6px 9px;border-radius:7px;border:1px solid var(--line);color:var(--dim);background:var(--e2)}
     .srow .modet.live{background:var(--blue-soft);color:var(--blue);border-color:transparent}
     .srow .phin{width:130px;background:var(--e2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12.5px;padding:6px 7px}
+    .srow.col{flex-direction:column;align-items:stretch}
+    .srow.col .top{display:flex;gap:10px;align-items:flex-start}
+    .srow.col .top .sl{flex:1;min-width:0}
+    .srow .skuline{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft)}
+    .srow .formt{font-size:10px;font-weight:700;padding:6px 12px;border-radius:7px;border:1px solid var(--line);background:var(--e2);color:var(--dim);flex-shrink:0}
+    .srow .formt.sku{background:var(--gold-soft);color:var(--gold);border-color:var(--gold-bd)}
+    .srow .brin,.srow .pkin{flex:1;min-width:74px;background:var(--e2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px}
+    .srow .loosehint{font-size:10.5px;color:var(--mute)}
     .ven .vtrail{border-top:1px solid var(--line-soft);padding:4px 12px 8px}
     .ven .tr{display:grid;grid-template-columns:auto 1fr auto;gap:3px 9px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-soft)}
     .ven .tr:last-child{border-bottom:none}
@@ -528,6 +536,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=23"></script>
+<script src="/ops/sauda/app.js?v=24"></script>
 </body>
 </html>

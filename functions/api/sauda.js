@@ -658,7 +658,7 @@ const ITEM_ALIASES = {
 async function ensureSettingsTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS sauda_item (item_code TEXT PRIMARY KEY, label TEXT, unit TEXT, pack_label TEXT, pack_qty REAL,
-      price_paise INTEGER DEFAULT 0, price_mode TEXT DEFAULT 'fixed', default_vendor TEXT DEFAULT '', category TEXT DEFAULT '',
+      price_paise INTEGER DEFAULT 0, price_mode TEXT DEFAULT 'fixed', form TEXT DEFAULT 'loose', brand TEXT DEFAULT '', default_vendor TEXT DEFAULT '', category TEXT DEFAULT '',
       cmp_query TEXT DEFAULT '', cmp_must TEXT DEFAULT '[]', cmp_not TEXT DEFAULT '[]', cmp_band TEXT DEFAULT '[]',
       flagged INTEGER DEFAULT 0, note TEXT DEFAULT '', active INTEGER DEFAULT 1, updated_by TEXT DEFAULT '', updated_at TEXT DEFAULT '')`),
     db.prepare(`CREATE TABLE IF NOT EXISTS sauda_item_alias (alias TEXT PRIMARY KEY, item_code TEXT, created_at TEXT DEFAULT '')`),
@@ -667,6 +667,15 @@ async function ensureSettingsTables(db) {
       aliases_json TEXT DEFAULT '[]', cat TEXT DEFAULT '', flagged INTEGER DEFAULT 0, active INTEGER DEFAULT 1,
       updated_by TEXT DEFAULT '', updated_at TEXT DEFAULT '')`),
   ]);
+  // add form (loose|defined) + brand to an already-existing table; on first add, the
+  // catalog items (packaged buys) become 'defined' SKUs.
+  let added = false;
+  try { await db.prepare("ALTER TABLE sauda_item ADD COLUMN form TEXT DEFAULT 'loose'").run(); added = true; } catch (e) {}
+  try { await db.prepare("ALTER TABLE sauda_item ADD COLUMN brand TEXT DEFAULT ''").run(); } catch (e) {}
+  if (added) {
+    const keys = HP_CATALOG.map((c) => c.key);
+    try { await db.prepare(`UPDATE sauda_item SET form='defined' WHERE item_code IN (${keys.map(() => '?').join(',')})`).bind(...keys).run(); } catch (e) {}
+  }
 }
 
 async function seedSettings(db) {
@@ -692,7 +701,7 @@ async function seedSettings(db) {
 async function getSettings(db) {
   await ensureSettingsTables(db);
   const seed = await seedSettings(db);
-  const items = ((await db.prepare(`SELECT item_code,label,unit,pack_label,pack_qty,price_paise,price_mode,default_vendor,category,flagged,note FROM sauda_item WHERE active=1 ORDER BY label`).all()).results) || [];
+  const items = ((await db.prepare(`SELECT item_code,label,unit,pack_label,pack_qty,price_paise,price_mode,form,brand,default_vendor,category,flagged,note FROM sauda_item WHERE active=1 ORDER BY label`).all()).results) || [];
   const vendors = ((await db.prepare(`SELECT vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged FROM sauda_vendor WHERE active=1 ORDER BY name`).all()).results) || [];
   const aliasRows = ((await db.prepare(`SELECT alias,item_code FROM sauda_item_alias`).all()).results) || [];
   const aliasByItem = {};
@@ -754,8 +763,8 @@ async function settingsItem(db, body, auth) {
     let base = slug(label), c = base, n = 1;
     while (await db.prepare('SELECT 1 FROM sauda_item WHERE item_code=?').bind(c).first()) c = base + '_' + (++n);
     code = c;
-    await db.prepare(`INSERT INTO sauda_item (item_code,label,unit,pack_label,price_paise,price_mode,default_vendor,category,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
-      .bind(code, label, body.unit || '', body.pack_label || '', Math.max(0, Math.round(+body.price_paise || 0)), body.price_mode === 'live' ? 'live' : 'fixed', body.default_vendor || '', body.category || '', by, now).run();
+    await db.prepare(`INSERT INTO sauda_item (item_code,label,unit,pack_label,price_paise,price_mode,form,brand,default_vendor,category,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(code, label, body.unit || '', body.pack_label || '', Math.max(0, Math.round(+body.price_paise || 0)), body.price_mode === 'live' ? 'live' : 'fixed', body.form === 'defined' ? 'defined' : 'loose', body.brand || '', body.default_vendor || '', body.category || '', by, now).run();
     return { ok: true, item_code: code, created: true };
   }
   const sets = [], vals = [];
@@ -763,6 +772,8 @@ async function settingsItem(db, body, auth) {
   f('label', 'label=?', String(body.label || ''));
   f('unit', 'unit=?', String(body.unit || ''));
   f('pack_label', 'pack_label=?', String(body.pack_label || ''));
+  f('form', 'form=?', body.form === 'defined' ? 'defined' : 'loose');
+  f('brand', 'brand=?', String(body.brand || ''));
   f('price_mode', 'price_mode=?', body.price_mode === 'live' ? 'live' : 'fixed');
   f('default_vendor', 'default_vendor=?', String(body.default_vendor || ''));
   f('category', 'category=?', String(body.category || ''));

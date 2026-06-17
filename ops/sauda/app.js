@@ -837,7 +837,7 @@
     document.querySelectorAll('#setSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.s===SET.tab); });
     if(SET.tab==='items') renderSetItems(list); else renderSetVendors(list);
   }
-  function itemMissing(i){ var m=[]; if(i.price_mode!=='live' && !(i.price_paise>0))m.push('price'); if(!i.unit)m.push('unit'); if(!i.default_vendor)m.push('vendor'); return m; }
+  function itemMissing(i){ var m=[]; if(i.price_mode!=='live' && !(i.price_paise>0))m.push('price'); if(!i.unit)m.push('unit'); if(!i.default_vendor)m.push('vendor'); if(i.form==='defined'){ if(!i.brand)m.push('brand'); if(!i.pack_label)m.push('pack'); } return m; }
   function renderSetItems(list){
     var q=SET.q;
     var need=SET.items.filter(function(i){return itemMissing(i).length;});
@@ -845,17 +845,21 @@
       if(SET.needOnly && !itemMissing(i).length) return false;
       return !q || (i.label+' '+(i.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0;
     });
-    var html='<div class="setcount">'+rows.length+' of '+SET.items.length+' items · <b style="color:var(--amber)">'+need.length+' to fill</b> (price / unit / vendor)</div>';
+    var html='<div class="setcount">'+rows.length+' of '+SET.items.length+' items · <b style="color:var(--amber)">'+need.length+' to fill</b> (loose/SKU · price · unit · vendor)</div>';
     html+=rows.map(function(i){
-      var live=i.price_mode==='live';
+      var live=i.price_mode==='live', def=i.form==='defined';
       var price=live
         ? '<button class="modet live" data-mode="'+esc(i.item_code)+'">LIVE</button>'
-        : '<span class="rs">₹</span><input class="spin" data-sp="'+esc(i.item_code)+'" inputmode="decimal" value="'+(i.price_paise>0?(i.price_paise/100):'')+'" placeholder="price"><button class="modet" data-mode="'+esc(i.item_code)+'">fix</button>';
+        : '<span class="rs">₹</span><input class="spin" data-sp="'+esc(i.item_code)+'" inputmode="decimal" value="'+(i.price_paise>0?(i.price_paise/100):'')+'" placeholder="'+(def?'pack ₹':'₹/'+(i.unit||'unit'))+'"><button class="modet" data-mode="'+esc(i.item_code)+'">fix</button>';
       var miss=itemMissing(i); var nc=miss.length?' need':'';
       var sub=miss.length?('<span style="color:var(--amber)">⚠ needs '+miss.join(' / ')+'</span>'):esc((i.aliases||[]).slice(0,5).join(', '));
-      return '<div class="srow'+nc+'"><div class="sl"><b>'+esc(i.label)+(i.flagged?' ⚠':'')+'</b><small>'+sub+'</small></div>'+
+      var skuline='<div class="skuline"><button class="formt'+(def?' sku':'')+'" data-form="'+esc(i.item_code)+'">'+(def?'SKU':'Loose')+'</button>'+
+        (def
+          ? '<input class="brin" data-sbr="'+esc(i.item_code)+'" value="'+esc(i.brand||'')+'" placeholder="brand"><input class="pkin" data-spk="'+esc(i.item_code)+'" value="'+esc(i.pack_label||'')+'" placeholder="pack e.g. 500 g">'
+          : '<span class="loosehint">loose · price is per '+esc(i.unit||'unit')+'</span>')+'</div>';
+      return '<div class="srow col'+nc+'"><div class="top"><div class="sl"><b>'+esc(i.label)+(i.flagged?' ⚠':'')+'</b><small>'+sub+'</small></div>'+
         '<div class="sf"><div class="r1">'+price+'</div><div class="r2"><select data-su="'+esc(i.item_code)+'">'+unitOpts(i.unit)+'</select>'+
-        '<select data-sv="'+esc(i.item_code)+'">'+vendorOpts(i.default_vendor)+'</select></div></div></div>';
+        '<select data-sv="'+esc(i.item_code)+'">'+vendorOpts(i.default_vendor)+'</select></div></div></div>'+skuline+'</div>';
     }).join('');
     html+='<button class="add" onclick="openAddItem()" style="margin-top:8px">+ add an item</button>';
     list.innerHTML=html;
@@ -863,6 +867,9 @@
     list.querySelectorAll('select[data-su]').forEach(function(s){ s.addEventListener('change',function(){ saveItem(s.dataset.su,{unit:s.value}); }); });
     list.querySelectorAll('select[data-sv]').forEach(function(s){ s.addEventListener('change',function(){ saveItem(s.dataset.sv,{default_vendor:s.value}); }); });
     list.querySelectorAll('[data-mode]').forEach(function(b){ b.addEventListener('click',function(){ var it=SET.items.find(function(x){return x.item_code===b.dataset.mode;}); saveItem(b.dataset.mode,{price_mode:(it&&it.price_mode==='live')?'fixed':'live'},true); }); });
+    list.querySelectorAll('[data-form]').forEach(function(b){ b.addEventListener('click',function(){ var it=SET.items.find(function(x){return x.item_code===b.dataset.form;}); saveItem(b.dataset.form,{form:(it&&it.form==='defined')?'loose':'defined'},true); }); });
+    list.querySelectorAll('input[data-sbr]').forEach(function(p){ p.addEventListener('change',function(){ saveItem(p.dataset.sbr,{brand:p.value}); }); });
+    list.querySelectorAll('input[data-spk]').forEach(function(p){ p.addEventListener('change',function(){ saveItem(p.dataset.spk,{pack_label:p.value}); }); });
   }
   function vendorMissing(v){ var m=[]; if(!v.phone)m.push('phone'); if(!(v.vpas&&v.vpas.length))m.push('UPI'); return m; }
   function renderSetVendors(list){
@@ -894,6 +901,9 @@
     var host=document.getElementById('sheetHost');
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Add an item</h2>'+
       '<div class="fld"><label>Name</label><input id="ai_label"></div>'+
+      '<div class="fld"><label>Form</label><select id="ai_form"><option value="loose">Loose (by weight)</option><option value="defined">Defined SKU (brand + pack)</option></select></div>'+
+      '<div class="fld"><label>Brand (if SKU)</label><input id="ai_brand" placeholder="e.g. Aashirvaad"></div>'+
+      '<div class="fld"><label>Pack (if SKU)</label><input id="ai_pack" placeholder="e.g. 500 g"></div>'+
       '<div class="fld"><label>Unit</label><select id="ai_unit">'+unitOpts('')+'</select></div>'+
       '<div class="fld"><label>Price ₹ (leave blank if live-priced)</label><input id="ai_price" inputmode="decimal"></div>'+
       '<div class="fld"><label>Vendor</label><select id="ai_vendor">'+vendorOpts('')+'</select></div>'+
@@ -902,7 +912,7 @@
     document.getElementById('ai_go').addEventListener('click',function(){
       var label=document.getElementById('ai_label').value.trim(); if(!label){ toast('item name?','err'); return; }
       var price=parseFloat(document.getElementById('ai_price').value)||0;
-      api('settings-item',{method:'POST',body:{item_code:'NEW',label:label,unit:document.getElementById('ai_unit').value,price_paise:Math.round(price*100),price_mode:price>0?'fixed':'live',default_vendor:document.getElementById('ai_vendor').value}})
+      api('settings-item',{method:'POST',body:{item_code:'NEW',label:label,form:document.getElementById('ai_form').value,brand:document.getElementById('ai_brand').value,pack_label:document.getElementById('ai_pack').value,unit:document.getElementById('ai_unit').value,price_paise:Math.round(price*100),price_mode:price>0?'fixed':'live',default_vendor:document.getElementById('ai_vendor').value}})
         .then(function(r){ if(r&&r.j&&r.j.ok){ toast('added ✓','ok'); host.innerHTML=''; loadSettings(); } else toast('failed','err'); });
     });
   };
