@@ -115,6 +115,11 @@ export async function onRequest(context) {
     if (action === 'settings' && request.method === 'GET') {
       return withCors(json(await getSettings(db)), request);
     }
+    // settings-bulk: upsert the canonical item master (collapse-pass result / grid saves)
+    if (action === 'settings-bulk' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await settingsBulk(db, body, auth)), request);
+    }
     // match-payment: preview whether the bank feed already shows this payment (before/without marking)
     if (action === 'match-payment' && request.method === 'GET') {
       const ids = (url.searchParams.get('ids') || '').split(',').map((x) => +x).filter(Boolean);
@@ -687,6 +692,45 @@ async function getSettings(db) {
   for (const it of items) it.aliases = aliasByItem[it.item_code] || [];
   for (const v of vendors) { try { v.vpas = JSON.parse(v.vpa_json || '[]'); } catch (e) { v.vpas = []; } try { v.aliases = JSON.parse(v.aliases_json || '[]'); } catch (e) { v.aliases = []; } }
   return { ok: true, seeded: seed.seeded, counts: { items: items.length, vendors: vendors.length, aliases: aliasRows.length }, items, vendors };
+}
+
+// ── Bulk upsert the canonical item master (the collapse-pass result + Settings-grid saves) ──
+// body = { items: [{ item_code|'NEW', label, unit, pack_label, category, price_mode, price_paise, aliases[], note }] }
+async function settingsBulk(db, body, auth) {
+  await ensureSettingsTables(db);
+  const items = Array.isArray(body && body.items) ? body.items : [];
+  if (!items.length) return { ok: false, error: 'no items' };
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const by = (auth && auth.u) || 'bulk';
+  const slug = (s) => ('itm_' + String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')).slice(0, 40) || 'itm';
+  const existing = new Set((((await db.prepare('SELECT item_code FROM sauda_item').all()).results) || []).map((r) => r.item_code));
+  const used = new Set(existing);
+  const stmts = []; let ins = 0, upd = 0, al = 0;
+  for (const it of items) {
+    let code = (it.item_code && it.item_code !== 'NEW') ? it.item_code : '';
+    const isExisting = code && existing.has(code);
+    const mode = it.price_mode === 'live' ? 'live' : 'fixed';
+    const price = Math.max(0, Math.round(+it.price_paise || 0));
+    if (!isExisting) {
+      let base = code || slug(it.label); let c = base, n = 1;
+      while (used.has(c)) c = base + '_' + (++n);
+      code = c; used.add(code);
+      stmts.push(db.prepare(`INSERT INTO sauda_item (item_code,label,unit,pack_label,price_paise,price_mode,category,note,flagged,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+        .bind(code, it.label || code, it.unit || '', it.pack_label || '', price, mode, it.category || '', it.note || '', 0, by, now));
+      ins++;
+    } else {
+      stmts.push(db.prepare(`UPDATE sauda_item SET label=?, unit=COALESCE(NULLIF(?,''),unit), pack_label=COALESCE(NULLIF(?,''),pack_label), price_mode=?, category=COALESCE(NULLIF(?,''),category), note=COALESCE(NULLIF(?,''),note), price_paise=CASE WHEN ?>0 THEN ? ELSE price_paise END, updated_by=?, updated_at=? WHERE item_code=?`)
+        .bind(it.label || code, it.unit || '', it.pack_label || '', mode, it.category || '', it.note || '', price, price, by, now, code));
+      upd++;
+    }
+    for (const a of (Array.isArray(it.aliases) ? it.aliases : [])) {
+      const x = String(a).trim().toLowerCase(); if (!x) continue;
+      stmts.push(db.prepare(`INSERT INTO sauda_item_alias (alias,item_code,created_at) VALUES (?,?,?) ON CONFLICT(alias) DO UPDATE SET item_code=excluded.item_code`).bind(x, code, now));
+      al++;
+    }
+  }
+  for (let i = 0; i < stmts.length; i += 20) await db.batch(stmts.slice(i, i + 20));
+  return { ok: true, inserted: ins, updated: upd, aliases: al };
 }
 
 // ── Per-vendor records: count, paid, outstanding, and the full trail (timestamps + method) ──
