@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-31T21:43:30+0530",
-  "published_at": "2026-05-31T21:43:30+0530",
+  "updated_at": "2026-06-17T07:31:22+0530",
+  "published_at": "2026-06-17T07:31:22+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -150,15 +150,35 @@
       "subgroup": "Creative Surface",
       "risk": "creative publishing and claim accuracy",
       "status": "ready",
-      "last_task": "Initialize Reel Making lane and classify May 25 batch",
-      "last_summary": "Created the dedicated Reel Making marketing lane and classified the 38-clip May 25 Hanin batch. Batch adds safe plated tandoori chicken, red chicken tikka, table-spread, roti/rumali roti, venue/counter, and takeaway packaging footage. Ghee rice has candidates needing Nihaf confirmation; Butter Chicken, Dal Fry, Butter Naan, Brain Dry, Mutton Biryani, Chicken Lollipop, Shawarma, Fried Rice, and Noodles remain unsafe for exact claims.",
-      "next_action": "Open this lane from Marketing Control for any reel brief, new footage classification, footage readiness decision, or repeatable reel-system build. First confirm whether IMG_0435, IMG_0449, and IMG_0476 are ghee rice before using them in exact ghee-rice offer reels.",
-      "mutation_status": "Creative memory and classification only; no reel posted, no ad spend, no POS/Odoo, WABA, aggregator, PiSignage, or customer-facing mutation.",
+      "last_task": "Take over reel-making lane and verify local/fleet render stack",
+      "last_summary": "Read the Claude reel-making handoff, local HE Remotion engine, HE raw-clip workflow, CLIP-INTELLIGENCE, May 25 classification, MENU, FILMING-GUIDE, and VIDEO-CREATIVE-SPINE. Verified hn-rtx-worker over Tailscale: Ubuntu Linux, RTX 3060 12GB, NVIDIA driver 595.71.05/CUDA 13.2, ffmpeg h264_nvenc/hevc_nvenc/av1_nvenc present, 1s h264_nvenc smoke test passed. Worker already has /home/nihaf/hn-video-workspace/he-video-engine and HE-Raw-Clips, but npm/npx is absent and node_modules/.bin/remotion is not currently runnable; existing scripts render with libx264 unless changed. Recommended repeatable Tier-1 template: tandoori_tikka_food_conviction using safe exact tandoori/tikka footage only.",
+      "next_action": "Build the Tandoori/Tikka Food Conviction reel template first: H10 fire hook -> Z08 tandoor process -> H34 tandoori plate -> H40 tikka plate -> H49 tandoori plate -> Z05 storefront -> FollowCTA/Get Directions. Create storyboard/contact sheet, render MP4, QA 1080x1920 H.264, first-frame nonblank, text/CTA safe zones, and footage honesty. Do not use ghee rice candidates IMG_0435/0449/0476 or butter-chicken candidates until Nihaf confirms exact identity.",
+      "mutation_status": "Read-only local/fleet verification plus memory sync only; no reel rendered/exported/posted, no ad spend, no POS/Odoo, WABA, aggregator, PiSignage, customer-facing, or HN checkout mutation. SSH known_hosts accepted hn-rtx-worker Tailscale key and /tmp NVENC smoke file was removed.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command reel-making",
-      "last_run_at": "2026-05-25T06:42:57+0530"
+      "last_run_at": "2026-06-17T07:31:22+0530",
+      "proof": "Local files read: /Users/nihaf/Documents/Tech.nosync/he-video-engine, /Users/nihaf/Documents/HE-Raw-Clips/{CLAUDE.md,CLIP-INTELLIGENCE.md,NEW-BATCH-2026-05-25-CLASSIFICATION.md,MENU.md,FILMING-GUIDE.md,VIDEO-CREATIVE-SPINE.md}. Worker proof: nvidia-smi showed RTX 3060 12GB; ffmpeg encoders showed h264_nvenc/hevc_nvenc/av1_nvenc; /tmp h264_nvenc smoke returned NVENC_SMOKE_OK.",
+      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/specs/tandoori_tikka_food_conviction_2026-06-08.json; /Users/nihaf/Documents/HE-Raw-Clips/storyboards/tandoori_tikka_food_conviction_2026-06-08.html; /home/nihaf/hn-video-workspace/he-video-engine on hn-rtx-worker",
+      "live_ids": "hn-rtx-worker 100.107.54.16; GPU NVIDIA GeForce RTX 3060; Google Chrome 149.0.7827.114; Node v22.22.1",
+      "rollback": "No product/customer mutation to roll back. Remove ~/.ssh/known_hosts hn-rtx-worker entry only if Tailscale host identity is later found wrong.",
+      "data_freshness": "Captured 2026-06-17 07:29-07:35 IST from laptop local filesystem and live hn-rtx-worker SSH"
     }
   },
   "events": [
+    {
+      "id": "20260617073122-reel-making",
+      "at": "2026-06-17T07:31:22+0530",
+      "lane": "reel-making",
+      "task": "Take over reel-making lane and verify local/fleet render stack",
+      "status": "ready",
+      "summary": "Read the Claude reel-making handoff, local HE Remotion engine, HE raw-clip workflow, CLIP-INTELLIGENCE, May 25 classification, MENU, FILMING-GUIDE, and VIDEO-CREATIVE-SPINE. Verified hn-rtx-worker over Tailscale: Ubuntu Linux, RTX 3060 12GB, NVIDIA driver 595.71.05/CUDA 13.2, ffmpeg h264_nvenc/hevc_nvenc/av1_nvenc present, 1s h264_nvenc smoke test passed. Worker already has /home/nihaf/hn-video-workspace/he-video-engine and HE-Raw-Clips, but npm/npx is absent and node_modules/.bin/remotion is not currently runnable; existing scripts render with libx264 unless changed. Recommended repeatable Tier-1 template: tandoori_tikka_food_conviction using safe exact tandoori/tikka footage only.",
+      "next_action": "Build the Tandoori/Tikka Food Conviction reel template first: H10 fire hook -> Z08 tandoor process -> H34 tandoori plate -> H40 tikka plate -> H49 tandoori plate -> Z05 storefront -> FollowCTA/Get Directions. Create storyboard/contact sheet, render MP4, QA 1080x1920 H.264, first-frame nonblank, text/CTA safe zones, and footage honesty. Do not use ghee rice candidates IMG_0435/0449/0476 or butter-chicken candidates until Nihaf confirms exact identity.",
+      "mutation_status": "Read-only local/fleet verification plus memory sync only; no reel rendered/exported/posted, no ad spend, no POS/Odoo, WABA, aggregator, PiSignage, customer-facing, or HN checkout mutation. SSH known_hosts accepted hn-rtx-worker Tailscale key and /tmp NVENC smoke file was removed.",
+      "proof": "Local files read: /Users/nihaf/Documents/Tech.nosync/he-video-engine, /Users/nihaf/Documents/HE-Raw-Clips/{CLAUDE.md,CLIP-INTELLIGENCE.md,NEW-BATCH-2026-05-25-CLASSIFICATION.md,MENU.md,FILMING-GUIDE.md,VIDEO-CREATIVE-SPINE.md}. Worker proof: nvidia-smi showed RTX 3060 12GB; ffmpeg encoders showed h264_nvenc/hevc_nvenc/av1_nvenc; /tmp h264_nvenc smoke returned NVENC_SMOKE_OK.",
+      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/specs/tandoori_tikka_food_conviction_2026-06-08.json; /Users/nihaf/Documents/HE-Raw-Clips/storyboards/tandoori_tikka_food_conviction_2026-06-08.html; /home/nihaf/hn-video-workspace/he-video-engine on hn-rtx-worker",
+      "live_ids": "hn-rtx-worker 100.107.54.16; GPU NVIDIA GeForce RTX 3060; Google Chrome 149.0.7827.114; Node v22.22.1",
+      "rollback": "No product/customer mutation to roll back. Remove ~/.ssh/known_hosts hn-rtx-worker entry only if Tailscale host identity is later found wrong.",
+      "data_freshness": "Captured 2026-06-17 07:29-07:35 IST from laptop local filesystem and live hn-rtx-worker SSH"
+    },
     {
       "id": "20260531214330-pisignage",
       "at": "2026-05-31T21:43:30+0530",
@@ -1043,16 +1063,6 @@
       "summary": "Explained location mode, Search partners, Display, bidding, and audiences from scratch for the Hamza Express late-night Hamza Hotel campaign. Recommended presence-only, Google Search only, Display off, manual CPC initially, and audiences as observation only because the keyword/location/schedule combination is the real targeting brain for physical footfall.",
       "next_action": "Use these settings when applying the live Brand campaign setup after landing proof and ad asset/keyword/schedule mutation path are ready.",
       "mutation_status": "No live Google Ads mutation. Explanation and platform guidance only."
-    },
-    {
-      "id": "20260525083002-google-ads",
-      "at": "2026-05-25T08:30:02+0530",
-      "lane": "google-ads",
-      "task": "Exact Google Ads platform configuration for Hamza Hotel late-night campaign",
-      "status": "ready",
-      "summary": "Verified live Google Ads account/campaign state and current API surface. Brand campaign 23845870050 is enabled, Rs50/day, 5km presence proximity, 0 delivery; Late Night 23854158442 is enabled, Rs300/day, 7km, spending on generic open-now searches. Created exact configuration doc for active Rs500/day Hamza Hotel late-night 5km Search campaign plus paused 2km biryani/ghee-rice fallback, including location, schedule, keywords, negatives, device, audiences, assets, text conveyance, landing CTA, conversion measurement, and kill criteria. Found current live mutation endpoint can change budget/status/bids/negatives but cannot safely apply Brand keywords/RSA/schedule/assets.",
-      "next_action": "Before live money mutation, update/verify /go/google-night landing message/tracking and either add a purpose-built Google Ads endpoint or apply exact Brand campaign setup in Google Ads UI; do not only raise Brand budget to Rs500 without keyword/RSA/schedule/asset readback.",
-      "mutation_status": "No live Google Ads mutation. Local exact configuration spec added under _context only."
     }
   ]
 }
