@@ -918,30 +918,37 @@
   function itemMissing(i){ var m=[]; if(i.price_mode!=='live' && !(i.price_paise>0))m.push('price'); if(!i.unit)m.push('unit'); if(!i.default_vendor)m.push('vendor'); if(i.form==='defined'){ if(!i.brand)m.push('brand'); if(!i.pack_label)m.push('pack'); } return m; }
   function renderSetItems(list){
     var q=SET.q;
-    var need=SET.items.filter(function(i){return itemMissing(i).length;});
+    function attn(i){ return i.flagged || itemMissing(i).length; }
+    var pricedN=SET.items.filter(function(i){return !i.flagged && i.price_mode!=='live' && i.price_paise>0;}).length;
+    var confirmN=SET.items.filter(function(i){return i.flagged;}).length;
+    var noPriceN=SET.items.filter(function(i){return !i.flagged && i.price_mode!=='live' && !(i.price_paise>0);}).length;
     var rows=SET.items.filter(function(i){
-      if(SET.needOnly && !itemMissing(i).length) return false;
+      if(SET.needOnly && !attn(i)) return false;
       return !q || (i.label+' '+(i.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0;
     });
-    var html='<div class="setcount">'+rows.length+' of '+SET.items.length+' items · <b style="color:var(--amber)">'+need.length+' to fill</b> (loose/SKU · price · unit · vendor)</div>';
+    var html='<div class="setcount"><b style="color:var(--green)">'+pricedN+' priced ✓</b> · <b style="color:var(--amber)">'+confirmN+' to confirm ⚠</b> · <b style="color:var(--dim)">'+noPriceN+' no price</b> · '+SET.items.filter(function(i){return i.price_mode==='live';}).length+' live</div>';
     html+=rows.map(function(i){
       var live=i.price_mode==='live', def=i.form==='defined';
       var price=live
         ? '<button class="modet live" data-mode="'+esc(i.item_code)+'">LIVE</button>'
         : '<span class="rs">₹</span><input class="spin" data-sp="'+esc(i.item_code)+'" inputmode="decimal" value="'+(i.price_paise>0?(i.price_paise/100):'')+'" placeholder="'+(def?'pack ₹':'₹/'+(i.unit||'unit'))+'"><button class="modet" data-mode="'+esc(i.item_code)+'">fix</button>';
-      var miss=itemMissing(i); var nc=miss.length?' need':'';
-      var sub=miss.length?('<span style="color:var(--amber)">⚠ needs '+miss.join(' / ')+'</span>'):esc((i.aliases||[]).slice(0,5).join(', '));
+      var miss=itemMissing(i); var nc=(i.flagged||miss.length)?' need':'';
+      var sub = i.flagged
+        ? '<span style="color:var(--amber)">⚠ confirm: '+esc(i.note||'check this')+'</span>'
+        : (miss.length?('<span style="color:var(--amber)">⚠ needs '+miss.join(' / ')+'</span>'):esc((i.aliases||[]).slice(0,5).join(', ')));
+      var confirmBtn = i.flagged ? '<button class="modet" data-confirm="'+esc(i.item_code)+'" style="background:var(--green-soft);color:var(--green)">✓ ok</button>' : '';
       var skuline='<div class="skuline"><button class="formt'+(def?' sku':'')+'" data-form="'+esc(i.item_code)+'">'+(def?'SKU':'Loose')+'</button>'+
         (def
           ? '<input class="brin" data-sbr="'+esc(i.item_code)+'" value="'+esc(i.brand||'')+'" placeholder="brand"><input class="pkin" data-spk="'+esc(i.item_code)+'" value="'+esc(i.pack_label||'')+'" placeholder="pack e.g. 500 g">'
           : '<span class="loosehint">loose · price is per '+esc(i.unit||'unit')+'</span>')+'</div>';
-      return '<div class="srow col'+nc+'"><div class="top"><div class="sl"><b>'+esc(i.label)+(i.flagged?' ⚠':'')+'</b><small>'+sub+'</small></div>'+
-        '<div class="sf"><div class="r1">'+price+'</div><div class="r2"><select data-su="'+esc(i.item_code)+'">'+unitOpts(i.unit)+'</select>'+
+      return '<div class="srow col'+nc+'"><div class="top"><div class="sl"><b>'+esc(i.label)+(i.flagged?' <span style="color:var(--amber)">⚠</span>':'')+'</b><small>'+sub+'</small></div>'+
+        '<div class="sf"><div class="r1">'+price+confirmBtn+'</div><div class="r2"><select data-su="'+esc(i.item_code)+'">'+unitOpts(i.unit)+'</select>'+
         '<select data-sv="'+esc(i.item_code)+'">'+vendorOpts(i.default_vendor)+'</select></div></div></div>'+skuline+'</div>';
     }).join('');
     html+='<button class="add" onclick="openAddItem()" style="margin-top:8px">+ add an item</button>';
     list.innerHTML=html;
-    list.querySelectorAll('input[data-sp]').forEach(function(p){ p.addEventListener('change',function(){ saveItem(p.dataset.sp,{price_paise:Math.round((parseFloat(p.value)||0)*100)}); }); });
+    list.querySelectorAll('input[data-sp]').forEach(function(p){ p.addEventListener('change',function(){ var it=SET.items.find(function(x){return x.item_code===p.dataset.sp;}); var f={price_paise:Math.round((parseFloat(p.value)||0)*100)}; if(it&&it.flagged) f.flagged=0; saveItem(p.dataset.sp,f, !!(it&&it.flagged)); }); });
+    list.querySelectorAll('[data-confirm]').forEach(function(b){ b.addEventListener('click',function(){ saveItem(b.dataset.confirm,{flagged:0},true); }); });
     list.querySelectorAll('select[data-su]').forEach(function(s){ s.addEventListener('change',function(){ saveItem(s.dataset.su,{unit:s.value}); }); });
     list.querySelectorAll('select[data-sv]').forEach(function(s){ s.addEventListener('change',function(){ saveItem(s.dataset.sv,{default_vendor:s.value}); }); });
     list.querySelectorAll('[data-mode]').forEach(function(b){ b.addEventListener('click',function(){ var it=SET.items.find(function(x){return x.item_code===b.dataset.mode;}); saveItem(b.dataset.mode,{price_mode:(it&&it.price_mode==='live')?'fixed':'live'},true); }); });
