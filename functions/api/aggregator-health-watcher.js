@@ -18,7 +18,6 @@ import { sendAndLog } from './_lib/comms-core.js';
 const PAGES_BASE = 'https://hnhotels.in';
 const SUPPRESS_MIN = 30;
 const DELIVERY_MAX_STALE = 30;
-const DINE_MAX_STALE = 60;
 const DASHBOARD_MIN_BYTES = 1024;
 const NIGHT_SUPPRESS_IST = [2, 9]; // [start, end) IST hour for delivery silence
 const OWNER_ALERT_PHONE = '917010426808';
@@ -52,6 +51,19 @@ function ring2AttemptLabel(attempt) {
 function coreRing2Failures(ring2) {
   const attempts = Array.isArray(ring2?.body?.attempts) ? ring2.body.attempts : [];
   return attempts.filter(a => CORE_RING2_SOURCES.has(a?.pull_source_code) && CRITICAL_RING2_STATES.has(a?.status_code));
+}
+function deliveryFreshness(body, platform) {
+  const ages = body?.age_minutes || {};
+  const candidates = [
+    ['direct', ages[`${platform}_direct`]],
+    ['order', ages[`${platform}_order`]],
+    ['snapshot', ages[`${platform}_snap`]],
+  ];
+  for (const [source, value] of candidates) {
+    const age = Number(value);
+    if (Number.isFinite(age)) return { source, age };
+  }
+  return { source: 'none', age: null };
 }
 
 async function probeJson(env, action) {
@@ -293,15 +305,16 @@ export async function onRequest(context) {
     out.probes.delivery = delivery;
     if (delivery.ok && !withinNightSuppress()) {
       const b = delivery.body;
-      const z = Number(b.age_minutes?.zomato_snap ?? 9999);
-      const s = Number(b.age_minutes?.swiggy_snap ?? 9999);
-      if (b.status !== 'ok' || z > DELIVERY_MAX_STALE) {
-        const r = await fireAlert(env, { platformKey: 'delivery_zomato', message: `HE-Aggregator: zomato delivery snap stale ${z}m as of ${istHHMM()} IST` });
-        out.alerts.push({ platform: 'delivery_zomato', stale_min: z, ...r });
+      const z = deliveryFreshness(b, 'zomato');
+      const s = deliveryFreshness(b, 'swiggy');
+      out.probes.delivery_effective_age = { zomato: z, swiggy: s };
+      if (z.age == null || z.age > DELIVERY_MAX_STALE) {
+        const r = await fireAlert(env, { platformKey: 'delivery_zomato', message: `HE-Aggregator: zomato delivery feed stale ${z.age ?? 'unknown'}m via ${z.source} as of ${istHHMM()} IST` });
+        out.alerts.push({ platform: 'delivery_zomato', stale_min: z.age, source: z.source, ...r });
       }
-      if (b.status !== 'ok' || s > DELIVERY_MAX_STALE) {
-        const r = await fireAlert(env, { platformKey: 'delivery_swiggy', message: `HE-Aggregator: swiggy delivery snap stale ${s}m as of ${istHHMM()} IST` });
-        out.alerts.push({ platform: 'delivery_swiggy', stale_min: s, ...r });
+      if (s.age == null || s.age > DELIVERY_MAX_STALE) {
+        const r = await fireAlert(env, { platformKey: 'delivery_swiggy', message: `HE-Aggregator: swiggy delivery feed stale ${s.age ?? 'unknown'}m via ${s.source} as of ${istHHMM()} IST` });
+        out.alerts.push({ platform: 'delivery_swiggy', stale_min: s.age, source: s.source, ...r });
       }
     } else if (delivery.ok && withinNightSuppress()) {
       out.probes.delivery.night_suppressed = true;
@@ -311,22 +324,13 @@ export async function onRequest(context) {
       out.alerts.push({ platform: 'delivery_endpoint', ...r });
     }
 
-    // B. Dine health (anytime)
+    // B. Dine health (probe-only until dine scraping is live again).
+    // Delivery Ring 2 is live and should alert. Dine-in portal scraping is not
+    // part of the current live pipeline; alerting on it creates stale noise and
+    // makes the owner distrust the working delivery feed.
     const dine = await probeJson(env, 'dine-health');
     out.probes.dine = dine;
-    if (dine.ok) {
-      // dine.body.platforms is an ARRAY of {platform, last_seen, stale_minutes, ...}
-      const platforms = Array.isArray(dine.body?.platforms) ? dine.body.platforms
-                       : Object.values(dine.body?.platforms || {});
-      for (const pdata of platforms) {
-        const age = Number(pdata?.stale_minutes ?? pdata?.age_minutes ?? 9999);
-        const pname = pdata?.platform || 'unknown';
-        if (age > DINE_MAX_STALE) {
-          const r = await fireAlert(env, { platformKey: `dine_${pname}`, message: `HE-Aggregator: dine ${pname} stale ${age}m as of ${istHHMM()} IST` });
-          out.alerts.push({ platform: `dine_${pname}`, stale_min: age, ...r });
-        }
-      }
-    }
+    out.probes.dine_alerts_disabled = true;
 
     // C. Dashboard 200 + body size
     const dash = await probeDashboard();
