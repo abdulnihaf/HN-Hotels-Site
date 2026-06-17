@@ -325,6 +325,16 @@
     .ven .tr .ti{font-size:12px;color:var(--text)}
     .ven .tr .ta{font-size:12.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;text-align:right}
     .ven .tr .tw{grid-column:2/4;font-size:10.5px;color:var(--mute)}
+    /* Pay sheet — choose UPI app + always-on fallbacks */
+    .paybig{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin:2px 0 8px}
+    .payapp{display:block;text-align:center;padding:13px;border-radius:11px;background:var(--e2);border:1px solid var(--line);color:var(--text);font-weight:700;font-size:14px;text-decoration:none;margin-bottom:9px}
+    .payapp.pp{background:#5f259f;color:#fff;border-color:#5f259f}
+    .payapp:active{transform:scale(.98)}
+    .payrow2{display:flex;gap:8px;margin-bottom:10px}
+    .payrow2 .payapp{flex:1;margin-bottom:0;font-size:12.5px;padding:11px 6px}
+    .cpyrow{display:flex;gap:8px;margin-bottom:8px}
+    .cpyrow .cpy{flex:1;padding:10px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700;font-size:12.5px}
+    .vpa-line{font-size:12px;color:var(--mute);text-align:center;font-variant-numeric:tabular-nums}
   </style>
 </head>
 <body>
@@ -483,6 +493,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=17"></script>
+<script src="/ops/sauda/app.js?v=18"></script>
 </body>
 </html>

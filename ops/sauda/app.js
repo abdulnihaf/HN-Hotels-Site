@@ -308,23 +308,18 @@
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
           '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt value="'+esc(amt)+'" placeholder="one payment for all items"></div>'+
           '<div class="pay-acts">'+
-            '<a class="upi'+(o.vpa?'':' dis')+'" data-vpa="'+esc(o.vpa)+'" data-vn="'+esc(o.vendor_name)+'" href="'+upiHref(o.vpa,o.vendor_name,num(amt))+'">'+(o.vpa?'Pay via UPI':'No UPI saved')+'</a>'+
+            '<button class="upi'+(o.vpa?'':' dis')+'" data-pay="'+esc(o.vpa)+'" data-vn="'+esc(o.vendor_name)+'">'+(o.vpa?'Pay':'No UPI saved')+'</button>'+
             '<button class="done" data-ids="'+ids+'">Mark paid</button>'+
           '</div></div></div>';
       });
       list.innerHTML=html;
       function idsOf(el){ return (el.closest('.pb').querySelector('button[data-ids]').dataset.ids||'').split(',').map(Number).filter(Boolean); }
-      list.querySelectorAll('input[data-amt]').forEach(function(inp){
-        inp.addEventListener('input', function(){
-          var a=inp.closest('.pb').querySelector('a[data-vpa]'); var rs=num(inp.value);
-          a.href=upiHref(a.dataset.vpa, a.dataset.vn, rs);
-        });
-      });
-      list.querySelectorAll('a[data-vpa]').forEach(function(a){
-        a.addEventListener('click', function(){
-          if(!a.dataset.vpa) return;
-          var pb=a.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
-          if(rs>0) api('request-pay',{method:'POST',body:{ids:idsOf(a), amount_paise:Math.round(rs*100)}});
+      list.querySelectorAll('button[data-pay]').forEach(function(b){
+        b.addEventListener('click', function(){
+          if(!b.dataset.pay) return;  // no UPI on file → manual pay
+          var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
+          if(rs<=0){ toast('Enter the amount first','err'); return; }
+          openPaySheet(b.dataset.pay, b.dataset.vn, rs, idsOf(b));
         });
       });
       list.querySelectorAll('button[data-ids]').forEach(function(b){
@@ -337,6 +332,43 @@
         });
       });
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
+  }
+
+  // ── Pay sheet: open the chosen UPI app with the amount filled, + always-on
+  //    fallbacks. PhonePe is the default; the generic upi:// is LAST (that's the
+  //    one iOS mis-routes to WhatsApp Pay). Amount is shown big — for a normal
+  //    vendor VPA it can't be hard-locked, so the owner confirms it himself. ──
+  function fmtAm(rs){ return (Math.round(rs*100)/100).toFixed(2); }
+  function payLink(scheme, vpa, vn, rs, tr){
+    var q='pa='+encodeURIComponent(vpa)+'&pn='+encodeURIComponent(vn||'Vendor')+'&am='+fmtAm(rs)+'&cu=INR&tn='+encodeURIComponent('Sauda')+'&tr='+encodeURIComponent(tr)+'&mam=null';
+    if(scheme==='phonepe') return 'phonepe://pay?'+q;
+    if(scheme==='gpay')    return 'tez://upi/pay?'+q;
+    if(scheme==='paytm')   return 'paytmmp://pay?'+q;
+    return 'upi://pay?'+q;
+  }
+  function openPaySheet(vpa, vn, rs, ids){
+    var tr='SAUDA'+((ids&&ids[0])||'')+'-'+Math.round(Date.now()/1000);
+    if(rs>0 && ids && ids.length){ api('request-pay',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100)}}); }
+    var big='₹'+rupees(Math.round(rs*100));
+    var host=document.getElementById('sheetHost');
+    function app(scheme,label,primary){ return '<a class="payapp'+(primary?' pp':'')+'" href="'+payLink(scheme,vpa,vn,rs,tr)+'">'+esc(label)+'</a>'; }
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(vn)+'</h2>'+
+      '<div class="paybig">'+big+'</div>'+
+      '<div class="skuhint">Opens your UPI app with the amount filled. Check the amount in the app before you confirm.</div>'+
+      app('phonepe','Pay '+big+' · PhonePe',true)+
+      '<div class="payrow2">'+app('gpay','Google Pay')+app('paytm','Paytm')+app('other','Other UPI')+'</div>'+
+      '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(vpa)+'">Copy UPI ID</button><button class="cpy" data-cpy="'+esc(fmtAm(rs))+'">Copy amount</button></div>'+
+      '<div class="vpa-line">'+esc(vpa)+'</div>'+
+      '<button class="btn primary" id="paidBtn" style="width:100%;margin-top:14px">I’ve paid — mark paid</button>'+
+      '</div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    host.querySelectorAll('button[data-cpy]').forEach(function(b){ b.addEventListener('click',function(){ try{ navigator.clipboard.writeText(b.dataset.cpy); toast('Copied','ok'); }catch(e){ toast('Copy failed','err'); } }); });
+    document.getElementById('paidBtn').addEventListener('click',function(){
+      if(busy) return; busy=true;
+      api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:'upi'}})
+        .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Marked paid','ok'); host.innerHTML=''; loadPay(); } else toast('Failed','err'); })
+        .catch(function(){ busy=false; toast('No connection','err'); });
+    });
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
