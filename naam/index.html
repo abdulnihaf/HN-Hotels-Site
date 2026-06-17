@@ -10,11 +10,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Naam">
 <link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,500;1,600&display=swap" rel="stylesheet">
 <style>
-/* ═══ NAAM v2 — "how the name travels" · view-only · iPhone-first ═══ */
+/* ═══ NAAM v2 — "how the name travels" · iPhone-first ═══ */
 :root{
   --bg:#000; --e1:#121218; --e2:#1a1a22; --e3:#23232d;
   --line:rgba(255,255,255,.08); --line-soft:rgba(255,255,255,.05);
@@ -74,6 +75,30 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .bl{font-size:10px;color:var(--dim);margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
 .doctrine{font-size:10.5px;color:var(--mute);margin-top:12px;line-height:1.45;font-style:italic}
 
+/* today move */
+.move{background:linear-gradient(165deg,#16120f,var(--e1) 58%,#11151c);border:1px solid var(--naam-bd);border-radius:18px;padding:16px;margin-top:10px}
+.mv-top{display:flex;align-items:flex-start;gap:10px}
+.mv-kicker{font-size:9.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--naam)}
+.mv-title{font-size:21px;font-weight:900;line-height:1.16;margin-top:5px;letter-spacing:0}
+.mv-chip{flex:0 0 auto;border:1px solid var(--gold-bd);background:var(--gold-soft);color:var(--gold);border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+.mv-why{font-size:12.5px;color:var(--dim);line-height:1.55;margin-top:10px}
+.mv-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:13px;border:1px solid var(--line-soft);border-radius:13px;overflow:hidden}
+.mv-stat{padding:11px 8px;text-align:center;background:rgba(255,255,255,.025)}
+.mv-stat+.mv-stat{border-left:1px solid var(--line-soft)}
+.mv-stat b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.mv-stat span{display:block;font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.proof{margin-top:13px;border-top:1px solid var(--line-soft);padding-top:11px}
+.proof-row{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.45;color:var(--text);padding:5px 0}
+.proof-dot{width:18px;height:18px;border-radius:50%;background:var(--green-soft);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;flex:0 0 auto}
+.mv-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.act-btn{min-height:46px;border-radius:13px;border:1px solid var(--naam-bd);background:var(--naam);color:#130806;font-weight:900;font-size:12px;cursor:pointer}
+.act-btn.ghost{background:var(--e2);color:var(--text);border-color:var(--line)}
+.act-btn.warn{color:var(--amber);border-color:rgba(251,191,36,.35)}
+.act-btn:active{transform:scale(.98)}
+.act-btn:disabled{opacity:.45;cursor:not-allowed}
+.mv-safe{font-size:10.5px;color:var(--mute);line-height:1.45;margin-top:10px}
+.queued-pill{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:7px 10px;border-radius:999px;border:1px solid var(--green);background:var(--green-soft);color:var(--green);font-size:11px;font-weight:900}
+
 /* stage cards */
 .stage{background:var(--e1);border:1px solid var(--line);border-radius:16px;padding:15px;margin-top:10px}
 .st-head{display:flex;align-items:center;gap:10px}
@@ -113,6 +138,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .l-name{font-size:13.5px;font-weight:700;flex:1}
 .l-sub{font-size:10.5px;color:var(--dim);margin-top:2px}
 .l-arrow{color:var(--naam);font-size:17px}
+
+/* execution queue */
+.queue-item{background:var(--e1);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:10px}
+.qi-top{display:flex;align-items:flex-start;gap:10px}
+.qi-status{width:9px;height:9px;border-radius:50%;background:var(--amber);margin-top:5px;flex:0 0 auto}
+.qi-status.done{background:var(--green)}
+.qi-title{font-size:14px;font-weight:850;line-height:1.35}
+.qi-meta{font-size:10.5px;color:var(--dim);margin-top:4px}
+.qi-actions{display:flex;gap:8px;margin-top:12px}
+.qi-btn{min-height:38px;border-radius:10px;border:1px solid var(--line);background:var(--e2);color:var(--text);font-size:11px;font-weight:850;padding:0 12px;cursor:pointer}
+.qi-btn.done{border-color:rgba(55,211,153,.35);color:var(--green)}
+.qi-btn.clear{color:var(--red)}
+.empty{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--mute);padding:22px 4px;line-height:1.45}
+.toast{position:fixed;left:18px;right:18px;bottom:calc(88px + var(--safe-bot));z-index:80;background:#17171d;border:1px solid var(--naam-bd);border-radius:14px;padding:12px 14px;color:var(--text);font-size:12.5px;font-weight:700;box-shadow:0 14px 40px rgba(0,0,0,.45);display:none}
+.toast.show{display:block}
 
 /* detail sheet */
 .sheet{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;flex-direction:column}
@@ -174,6 +214,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div class="asof" id="asof"></div>
     </div>
 
+    <div class="sect"><h2>Today’s move <span class="q">what should I do now?</span></h2>
+      <div id="todayMove" class="move"><div class="mv-title skeleton">building the move…</div></div>
+    </div>
+
     <div class="sect"><h2>The week in one breath <span class="q">what did the name cost?</span></h2>
       <div class="breath" id="breath"><div class="b-amount skeleton">₹—</div></div>
     </div>
@@ -201,6 +245,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   <div class="scroll"><div class="cgrid" id="crGrid"></div></div>
 </div>
 
+<!-- QUEUE -->
+<div id="s-queue" class="screen">
+  <div class="masthead">
+    <div class="mh-name" style="font-size:34px">Queue</div>
+    <div class="asof" id="queueCount"></div>
+  </div>
+  <div class="scroll" style="padding:8px 20px calc(96px + var(--safe-bot))">
+    <div class="stage">
+      <div class="st-name">Execution boundary</div>
+      <div class="l-sub" style="margin-top:8px;line-height:1.6">Naam queues the decision and its proof. It does not launch, pause, or edit ads from the phone yet. Spend-changing execution still happens in the controlled lane after the queued move is checked.</div>
+    </div>
+    <div id="queueList"></div>
+  </div>
+</div>
+
 <!-- YOU -->
 <div id="s-you" class="screen">
   <div class="masthead"><div class="mh-name" style="font-size:34px">You</div></div>
@@ -222,17 +281,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 <div class="tabbar">
   <div class="tb on" data-s="home" onclick="go('home')"><span class="ti">◈</span>Naam</div>
   <div class="tb" data-s="creative" onclick="go('creative')"><span class="ti">▣</span>Creative</div>
+  <div class="tb" data-s="queue" onclick="go('queue')"><span class="ti">◇</span>Queue</div>
   <div class="tb" data-s="you" onclick="go('you')"><span class="ti">◉</span>You</div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script>
-/* ═══ NAAM v2 — view-only. Live: meta-ads + google-ads-live + gbp-cockpit.
+/* ═══ NAAM v2. Live: meta-ads + google-ads-live + gbp-cockpit.
    Snapshot spine: data/naam-data.json (brand keys normalized — the v1 break
    was 'HE' vs 'he'). Doctrine: NO conversions, ever. ═══ */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const PINS=['0305','1918'];
-const LS={pin:'naamPin',brand:'naamBrand'};
+const LS={pin:'naamPin',brand:'naamBrand',queue:'naamActionQueue'};
 const HOST='https://hnhotels.in';
 const POSITIONING={he:'“Same HKP Road Hamza food memory. New Express face.”',nch:'“Irani chai & haleem — Shivajinagar’s evening ritual.”'};
 const S={brand:(localStorage.getItem(LS.brand)||'he').toLowerCase(),data:null,creative:null,live:{},entry:'',cLane:'all',cStatus:'deployed'};
@@ -251,10 +313,11 @@ function go(s){document.querySelectorAll('.screen').forEach(x=>x.classList.remov
   $('#s-'+s).classList.add('active');
   document.querySelectorAll('.tb').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
   if(s==='creative')renderCreative();
+  if(s==='queue')renderQueue();
   if(s==='you')renderYou();
 }
 function toggleBrand(){setBrand(S.brand==='he'?'nch':'he');}
-function setBrand(b){S.brand=b;localStorage.setItem(LS.brand,b);renderHome();}
+function setBrand(b){S.brand=b;localStorage.setItem(LS.brand,b);renderHome();renderQueue();}
 
 /* ── data ── */
 function normBrands(lane){const out={};for(const[k,v]of Object.entries(lane.brands||{}))out[k.toLowerCase()]=v;lane.brands=out;return lane;}
@@ -278,6 +341,94 @@ async function boot(){
 }
 function tone(ctr){return ctr>=3?'t-good':ctr>=1.5?'t-warn':ctr>0?'t-bad':'t-off';}
 function inr(n){return '₹'+Math.round(n).toLocaleString('en-IN');}
+function queue(){try{return JSON.parse(localStorage.getItem(LS.queue)||'[]');}catch{return[];}}
+function saveQueue(items){localStorage.setItem(LS.queue,JSON.stringify(items.slice(0,40)));}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2300);}
+function fmtTime(iso){try{return new Date(iso).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
+function dayKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+
+/* ── today's move ── */
+function todayMove(){
+  const m=S.live.meta&&S.live.meta.ok?S.live.meta:null;
+  const g=S.live.gads&&S.live.gads.ok?S.live.gads:null;
+  const gen=S.data&&S.data.generated_at?new Date(S.data.generated_at):null;
+  const stale=gen?Math.round((Date.now()-gen.getTime())/86400000):null;
+  if(S.brand!=='he'){
+    return {
+      id:'nch-hold-until-he-meta-loop-'+dayKey(),
+      lane:'Meta Ads',
+      chip:'Hold',
+      title:'Keep NCH parked until the HE Meta loop is closed',
+      why:'The first execution loop belongs to HE because live Meta spend and creative proof already exist there. NCH should not be opened until the same proof structure is ready.',
+      stats:[['—','spend'],['—','hands'],['queued','state']],
+      proof:['No NCH Meta spend move is being suggested from stale notes.','HE Meta loop becomes the reusable template.','NCH opens only after creative, objective and readback are equally clear.'],
+      primary:'Log hold',
+      secondary:'Open HE',
+      safe:'This keeps NCH out of the phone execution flow for now.'
+    };
+  }
+  const spend=m?m.totals.spend:0, clicks=m?m.totals.clicks:0, impressions=m?m.totals.impressions:0;
+  const ctr=impressions?((clicks/impressions)*100):0;
+  const cpc=clicks?spend/clicks:0;
+  const googleQuiet=g?((g.totals.clicks||0)===0&&Number(g.totals.spend||0)===0):true;
+  return {
+    id:'he-meta-qissa-food-conviction-'+dayKey(),
+    lane:'Meta Ads',
+    chip:'Priority 1',
+    title:'Approve the next HE Meta food-conviction move',
+    why:(m?`Meta is the only live paid channel with real motion this week: ${inr(spend)} spent, ${clicks.toLocaleString('en-IN')} hands, ${ctr.toFixed(2)}% CTR. `:'Meta live feed is not loaded yet, so this must be proof-only. ')+(googleQuiet?'Google is currently quiet, so the first execution intelligence belongs here.':'Google has activity, but Meta still remains the first execution lane.'),
+    stats:[[inr(spend),'7d spend'],[clicks.toLocaleString('en-IN'),'hands'],[ctr?ctr.toFixed(2)+'%':'—','CTR']],
+    proof:[
+      'Use the QISSA food-conviction creative as the source, not generic offer copy.',
+      'Destination stays Get Directions / maps intent; WABA remains retention only.',
+      'Check real food proof before spend: tandoori, tikka, kabab, biryani, not stock-like imagery.',
+      `Tomorrow readback must judge hands, CTR, CPC and POS spike correlation; conversions remain ignored.${stale&&stale>2?' Lane notes are stale, so only live Meta numbers are trusted today.':''}`
+    ],
+    primary:'Queue approval',
+    secondary:'Hold',
+    safe:`This tap queues the decision only. It does not launch or edit a Meta campaign from the phone. CPC now reads ${cpc?inr(cpc):'—'}.`
+  };
+}
+function queuedFor(move){return queue().find(x=>x.move_id===move.id&&x.brand===S.brand.toUpperCase()&&x.status!=='cleared');}
+function renderTodayMove(){
+  const el=$('#todayMove');if(!el)return;
+  const mv=todayMove();const q=queuedFor(mv);
+  el.innerHTML=`<div class="mv-top"><div style="flex:1"><div class="mv-kicker">${esc(mv.lane)} · today</div><div class="mv-title">${esc(mv.title)}</div></div><div class="mv-chip">${esc(mv.chip)}</div></div>
+    <div class="mv-why">${esc(mv.why)}</div>
+    <div class="mv-stats">${mv.stats.map(s=>`<div class="mv-stat"><b>${esc(s[0])}</b><span>${esc(s[1])}</span></div>`).join('')}</div>
+    <div class="proof">${mv.proof.map(p=>`<div class="proof-row"><span class="proof-dot">✓</span><span>${esc(p)}</span></div>`).join('')}</div>
+    ${q?`<div class="queued-pill">✓ ${esc(q.decision_label)} · queued ${fmtTime(q.created_at)}</div>`:`<div class="mv-actions">
+      <button class="act-btn" onclick="recordMove('approve')">${esc(mv.primary)}</button>
+      <button class="act-btn ghost warn" onclick="recordMove('hold')">${esc(mv.secondary)}</button>
+    </div>`}
+    <div class="mv-safe">${esc(mv.safe)}</div>`;
+}
+function recordMove(decision){
+  const mv=todayMove();
+  if(decision==='hold'&&S.brand==='nch'){setBrand('he');toast('NCH held. Showing the HE Meta loop.');return;}
+  const label=S.brand!=='he'?'NCH held until HE loop closes':(decision==='approve'?'Approved for controlled execution':'Held for review');
+  const item={id:String(Date.now()),move_id:mv.id,brand:S.brand.toUpperCase(),lane:mv.lane,title:mv.title,decision,decision_label:label,status:'queued',created_at:new Date().toISOString(),proof:mv.proof,safe:mv.safe};
+  saveQueue([item,...queue().filter(x=>!(x.move_id===item.move_id&&x.brand===item.brand))]);
+  renderTodayMove();renderQueue();go('queue');toast(label+'. No ad was changed.');
+}
+function markQueue(id,status){saveQueue(queue().map(x=>x.id===id?{...x,status}:x));renderQueue();renderTodayMove();}
+function clearQueue(id){saveQueue(queue().filter(x=>x.id!==id));renderQueue();renderTodayMove();toast('Queue item cleared.');}
+function renderQueue(){
+  const list=queue();
+  const count=$('#queueCount');if(count)count.textContent=list.length?`${list.length} local decision${list.length===1?'':'s'} · phone-only queue`:'No queued decisions';
+  const el=$('#queueList');if(!el)return;
+  el.innerHTML=list.length?list.map(x=>`<div class="queue-item">
+    <div class="qi-top"><div class="qi-status ${x.status==='done'?'done':''}"></div><div style="flex:1">
+      <div class="qi-title">${esc(x.title)}</div>
+      <div class="qi-meta">${esc(x.brand)} · ${esc(x.lane)} · ${esc(x.decision_label)} · ${fmtTime(x.created_at)}</div>
+    </div></div>
+    <div class="l-sub" style="margin-top:10px;line-height:1.55">${esc(x.safe)}</div>
+    <div class="qi-actions">
+      <button class="qi-btn done" onclick="markQueue('${esc(x.id)}','done')">Mark checked</button>
+      <button class="qi-btn clear" onclick="clearQueue('${esc(x.id)}')">Clear</button>
+    </div>
+  </div>`).join(''):'<div class="empty">Nothing is queued. The next move starts from the Naam tab.</div>';
+}
 
 /* ── home ── */
 function renderHome(){
@@ -289,6 +440,7 @@ function renderHome(){
   const m=S.live.meta&&S.live.meta.ok?S.live.meta:null;
   const g=S.live.gads&&S.live.gads.ok?S.live.gads:null;
   const gbp=S.live.gbp&&S.live.gbp.ok?S.live.gbp:null;
+  renderTodayMove();
   if(m||g){
     const spend=(m?m.totals.spend:0)+(g?g.totals.spend:0);
     const eyes=(m?m.totals.impressions:0)+(g?g.totals.impressions:0);
