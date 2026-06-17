@@ -298,6 +298,10 @@
       "writeback_required": true,
       "links": [
         [
+          "Reel desk",
+          "/ops/reels/"
+        ],
+        [
           "CTWA cockpit",
           "https://hamzaexpress.in/ops/ctwa-cockpit/"
         ],
