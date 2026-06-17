@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-06-17T13:09:47+0530",
-  "published_at": "2026-06-17T13:09:47+0530",
+  "updated_at": "2026-06-17T14:02:30+0530",
+  "published_at": "2026-06-17T14:02:30+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -159,16 +159,6 @@
       "summary": "Revised the late-night Hamza Hotel ad psychology again after Nihaf feedback. Moved from plain bridge to memory-plus-curiosity: 'Hamza Hotel Yaad Hai? | Hamza Express: Naya Andaaz' with description 'HKP Road ka new Hamza face. Wahi Hamza naam. Open till 3 AM. 10% dine-in.' Updated exact config, copy doc, and visual mockup to position Hamza Express as the new face/new andaaz of remembered Hamza rather than a forced redirect.",
       "next_action": "Use this curiosity-led continuity copy for landing/RSA if approved; verify Google headline length and landing proof before live mutation.",
       "mutation_status": "No live Google Ads mutation. Local copy/spec/mockup updated only."
-    },
-    {
-      "id": "20260525085900-google-ads",
-      "at": "2026-05-25T08:59:00+0530",
-      "lane": "google-ads",
-      "task": "Reframe Hamza Hotel to Hamza Express psychology",
-      "status": "ready",
-      "summary": "Reworked the late-night Hamza Hotel ad from blunt redirection ('Go To Hamza Express') into continuity psychology. New conveyance: 'Looking For Hamza Hotel? | Hamza Express HKP Road' with description 'Wahi Hamza naam. Naya zaiqa, naya andaaz. Open till 3 AM. 10% dine-in.' Updated config, copy doc, and mockup to explain Hamza Hotel as remembered name and Hamza Express as current newer HKP Road format.",
-      "next_action": "Use continuity bridge copy for landing and RSA pins; avoid blunt redirect or comparison against old Hamza Hotel. Live mutation still pending landing/readback path.",
-      "mutation_status": "No live Google Ads mutation. Local context/copy/mockup update only."
     }
   ]
 }
