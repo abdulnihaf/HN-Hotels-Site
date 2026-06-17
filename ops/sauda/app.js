@@ -590,10 +590,33 @@
     api('hyperpure-place',{method:'POST',body:{lines:lines}}).then(function(res){
       busy=false;
       if(!res.ok||!res.j||!res.j.ok){ toast(res.j&&res.j.j&&res.j.j.error||res.j&&res.j.error||'Place failed','err'); updateMov(); return; }
-      toast('Queued for '+fmtDay(res.j.for_date)+' — confirm & pay in Hyperpure','ok');
       S.hp.basket={}; renderHpFeed();
+      openHpHandoff(lines, res.j.for_date, sub);
     }).catch(function(){ busy=false; toast('No connection','err'); updateMov(); });
   });
+  // After Send: the handoff. Sauda can't push the cart to Hyperpure (no order API), so it hands
+  // you a clean checklist + a per-item "Find on Hyperpure" search link to re-create + place it there.
+  function openHpHandoff(lines, forDate, subPaise){
+    lines = lines || [];
+    var rows=lines.map(function(l){
+      var nm=l.matched||l.name, srch='https://www.hyperpure.com/in/search/'+encodeURIComponent(l.name||nm);
+      var ph=l.image?' style="background-image:url('+esc(l.image)+')"':'';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft)">'+
+        '<div class="ph sm"'+ph+'>'+(l.image?'':'<span>'+esc(String(nm).slice(0,1))+'</span>')+'</div>'+
+        '<div style="flex:1;min-width:0"><b style="font-size:13.5px">'+esc(nm)+'</b>'+
+          '<small style="display:block;color:var(--dim);font-size:11px">'+esc(l.pack||'')+' · '+esc(String(l.qty))+' × ₹'+rupees(l.price_paise)+' = ₹'+rupees(Math.round(l.qty*(l.price_paise||0)))+'</small></div>'+
+        '<a class="payapp" style="flex:none;padding:6px 12px;font-size:12px" href="'+esc(srch)+'" target="_blank" rel="noopener">Find ↗</a></div>';
+    }).join('');
+    var host=document.getElementById('sheetHost');
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Order in Hyperpure</h2>'+
+      '<div class="skuhint">Queued for <b>'+esc(fmtDay(forDate))+'</b>. Open Hyperpure, add these '+lines.length+' item'+(lines.length!==1?'s':'')+' (tap <b>Find</b> to jump to each), then place + pay there. ≈ ₹'+rupees(subPaise)+' + delivery.</div>'+
+      '<a class="payapp pp" href="https://www.hyperpure.com/" target="_blank" rel="noopener">Open Hyperpure ↗</a>'+
+      '<div style="margin-top:10px;max-height:44vh;overflow-y:auto">'+(rows||'<div class="empty">Nothing queued.</div>')+'</div>'+
+      '<button class="btn primary" id="hoDone" style="width:100%;margin-top:14px">✓ I’ve placed it in Hyperpure</button>'+
+      '</div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    document.getElementById('hoDone').addEventListener('click',function(){ host.innerHTML=''; toast('Done — placed in Hyperpure ✓','ok'); });
+  }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // COMPARE — cheapest across platforms, per product (swipe to see each source)
