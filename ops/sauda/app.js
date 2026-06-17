@@ -327,7 +327,7 @@
           var ids=idsOf(b); var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
           if(busy||!ids.length) return; busy=true;
           api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:'upi'}})
-             .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Marked paid','ok'); loadPay(); } else toast('Failed','err'); })
+             .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(r.j.reconciled?'✓ Bank-confirmed paid':'Marked paid · bank not seen yet','ok'); loadPay(); } else toast('Failed','err'); })
              .catch(function(){ busy=false; toast('No connection','err'); });
         });
       });
@@ -366,7 +366,7 @@
     document.getElementById('paidBtn').addEventListener('click',function(){
       if(busy) return; busy=true;
       api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:'upi'}})
-        .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Marked paid','ok'); host.innerHTML=''; loadPay(); } else toast('Failed','err'); })
+        .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(r.j.reconciled?'✓ Bank-confirmed paid':'Marked paid · bank not seen yet','ok'); host.innerHTML=''; loadPay(); } else toast('Failed','err'); })
         .catch(function(){ busy=false; toast('No connection','err'); });
     });
   }
@@ -766,7 +766,7 @@
       if(!vs.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
       list.innerHTML=vs.map(function(v,vi){
         var trail=(v.trail||[]).map(function(t){
-          var when = t.paid_at?('paid '+fmtTs(t.paid_at)+(t.method?' · '+esc(t.method):'')) : (t.pay_requested_at?('asked '+fmtTs(t.pay_requested_at)) : ('placed '+fmtTs(t.ordered_at)));
+          var when = t.paid_at?('paid '+fmtTs(t.paid_at)+(t.method?' · '+esc(t.method):'')+(t.reconciled?' · ✓ bank':'')) : (t.pay_requested_at?('asked '+fmtTs(t.pay_requested_at)) : ('placed '+fmtTs(t.ordered_at)));
           var stcls = t.status==='PAID'?'ok':(t.status==='REQUESTED'?'amber':'dim');
           return '<div class="tr"><span class="ts '+stcls+'">'+esc(t.status||'')+'</span>'+
             '<span class="ti">'+esc(t.for_date||'')+' · '+t.items+' item'+(t.items!==1?'s':'')+'</span>'+

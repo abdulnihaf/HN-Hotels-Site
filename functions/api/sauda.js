@@ -98,6 +98,12 @@ export async function onRequest(context) {
       const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10) || 30, 120);
       return withCors(json(await vendorLedger(db, days)), request);
     }
+    // match-payment: preview whether the bank feed already shows this payment (before/without marking)
+    if (action === 'match-payment' && request.method === 'GET') {
+      const ids = (url.searchParams.get('ids') || '').split(',').map((x) => +x).filter(Boolean);
+      const amount = Math.round(+url.searchParams.get('amount_paise') || 0);
+      return withCors(json(await previewMatch(db, ids, amount)), request);
+    }
     if (action === 'request-pay' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await requestPay(db, body)), request);
@@ -587,7 +593,8 @@ async function vendorLedger(db, days) {
   try {
     rows = ((await db.prepare(
       `SELECT id, vendor_name, for_date, fulfilment, pay_timing, items_json, status,
-              expected_amount_paise, pay_amount_paise, ordered_at, pay_requested_at, paid_at, pay_method
+              expected_amount_paise, pay_amount_paise, ordered_at, pay_requested_at, paid_at, pay_method,
+              bank_ref, reconciled_at
          FROM sauda_purchase
         WHERE (pay_timing IS NULL OR pay_timing != 'online') AND for_date >= ${since}
         ORDER BY id DESC`
@@ -615,6 +622,7 @@ async function vendorLedger(db, days) {
         id: r.id, for_date: r.for_date, status: r.status, amount_paise: amt, items: itemCount,
         ordered_at: r.ordered_at || '', pay_requested_at: r.pay_requested_at || '',
         paid_at: r.paid_at || '', method: r.pay_method || '',
+        reconciled: !!r.reconciled_at, bank_ref: r.bank_ref || '',
       });
     }
     vendors.push({
@@ -686,7 +694,46 @@ async function requestPay(db, body) {
   return { ok: true, ids, amount_paise: amt };
 }
 
+// ── Bank-feed match: find the UPI debit that proves this vendor was paid ──
+// Matches by vendor VPA appearing in money_events.counterparty_ref + exact amount,
+// on/after `sinceDate` (so a prior same-amount payment can't false-match), and not
+// already claimed by another order (one debit confirms one order). This turns a
+// trusted "mark paid" tap into a bank-proven fact — the COA "don't rely on honesty".
+async function findVendorDebit(db, vpa, amountPaise, sinceDate) {
+  if (!vpa || !amountPaise) return null;
+  let used = new Set();
+  try {
+    const ur = (await db.prepare(`SELECT bank_event_id FROM sauda_purchase WHERE bank_event_id IS NOT NULL`).all()).results || [];
+    used = new Set(ur.map((r) => r.bank_event_id));
+  } catch (e) {}
+  let rows = [];
+  try {
+    rows = ((await db.prepare(
+      `SELECT id, source_ref, counterparty_ref, narration, amount_paise, txn_at
+         FROM money_events
+        WHERE direction='debit' AND amount_paise=? AND lower(counterparty_ref) LIKE ?
+          AND substr(COALESCE(txn_at,received_at),1,10) >= ?
+        ORDER BY COALESCE(txn_at,received_at) DESC LIMIT 10`
+    ).bind(amountPaise, '%' + String(vpa).toLowerCase() + '%', sinceDate).all()).results) || [];
+  } catch (e) { return null; }
+  const hit = rows.find((r) => !used.has(r.id));
+  if (!hit) return null;
+  return { bank_event_id: hit.id, bank_ref: hit.source_ref || hit.counterparty_ref || '', txn_at: hit.txn_at || '' };
+}
+
+// preview the match without marking (so the pay screen can show "bank already shows this")
+async function previewMatch(db, ids, amount) {
+  if (!ids.length || !amount) return { ok: true, matched: false };
+  const o = await db.prepare(`SELECT vendor_name, pay_requested_at, ordered_at FROM sauda_purchase WHERE id=?`).bind(ids[0]).first();
+  if (!o) return { ok: true, matched: false };
+  const v = vendorView(canonVendorKey(o.vendor_name) || 'unassigned');
+  const since = String(o.pay_requested_at || o.ordered_at || '').slice(0, 10) || todayIST();
+  const m = await findVendorDebit(db, v.vpa, amount, since);
+  return { ok: true, matched: !!m, bank_ref: m ? m.bank_ref : '', txn_at: m ? m.txn_at : '', vendor: v.name };
+}
+
 // ── owner marks a vendor's order(s) paid — one tap clears all that vendor's items ──
+// Then auto-reconciles against the bank feed and stamps bank_ref + reconciled_at if found.
 async function markPaid(db, body, auth) {
   const ids = idList(body);
   if (!ids.length) return { ok: false, error: 'no id' };
@@ -698,7 +745,24 @@ async function markPaid(db, body, auth) {
   }
   await db.prepare(`UPDATE sauda_purchase SET paid_at=?, pay_method=?, status='PAID', updated_at=? WHERE id IN (${ph})`)
     .bind(now, (body.method || 'upi'), now, ...ids).run();
-  return { ok: true, ids, paid_by: auth.u || '' };
+
+  // auto-reconcile: did the bank feed record this exact payment to this vendor?
+  let reconciled = null;
+  try {
+    const o = await db.prepare(`SELECT vendor_name, pay_requested_at, ordered_at FROM sauda_purchase WHERE id=?`).bind(ids[0]).first();
+    const v = vendorView(canonVendorKey(o && o.vendor_name) || 'unassigned');
+    const since = String((o && (o.pay_requested_at || o.ordered_at)) || now).slice(0, 10);
+    if (amt > 0 && v.vpa) {
+      const m = await findVendorDebit(db, v.vpa, amt, since);
+      if (m) {
+        await db.prepare(`UPDATE sauda_purchase SET bank_event_id=?, bank_ref=?, reconciled_at=? WHERE id IN (${ph})`)
+          .bind(m.bank_event_id, m.bank_ref, now, ...ids).run();
+        reconciled = { bank_ref: m.bank_ref, txn_at: m.txn_at };
+      }
+    }
+  } catch (e) { /* reconcile is best-effort; the PAID status still stands */ }
+
+  return { ok: true, ids, paid_by: (auth && auth.u) || '', reconciled: !!reconciled, bank_ref: reconciled ? reconciled.bank_ref : '' };
 }
 
 // ── Hyperpure delivery window from the cutoff (IST). Order before 23:00 → tomorrow. ──
