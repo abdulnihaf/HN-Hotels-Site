@@ -111,6 +111,10 @@ export async function onRequest(context) {
       const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10) || 30, 120);
       return withCors(json(await vendorLedger(db, days)), request);
     }
+    // settings: the item + vendor master (Slice 1 — creates + seeds tables on first read)
+    if (action === 'settings' && request.method === 'GET') {
+      return withCors(json(await getSettings(db)), request);
+    }
     // match-payment: preview whether the bank feed already shows this payment (before/without marking)
     if (action === 'match-payment' && request.method === 'GET') {
       const ids = (url.searchParams.get('ids') || '').split(',').map((x) => +x).filter(Boolean);
@@ -600,6 +604,89 @@ async function notifyOnPlace(env, created, forDate) {
       });
     } catch (e) { /* never block a placed order on a comms failure */ }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS MASTER (Slice 1) — the single source of truth for items + vendors.
+// Tables sauda_item / sauda_item_alias / sauda_vendor, seeded ONCE from the
+// existing HP_CATALOG + VENDORS + decode dictionary. Additive; nothing reads
+// these yet (the consumers get wired in later slices). One source, not four.
+// ═══════════════════════════════════════════════════════════════════════════
+const VENDOR_PHONES = { prabhu:'9886806395', ganga:'7019547835', nisarcha:'8971457998', samosa:'9746581122', osmania:'9482965179', gas:'8553568718', jayjay:'9976688833' };
+// obvious default vendor per item (editable in Settings; '' = decide later)
+const DEFAULT_VENDOR = {
+  sugar:'ashrafiya', atta:'ashrafiya', maida:'ashrafiya', honey:'ashrafiya', chilli_powder:'ashrafiya',
+  turmeric:'ashrafiya', apple_chilli:'ashrafiya', whole_cashew:'ashrafiya', baby_cashew:'ashrafiya', magaj:'ashrafiya',
+  kasuri_methi:'ashrafiya', colour_red:'ashrafiya', colour_orange:'ashrafiya', msg:'ashrafiya', soya_sauce:'ashrafiya',
+  cornflour:'ashrafiya', moong_dal:'ashrafiya', masoor_dal:'ashrafiya', rice:'ashrafiya', tomato_ketchup:'ashrafiya',
+  ruchi_gold_oil:'ashrafiya', sunflower_oil:'ashrafiya', condensed_milk:'ashrafiya', amul_cream:'ashrafiya',
+  butter_unsalted:'ashrafiya', salted_butter:'ashrafiya', paneer:'ashrafiya',
+  milk:'prabhu', curd:'prabhu',
+  water_bisleri_500:'nazeer', water_aquaking_500:'nazeer', water_bisleri_1l:'nazeer', coke:'nazeer', thumsup:'nazeer',
+  egg:'eggs',
+};
+// item spellings (raw → canonical key), migrated from the decode dictionary + HP_CATALOG synonyms
+const ITEM_ALIASES = {
+  sugar:['cheeni','sakkar'], butter_unsalted:['unsalted butter','white butter'], atta:['whole wheat','wheat flour'],
+  maida:['white atta','refined flour'], milk:['doodh'], curd:['dahi','yogurt','yoghurt'], honey:['shahad'],
+  condensed_milk:['milkmaid','condensed milk'], ruchi_gold_oil:['ruchi gold','ruchigold','palmolein'],
+  sunflower_oil:['sunflower'], chilli_powder:['chilly powder','red chilli powder','mirchi powder','lal mirch','mirchi'],
+  turmeric:['haldi','haldi powder','turmeric powder'], apple_chilli:['apple chilly','byadgi','byadgi chilli'],
+  whole_cashew:['whole kaju'], baby_cashew:['bebi kaju','baby kaju'], magaj:['magaz','melon seeds','char magaj','magaj seeds'],
+  amul_cream:['amal cream','fresh cream','cream'], salted_butter:['butter'], tomato_ketchup:['tomato sauce','kisan tomato sauce','ketchup'],
+  kasuri_methi:['kasoori methi'], colour_red:['red food colour','red colour','red color'], colour_orange:['orange food colour','orange colour'],
+  msg:['ajinomoto','tasting salt','tasting powder','china salt','testing salt'], soya_sauce:['soy sauce'],
+  cornflour:['corn flour','corn starch'], moong_dal:['mung dal','moong','mung'], masoor_dal:['masur dal','masrul','masoor'],
+  rice:['staff rice','sona masoori','sona masoori rice'], water_bisleri_500:['bisleri 500ml','bisleri 500 ml','bislari water'],
+  water_aquaking_500:['aqua king','aquaking'], water_bisleri_1l:['bisleri 1l','bisleri 1 litre','bisleri 1 liter'],
+  coke:['cock','coca cola','coca-cola'], thumsup:['thums up','thampsup','thumbs up'], egg:['eggs','anda'],
+};
+
+async function ensureSettingsTables(db) {
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS sauda_item (item_code TEXT PRIMARY KEY, label TEXT, unit TEXT, pack_label TEXT, pack_qty REAL,
+      price_paise INTEGER DEFAULT 0, price_mode TEXT DEFAULT 'fixed', default_vendor TEXT DEFAULT '', category TEXT DEFAULT '',
+      cmp_query TEXT DEFAULT '', cmp_must TEXT DEFAULT '[]', cmp_not TEXT DEFAULT '[]', cmp_band TEXT DEFAULT '[]',
+      flagged INTEGER DEFAULT 0, note TEXT DEFAULT '', active INTEGER DEFAULT 1, updated_by TEXT DEFAULT '', updated_at TEXT DEFAULT '')`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS sauda_item_alias (alias TEXT PRIMARY KEY, item_code TEXT, created_at TEXT DEFAULT '')`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS sauda_vendor (vendor_key TEXT PRIMARY KEY, name TEXT, brand TEXT DEFAULT 'both',
+      fulfilment TEXT DEFAULT 'deliver', pay TEXT DEFAULT 'per', phone TEXT DEFAULT '', vpa_json TEXT DEFAULT '[]',
+      aliases_json TEXT DEFAULT '[]', cat TEXT DEFAULT '', flagged INTEGER DEFAULT 0, active INTEGER DEFAULT 1,
+      updated_by TEXT DEFAULT '', updated_at TEXT DEFAULT '')`),
+  ]);
+}
+
+async function seedSettings(db) {
+  const row = await db.prepare('SELECT COUNT(*) AS n FROM sauda_item').first();
+  if (row && row.n > 0) return { seeded: false };
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const stmts = [];
+  for (const [k, v] of Object.entries(VENDORS)) {
+    stmts.push(db.prepare(`INSERT OR IGNORE INTO sauda_vendor (vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(k, v.name, v.brand || 'both', v.fulfilment, v.pay, VENDOR_PHONES[k] || '', JSON.stringify(v.vpa ? [v.vpa] : []), JSON.stringify(v.aliases || []), v.cat || '', v.vpa ? 0 : 1, 'seed', now));
+  }
+  for (const c of HP_CATALOG) {
+    stmts.push(db.prepare(`INSERT OR IGNORE INTO sauda_item (item_code,label,unit,pack_label,pack_qty,price_paise,price_mode,default_vendor,cmp_query,cmp_must,cmp_not,cmp_band,flagged,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(c.key, c.label, c.unit, c.buy.pack, c.buy.qty, c.buy.base_paise, 'fixed', DEFAULT_VENDOR[c.key] || '', c.query, JSON.stringify(c.must || []), JSON.stringify(c.not || []), JSON.stringify(c.band || []), /CONFIRM/i.test(c.label) ? 1 : 0, 'seed', now));
+  }
+  for (const [code, arr] of Object.entries(ITEM_ALIASES)) for (const a of arr) {
+    stmts.push(db.prepare(`INSERT OR IGNORE INTO sauda_item_alias (alias,item_code,created_at) VALUES (?,?,?)`).bind(String(a).toLowerCase(), code, now));
+  }
+  for (let i = 0; i < stmts.length; i += 20) await db.batch(stmts.slice(i, i + 20));
+  return { seeded: true, vendors: Object.keys(VENDORS).length, items: HP_CATALOG.length };
+}
+
+async function getSettings(db) {
+  await ensureSettingsTables(db);
+  const seed = await seedSettings(db);
+  const items = ((await db.prepare(`SELECT item_code,label,unit,pack_label,pack_qty,price_paise,price_mode,default_vendor,category,flagged,note FROM sauda_item WHERE active=1 ORDER BY label`).all()).results) || [];
+  const vendors = ((await db.prepare(`SELECT vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged FROM sauda_vendor WHERE active=1 ORDER BY name`).all()).results) || [];
+  const aliasRows = ((await db.prepare(`SELECT alias,item_code FROM sauda_item_alias`).all()).results) || [];
+  const aliasByItem = {};
+  for (const r of aliasRows) (aliasByItem[r.item_code] = aliasByItem[r.item_code] || []).push(r.alias);
+  for (const it of items) it.aliases = aliasByItem[it.item_code] || [];
+  for (const v of vendors) { try { v.vpas = JSON.parse(v.vpa_json || '[]'); } catch (e) { v.vpas = []; } try { v.aliases = JSON.parse(v.aliases_json || '[]'); } catch (e) { v.aliases = []; } }
+  return { ok: true, seeded: seed.seeded, counts: { items: items.length, vendors: vendors.length, aliases: aliasRows.length }, items, vendors };
 }
 
 // ── Per-vendor records: count, paid, outstanding, and the full trail (timestamps + method) ──
