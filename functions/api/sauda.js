@@ -587,8 +587,32 @@ async function notifyOnPlace(env, created, forDate) {
 // ── Per-vendor records: count, paid, outstanding, and the full trail (timestamps + method) ──
 // Reads the same sauda_purchase rows; online (prepaid Hyperpure) excluded. This is
 // the "every record for a vendor" view: how much is paid, how much is left, when.
+// catch-up reconcile: bank email alerts lag, so retry matching any PAID-but-unconfirmed
+// order against the feed whenever the records are viewed (self-heals delayed confirmations).
+async function reconcileSweep(db, sinceFloor) {
+  let rows = [];
+  try {
+    rows = ((await db.prepare(
+      `SELECT id, vendor_name, pay_amount_paise, expected_amount_paise, pay_requested_at, ordered_at
+         FROM sauda_purchase
+        WHERE status='PAID' AND reconciled_at IS NULL AND (pay_timing IS NULL OR pay_timing != 'online')
+          AND for_date >= ${sinceFloor} ORDER BY id DESC LIMIT 50`).all()).results) || [];
+  } catch (e) { return; }
+  if (!rows.length) return;
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  for (const r of rows) {
+    const v = vendorView(canonVendorKey(r.vendor_name) || 'unassigned');
+    const amt = r.pay_amount_paise || r.expected_amount_paise || 0;
+    if (!v.vpa || !amt) continue;
+    const since = String(r.pay_requested_at || r.ordered_at || '').slice(0, 10) || '2000-01-01';
+    const m = await findVendorDebit(db, v.vpa, amt, since);
+    if (m) { try { await db.prepare(`UPDATE sauda_purchase SET bank_event_id=?, bank_ref=?, reconciled_at=? WHERE id=?`).bind(m.bank_event_id, m.bank_ref, now, r.id).run(); } catch (e) {} }
+  }
+}
+
 async function vendorLedger(db, days) {
   const since = `date('now','-${days} days')`;
+  await reconcileSweep(db, since);   // self-heal any delayed bank confirmations first
   let rows = [];
   try {
     rows = ((await db.prepare(
