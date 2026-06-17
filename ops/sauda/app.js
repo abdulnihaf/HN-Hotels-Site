@@ -518,7 +518,8 @@
       var meta = '<div class="meta">'+(sku.pack?'<span class="pk">'+esc(sku.pack)+'</span>':'')+perUnit+more+'</div>';
       return '<div class="hpitem'+(inb?' in':'')+'">'+
         '<div class="tap" data-sku="'+esc(k)+'">'+photo+'<div class="nm"><b>'+esc(title)+'</b>'+meta+'</div></div>'+
-        '<div class="right"><span class="pr">₹'+rupees(sku.price_paise)+'</span>'+ctrl+'</div></div>';
+        '<div class="right"><a class="hp-open" href="'+esc(hpOpenUrl(it.name))+'" target="_blank" rel="noopener" aria-label="open in Hyperpure">Open ↗</a>'+
+        '<span class="pr">₹'+rupees(sku.price_paise)+'</span>'+ctrl+'</div></div>';
     }).join('');
     host.querySelectorAll('[data-addhp]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); setHpQty(b.dataset.addhp,1); }); });
     host.querySelectorAll('[data-inc]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); bumpHp(b.dataset.inc,1); }); });
@@ -528,6 +529,9 @@
     updateMov();
   }
   function cap(s){ s=String(s||''); return s.charAt(0).toUpperCase()+s.slice(1); }
+  // one-tap jump straight to this item on Hyperpure (search endpoint = never dead-ends,
+  // opens in the Hyperpure app via universal link, lands on the pre-filtered product list).
+  function hpOpenUrl(q){ q=String(q||'').trim(); var e=encodeURIComponent(q); return 'https://www.hyperpure.com/in/search/'+e+'?query='+e; }
   function feedItem(k){ return S.hp.feed.find(function(x){return x.item_key===k;}); }
   // the SKU shown/ordered for an item = the picked override, else the cheapest from the feed
   function chosenSku(k){
