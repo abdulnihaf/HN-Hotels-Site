@@ -6,6 +6,16 @@
 video engine, the raw clips, and the Tailscale fleet. This file is the single
 source of truth for the handoff; read it top to bottom before acting.
 
+> **Codex, you have the access this brief was written without.** The session that
+> wrote this ran in an isolated cloud sandbox and could NOT see `~/Documents/Tech.nosync/`,
+> the raw clips, or the Tailscale fleet — so the deepest layer (the actual Remotion
+> compositions and the `hn-rtx-worker` render config) is described here only by
+> pointer, not by content. **You run on the laptop with full execution access, so
+> go pull that layer yourself** — read the engine, SSH the fleet, open the
+> clip-intelligence files. This brief tells you exactly where each thing lives
+> (§1, §2) and what's already done (§5); your job is to fetch the real contents
+> and continue, not to trust this brief as complete.
+
 > **Confidence tags used below:** `[repo]` = verified in this repository ·
 > `[owner]` = stated by Nihaf / known to the system but NOT verifiable from the repo
 > (Codex should confirm locally before relying on it) · `[infer]` = reasonable
@@ -132,6 +142,10 @@ documented; `hn-rtx-worker` render role unverified; footage gaps above unfilled.
 ---
 
 ## 6. Suggested next actions for Codex (pick with Nihaf)
+
+**You have full local + fleet access — pull the real context first, don't run on
+this brief alone.** The steps below all start by fetching what the cloud session
+couldn't reach:
 
 1. Recover engine ground truth: read `~/Documents/Tech.nosync/he-video-engine/`
    (Remotion compositions, render script, the spine recipe file).
