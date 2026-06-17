@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-06-17T10:20:24+0530",
-  "published_at": "2026-06-17T10:20:24+0530",
+  "updated_at": "2026-06-17T13:09:47+0530",
+  "published_at": "2026-06-17T13:09:47+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -169,16 +169,6 @@
       "summary": "Reworked the late-night Hamza Hotel ad from blunt redirection ('Go To Hamza Express') into continuity psychology. New conveyance: 'Looking For Hamza Hotel? | Hamza Express HKP Road' with description 'Wahi Hamza naam. Naya zaiqa, naya andaaz. Open till 3 AM. 10% dine-in.' Updated config, copy doc, and mockup to explain Hamza Hotel as remembered name and Hamza Express as current newer HKP Road format.",
       "next_action": "Use continuity bridge copy for landing and RSA pins; avoid blunt redirect or comparison against old Hamza Hotel. Live mutation still pending landing/readback path.",
       "mutation_status": "No live Google Ads mutation. Local context/copy/mockup update only."
-    },
-    {
-      "id": "20260525085218-google-ads",
-      "at": "2026-05-25T08:52:18+0530",
-      "lane": "google-ads",
-      "task": "Clarify Hamza Hotel to Hamza Express ad conveyance",
-      "status": "ready",
-      "summary": "Revised the late-night Hamza Hotel campaign copy so the first visible line now redirects action to Hamza Express: 'Searched Hamza Hotel? | Go To Hamza Express'. Updated the exact platform config, copy doc, and HTML mockup to make Hamza Express/HKP Road the destination before food claim and offer; landing CTA must read Get Directions To Hamza Express.",
-      "next_action": "Use the clarified bridge copy in landing update and live Google Ads setup; verify final RSA pins, sitelink text, and landing first CTA all repeat Hamza Express before enabling Rs500/day.",
-      "mutation_status": "No live Google Ads mutation. Local copy/spec/mockup updated only."
     }
   ]
 }
