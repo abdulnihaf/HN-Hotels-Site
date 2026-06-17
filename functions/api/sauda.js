@@ -475,52 +475,52 @@ async function routePlan(db, when) {
   };
 }
 
-// ── Build the live item master from the last 30 days, routed to canonical vendors ──
+// ── The cart catalog IS the canonical sauda_item master (175 items + the loaded
+//    prices). Rates auto-fill from price_paise; live items (chicken/mutton/veg)
+//    carry no price so the rate stays blank for today's number. Search also matches
+//    aliases (haldi → Turmeric). Vendor baskets group by each item's default_vendor. ──
 async function buildCatalog(db) {
-  const since = `date('now','-30 days')`;
-  const [bl, dp] = await Promise.all([
-    db.prepare(`SELECT item AS name, vendor AS vend, uom AS unit, brand, unit_cost_paise FROM buy_lines WHERE biz_date >= ${since} AND item != '' ORDER BY biz_date DESC`).all(),
-    db.prepare(`SELECT item_name AS name, vendor_name AS vend, unit, brand FROM sauda_day_po WHERE for_date >= ${since} AND item_name NOT IN ('NEW','')`).all(),
+  const [itemsRes, aliasRes] = await Promise.all([
+    db.prepare(`SELECT item_code,label,unit,price_paise,price_mode,default_vendor FROM sauda_item WHERE active=1 ORDER BY label`).all(),
+    db.prepare(`SELECT alias,item_code FROM sauda_item_alias`).all(),
   ]);
-
-  // dedupe by normalized name; prefer a row whose vendor we recognise.
-  const items = new Map();
-  const priceByKey = new Map();   // norm(name) -> most-recent non-zero unit price (paise), so Place can pre-fill it
-  const ingest = (rows, weight) => {
-    for (const r of (rows?.results || [])) {
-      const key = norm(r.name);
-      if (!key) continue;
-      if (r.unit_cost_paise > 0 && !priceByKey.has(key)) priceByKey.set(key, r.unit_cost_paise); // buy_lines is DESC → first seen = latest price
-      const vk = canonVendorKey(r.vend);
-      const prev = items.get(key);
-      const cand = { name: r.name.trim(), vendorKey: vk, unit: (r.unit || '').trim(), brand: (r.brand || 'both'), w: weight + (vk ? 5 : 0) };
-      if (!prev || cand.w > prev.w) items.set(key, cand);
-    }
-  };
-  ingest(bl, 1);      // buy_lines (recent, carries the last price paid)
-  ingest(dp, 2);      // sauda_day_po (richer names) wins ties
-
-  // group into vendor baskets
-  const baskets = new Map();
-  for (const [key, it] of items.entries()) {
-    const vk = it.vendorKey || 'unassigned';
-    if (!baskets.has(vk)) baskets.set(vk, []);
-    baskets.get(vk).push({ name: it.name, unit: it.unit, brand: it.brand, price_paise: priceByKey.get(key) || 0 });
+  const items = (itemsRes && itemsRes.results) || [];
+  if (!items.length) {
+    // master not seeded yet → empty catalog (creates on first settings read)
+    return { generatedFrom: 'sauda_item master (empty)', itemCount: 0, vendorCount: 0, vendors: [], flat: [] };
   }
-
+  const aliasByCode = new Map();
+  for (const a of ((aliasRes && aliasRes.results) || [])) {
+    if (!aliasByCode.has(a.item_code)) aliasByCode.set(a.item_code, []);
+    if (String(a.alias).toLowerCase() !== String(a.item_code)) aliasByCode.get(a.item_code).push(a.alias);
+  }
+  const baskets = new Map();
+  for (const it of items) {
+    const live = it.price_mode === 'live';
+    const vk = (it.default_vendor && VENDORS[it.default_vendor]) ? it.default_vendor : 'unassigned';
+    if (!baskets.has(vk)) baskets.set(vk, []);
+    baskets.get(vk).push({
+      name: it.label,
+      item_code: it.item_code,
+      unit: it.unit || '',
+      brand: 'both',
+      live,
+      price_paise: live ? 0 : (it.price_paise || 0),
+      alias: (aliasByCode.get(it.item_code) || []).slice(0, 8).join(' '),
+    });
+  }
   const vendors = [...baskets.entries()].map(([vk, list]) => ({
     ...vendorView(vk),
     items: list.sort((a, b) => a.name.localeCompare(b.name)),
   })).sort((a, b) => b.items.length - a.items.length);
 
-  // flat list for search (each item -> its vendor)
   const flat = [];
   for (const v of vendors) for (const it of v.items) flat.push({ ...it, vendorKey: v.key, vendorName: v.name });
 
   return {
-    generatedFrom: 'last 30 days of buy_lines + sauda_day_po',
+    generatedFrom: 'sauda_item master',
     itemCount: flat.length,
-    vendorCount: vendors.filter(v => v.key !== 'unassigned').length,
+    vendorCount: vendors.filter((v) => v.key !== 'unassigned').length,
     vendors,
     flat: flat.sort((a, b) => a.name.localeCompare(b.name)),
   };

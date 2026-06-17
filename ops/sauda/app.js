@@ -93,7 +93,7 @@
     var q=(searchInput.value||'').trim().toLowerCase();
     if(!S.cat){ hideSugg(); return; }
     if(!q){ hideSugg(); return; }
-    var hits = S.cat.flat.filter(function(it){ return it.name.toLowerCase().indexOf(q)>=0 && brandMatch(it.brand); }).slice(0,12);
+    var hits = S.cat.flat.filter(function(it){ return (it.name+' '+(it.alias||'')).toLowerCase().indexOf(q)>=0 && brandMatch(it.brand); }).slice(0,12);
     var html = hits.map(function(it){
       return '<div class="s" data-add=\''+esc(JSON.stringify(it))+'\'><span class="nm">'+esc(it.name)+'</span><span class="vn">'+esc(it.vendorName||'')+'</span></div>';
     }).join('');
@@ -111,7 +111,7 @@
 
   // ── order model ──
   function addLine(it){
-    S.order.push({ id:++S.seq, item:it.name, qty:'', price:(it.price_paise?String(it.price_paise/100):''), unit:it.unit||'', vendorKey:it.vendorKey||'unassigned', vendorName:it.vendorName||'Unassigned', brand:it.brand||'both' });
+    S.order.push({ id:++S.seq, item:it.name, item_code:it.item_code||'', qty:'', price:(it.price_paise?String(it.price_paise/100):''), unit:it.unit||'', vendorKey:it.vendorKey||'unassigned', vendorName:it.vendorName||'Unassigned', brand:it.brand||'both', live:!!it.live });
     renderOrder(); toast(it.name+' added','info');
   }
   function removeLine(id){ S.order=S.order.filter(function(l){return l.id!==id;}); renderOrder(); }
@@ -145,7 +145,7 @@
         html+='<div class="line"><div class="lhead"><div class="ln">'+esc(l.item)+(l.brand&&l.brand!=='both'?' <span class="lb">'+esc(l.brand)+'</span>':'')+'</div>'+
           '<button class="x" data-x="'+l.id+'" aria-label="remove">×</button></div>'+
           '<div class="lf"><div class="ff"><label>Qty</label><input inputmode="decimal" value="'+esc(l.qty)+'" data-q="'+l.id+'" placeholder="qty"><span class="u">'+esc(l.unit||'')+'</span></div>'+
-          '<div class="ff"><label>₹'+(l.unit?'/'+esc(l.unit):'')+'</label><input inputmode="decimal" value="'+esc(l.price||'')+'" data-p="'+l.id+'" placeholder="rate"></div></div></div>';
+          '<div class="ff"><label>₹'+(l.unit?'/'+esc(l.unit):'')+(l.live?' · live':'')+'</label><input inputmode="decimal" value="'+esc(l.price||'')+'" data-p="'+l.id+'" placeholder="'+(l.live?'today’s rate':'rate')+'"></div></div></div>';
       });
       html+='<div class="bsub">basket ₹<b>'+(Math.round(sub).toLocaleString('en-IN'))+'</b></div>';
       html+='</div>';
@@ -206,7 +206,7 @@
   function vLineFor(key,nm){ return S.order.find(function(l){ return l.vendorKey===key && l.item.toLowerCase()===String(nm).toLowerCase(); }); }
   function vSetQty(key,item,qty){
     var l=vLineFor(key,item.name);
-    if(qty>0){ if(l){ l.qty=qty; } else { S.order.push({ id:++S.seq, item:item.name, qty:qty, price:(item.price_paise?String(item.price_paise/100):''), unit:item.unit||'', vendorKey:key, vendorName:vendorMeta(key).name, brand:item.brand||S.brand }); } }
+    if(qty>0){ if(l){ l.qty=qty; } else { S.order.push({ id:++S.seq, item:item.name, item_code:item.item_code||'', qty:qty, price:(item.price_paise?String(item.price_paise/100):''), unit:item.unit||'', vendorKey:key, vendorName:vendorMeta(key).name, brand:item.brand||S.brand, live:!!item.live }); } }
     else if(l){ S.order=S.order.filter(function(x){return x!==l;}); }
   }
   function openVendorSheet(key){
@@ -248,7 +248,7 @@
     var bad=S.order.filter(function(l){ return String(l.qty).trim()===''; });
     if(bad.length && !confirm(bad.length+' item(s) have no quantity. Place anyway? (vendor will fill)')) return;
     busy=true; var btn=this; btn.disabled=true; btn.textContent='Placing…';
-    var lines=S.order.map(function(l){ return { item:l.item, sku:l.item, qty:l.qty, unit:l.unit, vendorKey:l.vendorKey, brand:l.brand, price_paise:Math.round((parseFloat(l.price)||0)*100) }; });
+    var lines=S.order.map(function(l){ return { item:l.item, sku:l.item_code||l.item, qty:l.qty, unit:l.unit, vendorKey:l.vendorKey, brand:l.brand, price_paise:Math.round((parseFloat(l.price)||0)*100) }; });
     api('place',{method:'POST',body:{ lines:lines }}).then(function(res){
       busy=false;
       if(!res.ok||!res.j||!res.j.ok){ toast(res.j&&res.j.error||'Place failed','err'); updatePlaceBtn(); return; }
