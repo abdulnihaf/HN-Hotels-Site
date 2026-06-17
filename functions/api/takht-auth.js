@@ -23,7 +23,11 @@ const ALLOW_ORIGINS = new Set([
 ]);
 function corsHeaders(request) {
   const o = request.headers.get('Origin') || '';
-  const allow = ALLOW_ORIGINS.has(o) ? o : 'https://takht.hnhotels.in';
+  // Reflect a known origin, or any *.pages.dev preview of the brand projects.
+  // This is a no-credentials GET — the PIN is the secret, not the origin; CORS is
+  // not the access control here (the hardening TODO is a per-IP rate limiter).
+  const allow = (ALLOW_ORIGINS.has(o) || /^https:\/\/[a-z0-9-]+\.(nawabi-chai-house-sit|hamza-express-site|hn-hotels-site)\.pages\.dev$/.test(o))
+    ? o : 'https://takht.hnhotels.in';
   return {
     'Access-Control-Allow-Origin': allow,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
