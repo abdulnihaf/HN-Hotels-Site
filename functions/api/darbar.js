@@ -90,6 +90,8 @@ export async function onRequest(context) {
     if (request.method === 'GET') {
       if (action === 'home') return withCors(await home(db, url), request);
       if (action === 'ghost-photo') return withCors(await ghostPhoto(db, url), request);
+      if (action === 'photo-img')  return withCors(await photoImg(db, url), request);
+      if (action === 'photo-meta') return withCors(await photoMeta(db, url), request);
       if (action === 'month-board') return withCors(await monthBoard(db, url), request);
       if (action === 'month-attendance') return withCors(await monthAttendance(db, url), request);
       if (action === 'reconcile') return withCors(await reconcile(db, false), request);
@@ -288,6 +290,49 @@ async function ghostPhoto(db, url) {
     ).bind(pin).first();
     return json({ pin, user_name: (r && r.user_name) || null, photo_base64: (r && r.photo_base64) || null });
   } catch { return json({ pin, user_name: null, photo_base64: null }); }
+}
+
+/* ━━━ PROFILE PHOTO (raw JPEG) — the enrolled face, served as an image so <img src> can
+ *     lazy-load + browser-cache it. Keyed by pin OR employee id (resolve id→pin). The latest
+ *     enrolled photo wins; older rows stay in the table as the historical trail (photo-meta). ━━━ */
+async function photoImg(db, url) {
+  try {
+    let pin = url.searchParams.get('pin');
+    const id = url.searchParams.get('id');
+    if ((!pin || pin === 'null') && id) {
+      const e = await db.prepare(`SELECT pin FROM hr_employees WHERE id=?`).bind(id).first();
+      pin = e && e.pin;
+    }
+    if (!pin) return new Response('no pin', { status: 404 });
+    const r = await db.prepare(
+      `SELECT photo_base64 FROM hr_cams_user_events
+        WHERE pin=? AND photo_base64 IS NOT NULL AND length(photo_base64)>100 ORDER BY id DESC LIMIT 1`
+    ).bind(pin).first();
+    if (!r || !r.photo_base64) return new Response('no photo', { status: 404 });
+    const bin = atob(r.photo_base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Response(bytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=3600' } });
+  } catch { return new Response('err', { status: 500 }); }
+}
+
+/* ━━━ PHOTO META — the dated trail: how many faces on file for a pin and when each landed. ━━━ */
+async function photoMeta(db, url) {
+  let pin = url.searchParams.get('pin');
+  const id = url.searchParams.get('id');
+  try {
+    if ((!pin || pin === 'null') && id) {
+      const e = await db.prepare(`SELECT pin FROM hr_employees WHERE id=?`).bind(id).first();
+      pin = e && e.pin;
+    }
+    if (!pin) return json({ pin: null, count: 0, history: [] });
+    const rows = await db.prepare(
+      `SELECT received_at FROM hr_cams_user_events
+        WHERE pin=? AND photo_base64 IS NOT NULL AND length(photo_base64)>100 ORDER BY id DESC`
+    ).bind(pin).all();
+    const list = (rows.results || []).map(r => r.received_at).filter(Boolean);
+    return json({ pin, count: list.length, latest: list[0] || null, first: list[list.length - 1] || null, history: list });
+  } catch { return json({ pin, count: 0, history: [] }); }
 }
 
 /* ━━━ MONTH ATTENDANCE — every active person × every day of a month (dot-strips) ━━━ */

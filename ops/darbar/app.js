@@ -25,6 +25,23 @@ const S = {
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Profile avatar — the enrolled CAMS face as a round picture, initials behind it as the
+// fallback (no photo / never enrolled / load error → initials show). Keyed by pin or emp id.
+function initialsOf(name) {
+  const p = String(name || '?').trim().split(/\s+/);
+  return ((p[0] || '')[0] || '?').toUpperCase() + ((p[1] || '')[0] || '').toUpperCase();
+}
+function avatarHTML(o) {
+  o = o || {};
+  const ini = esc(initialsOf(o.name));
+  const cls = 'av' + (o.lg ? ' av-lg' : '');
+  let key = null;
+  if (o.pin != null && o.pin !== '' && o.pin !== 'null') key = 'pin=' + encodeURIComponent(o.pin);
+  else if (o.id != null) key = 'id=' + encodeURIComponent(o.id);
+  if (!key || !S.token) return `<span class="${cls}">${ini}</span>`;
+  const src = `/api/darbar?action=photo-img&${key}&t=${encodeURIComponent(S.token)}`;
+  return `<span class="${cls}">${ini}<img loading="lazy" src="${src}" alt="" onerror="this.remove()"></span>`;
+}
 const inr = n => '₹' + Math.round(Number(n) || 0).toLocaleString('en-IN');
 const todayIST = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 // HE business day = IST now shifted back 4h
@@ -188,7 +205,7 @@ function cardFor(x) {
     const pay = x.monthly_salary ? `${inr(x.monthly_salary)}/mo` : x.daily_rate ? `${inr(x.daily_rate)}/day` : '';
     const tierPill = x.tier === 'certain' ? '<span class="pill red">gone 21d+</span>' : x.tier === 'strong' ? '<span class="pill yellow">14d+</span>' : '<span class="pill grey">7d+</span>';
     return `<div class="card xcard departed">
-      <div class="xc-top" onclick='rosterTap(${x.id})'><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
+      <div class="xc-top" onclick='rosterTap(${x.id})'>${avatarHTML({ pin: x.pin, id: x.id, name: x.name })}<div class="xc-b"><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
         <div class="xc-meta">Silent <b>${x.days_silent}d</b> · still on payroll ${pay ? `at <b>${pay}</b>` : ''}<br>last punch ${x.last_punch ? esc(x.last_punch.slice(0, 10)) : 'never'}</div></div>${tierPill}</div>
       <div class="acts">
         <button class="btn danger" onclick='confirmExit(${x.id}, ${JSON.stringify(x.name)})'>Mark left</button>
@@ -199,7 +216,7 @@ function cardFor(x) {
   if (x.type === 'ghost') {
     const nm = x.device_name ? `${esc(x.device_name)} <span class="pill purple">PIN ${esc(x.pin)} · no roster</span>` : `Unknown — PIN ${esc(x.pin)} <span class="pill purple">ghost</span>`;
     return `<div class="card xcard ghost">
-      <div class="xc-top"><div><div class="xc-name">${nm}</div>
+      <div class="xc-top">${avatarHTML({ pin: x.pin, name: x.device_name })}<div class="xc-b"><div class="xc-name">${nm}</div>
         <div class="xc-meta">${x.device_name ? `device says <b>${esc(x.device_name)}</b> · ` : ''}<b>${x.punches}</b> punches over <b>${x.days}</b> days · ${esc(x.shape)}<br>${x.active ? '<b style="color:var(--green)">working now</b>' : `last seen ${x.days_silent}d ago`}</div></div></div>
       <div class="acts">
         <button class="btn primary" onclick='nameGhost(${JSON.stringify(x.pin)}, ${JSON.stringify(x.device_name || '')})'>Add to roster</button>
@@ -208,18 +225,18 @@ function cardFor(x) {
   }
   if (x.type === 'chronic') {
     return `<div class="card xcard chronic">
-      <div class="xc-top" onclick='rosterTap(${x.id})'><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
+      <div class="xc-top" onclick='rosterTap(${x.id})'>${avatarHTML({ pin: x.pin, id: x.id, name: x.name })}<div class="xc-b"><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
         <div class="xc-meta">Forgot a punch on <b>${x.odd_days}</b> of the last 7 days — needs a word, not another SMS.</div></div><span class="pill yellow">chronic</span></div></div>`;
   }
   if (x.type === 'pay_missing') {
     return `<div class="card xcard chronic">
-      <div class="xc-top" onclick='rosterTap(${x.id})'><div><div class="xc-name">${esc(x.name)} <span class="pill ${(x.brand || '').toLowerCase()}">${x.brand || ''}</span></div>
+      <div class="xc-top" onclick='rosterTap(${x.id})'>${avatarHTML({ pin: x.pin, id: x.id, name: x.name })}<div class="xc-b"><div class="xc-name">${esc(x.name)} <span class="pill ${(x.brand || '').toLowerCase()}">${x.brand || ''}</span></div>
         <div class="xc-meta">No pay set — the system can't show money facts for them. Their settlement line is held until you set it.</div></div><span class="pill gold">pay not set</span></div>
       <div class="acts"><button class="btn primary" onclick='setPaySheet(${x.id}, ${JSON.stringify(x.name)})'>Set pay</button></div></div>`;
   }
   if (x.type === 'never_punched') {
     return `<div class="card xcard never">
-      <div class="xc-top" onclick='rosterTap(${x.id})'><div><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
+      <div class="xc-top" onclick='rosterTap(${x.id})'>${avatarHTML({ pin: x.pin, id: x.id, name: x.name })}<div class="xc-b"><div class="xc-name">${esc(x.name)} <span class="pill ${x.brand.toLowerCase()}">${x.brand}</span></div>
         <div class="xc-meta">On roster (PIN ${esc(x.pin)}) but has <b>never punched</b> — enrolled on the device, or not really working?</div></div><span class="pill blue">no punches</span></div></div>`;
   }
   return '';
@@ -353,7 +370,7 @@ function renderAttendMonth(month) {
       }
       cells += `<div class="mc ${cls}"></div>`;
     }
-    return `<div class="arow" onclick='rosterTap(${p.id})'><div class="top">
+    return `<div class="arow" onclick='rosterTap(${p.id})'><div class="top">${avatarHTML({ id: p.id, name: p.name })}
       <div style="flex:1"><div class="nm">${esc(p.name)} <span class="pill ${(p.brand || '').toLowerCase()}">${p.brand || ''}</span></div>
       <div class="mstrip">${cells}</div></div>
       <div style="text-align:right;font-size:11.5px;line-height:1.5" class="num"><span style="color:var(--green);font-weight:700">${worked}w</span><br>${errs ? `<span style="color:var(--yellow)">${errs}!</span> ` : ''}<span style="color:var(--red)">${abs}a</span></div>
@@ -420,7 +437,7 @@ function renderAttend() {
     const fixBtn = (st.k === 'present' && st.incomplete) ? `<button class="btn primary sm" style="margin-top:9px" onclick='event.stopPropagation();fixPunch(${r.employee_id}, ${JSON.stringify(S.attendDate)})'>Fix — impute missing punch</button>` : '';
     const dot = st.working ? 'inprog' : st.k === 'present' ? (st.incomplete ? 'missing' : 'present') : st.k;
     const pill = st.working ? 'blue' : st.k === 'present' ? (st.incomplete ? 'yellow' : 'green') : st.k === 'absent' ? 'red' : 'purple';
-    return `<div class="arow" onclick='attRowTap(${r.employee_id})'><div class="top"><div>
+    return `<div class="arow" onclick='attRowTap(${r.employee_id})'><div class="top">${avatarHTML({ id: r.employee_id, pin: r.pin, name: r.name })}<div style="flex:1;min-width:0">
         <div class="nm"><span class="sdot ${dot}"></span>${nm} <span class="pill ${(r.brand_label||'').toLowerCase()}">${r.brand_label||''}</span></div>
         <div class="role">${esc(r.job_name || r.department_name || '')}</div>
         <div class="sess">${sess}</div></div>
@@ -708,8 +725,9 @@ async function loadPayCtx(mode, empId, month) {
   const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
   const verb = mode === 'settle' ? 'Record settlement' : 'Give advance';
   const dailyLane = emp.pay_lane === 'daily';
-  sheet(`<h2>${mode === 'settle' ? 'Settle' : 'Advance'} — ${esc(emp.name)}</h2>
+  sheet(`<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">${avatarHTML({ pin: emp.pin, id: emp.id, name: emp.name, lg: true })}<div style="flex:1;min-width:0"><h2 style="margin:0">${esc(emp.name)}</h2>
     <div class="sd">${esc(emp.brand || '')} · ${esc(emp.pay_type || '')} · ${salaryLbl}</div>
+    <div class="sd" id="faceTrail" style="margin-top:2px;font-size:11px;color:var(--mute)"></div></div></div>
     ${dailyLane ? `<div class="card" style="border-color:var(--gold-bd);background:var(--gold-soft)"><b>DAILY LANE</b><div class="xc-meta" style="margin-top:4px">Paid day by day — separate from the monthly salary cycle. Money recorded here is the day's team cost, not a salary advance against a month.</div></div>` : ''}
     <div class="mchips">${chips}</div>
     <div class="card"><div class="xc-meta"><b>1 · Attendance</b> — ${esc(monthLabel(month))}</div>
@@ -737,6 +755,20 @@ async function loadPayCtx(mode, empId, month) {
     <div class="fld"><label>Paid via</label><select id="payVia"><option>cash</option><option>upi</option><option>bank</option><option>razorpay</option><option>paytm</option></select></div>
     <div class="fld"><label>Note (optional)</label><input id="payNote" placeholder="${mode === 'settle' ? 'final settlement / partial' : 'reason'}"></div>
     <div class="acts"><button class="btn primary" onclick='doPay("${mode}", ${emp.id}, ${JSON.stringify(month)})'>${verb} — ${esc(monthLabel(month))}</button><button class="btn ghost-b sm" onclick='overrideSheet(${emp.id}, ${JSON.stringify(emp.name)})'>Over-write</button><button class="btn danger sm" onclick='confirmExit(${emp.id}, ${JSON.stringify(emp.name)})'>Mark left</button><button class="btn ghost-b sm" onclick="closeSheet()">Cancel</button></div>`);
+  loadFaceTrail(emp);
+}
+// The dated face trail — how many enrolled photos we hold for this person and when the
+// latest landed. The history builds from here on: each device re-push adds a dated row.
+async function loadFaceTrail(emp) {
+  const el = $('faceTrail'); if (!el) return;
+  try {
+    const key = (emp.pin != null && emp.pin !== '') ? `pin=${encodeURIComponent(emp.pin)}` : `id=${encodeURIComponent(emp.id)}`;
+    const m = await api(`/api/darbar?action=photo-meta&${key}`);
+    if (m && m.count) {
+      const d = s => s ? fmtDayShort(String(s).slice(0, 10)) : '';
+      el.textContent = `📷 face on file${m.count > 1 ? ` · ${m.count} versions` : ''}${m.latest ? ` · updated ${d(m.latest)}` : ''}`;
+    } else { el.textContent = '📷 no face enrolled yet'; }
+  } catch { /* leave blank */ }
 }
 
 async function doPay(mode, empId, month) {
