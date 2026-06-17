@@ -120,6 +120,14 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await settingsBulk(db, body, auth)), request);
     }
+    if (action === 'settings-item' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await settingsItem(db, body, auth)), request);
+    }
+    if (action === 'settings-vendor' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await settingsVendor(db, body)), request);
+    }
     // match-payment: preview whether the bank feed already shows this payment (before/without marking)
     if (action === 'match-payment' && request.method === 'GET') {
       const ids = (url.searchParams.get('ids') || '').split(',').map((x) => +x).filter(Boolean);
@@ -731,6 +739,60 @@ async function settingsBulk(db, body, auth) {
   }
   for (let i = 0; i < stmts.length; i += 20) await db.batch(stmts.slice(i, i + 20));
   return { ok: true, inserted: ins, updated: upd, aliases: al };
+}
+
+// ── Settings grid: edit/add a single item (partial fields only) ──
+async function settingsItem(db, body, auth) {
+  await ensureSettingsTables(db);
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const by = (auth && auth.u) || '';
+  let code = String((body && body.item_code) || '').trim();
+  if (!code || code === 'NEW') {
+    const label = String((body && body.label) || '').trim();
+    if (!label) return { ok: false, error: 'label required' };
+    const slug = (s) => ('itm_' + s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')).slice(0, 40) || 'itm';
+    let base = slug(label), c = base, n = 1;
+    while (await db.prepare('SELECT 1 FROM sauda_item WHERE item_code=?').bind(c).first()) c = base + '_' + (++n);
+    code = c;
+    await db.prepare(`INSERT INTO sauda_item (item_code,label,unit,pack_label,price_paise,price_mode,default_vendor,category,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+      .bind(code, label, body.unit || '', body.pack_label || '', Math.max(0, Math.round(+body.price_paise || 0)), body.price_mode === 'live' ? 'live' : 'fixed', body.default_vendor || '', body.category || '', by, now).run();
+    return { ok: true, item_code: code, created: true };
+  }
+  const sets = [], vals = [];
+  const f = (k, sql, val) => { if (k in body) { sets.push(sql); vals.push(val); } };
+  f('label', 'label=?', String(body.label || ''));
+  f('unit', 'unit=?', String(body.unit || ''));
+  f('pack_label', 'pack_label=?', String(body.pack_label || ''));
+  f('price_mode', 'price_mode=?', body.price_mode === 'live' ? 'live' : 'fixed');
+  f('default_vendor', 'default_vendor=?', String(body.default_vendor || ''));
+  f('category', 'category=?', String(body.category || ''));
+  if ('price_paise' in body) { sets.push('price_paise=?'); vals.push(Math.max(0, Math.round(+body.price_paise || 0))); }
+  if ('flagged' in body) { sets.push('flagged=?'); vals.push(body.flagged ? 1 : 0); }
+  if ('active' in body) { sets.push('active=?'); vals.push(body.active ? 1 : 0); }
+  if (!sets.length) return { ok: false, error: 'nothing to update' };
+  sets.push('updated_by=?', 'updated_at=?'); vals.push(by, now);
+  await db.prepare(`UPDATE sauda_item SET ${sets.join(', ')} WHERE item_code=?`).bind(...vals, code).run();
+  return { ok: true, item_code: code };
+}
+
+// ── Settings grid: edit a vendor (phone, UPIs, fulfilment, pay, aliases) ──
+async function settingsVendor(db, body) {
+  await ensureSettingsTables(db);
+  const key = String((body && body.vendor_key) || '').trim();
+  if (!key) return { ok: false, error: 'vendor_key required' };
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const sets = [], vals = [];
+  if ('name' in body) { sets.push('name=?'); vals.push(String(body.name || '')); }
+  if ('phone' in body) { sets.push('phone=?'); vals.push(String(body.phone || '')); }
+  if ('vpas' in body) { const a = Array.isArray(body.vpas) ? body.vpas.map((x) => String(x).trim()).filter(Boolean) : []; sets.push('vpa_json=?'); vals.push(JSON.stringify(a)); }
+  if ('fulfilment' in body) { sets.push('fulfilment=?'); vals.push(String(body.fulfilment || 'deliver')); }
+  if ('pay' in body) { sets.push('pay=?'); vals.push(String(body.pay || 'per')); }
+  if ('aliases' in body) { const a = Array.isArray(body.aliases) ? body.aliases.map((x) => String(x).trim()).filter(Boolean) : []; sets.push('aliases_json=?'); vals.push(JSON.stringify(a)); }
+  if ('flagged' in body) { sets.push('flagged=?'); vals.push(body.flagged ? 1 : 0); }
+  if (!sets.length) return { ok: false, error: 'nothing to update' };
+  sets.push('updated_at=?'); vals.push(now);
+  await db.prepare(`UPDATE sauda_vendor SET ${sets.join(', ')} WHERE vendor_key=?`).bind(...vals, key).run();
+  return { ok: true };
 }
 
 // ── Per-vendor records: count, paid, outstanding, and the full trail (timestamps + method) ──

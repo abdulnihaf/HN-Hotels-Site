@@ -269,14 +269,15 @@
   function setMode(m){
     var buy=document.getElementById('viewBuy'), place=document.getElementById('viewPlace'), pay=document.getElementById('viewPay'),
         hp=document.getElementById('viewHp'), cmp=document.getElementById('viewCompare'), hist=document.getElementById('viewHistory'),
-        vend=document.getElementById('viewVendors');
+        vend=document.getElementById('viewVendors'), vset=document.getElementById('viewSettings');
     var buyBar=document.getElementById('buyBar'), placeBar=document.getElementById('placeBar'), hpBar=document.getElementById('hpBar'), cmpBar=document.getElementById('cmpBar');
     var h1=document.querySelector('.top h1');
     document.querySelectorAll('#modeSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.m===m); });
-    [buy,place,pay,hp,cmp,hist,vend].forEach(function(v){ if(v) v.classList.add('hide'); });
+    [buy,place,pay,hp,cmp,hist,vend,vset].forEach(function(v){ if(v) v.classList.add('hide'); });
     [buyBar,placeBar,hpBar,cmpBar].forEach(function(b){ b.classList.add('hide'); });
     if(m==='pay'){ pay.classList.remove('hide'); if(h1) h1.textContent="To pay"; loadPay(); }
     else if(m==='vendors'){ vend.classList.remove('hide'); if(h1) h1.textContent="Vendors"; loadVendors(); }
+    else if(m==='settings'){ vset.classList.remove('hide'); if(h1) h1.textContent="Settings"; loadSettings(); }
     else if(m==='hp'){ hp.classList.remove('hide'); hpBar.classList.remove('hide'); if(h1) h1.textContent="Tomorrow · Hyperpure"; loadHp(); }
     else if(m==='cmp'){ cmp.classList.remove('hide'); cmpBar.classList.remove('hide'); if(h1) h1.textContent="Compare prices"; loadCompare(); }
     else if(m==='saved'){ hist.classList.remove('hide'); if(h1) h1.textContent="Saved orders"; loadHistory(); }
@@ -817,6 +818,95 @@
       list.querySelectorAll('.paynow').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openDirectPay(b.dataset.vk, b.dataset.vn, b.dataset.vpa); }); });
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
+
+  // ── Settings: the item + vendor master (price · unit · vendor · fixed/live · phones/UPIs) ──
+  var SET={items:[],vendors:[],tab:'items',q:'',needOnly:false};
+  var SET_UNITS=['kg','g','L','ml','pc','birds','crate','bunch','katta','bora','bag','cylinder','case','box','bundle','packet','bottle'];
+  function loadSettings(){
+    var list=document.getElementById('setList'), empty=document.getElementById('setEmpty');
+    empty.classList.remove('hide'); empty.textContent='Loading…'; list.innerHTML='';
+    api('settings').then(function(res){
+      if(!res.j||!res.j.ok){ empty.textContent='Load failed'; return; }
+      SET.items=res.j.items||[]; SET.vendors=res.j.vendors||[]; renderSettings();
+    }).catch(function(){ empty.textContent='No connection'; });
+  }
+  function vendorOpts(sel){ return '<option value="">— vendor —</option>'+SET.vendors.map(function(v){return '<option value="'+esc(v.vendor_key)+'"'+(v.vendor_key===sel?' selected':'')+'>'+esc(v.name)+'</option>';}).join(''); }
+  function unitOpts(sel){ return '<option value="">unit</option>'+SET_UNITS.map(function(u){return '<option'+(u===sel?' selected':'')+'>'+u+'</option>';}).join(''); }
+  function renderSettings(){
+    var list=document.getElementById('setList'); document.getElementById('setEmpty').classList.add('hide');
+    document.querySelectorAll('#setSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.s===SET.tab); });
+    document.getElementById('setNeed').style.display = SET.tab==='items'?'':'none';
+    if(SET.tab==='items') renderSetItems(list); else renderSetVendors(list);
+  }
+  function renderSetItems(list){
+    var q=SET.q;
+    var need=SET.items.filter(function(i){return i.price_mode!=='live' && !(i.price_paise>0);});
+    var rows=SET.items.filter(function(i){
+      if(SET.needOnly && need.indexOf(i)<0) return false;
+      return !q || (i.label+' '+(i.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0;
+    });
+    var html='<div class="setcount">'+rows.length+' of '+SET.items.length+' items · '+need.length+' need a price</div>';
+    html+=rows.map(function(i){
+      var live=i.price_mode==='live';
+      var price=live
+        ? '<button class="modet live" data-mode="'+esc(i.item_code)+'">LIVE</button>'
+        : '<span class="rs">₹</span><input class="spin" data-sp="'+esc(i.item_code)+'" inputmode="decimal" value="'+(i.price_paise>0?(i.price_paise/100):'')+'" placeholder="price"><button class="modet" data-mode="'+esc(i.item_code)+'">fix</button>';
+      var nc=(!live && !(i.price_paise>0))?' need':'';
+      return '<div class="srow'+nc+'"><div class="sl"><b>'+esc(i.label)+(i.flagged?' ⚠':'')+'</b><small>'+esc((i.aliases||[]).slice(0,5).join(', '))+'</small></div>'+
+        '<div class="sf"><div class="r1">'+price+'</div><div class="r2"><select data-su="'+esc(i.item_code)+'">'+unitOpts(i.unit)+'</select>'+
+        '<select data-sv="'+esc(i.item_code)+'">'+vendorOpts(i.default_vendor)+'</select></div></div></div>';
+    }).join('');
+    html+='<button class="add" onclick="openAddItem()" style="margin-top:8px">+ add an item</button>';
+    list.innerHTML=html;
+    list.querySelectorAll('input[data-sp]').forEach(function(p){ p.addEventListener('change',function(){ saveItem(p.dataset.sp,{price_paise:Math.round((parseFloat(p.value)||0)*100)}); }); });
+    list.querySelectorAll('select[data-su]').forEach(function(s){ s.addEventListener('change',function(){ saveItem(s.dataset.su,{unit:s.value}); }); });
+    list.querySelectorAll('select[data-sv]').forEach(function(s){ s.addEventListener('change',function(){ saveItem(s.dataset.sv,{default_vendor:s.value}); }); });
+    list.querySelectorAll('[data-mode]').forEach(function(b){ b.addEventListener('click',function(){ var it=SET.items.find(function(x){return x.item_code===b.dataset.mode;}); saveItem(b.dataset.mode,{price_mode:(it&&it.price_mode==='live')?'fixed':'live'},true); }); });
+  }
+  function renderSetVendors(list){
+    var q=SET.q, FUL=['deliver','collect','standing','porter'], PAY=['per','khata_roll','khata_periodic'];
+    var rows=SET.vendors.filter(function(v){ return !q || (v.name+' '+(v.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
+    list.innerHTML='<div class="setcount">'+rows.length+' vendors</div>'+rows.map(function(v){
+      var vpa=(v.vpas&&v.vpas[0])||'';
+      return '<div class="srow"><div class="sl"><b>'+esc(v.name)+'</b><small>'+esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI</small></div>'+
+        '<div class="sf"><div class="r1"><input class="phin" data-vph="'+esc(v.vendor_key)+'" inputmode="tel" value="'+esc(v.phone||'')+'" placeholder="phone"></div>'+
+        '<div class="r1"><input class="phin" data-vpa="'+esc(v.vendor_key)+'" value="'+esc(vpa)+'" placeholder="name@bank"></div>'+
+        '<div class="r2"><select data-vf="'+esc(v.vendor_key)+'">'+FUL.map(function(f){return '<option'+(f===v.fulfilment?' selected':'')+'>'+f+'</option>';}).join('')+'</select>'+
+        '<select data-vpy="'+esc(v.vendor_key)+'">'+PAY.map(function(p){return '<option'+(p===v.pay?' selected':'')+'>'+p.replace('khata_','khata ')+'</option>';}).join('')+'</select></div></div></div>';
+    }).join('');
+    list.querySelectorAll('input[data-vph]').forEach(function(p){ p.addEventListener('change',function(){ saveVendor(p.dataset.vph,{phone:p.value}); }); });
+    list.querySelectorAll('input[data-vpa]').forEach(function(p){ p.addEventListener('change',function(){ saveVendor(p.dataset.vpa,{vpas:[p.value]}); }); });
+    list.querySelectorAll('select[data-vf]').forEach(function(s){ s.addEventListener('change',function(){ saveVendor(s.dataset.vf,{fulfilment:s.value}); }); });
+    list.querySelectorAll('select[data-vpy]').forEach(function(s){ s.addEventListener('change',function(){ saveVendor(s.dataset.vpy,{pay:s.value}); }); });
+  }
+  function saveItem(code,fields,rerender){
+    var it=SET.items.find(function(x){return x.item_code===code;}); if(it) for(var k in fields) it[k]=fields[k];
+    api('settings-item',{method:'POST',body:Object.assign({item_code:code},fields)}).then(function(r){ var ok=r&&r.j&&r.j.ok; toast(ok?'saved ✓':'save failed',ok?'ok':'err'); if(rerender&&ok) renderSettings(); });
+  }
+  function saveVendor(key,fields){
+    var v=SET.vendors.find(function(x){return x.vendor_key===key;}); if(v){ if('phone' in fields)v.phone=fields.phone; if('vpas' in fields)v.vpas=fields.vpas; if('fulfilment' in fields)v.fulfilment=fields.fulfilment; if('pay' in fields)v.pay=fields.pay; }
+    api('settings-vendor',{method:'POST',body:Object.assign({vendor_key:key},fields)}).then(function(r){ var ok=r&&r.j&&r.j.ok; toast(ok?'saved ✓':'save failed',ok?'ok':'err'); });
+  }
+  window.openAddItem=function(){
+    var host=document.getElementById('sheetHost');
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Add an item</h2>'+
+      '<div class="fld"><label>Name</label><input id="ai_label"></div>'+
+      '<div class="fld"><label>Unit</label><select id="ai_unit">'+unitOpts('')+'</select></div>'+
+      '<div class="fld"><label>Price ₹ (leave blank if live-priced)</label><input id="ai_price" inputmode="decimal"></div>'+
+      '<div class="fld"><label>Vendor</label><select id="ai_vendor">'+vendorOpts('')+'</select></div>'+
+      '<button class="btn primary" id="ai_go" style="width:100%">Add to master</button></div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    document.getElementById('ai_go').addEventListener('click',function(){
+      var label=document.getElementById('ai_label').value.trim(); if(!label){ toast('item name?','err'); return; }
+      var price=parseFloat(document.getElementById('ai_price').value)||0;
+      api('settings-item',{method:'POST',body:{item_code:'NEW',label:label,unit:document.getElementById('ai_unit').value,price_paise:Math.round(price*100),price_mode:price>0?'fixed':'live',default_vendor:document.getElementById('ai_vendor').value}})
+        .then(function(r){ if(r&&r.j&&r.j.ok){ toast('added ✓','ok'); host.innerHTML=''; loadSettings(); } else toast('failed','err'); });
+    });
+  };
+  document.getElementById('gear').addEventListener('click', function(){ setMode('settings'); });
+  document.getElementById('setSeg').addEventListener('click', function(e){ var b=e.target.closest('button[data-s]'); if(b){ SET.tab=b.dataset.s; renderSettings(); } });
+  document.getElementById('setSearch').addEventListener('input', function(){ SET.q=(this.value||'').trim().toLowerCase(); renderSettings(); });
+  document.getElementById('setNeed').addEventListener('click', function(){ SET.needOnly=!SET.needOnly; this.classList.toggle('on',SET.needOnly); renderSettings(); });
 
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
