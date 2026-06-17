@@ -125,6 +125,11 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await markPaid(db, body, auth)), request);
     }
+    // direct-pay: pay ANY vendor an ad-hoc amount (not tied to a placed order) — records it
+    if (action === 'direct-pay' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await directPay(db, body, auth)), request);
+    }
     if (action === 'hyperpure-feed' && request.method === 'GET') {
       return withCors(json(await hyperpureFeed(db)), request);
     }
@@ -625,7 +630,7 @@ async function reconcileSweep(db, sinceFloor) {
 
 async function vendorLedger(db, days) {
   const since = `date('now','-${days} days')`;
-  await reconcileSweep(db, since);   // self-heal any delayed bank confirmations first
+  await autoSettle(db);   // live: settle anything the bank now confirms (orders + direct pays)
   let rows = [];
   try {
     rows = ((await db.prepare(
@@ -644,8 +649,8 @@ async function vendorLedger(db, days) {
     if (!byVendor.has(vk)) byVendor.set(vk, []);
     byVendor.get(vk).push(r);
   }
-  const vendors = [];
-  for (const [vk, list] of byVendor.entries()) {
+
+  function summarize(vk, list) {
     const v = vendorView(vk);
     let paid = 0, outstanding = 0, lastPaidAt = '';
     const trail = [];
@@ -662,14 +667,22 @@ async function vendorLedger(db, days) {
         reconciled: !!r.reconciled_at, bank_ref: r.bank_ref || '',
       });
     }
-    vendors.push({
-      vendorKey: v.key, vendor_name: v.name, vpa: v.vpa || '',
+    return {
+      vendorKey: v.key, vendor_name: v.name, cat: v.cat || '', vpa: v.vpa || '',
       fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
       order_count: list.length, paid_paise: paid, outstanding_paise: outstanding,
       last_paid_at: lastPaidAt, trail,
-    });
+    };
   }
-  vendors.sort((a, b) => (b.outstanding_paise - a.outstanding_paise) || (b.paid_paise - a.paid_paise));
+
+  // EVERY canonical vendor appears (with its UPI id) so this tab is also the
+  // pay-any-vendor directory; plus any 'unassigned' bucket that has orders.
+  const vendors = Object.keys(VENDORS).map((vk) => summarize(vk, byVendor.get(vk) || []));
+  if (byVendor.has('unassigned')) vendors.push(summarize('unassigned', byVendor.get('unassigned')));
+  vendors.sort((a, b) =>
+    (b.outstanding_paise - a.outstanding_paise) ||
+    (b.order_count - a.order_count) ||
+    a.vendor_name.localeCompare(b.vendor_name));
   return { ok: true, days, vendors };
 }
 
@@ -834,6 +847,26 @@ async function autoSettle(db) {
     settled.push({ id: r.id, vendor: v.name, amount_paise: amt, bank_ref: m.bank_ref });
   }
   return { ok: true, settled, count: settled.length };
+}
+
+// ── Direct pay: pay ANY vendor an ad-hoc amount, not tied to a placed order.
+// Records a REQUESTED sauda_purchase row so it shows in the vendor trail and gets
+// bank-verified by auto-settle when the debit lands — same rails as a normal order. ──
+async function directPay(db, body, auth) {
+  const rawVk = String((body && body.vendorKey) || '');
+  const vk = VENDORS[rawVk] ? rawVk : (canonVendorKey(rawVk) || '');
+  if (!vk || !VENDORS[vk]) return { ok: false, error: 'unknown vendor' };
+  const v = vendorView(vk);
+  const amt = Math.round(+(body && body.amount_paise) || 0);
+  if (amt <= 0) return { ok: false, error: 'amount required' };
+  const forDate = todayIST();
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const items = [{ item: String((body && body.note) || 'Direct payment'), qty: '', unit: '', price_paise: amt, direct: true }];
+  const res = await db.prepare(
+    `INSERT INTO sauda_purchase (brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, expected_amount_paise, pay_amount_paise, pay_requested_at, ordered_at, ordered_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(v.brand || 'both', v.name, forDate, v.fulfilment, v.pay, JSON.stringify(items), 'REQUESTED', amt, amt, now, now, (auth && auth.u) || '').run();
+  return { ok: true, id: res?.meta?.last_row_id, vendor: v.name, vpa: v.vpa || '', amount_paise: amt };
 }
 
 // ── Hyperpure delivery window from the cutoff (IST). Order before 23:00 → tomorrow. ──

@@ -371,6 +371,32 @@
     });
   }
 
+  // ── Direct pay: pay ANY vendor an ad-hoc amount (Vendors tab). Records it, then
+  //    opens the normal PhonePe pay sheet so it's bank-verified like any payment. ──
+  function openDirectPay(vk, name, vpa){
+    if(!vpa){ toast('No UPI saved for '+name,'err'); return; }
+    var host=document.getElementById('sheetHost');
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(name)+'</h2>'+
+      '<div class="skuhint">Enter the amount, then choose your UPI app. It’s recorded and bank-verified like any payment.</div>'+
+      '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" id="dpAmt" placeholder="amount"></div>'+
+      '<div class="vpa-line" style="margin:8px 0 0">'+esc(vpa)+'</div>'+
+      '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Continue to pay</button>'+
+      '</div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    var amtEl=document.getElementById('dpAmt'); if(amtEl) amtEl.focus();
+    document.getElementById('dpGo').addEventListener('click',function(){
+      var rs=num(document.getElementById('dpAmt').value);
+      if(rs<=0){ toast('Enter an amount','err'); return; }
+      if(busy) return; busy=true;
+      api('direct-pay',{method:'POST',body:{vendorKey:vk, amount_paise:Math.round(rs*100)}}).then(function(r){
+        busy=false;
+        if(!r.ok||!r.j||!r.j.ok){ toast((r.j&&r.j.error)||'Failed','err'); return; }
+        host.innerHTML='';
+        openPaySheet(vpa, name, rs, [r.j.id]);
+      }).catch(function(){ busy=false; toast('No connection','err'); });
+    });
+  }
+
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // HYPERPURE — tomorrow's planned mandi basket (next-day, ₹1,500 min, 11pm cutoff)
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -773,14 +799,22 @@
             '<span class="ta">₹'+rupees(t.amount_paise)+'</span>'+
             '<span class="tw">'+esc(when)+'</span></div>';
         }).join('');
+        var right = v.outstanding_paise>0 ? '<span class="due">₹'+rupees(v.outstanding_paise)+' due</span>'
+                  : (v.order_count>0 ? '<span class="clr">clear</span>' : '');
+        var meta = v.order_count>0
+          ? '<span>'+v.order_count+' order'+(v.order_count!==1?'s':'')+'</span><span>paid ₹'+rupees(v.paid_paise)+'</span>'+(v.last_paid_at?'<span>last '+esc(fmtTs(v.last_paid_at))+'</span>':'')
+          : '<span>'+esc(v.cat||'no orders in 30 days')+'</span>';
         return '<div class="ven"><div class="vhd" data-vi="'+vi+'">'+
           '<div class="vleft"><span class="bn">'+esc(v.vendor_name)+'</span>'+
             '<span class="tag f">'+esc(v.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(v.payLabel||'')+'</span></div>'+
-          '<div class="vright">'+(v.outstanding_paise>0?'<span class="due">₹'+rupees(v.outstanding_paise)+' due</span>':'<span class="clr">clear</span>')+'</div></div>'+
-          '<div class="vmeta"><span>'+v.order_count+' order'+(v.order_count!==1?'s':'')+'</span><span>paid ₹'+rupees(v.paid_paise)+'</span>'+(v.last_paid_at?'<span>last '+esc(fmtTs(v.last_paid_at))+'</span>':'')+'</div>'+
-          '<div class="vtrail hide" id="vt'+vi+'">'+(trail||'<div class="dim" style="padding:8px;color:var(--mute)">No orders.</div>')+'</div></div>';
+          '<div class="vright">'+right+'</div></div>'+
+          '<div class="vpay"><span class="vid">'+(v.vpa?esc(v.vpa):'no UPI saved')+'</span>'+
+            (v.vpa?'<button class="paynow" data-vk="'+esc(v.vendorKey)+'" data-vn="'+esc(v.vendor_name)+'" data-vpa="'+esc(v.vpa)+'">Pay now</button>':'')+'</div>'+
+          '<div class="vmeta">'+meta+'</div>'+
+          '<div class="vtrail hide" id="vt'+vi+'">'+(trail||'<div style="padding:8px;color:var(--mute)">No orders in the last 30 days.</div>')+'</div></div>';
       }).join('');
       list.querySelectorAll('.vhd[data-vi]').forEach(function(h){ h.addEventListener('click',function(){ var el=document.getElementById('vt'+h.dataset.vi); if(el) el.classList.toggle('hide'); }); });
+      list.querySelectorAll('.paynow').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openDirectPay(b.dataset.vk, b.dataset.vn, b.dataset.vpa); }); });
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
 
