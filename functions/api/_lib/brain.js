@@ -187,9 +187,11 @@ async function callAnthropic(env, body) {
 }
 
 // Answer one question. Returns a short spoken-style string.
-export async function answerBrainQuery(env, { question, originBase }) {
+export async function answerBrainQuery(env, { question, originBase, model: modelOverride }) {
   if (!env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not configured');
-  const model   = env.BRAIN_MODEL || DEFAULT_MODEL;
+  // Per-call model alias (e.g. voice path passes ?model=fast for low latency). Default path unchanged.
+  const MODEL_ALIASES = { fast: 'claude-haiku-4-5', haiku: 'claude-haiku-4-5', sonnet: 'claude-sonnet-4-6', opus: 'claude-opus-4-8' };
+  const model   = (modelOverride && MODEL_ALIASES[modelOverride]) || env.BRAIN_MODEL || DEFAULT_MODEL;
   const system  = systemPrompt();
   const messages = [{ role: 'user', content: question }];
 
