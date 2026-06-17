@@ -21,7 +21,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const DEFAULT_MODEL = 'claude-fable-5';    // accuracy-first; override via env.BRAIN_MODEL
+const DEFAULT_MODEL = 'claude-opus-4-8';   // accuracy-first; override via env.BRAIN_MODEL (was claude-fable-5, deprecated 2026-06)
 const SERVICE_PIN   = '0305';              // Nihaf admin — the brain reads as the owner
 const MAX_TOOL_HOPS = 4;
 
