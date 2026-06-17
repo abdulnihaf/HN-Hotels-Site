@@ -27,6 +27,7 @@ const WABA_AGGREGATOR_TEMPLATE = 'aggregator_session_expired_alert_v1';
 const WABA_FALLBACK_TEMPLATE = 'ops_alert_critical_v1';
 const CORE_RING2_SOURCES = new Set(['swiggy_fetch_orders', 'swiggy_history', 'zomato_history_v2']);
 const CRITICAL_RING2_STATES = new Set(['unauthorized', 'parser_failed']);
+const WATCHER_VERSION = '2026-06-17-effective-session-guard-v1';
 
 function nowIST() { return new Date(Date.now() + 5.5 * 60 * 60 * 1000); }
 function withinNightSuppress() {
@@ -52,6 +53,23 @@ function ring2AttemptLabel(attempt) {
 function coreRing2Failures(ring2) {
   const attempts = Array.isArray(ring2?.body?.attempts) ? ring2.body.attempts : [];
   return attempts.filter(a => CORE_RING2_SOURCES.has(a?.pull_source_code) && CRITICAL_RING2_STATES.has(a?.status_code));
+}
+function enrichmentRing2Failures(ring2) {
+  const attempts = Array.isArray(ring2?.body?.attempts) ? ring2.body.attempts : [];
+  return attempts.filter(a => !CORE_RING2_SOURCES.has(a?.pull_source_code) && CRITICAL_RING2_STATES.has(a?.status_code));
+}
+function ageNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+function deliveryFreshness(body, platform) {
+  const ages = body?.age_minutes || {};
+  const candidates = [
+    { source: 'direct', age: ageNumber(ages[`${platform}_direct`]) },
+    { source: 'order', age: ageNumber(ages[`${platform}_order`]) },
+    { source: 'snapshot', age: ageNumber(ages[`${platform}_snap`]) },
+  ];
+  return candidates.find(row => row.age !== null) || { source: 'none', age: null };
 }
 
 async function probeJson(env, action) {
@@ -261,7 +279,7 @@ export async function onRequest(context) {
   }
 
   if (action === 'tick') {
-    const out = { checked_at_ist: nowIST().toISOString(), alerts: [], probes: {} };
+    const out = { checked_at_ist: nowIST().toISOString(), watcher_version: WATCHER_VERSION, alerts: [], probes: {} };
 
     // Ring 2 direct API pull runs before health checks. This is the actual
     // laptop-independent order updater: Cloudflare cron → Pages Function →
@@ -271,6 +289,8 @@ export async function onRequest(context) {
     out.probes.daily_owner_report = await runDailyOwnerReport(env);
 
     const coreFailures = coreRing2Failures(out.probes.ring2_pull);
+    const enrichmentFailures = enrichmentRing2Failures(out.probes.ring2_pull);
+    out.probes.enrichment_degraded = enrichmentFailures.map(ring2AttemptLabel);
     if (coreFailures.length) {
       const detail = coreFailures.slice(0, 3).map(ring2AttemptLabel).join('; ');
       const r = await fireAlert(env, {
@@ -293,15 +313,18 @@ export async function onRequest(context) {
     out.probes.delivery = delivery;
     if (delivery.ok && !withinNightSuppress()) {
       const b = delivery.body;
-      const z = Number(b.age_minutes?.zomato_snap ?? 9999);
-      const s = Number(b.age_minutes?.swiggy_snap ?? 9999);
-      if (b.status !== 'ok' || z > DELIVERY_MAX_STALE) {
-        const r = await fireAlert(env, { platformKey: 'delivery_zomato', message: `HE-Aggregator: zomato delivery snap stale ${z}m as of ${istHHMM()} IST` });
-        out.alerts.push({ platform: 'delivery_zomato', stale_min: z, ...r });
-      }
-      if (b.status !== 'ok' || s > DELIVERY_MAX_STALE) {
-        const r = await fireAlert(env, { platformKey: 'delivery_swiggy', message: `HE-Aggregator: swiggy delivery snap stale ${s}m as of ${istHHMM()} IST` });
-        out.alerts.push({ platform: 'delivery_swiggy', stale_min: s, ...r });
+      out.probes.delivery_effective = {};
+      for (const platform of ['zomato', 'swiggy']) {
+        const fresh = deliveryFreshness(b, platform);
+        out.probes.delivery_effective[platform] = fresh;
+        if (fresh.age === null || fresh.age > DELIVERY_MAX_STALE) {
+          const label = fresh.age === null ? 'never seen' : `${fresh.age}m via ${fresh.source}`;
+          const r = await fireAlert(env, {
+            platformKey: `delivery_${platform}`,
+            message: `HE-Aggregator: ${platform} delivery feed stale ${label} as of ${istHHMM()} IST`,
+          });
+          out.alerts.push({ platform: `delivery_${platform}`, freshness: fresh, ...r });
+        }
       }
     } else if (delivery.ok && withinNightSuppress()) {
       out.probes.delivery.night_suppressed = true;
@@ -315,17 +338,8 @@ export async function onRequest(context) {
     const dine = await probeJson(env, 'dine-health');
     out.probes.dine = dine;
     if (dine.ok) {
-      // dine.body.platforms is an ARRAY of {platform, last_seen, stale_minutes, ...}
-      const platforms = Array.isArray(dine.body?.platforms) ? dine.body.platforms
-                       : Object.values(dine.body?.platforms || {});
-      for (const pdata of platforms) {
-        const age = Number(pdata?.stale_minutes ?? pdata?.age_minutes ?? 9999);
-        const pname = pdata?.platform || 'unknown';
-        if (age > DINE_MAX_STALE) {
-          const r = await fireAlert(env, { platformKey: `dine_${pname}`, message: `HE-Aggregator: dine ${pname} stale ${age}m as of ${istHHMM()} IST` });
-          out.alerts.push({ platform: `dine_${pname}`, stale_min: age, ...r });
-        }
-      }
+      out.probes.dine.probe_only = true;
+      out.probes.dine.alert_policy = 'disabled_until_dine_sessions_are_first_class_delivery_health_must_not_page_on_dine_snapshot_staleness';
     }
 
     // C. Dashboard 200 + body size
@@ -345,7 +359,7 @@ export async function onRequest(context) {
       const rows = await env.DB.prepare(
         'SELECT platform, last_alert_at, last_severity FROM health_alert_suppression ORDER BY last_alert_at DESC'
       ).all();
-      return new Response(JSON.stringify({ suppressions: rows.results || [] }), { headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify({ watcher_version: WATCHER_VERSION, suppressions: rows.results || [] }), { headers: { 'content-type': 'application/json' } });
     } catch (e) {
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { 'content-type': 'application/json' } });
     }
