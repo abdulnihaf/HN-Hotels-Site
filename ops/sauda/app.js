@@ -58,6 +58,9 @@
     setMode('buy');
     loadCatalog();
     startPersist();
+    // deep-link: a link ending ?go=settings (or #settings) opens straight to the Settings
+    // price/vendor editor — so the manager can be sent one link + PIN and land there.
+    try{ if(/settings/i.test(location.search + location.hash)) setMode('settings'); }catch(e){}
   }
 
   // ── persist in-progress work so a Safari/iOS reload never loses it ──
@@ -1025,6 +1028,41 @@
   document.getElementById('setSeg').addEventListener('click', function(e){ var b=e.target.closest('button[data-s]'); if(b){ SET.tab=b.dataset.s; renderSettings(); } });
   document.getElementById('setSearch').addEventListener('input', function(){ SET.q=(this.value||'').trim().toLowerCase(); renderSettings(); });
   document.getElementById('setNeed').addEventListener('click', function(){ SET.chip=(SET.chip==='attn'?'all':'attn'); this.classList.toggle('on',SET.chip==='attn'); renderSettings(); });
+  document.getElementById('setPdf').addEventListener('click', exportSettingsPDF);
+  // Clean, read-only PDF of the master (grouped by vendor, with status) → opens a print
+  // view the manager can Save-as-PDF. A "different form" from the editing grid.
+  function exportSettingsPDF(){
+    if(!SET.items.length){ toast('Load settings first','err'); return; }
+    function vn(k){ if(!k) return '◇ No vendor'; var v=SET.vendors.find(function(x){return x.vendor_key===k;}); return v?v.name:k; }
+    function statusOf(i){ if(i.flagged) return 'CONFIRM'; if(i.price_mode==='live') return 'live (daily)'; if(i.price_paise>0) return 'set'; return 'NO PRICE'; }
+    function priceOf(i){ if(i.price_mode==='live') return 'today’s rate'; if(i.price_paise>0) return '₹'+(i.price_paise/100)+(i.form==='defined'&&i.pack_label?' / '+i.pack_label:(i.unit?' / '+i.unit:'')); return '—'; }
+    var by={}; SET.items.forEach(function(i){ var k=i.default_vendor||''; (by[k]=by[k]||[]).push(i); });
+    var keys=Object.keys(by).sort(function(a,b){ if(!a) return 1; if(!b) return -1; return by[b].length-by[a].length; });
+    var done=SET.items.filter(function(i){return !i.flagged && (i.price_paise>0||i.price_mode==='live');}).length;
+    var body='';
+    keys.forEach(function(k){
+      body+='<h2>'+esc(vn(k))+' <span class="n">'+by[k].length+'</span></h2><table><tr><th>Item</th><th>Type</th><th>Price</th><th>Status</th></tr>';
+      by[k].sort(function(a,b){return a.label.localeCompare(b.label);}).forEach(function(i){
+        var cls=i.flagged?' class="c"':((i.price_paise>0||i.price_mode==='live')?'':' class="x"');
+        body+='<tr'+cls+'><td>'+esc(i.label)+'</td><td>'+(i.form==='defined'?('SKU'+(i.brand?' · '+esc(i.brand):'')):'loose')+'</td><td>'+esc(priceOf(i))+'</td><td>'+statusOf(i)+'</td></tr>';
+      });
+      body+='</table>';
+    });
+    var html='<!doctype html><html><head><meta charset="utf-8"><title>Sauda · Vendor Price List</title>'+
+      '<style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;margin:22px;color:#1a1a1a}'+
+      'h1{font-size:19px;margin:0 0 2px}.sub{color:#777;font-size:12px;margin-bottom:14px}'+
+      'h2{font-size:14px;margin:16px 0 5px;color:#581810;border-bottom:2px solid #581810;padding-bottom:3px}'+
+      'h2 .n{color:#aaa;font-weight:400}table{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:6px}'+
+      'th{text-align:left;background:#f3efe8;padding:4px 7px;border-bottom:1px solid #ccc}'+
+      'td{padding:4px 7px;border-bottom:1px solid #eee}tr.c td{background:#fff6e2}tr.x td{color:#b00;font-style:italic}'+
+      '@media print{h2{break-after:avoid}}</style></head><body>'+
+      '<h1>Sauda — Local Vendor Price List</h1><div class="sub">'+SET.items.length+' items · '+done+' priced · generated '+new Date().toLocaleString('en-IN')+'</div>'+
+      body+'</body></html>';
+    var w=window.open('','_blank');
+    if(!w){ toast('Allow pop-ups to export the PDF','err'); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 500);
+  }
 
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
