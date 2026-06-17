@@ -94,7 +94,7 @@
 
     .pane{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 14px calc(96px + var(--safe-bot))}
     /* view containers must be flex columns so their .pane becomes a bounded, scrollable area */
-    #viewBuy,#viewPlace,#viewPay,#viewHp,#viewCompare,#viewHistory{flex:1;min-height:0;display:flex;flex-direction:column}
+    #viewBuy,#viewPlace,#viewPay,#viewHp,#viewCompare,#viewHistory,#viewVendors{flex:1;min-height:0;display:flex;flex-direction:column}
     .empty{text-align:center;color:var(--mute);font-size:14px;padding:48px 24px;line-height:1.6}
     .empty .big{font-size:30px;margin-bottom:10px;color:var(--sauda)}
 
@@ -296,6 +296,45 @@
     .dec-it .dx{color:var(--mute);width:24px;height:24px;display:grid;place-items:center;border-radius:50%;flex-shrink:0}
     .dec-it .dx:active{background:var(--red-soft);color:var(--red)}
     .dec-note{font-size:11.5px;color:var(--amber);background:var(--amber-soft);border-radius:8px;padding:7px 10px;margin-bottom:8px;line-height:1.45}
+    /* Place — per-line qty + price (SKU price captured for today's buy) */
+    .line{flex-direction:column;align-items:stretch;gap:7px}
+    .line .lhead{display:flex;align-items:center;gap:8px}
+    .line .lhead .ln{flex:1;font-size:14px}
+    .line .lf{display:flex;gap:8px}
+    .line .lf .ff{flex:1;display:flex;align-items:center;gap:6px}
+    .line .lf .ff label{font-size:10px;color:var(--mute);min-width:30px}
+    .line .lf .ff input{flex:1;min-width:0;text-align:center;background:var(--e2);border:1px solid var(--line);border-radius:8px;padding:8px 4px;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+    .line .lf .ff .u{font-size:11px;color:var(--dim)}
+    .bsub{padding:8px 12px;text-align:right;font-size:12px;color:var(--dim);border-top:1px solid var(--line-soft)}
+    .bsub b{color:var(--text);font-variant-numeric:tabular-nums}
+    /* Vendors — per-vendor records ledger */
+    .ven{margin-bottom:10px;border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;border-left:3px solid var(--sauda);background:var(--e1)}
+    .ven .vhd{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer}
+    .ven .vleft{flex:1;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+    .ven .vleft .bn{font-weight:700;font-size:14.5px}
+    .ven .vright .due{font-size:12.5px;font-weight:800;color:var(--amber);white-space:nowrap}
+    .ven .vright .clr{font-size:12px;font-weight:700;color:var(--green)}
+    .ven .vmeta{display:flex;gap:14px;padding:0 12px 10px;font-size:11.5px;color:var(--dim);flex-wrap:wrap;font-variant-numeric:tabular-nums}
+    .ven .vtrail{border-top:1px solid var(--line-soft);padding:4px 12px 8px}
+    .ven .tr{display:grid;grid-template-columns:auto 1fr auto;gap:3px 9px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-soft)}
+    .ven .tr:last-child{border-bottom:none}
+    .ven .tr .ts{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:2px 6px;border-radius:6px;white-space:nowrap}
+    .ven .tr .ts.ok{background:var(--green-soft);color:var(--green)}
+    .ven .tr .ts.amber{background:var(--amber-soft);color:var(--amber)}
+    .ven .tr .ts.dim{background:rgba(255,255,255,.06);color:var(--dim)}
+    .ven .tr .ti{font-size:12px;color:var(--text)}
+    .ven .tr .ta{font-size:12.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;text-align:right}
+    .ven .tr .tw{grid-column:2/4;font-size:10.5px;color:var(--mute)}
+    /* Pay sheet — choose UPI app + always-on fallbacks */
+    .paybig{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin:2px 0 8px}
+    .payapp{display:block;text-align:center;padding:13px;border-radius:11px;background:var(--e2);border:1px solid var(--line);color:var(--text);font-weight:700;font-size:14px;text-decoration:none;margin-bottom:9px}
+    .payapp.pp{background:#5f259f;color:#fff;border-color:#5f259f}
+    .payapp:active{transform:scale(.98)}
+    .payrow2{display:flex;gap:8px;margin-bottom:10px}
+    .payrow2 .payapp{flex:1;margin-bottom:0;font-size:12.5px;padding:11px 6px}
+    .cpyrow{display:flex;gap:8px;margin-bottom:8px}
+    .cpyrow .cpy{flex:1;padding:10px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700;font-size:12.5px}
+    .vpa-line{font-size:12px;color:var(--mute);text-align:center;font-variant-numeric:tabular-nums}
   </style>
 </head>
 <body>
@@ -335,6 +374,7 @@
       <button data-m="buy" class="on">Buy list</button>
       <button data-m="place">Place</button>
       <button data-m="pay">To pay</button>
+      <button data-m="vendors">Vendors</button>
       <button data-m="hp">Hyperpure</button>
       <button data-m="cmp">Compare</button>
       <button data-m="saved">Saved</button>
@@ -440,11 +480,19 @@
       <div id="histList"></div>
     </main>
   </div>
+
+  <!-- VENDORS VIEW — per-vendor records: paid / outstanding / full trail -->
+  <div id="viewVendors" class="hide">
+    <main class="pane" id="venPane">
+      <div class="empty" id="venEmpty">No vendor records yet.<br>Place an order with prices and they’ll appear here.</div>
+      <div id="venList"></div>
+    </main>
+  </div>
 </div>
 
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=15"></script>
+<script src="/ops/sauda/app.js?v=20"></script>
 </body>
 </html>
