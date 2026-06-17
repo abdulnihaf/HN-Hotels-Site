@@ -56,7 +56,11 @@ export async function verifyToken(env, request) {
     if (svc && env.CAMS_AUTH_TOKEN && timingSafeEq(svc, env.CAMS_AUTH_TOKEN)) {
       return { u: 'service', r: 'admin', f: true, service: true };
     }
-    const tok = request.headers.get('x-darbar-token') || '';
+    // Header is the norm. <img src> can't set a header, so a token may also ride
+    // the query (?t=) — same signed, short-lived (12h) token, same-origin, and the
+    // whole surface sits behind Cloudflare Access. Used by the profile-photo endpoint.
+    let tok = request.headers.get('x-darbar-token') || '';
+    if (!tok) { try { tok = new URL(request.url).searchParams.get('t') || ''; } catch { /* noop */ } }
     const dot = tok.indexOf('.');
     if (dot < 1) return null;
     const body = tok.slice(0, dot), sig = tok.slice(dot + 1);
