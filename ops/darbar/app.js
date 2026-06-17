@@ -618,13 +618,13 @@ async function openMonthBoard() {
       <div class="role" style="margin-top:6px">paid is exact · pending is a range from each person's real window (start day → month end), minus advances · not-punching people are flagged, never zeroed${skipped.length ? `<br>not counted: ${esc(skipped.join(', '))}` : ''}</div></div>
     </div></div>
     <div class="sd">${done}/${rows.length} settled · tap a row — facts come up, you decide</div>
-    ${rows.map(r => `<div class="arow" onclick='closeSheet();loadPayCtx("settle", ${r.id}, ${JSON.stringify(b.month)})' style="margin-bottom:8px"><div class="top">
-      <div><div class="nm">${esc(r.name)} <span class="pill ${(r.brand || '').toLowerCase()}">${r.brand || ''}</span>${r.is_active ? '' : ' <span class="pill grey">left</span>'}</div>
+    ${rows.map(r => `<div class="arow" onclick='closeSheet();loadPayCtx("settle", ${r.id}, ${JSON.stringify(b.month)})' style="margin-bottom:8px"><div class="top">${avatarHTML({ pin: r.pin, id: r.id, name: r.name })}
+      <div style="flex:1;min-width:0"><div class="nm">${esc(r.name)} <span class="pill ${(r.brand || '').toLowerCase()}">${r.brand || ''}</span>${r.is_active ? '' : ' <span class="pill grey">left</span>'}</div>
       <div class="role">worked <b>${r.days_worked}</b>d${r.days_error ? ` · ${r.days_error} punch-missing` : ''} · adv ${inr(r.advances)}${estLine(r)}</div></div>
       ${chip(r)}</div></div>`).join('')}
     ${daily.length ? `<div class="sd" style="margin-top:14px">Daily lane — paid day by day, separate from the monthly cycle${dailyPaid ? ` · ${inr(dailyPaid)} given this month` : ''}</div>
-    ${daily.map(r => `<div class="arow" onclick='closeSheet();loadPayCtx("advance", ${r.id}, ${JSON.stringify(b.month)})' style="margin-bottom:8px"><div class="top">
-      <div><div class="nm">${esc(r.name)} <span class="pill ${(r.brand || '').toLowerCase()}">${r.brand || ''}</span> <span class="pill gold">daily</span></div>
+    ${daily.map(r => `<div class="arow" onclick='closeSheet();loadPayCtx("advance", ${r.id}, ${JSON.stringify(b.month)})' style="margin-bottom:8px"><div class="top">${avatarHTML({ pin: r.pin, id: r.id, name: r.name })}
+      <div style="flex:1;min-width:0"><div class="nm">${esc(r.name)} <span class="pill ${(r.brand || '').toLowerCase()}">${r.brand || ''}</span> <span class="pill gold">daily</span></div>
       <div class="role">${r.daily_rate ? `${inr(r.daily_rate)}/day · ` : 'paid via team line · '}given ${inr((r.advances || 0) + (r.settled || 0))} this month</div></div>
     </div></div>`).join('')}` : ''}
     <div class="acts"><button class="btn ghost-b" onclick="closeSheet()">Close</button></div>`);
@@ -828,8 +828,8 @@ function renderRoster() {
   $('rosterList').innerHTML = costCard + rows.map(e => {
     const pay = S.fin ? (e.pay_type === 'Contract' && e.daily_rate ? `${inr(e.daily_rate)}/day` : e.monthly_salary ? `${inr(e.monthly_salary)}/mo` : e.daily_rate ? `${inr(e.daily_rate)}/day` : '—') : '';
     const noPin = !e.pin ? '<span class="pill yellow">no pin</span>' : '';
-    return `<div class="arow" onclick='rosterTap(${e.id})'><div class="top">
-      <div><div class="nm">${esc(e.known_as || e.name)} <span class="pill ${(e.brand_label||'').toLowerCase()}">${e.brand_label||''}</span> ${noPin}</div>
+    return `<div class="arow" onclick='rosterTap(${e.id})'><div class="top">${avatarHTML({ pin: e.pin, id: e.id, name: e.known_as || e.name })}
+      <div style="flex:1;min-width:0"><div class="nm">${esc(e.known_as || e.name)} <span class="pill ${(e.brand_label||'').toLowerCase()}">${e.brand_label||''}</span> ${noPin}</div>
       <div class="role">${esc(e.job_name || '')} ${e.pin ? '· PIN ' + esc(e.pin) : ''} · ${esc(e.pay_type || '')}</div></div>
       ${pay ? `<div style="font-weight:700;font-size:14px" class="num">${pay}</div>` : ''}</div></div>`;
   }).join('');
