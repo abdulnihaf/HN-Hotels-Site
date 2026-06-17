@@ -1185,13 +1185,58 @@ function hyperpureWindow() {
 }
 
 // ── Hyperpure live price feed (read-side; the price-token never reaches the client) ──
+// Normalise any unit string to one of three measurement axes. A comparison is only
+// honest when the owner's baseline unit and Hyperpure's unit sit on the SAME axis —
+// kg-vs-kg, L-vs-L, pc-vs-pc. Packaging words (case/box/bottle/crate/tray/bora) are
+// ambiguous (the per-unit basis is unknown) → return '' so we refuse to assert a verdict.
+function hpAxis(u) {
+  u = String(u || '').toLowerCase().trim();
+  if (/^(kg|kgs|g|gm|gms|gram|grams|kilo|kilos)$/.test(u)) return 'mass';
+  if (/^(l|ltr|litre|liter|lt|ml)$/.test(u)) return 'vol';
+  if (/^(pc|pcs|piece|pieces|nos|no|egg|eggs|dozen)$/.test(u)) return 'count';
+  return '';
+}
+// Honest, gated price comparison for one feed row joined to its master catalog item.
+// Returns a verdict ONLY when every trust check passes; otherwise verified=false +
+// a plain-English reason, and the row degrades to "couldn't compare" in the UI.
+function hpCompare(r) {
+  const out = { your_unit_paise: null, your_pack: r.c_pack || '', your_unit: r.c_unit || '',
+                verified: false, verdict: null, pct: null, save_unit_paise: 0, reason: '' };
+  if (r.c_label == null) { out.reason = 'not in your list yet'; return out; }
+  const qty = Number(r.c_qty) || 0, price = Number(r.c_price) || 0;
+  if (!(qty > 0 && price > 0)) { out.reason = 'no price set in your list'; return out; }
+  const yourUnit = Math.round(price / qty);
+  out.your_unit_paise = yourUnit;
+  const hpUnit = Number(r.cheapest_unit_price_paise) || Number(r.cheapest_price_paise) || 0;
+  if (!hpUnit) { out.reason = 'no Hyperpure unit price'; return out; }
+  if (Number(r.c_flagged) === 1) { out.reason = 'your price needs confirming'; return out; }
+  const a1 = hpAxis(r.c_unit), a2 = hpAxis(r.cheapest_unit);
+  if (!a1 || !a2 || a1 !== a2) { out.reason = 'different unit — can’t compare'; return out; }
+  let band = null; try { band = JSON.parse(r.c_band || '[]'); } catch (e) {}
+  if (Array.isArray(band) && band.length === 2) {
+    const hpR = hpUnit / 100;
+    if (hpR < band[0] || hpR > band[1]) { out.reason = 'Hyperpure price looks off'; return out; }
+  }
+  const pct = Math.round((yourUnit - hpUnit) / yourUnit * 100);
+  if (Math.abs(pct) > 60) { out.reason = 'match looks wrong — open to check'; return out; }
+  out.verified = true;
+  out.pct = pct;
+  out.save_unit_paise = yourUnit - hpUnit;  // signed: +ve = Hyperpure cheaper
+  out.verdict = pct >= 4 ? 'cheaper' : (pct <= -4 ? 'dearer' : 'same');
+  return out;
+}
+
 async function hyperpureFeed(db) {
   let rows = { results: [] };
   try {
     rows = await db.prepare(
-      `SELECT item_key, query, cheapest_name, cheapest_price_paise, cheapest_image, cheapest_pack,
-              cheapest_unit, cheapest_brand, cheapest_unit_price_paise, options_json, match_count, scraped_at
-         FROM hyperpure_prices WHERE cheapest_price_paise IS NOT NULL ORDER BY item_key`
+      `SELECT h.item_key, h.query, h.cheapest_name, h.cheapest_price_paise, h.cheapest_image, h.cheapest_pack,
+              h.cheapest_unit, h.cheapest_brand, h.cheapest_unit_price_paise, h.options_json, h.match_count, h.scraped_at,
+              i.label AS c_label, i.unit AS c_unit, i.pack_label AS c_pack, i.pack_qty AS c_qty,
+              i.price_paise AS c_price, i.flagged AS c_flagged, i.cmp_band AS c_band
+         FROM hyperpure_prices h
+         LEFT JOIN sauda_item i ON i.item_code = h.item_key
+        WHERE h.cheapest_price_paise IS NOT NULL ORDER BY h.item_key`
     ).all();
   } catch (e) { /* table may not exist yet → empty feed */ }
   // a scraped option object (price in rupees) → a feed-item-shaped SKU (paise)
@@ -1204,11 +1249,13 @@ async function hyperpureFeed(db) {
   const items = (rows?.results || []).map((r) => {
     let opts = [];
     try { opts = (JSON.parse(r.options_json || '[]') || []).map(toSku); } catch (e) {}
+    const c = hpCompare(r);
     return {
       item_key: r.item_key,
       name: r.query || r.item_key,          // the catalog/search concept (e.g. "paneer")
-      matched: r.cheapest_name || '',       // the exact Hyperpure SKU we'd order (cheapest)
-      price_paise: r.cheapest_price_paise,  // pack price (what the basket charges per unit)
+      label: r.c_label || '',               // the owner's catalog label (preferred display name)
+      matched: r.cheapest_name || '',       // the exact Hyperpure SKU we'd order (cheapest) — shown for transparency
+      price_paise: r.cheapest_price_paise,  // Hyperpure pack price
       unit_price_paise: r.cheapest_unit_price_paise || r.cheapest_price_paise,
       unit: r.cheapest_unit || '',          // kg | ltr | pc …
       pack: r.cheapest_pack || '',          // "1 kg", "1 L" …
@@ -1217,13 +1264,24 @@ async function hyperpureFeed(db) {
       options: opts,                        // related SKUs (tier 2) — choose from these
       match_count: r.match_count || 0,
       scraped_at: r.scraped_at,
+      // honest comparison vs the owner's own price (gated; see hpCompare)
+      your_unit_paise: c.your_unit_paise,   // baseline ₹/unit in paise (null if unknown)
+      your_pack: c.your_pack,
+      your_unit: c.your_unit,
+      verified: c.verified,                 // true → a verdict can be trusted
+      verdict: c.verdict,                   // 'cheaper' | 'dearer' | 'same' | null
+      pct: c.pct,                           // +ve = Hyperpure cheaper than your price
+      save_unit_paise: c.save_unit_paise,   // signed ₹/unit in paise
+      no_compare_reason: c.reason,          // why no verdict (shown in the "couldn't compare" group)
     };
   });
   const freshest = items.reduce((m, it) => (it.scraped_at && it.scraped_at > m ? it.scraped_at : m), '');
+  const stale = freshest ? ((Date.now() - new Date(freshest).getTime()) > 36 * 3600000) : true;
   return {
     items,
     count: items.length,
     scraped_at: freshest,
+    stale,                                  // true → client suppresses all verdicts this session
     mov_paise: HP.MOV_PAISE,
     delivery_paise: HP.DELIVERY_PAISE,
     window: hyperpureWindow(),

@@ -14,7 +14,7 @@
   var pin = '', busy = false;
 
   var S = { token: null, user: '', role: '', cat: null, brand: 'both', order: [] /* lines */, seq: 0,
-            hp: { feed: [], win: null, mov: 150000, del: 9900, fresh: '', basket: {} /* item_key -> {it, qty} */, chosen: {} /* item_key -> picked SKU override */, tick: null },
+            hp: { feed: [], win: null, fresh: '', stale: false, picked: {} /* item_key -> 'opened'|'added' */, chosen: {} /* item_key -> picked SKU override */, collapsed: { dearer: true, nomatch: true }, tick: null },
             cmp: { items: [], sources: {}, pick: {} /* item_key -> chosen source */ },
             buy: { qty: {} /* item_key -> qty */, when: 'today' /* today | tomorrow — decides feasible sources */ } };
 
@@ -65,10 +65,10 @@
 
   // ── persist in-progress work so a Safari/iOS reload never loses it ──
   function saveWork(){ try{ localStorage.setItem('sauda_work', JSON.stringify({
-    order:S.order, seq:S.seq, hpBasket:S.hp.basket, hpChosen:S.hp.chosen, cmpPick:S.cmp.pick, buyQty:S.buy.qty, buyWhen:S.buy.when })); }catch(e){} }
+    order:S.order, seq:S.seq, hpPicked:S.hp.picked, hpChosen:S.hp.chosen, cmpPick:S.cmp.pick, buyQty:S.buy.qty, buyWhen:S.buy.when })); }catch(e){} }
   function restoreWork(){ try{ var w=JSON.parse(localStorage.getItem('sauda_work')||'null'); if(!w) return;
     if(Array.isArray(w.order)) S.order=w.order; if(w.seq) S.seq=w.seq;
-    if(w.hpBasket) S.hp.basket=w.hpBasket; if(w.hpChosen) S.hp.chosen=w.hpChosen;
+    if(w.hpPicked && typeof w.hpPicked==='object') S.hp.picked=w.hpPicked; if(w.hpChosen && typeof w.hpChosen==='object') S.hp.chosen=w.hpChosen;
     if(w.cmpPick) S.cmp.pick=w.cmpPick; if(w.buyQty) S.buy.qty=w.buyQty; if(w.buyWhen) S.buy.when=w.buyWhen; }catch(e){} }
   var _persist;
   function startPersist(){ if(_persist) return; _persist=setInterval(saveWork,3000);
@@ -273,15 +273,15 @@
     var buy=document.getElementById('viewBuy'), place=document.getElementById('viewPlace'), pay=document.getElementById('viewPay'),
         hp=document.getElementById('viewHp'), cmp=document.getElementById('viewCompare'), hist=document.getElementById('viewHistory'),
         vend=document.getElementById('viewVendors'), vset=document.getElementById('viewSettings');
-    var buyBar=document.getElementById('buyBar'), placeBar=document.getElementById('placeBar'), hpBar=document.getElementById('hpBar'), cmpBar=document.getElementById('cmpBar');
+    var buyBar=document.getElementById('buyBar'), placeBar=document.getElementById('placeBar'), cmpBar=document.getElementById('cmpBar');
     var h1=document.querySelector('.top h1');
     document.querySelectorAll('#modeSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.m===m); });
     [buy,place,pay,hp,cmp,hist,vend,vset].forEach(function(v){ if(v) v.classList.add('hide'); });
-    [buyBar,placeBar,hpBar,cmpBar].forEach(function(b){ b.classList.add('hide'); });
+    [buyBar,placeBar,cmpBar].forEach(function(b){ if(b) b.classList.add('hide'); });
     if(m==='pay'){ pay.classList.remove('hide'); if(h1) h1.textContent="To pay"; loadPay(); }
     else if(m==='vendors'){ vend.classList.remove('hide'); if(h1) h1.textContent="Vendors"; loadVendors(); }
     else if(m==='settings'){ vset.classList.remove('hide'); if(h1) h1.textContent="Settings"; loadSettings(); }
-    else if(m==='hp'){ hp.classList.remove('hide'); hpBar.classList.remove('hide'); if(h1) h1.textContent="Tomorrow · Hyperpure"; loadHp(); }
+    else if(m==='hp'){ hp.classList.remove('hide'); if(h1) h1.textContent="Tomorrow · Hyperpure"; loadHp(); }
     else if(m==='cmp'){ cmp.classList.remove('hide'); cmpBar.classList.remove('hide'); if(h1) h1.textContent="Compare prices"; loadCompare(); }
     else if(m==='saved'){ hist.classList.remove('hide'); if(h1) h1.textContent="Saved orders"; loadHistory(); }
     else if(m==='place'){ place.classList.remove('hide'); placeBar.classList.remove('hide'); if(h1) h1.textContent="Today's order"; }
@@ -463,8 +463,7 @@
     api('hyperpure-feed').then(function(res){
       if(!res.ok){ toast(res.j&&res.j.error||'feed failed','err'); return; }
       S.hp.feed = res.j.items||[]; S.hp.win = res.j.window||null; S.hp.fresh = res.j.scraped_at||'';
-      S.hp.mov = res.j.mov_paise||150000; S.hp.del = res.j.delivery_paise||9900;
-      document.getElementById('movRight').textContent = 'of ₹'+rupees(S.hp.mov)+' minimum';
+      S.hp.stale = !!res.j.stale;
       renderHpStrip();
       renderHpFeed();
       // live cutoff countdown, ticking each minute
@@ -478,81 +477,130 @@
   function isStale(iso){ if(!iso) return true; return (Date.now()-new Date(iso).getTime())>36*3600000; }
 
   function renderHpStrip(){
-    var w=S.hp.win; if(!w){ return; }
-    var strip=document.getElementById('hpStrip'); var pill='';
+    var strip=document.getElementById('hpStrip'); if(!strip) return;
+    var w=S.hp.win, pill='';
     var clock='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
-    if(w.open){
-      var hh=Math.floor(w.mins_to_cutoff/60), mm=w.mins_to_cutoff%60;
-      var left=hh>0?(hh+'h '+mm+'m'):(mm+'m');
-      pill='<span class="hp-pill">'+clock+'Delivers '+esc(fmtDay(w.for_date))+' · order within '+left+'</span>';
-    } else {
-      pill='<span class="hp-pill warn">'+clock+'Cutoff passed · delivers '+esc(fmtDay(w.for_date))+'</span>';
+    if(w){
+      if(w.open){
+        var hh=Math.floor(w.mins_to_cutoff/60), mm=w.mins_to_cutoff%60;
+        var left=hh>0?(hh+'h '+mm+'m'):(mm+'m');
+        pill='<span class="hp-pill">'+clock+'Delivers '+esc(fmtDay(w.for_date))+' · order within '+left+'</span>';
+      } else {
+        pill='<span class="hp-pill warn">'+clock+'Cutoff passed · delivers '+esc(fmtDay(w.for_date))+'</span>';
+      }
     }
-    var stale=isStale(S.hp.fresh);
-    var fresh='<span class="hp-fresh'+(stale?' stale':'')+'">prices '+(S.hp.fresh?relTime(S.hp.fresh):'—')+(stale?' · stale':'')+'</span>';
-    strip.innerHTML=pill+fresh;
+    var stale=S.hp.stale||isStale(S.hp.fresh);
+    var fresh='<span class="hp-fresh'+(stale?' stale':'')+'">prices '+(S.hp.fresh?relTime(S.hp.fresh):'—')+(stale?' · may be old':'')+'</span>';
+    var added=0; for(var kk in S.hp.picked){ if(S.hp.picked[kk]==='added') added++; }
+    var cnt = added ? '<span class="hp-cnt">✓ '+added+' added</span>' : '';
+    var banner = stale ? '<div class="hp-stale">Hyperpure prices may be a day old — cheaper/dearer marks are hidden until tonight’s refresh.</div>' : '';
+    strip.innerHTML=pill+fresh+cnt+banner;
   }
 
   document.getElementById('hpSearch').addEventListener('input', renderHpFeed);
 
+  // Which display group a row falls into. Unverified / stale rows can never assert a
+  // cheaper/dearer claim → they land in "couldn't compare" (price shown, no verdict).
+  function hpBucket(it){ if(S.hp.stale || !it.verified || !it.verdict) return 'nomatch'; return it.verdict; }
+  var HP_GROUPS=[
+    {key:'cheaper', title:'Cheaper on Hyperpure', cls:'g-ok'},
+    {key:'same',    title:'About the same',       cls:'g-mut'},
+    {key:'dearer',  title:'Dearer on Hyperpure',  cls:'g-warn'},
+    {key:'nomatch', title:'Couldn’t compare',     cls:'g-mut'},
+    {key:'added',   title:'Added',                cls:'g-ok'}
+  ];
+
   function renderHpFeed(){
     var host=document.getElementById('hpFeed'), empty=document.getElementById('hpEmpty');
-    var q=(document.getElementById('hpSearch').value||'').trim().toLowerCase();
-    if(!S.hp.feed.length){ host.innerHTML=''; empty.classList.remove('hide'); updateMov(); return; }
+    if(!S.hp.feed.length){ host.innerHTML=''; empty.classList.remove('hide'); renderHpStrip(); return; }
     empty.classList.add('hide');
-    var rows=S.hp.feed.filter(function(it){ return !q || (it.name+' '+(it.matched||'')).toLowerCase().indexOf(q)>=0; });
-    host.innerHTML = rows.map(function(it){
-      var k=it.item_key, sku=chosenSku(k);
-      var b=S.hp.basket[k]; var inb=b&&b.qty>0;
-      var title = sku.matched || cap(it.name);
-      var ctrl = inb
-        ? '<div class="step"><button data-dec="'+esc(k)+'">−</button>'+
-            '<input inputmode="decimal" data-q="'+esc(k)+'" value="'+esc(String(b.qty))+'">'+
-            '<button data-inc="'+esc(k)+'">+</button></div>'
-        : '<button class="add-pill" data-addhp="'+esc(k)+'" aria-label="add">+</button>';
-      var photo = '<div class="ph"'+(sku.image?' style="background-image:url('+esc(sku.image)+')"':'')+'>'+
-                  (sku.image?'':'<span>'+esc(title.slice(0,1))+'</span>')+'</div>';
-      var perUnit = (sku.unit && sku.unit_price_paise) ? '<span class="uu">₹'+rupees(sku.unit_price_paise)+'/'+esc(sku.unit)+'</span>' : '';
-      var nopt = (it.options&&it.options.length)||1;
-      var more = nopt>1 ? '<span class="more">⌄ '+nopt+' options</span>' : '';
-      var meta = '<div class="meta">'+(sku.pack?'<span class="pk">'+esc(sku.pack)+'</span>':'')+perUnit+more+'</div>';
-      return '<div class="hpitem'+(inb?' in':'')+'">'+
-        '<div class="tap" data-sku="'+esc(k)+'">'+photo+'<div class="nm"><b>'+esc(title)+'</b>'+meta+'</div></div>'+
-        '<div class="right"><a class="hp-open" href="'+esc(hpOpenUrl(it.name))+'" target="_blank" rel="noopener" aria-label="open in Hyperpure">Open ↗</a>'+
-        '<span class="pr">₹'+rupees(sku.price_paise)+'</span>'+ctrl+'</div></div>';
+    var q=(document.getElementById('hpSearch').value||'').trim().toLowerCase();
+    var rows=S.hp.feed.filter(function(it){ return !q || ((it.label||it.name)+' '+(it.matched||'')).toLowerCase().indexOf(q)>=0; });
+    var byName=function(a,b){ return String(a.label||a.name).localeCompare(String(b.label||b.name)); };
+    var groups, buckets;
+    if(S.hp.stale){
+      // stale feed: never assert verdicts — one flat list + the Added group
+      groups=[{key:'all',title:'All items',cls:'g-mut'},{key:'added',title:'Added',cls:'g-ok'}];
+      buckets={all:[],added:[]};
+      rows.forEach(function(it){ (S.hp.picked[it.item_key]==='added'?buckets.added:buckets.all).push(it); });
+      buckets.all.sort(byName); buckets.added.sort(byName);
+    } else {
+      groups=HP_GROUPS;
+      buckets={cheaper:[],same:[],dearer:[],nomatch:[],added:[]};
+      rows.forEach(function(it){ if(S.hp.picked[it.item_key]==='added'){ buckets.added.push(it); return; } buckets[hpBucket(it)].push(it); });
+      buckets.cheaper.sort(function(a,b){ return (b.pct||0)-(a.pct||0); });   // biggest saving first
+      ['same','dearer','nomatch','added'].forEach(function(g){ buckets[g].sort(byName); });
+    }
+    host.innerHTML = groups.map(function(g){
+      var list=buckets[g.key]||[]; if(!list.length) return '';
+      var collapsible=(g.key==='dearer'||g.key==='nomatch');
+      var collapsed=(g.key==='dearer'&&S.hp.collapsed.dearer)||(g.key==='nomatch'&&S.hp.collapsed.nomatch);
+      var head='<button class="hpgrp '+g.cls+'" data-grp="'+g.key+'">'+esc(g.title)+' <em>'+list.length+'</em>'+
+               (collapsible?'<span class="chev">'+(collapsed?'▸':'▾')+'</span>':'')+'</button>';
+      return head+(collapsed?'':list.map(hpRow).join(''));
     }).join('');
-    host.querySelectorAll('[data-addhp]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); setHpQty(b.dataset.addhp,1); }); });
-    host.querySelectorAll('[data-inc]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); bumpHp(b.dataset.inc,1); }); });
-    host.querySelectorAll('[data-dec]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); bumpHp(b.dataset.dec,-1); }); });
-    host.querySelectorAll('input[data-q]').forEach(function(inp){ inp.addEventListener('click',function(e){e.stopPropagation();}); inp.addEventListener('input',function(){ setHpQty(inp.dataset.q, parseFloat(inp.value)||0, true); }); });
+    host.querySelectorAll('.hpgrp[data-grp]').forEach(function(b){ b.addEventListener('click',function(){
+      var g=b.dataset.grp; if(g==='dearer') S.hp.collapsed.dearer=!S.hp.collapsed.dearer; else if(g==='nomatch') S.hp.collapsed.nomatch=!S.hp.collapsed.nomatch; else return; renderHpFeed(); }); });
+    host.querySelectorAll('.hp-open[data-open]').forEach(function(a){ a.addEventListener('click',function(){ markOpened(a.dataset.open); }); });
+    host.querySelectorAll('[data-tick]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); toggleAdded(b.dataset.tick); }); });
     host.querySelectorAll('.tap[data-sku]').forEach(function(t){ t.addEventListener('click',function(){ openHpSku(t.dataset.sku); }); });
-    updateMov();
+    renderHpStrip();
   }
+
+  // one row of the comparison checklist
+  function hpRow(it){
+    var k=it.item_key, sku=chosenSku(k);
+    var st=S.hp.picked[k]||''; var added=st==='added';
+    var title=it.label || cap(it.name);
+    var photo='<div class="ph"'+(sku.image?' style="background-image:url('+esc(sku.image)+')"':'')+'>'+(sku.image?'':'<span>'+esc(title.slice(0,1))+'</span>')+'</div>';
+    var matched=sku.matched ? '<small class="mt">'+esc(sku.matched)+'</small>' : '';
+    var hpUnit=(sku.unit && sku.unit_price_paise) ? '₹'+rupees(sku.unit_price_paise)+'/'+esc(sku.unit) : '₹'+rupees(sku.price_paise);
+    var verdict;
+    if(it.verified && it.verdict && !S.hp.stale){
+      var yours='your ₹'+rupees(it.your_unit_paise)+'/'+esc(it.your_unit||sku.unit);
+      if(it.verdict==='cheaper') verdict='<span class="vd ok">'+it.pct+'% cheaper than '+yours+'</span>';
+      else if(it.verdict==='dearer') verdict='<span class="vd warn">'+Math.abs(it.pct)+'% dearer than '+yours+'</span>';
+      else verdict='<span class="vd mut">about the same as '+yours+'</span>';
+    } else {
+      verdict='<span class="vd mut">'+esc(it.no_compare_reason||'couldn’t compare')+'</span>';
+    }
+    var nopt=(it.options&&it.options.length)||1;
+    var more=nopt>1 ? '<span class="more">⌄ '+nopt+'</span>' : '';
+    var meta='<div class="meta"><span class="uu big">'+hpUnit+'</span><span class="pk2">₹'+rupees(sku.price_paise)+(sku.pack?' · '+esc(sku.pack):'')+'</span>'+more+'</div>';
+    var openCtl=added
+      ? '<button class="hp-open done" data-tick="'+esc(k)+'">✓ Added</button>'
+      : '<a class="hp-open'+(st==='opened'?' op':'')+'" href="'+esc(hpOpenUrl(it.name))+'" target="_blank" rel="noopener" data-open="'+esc(k)+'">'+(st==='opened'?'Opened ↗':'Open ↗')+'</a>'+
+        '<button class="hp-tick'+(st==='opened'?' on':'')+'" data-tick="'+esc(k)+'" aria-label="mark added">'+(st==='opened'?'mark added':'✓')+'</button>';
+    return '<div class="hpitem'+(added?' added':'')+'">'+
+      '<div class="tap" data-sku="'+esc(k)+'">'+photo+'<div class="nm"><b>'+esc(title)+'</b>'+matched+verdict+meta+'</div></div>'+
+      '<div class="right">'+openCtl+'</div></div>';
+  }
+
+  // 3-state checklist (TO ADD → OPENED → ADDED), persisted so it survives the app-switch to Hyperpure
+  function markOpened(k){ if(S.hp.picked[k]!=='added'){ S.hp.picked[k]='opened'; saveWork(); setTimeout(renderHpFeed,0); } }
+  function toggleAdded(k){ S.hp.picked[k]=(S.hp.picked[k]==='added')?'opened':'added'; saveWork(); renderHpFeed(); }
+
   function cap(s){ s=String(s||''); return s.charAt(0).toUpperCase()+s.slice(1); }
   // one-tap jump straight to this item on Hyperpure (search endpoint = never dead-ends,
   // opens in the Hyperpure app via universal link, lands on the pre-filtered product list).
   function hpOpenUrl(q){ q=String(q||'').trim(); var e=encodeURIComponent(q); return 'https://www.hyperpure.com/in/search/'+e+'?query='+e; }
   function feedItem(k){ return S.hp.feed.find(function(x){return x.item_key===k;}); }
-  // the SKU shown/ordered for an item = the picked override, else the cheapest from the feed
+  // the SKU shown for an item = the picked override, else the cheapest from the feed
   function chosenSku(k){
     var fi=feedItem(k); if(!fi) return {};
     var v=S.hp.chosen[k], src=v||fi;
     return { item_key:k, name:fi.name, matched:src.matched, price_paise:src.price_paise,
              unit_price_paise:src.unit_price_paise, unit:src.unit, pack:src.pack, brand:src.brand, image:src.image };
   }
-  function setHpQty(k,qty,fromInput){ var sku=chosenSku(k); if(!sku.matched&&!feedItem(k)) return;
-    if(qty>0) S.hp.basket[k]={it:sku,qty:qty}; else delete S.hp.basket[k];
-    if(!fromInput) renderHpFeed(); else updateMov(); }
-  function bumpHp(k,d){ var b=S.hp.basket[k]; var q=(b?b.qty:0)+d; if(q<0)q=0; setHpQty(k, Math.round(q*100)/100); }
 
-  // ── the 3-tier chooser: exact cheapest SKU · related SKUs · search on Hyperpure ──
-  function chooseSku(k, opt){ S.hp.chosen[k]=opt; var b=S.hp.basket[k]; setHpQty(k, b?b.qty:1); }
+  // ── SKU chooser: swap the cheapest match for a related SKU, or search Hyperpure ──
+  function chooseSku(k, opt){ S.hp.chosen[k]=opt; renderHpFeed(); }
   function openHpSku(k){
     var fi=feedItem(k); if(!fi) return;
     var opts = (fi.options&&fi.options.length) ? fi.options.slice(0)
       : [{matched:fi.matched,pack:fi.pack,brand:fi.brand,unit:fi.unit,price_paise:fi.price_paise,unit_price_paise:fi.unit_price_paise,image:fi.image}];
     var curName=(S.hp.chosen[k]&&S.hp.chosen[k].matched)||fi.matched;
-    var searchUrl='https://www.hyperpure.com/in/search/'+encodeURIComponent(fi.name)+'?query='+encodeURIComponent(fi.name);
+    var searchUrl=hpOpenUrl(fi.name);
     var rowsHtml=opts.map(function(o,i){
       var ph='<div class="ph sm"'+(o.image?' style="background-image:url('+esc(o.image)+')"':'')+'>'+(o.image?'':'<span>'+esc((o.matched||'?').slice(0,1))+'</span>')+'</div>';
       var pu=(o.unit&&o.unit_price_paise)?' · ₹'+rupees(o.unit_price_paise)+'/'+esc(o.unit):'';
@@ -562,64 +610,14 @@
         '<div class="si"><b>'+esc(o.matched||'—')+'</b><small>'+esc(o.pack||'')+pu+'</small></div>'+
         '<div class="sp">₹'+rupees(o.price_paise)+bdg+'</div></div>';
     }).join('');
-    var h='<div class="ov" id="ov"><div class="sheet"><h2>'+esc(cap(fi.name))+' · on Hyperpure</h2>'+
-      '<div class="skuhint">Cheapest is picked by default — tap another to swap, or search Hyperpure for the exact one.</div>'+
+    var h='<div class="ov" id="ov"><div class="sheet"><h2>'+esc(cap(fi.label||fi.name))+' · on Hyperpure</h2>'+
+      '<div class="skuhint">Cheapest is shown by default — tap another to swap, or search Hyperpure for the exact one.</div>'+
       '<div class="skulist">'+rowsHtml+'</div>'+
-      '<a class="hpsearch" href="'+esc(searchUrl)+'" target="_blank" rel="noopener">Search “'+esc(fi.name)+'” on Hyperpure ↗</a>'+
+      '<a class="hpsearch" href="'+esc(searchUrl)+'" target="_blank" rel="noopener">Search “'+esc(fi.label||fi.name)+'” on Hyperpure ↗</a>'+
       '</div></div>';
     var hostEl=document.getElementById('sheetHost'); hostEl.innerHTML=h;
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') hostEl.innerHTML=''; });
     hostEl.querySelectorAll('.skurow[data-pick]').forEach(function(r){ r.addEventListener('click',function(){ chooseSku(k, opts[+r.dataset.pick]); hostEl.innerHTML=''; toast('Picked','info'); }); });
-  }
-
-  function hpSubtotal(){ var s=0; Object.keys(S.hp.basket).forEach(function(k){ var b=S.hp.basket[k]; s+=b.qty*(b.it.price_paise||0); }); return Math.round(s); }
-  function updateMov(){
-    var sub=hpSubtotal(), mov=S.hp.mov, del=S.hp.del;
-    var fill=document.getElementById('movFill'), left=document.getElementById('movLeft'), right=document.getElementById('movRight'), btn=document.getElementById('hpPlaceBtn');
-    var pct=Math.min(100, mov?Math.round(sub/mov*100):0);
-    fill.style.width=pct+'%'; fill.classList.toggle('met', sub>=mov);
-    var n=Object.keys(S.hp.basket).length;
-    if(!n){ left.textContent='₹0'; right.textContent='of ₹'+rupees(mov)+' minimum'; btn.disabled=true; btn.textContent='Add items to start'; return; }
-    left.textContent='₹'+rupees(sub)+' · '+n+' item'+(n>1?'s':'');
-    if(sub<mov){ right.textContent='₹'+rupees(mov-sub)+' to go'; btn.disabled=true; btn.textContent='Add ₹'+rupees(mov-sub)+' more to reach minimum'; }
-    else { right.textContent='+ ₹'+rupees(del)+' delivery = ₹'+rupees(sub+del); btn.disabled=false; btn.textContent='Send tomorrow’s order · ₹'+rupees(sub+del); }
-  }
-
-  document.getElementById('hpPlaceBtn').addEventListener('click', function(){
-    if(busy) return; var sub=hpSubtotal(); if(sub<S.hp.mov) return;
-    var lines=Object.keys(S.hp.basket).map(function(k){ var b=S.hp.basket[k];
-      return { item_key:k, name:b.it.name, matched:b.it.matched, qty:b.qty, price_paise:b.it.price_paise,
-               unit:b.it.unit, pack:b.it.pack, brand:b.it.brand, image:b.it.image }; });
-    busy=true; var btn=this; btn.disabled=true; btn.textContent='Sending…';
-    api('hyperpure-place',{method:'POST',body:{lines:lines}}).then(function(res){
-      busy=false;
-      if(!res.ok||!res.j||!res.j.ok){ toast(res.j&&res.j.j&&res.j.j.error||res.j&&res.j.error||'Place failed','err'); updateMov(); return; }
-      S.hp.basket={}; renderHpFeed();
-      openHpHandoff(lines, res.j.for_date, sub);
-    }).catch(function(){ busy=false; toast('No connection','err'); updateMov(); });
-  });
-  // After Send: the handoff. Sauda can't push the cart to Hyperpure (no order API), so it hands
-  // you a clean checklist + a per-item "Find on Hyperpure" search link to re-create + place it there.
-  function openHpHandoff(lines, forDate, subPaise){
-    lines = lines || [];
-    var rows=lines.map(function(l){
-      var nm=l.matched||l.name, srch='https://www.hyperpure.com/in/search/'+encodeURIComponent(nm)+'?query='+encodeURIComponent(nm);
-      var ph=l.image?' style="background-image:url('+esc(l.image)+')"':'';
-      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft)">'+
-        '<div class="ph sm"'+ph+'>'+(l.image?'':'<span>'+esc(String(nm).slice(0,1))+'</span>')+'</div>'+
-        '<div style="flex:1;min-width:0"><b style="font-size:13.5px">'+esc(nm)+'</b>'+
-          '<small style="display:block;color:var(--dim);font-size:11px">'+esc(l.pack||'')+' · '+esc(String(l.qty))+' × ₹'+rupees(l.price_paise)+' = ₹'+rupees(Math.round(l.qty*(l.price_paise||0)))+'</small></div>'+
-        '<a class="payapp" style="flex:none;padding:6px 12px;font-size:12px" href="'+esc(srch)+'" target="_blank" rel="noopener">Find ↗</a></div>';
-    }).join('');
-    var host=document.getElementById('sheetHost');
-    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Order in Hyperpure</h2>'+
-      '<div class="skuhint">Queued for <b>'+esc(fmtDay(forDate))+'</b>. Open Hyperpure, add these '+lines.length+' item'+(lines.length!==1?'s':'')+' (tap <b>Find</b> to jump to each), then place + pay there. ≈ ₹'+rupees(subPaise)+' + delivery.</div>'+
-      '<a class="payapp pp" href="https://www.hyperpure.com/" target="_blank" rel="noopener">Open Hyperpure ↗</a>'+
-      '<div style="margin-top:10px;max-height:44vh;overflow-y:auto">'+(rows||'<div class="empty">Nothing queued.</div>')+'</div>'+
-      '<button class="btn primary" id="hoDone" style="width:100%;margin-top:14px">✓ I’ve placed it in Hyperpure</button>'+
-      '</div></div>';
-    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
-    document.getElementById('hoDone').addEventListener('click',function(){ host.innerHTML=''; toast('Done — placed in Hyperpure ✓','ok'); });
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1094,7 +1092,7 @@
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
     try{ localStorage.removeItem('sauda_work'); }catch(e){}
-    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,hp:{feed:[],win:null,mov:150000,del:9900,fresh:'',basket:{},chosen:{},tick:null},cmp:{items:[],sources:{},pick:{}},buy:{qty:{},when:'today'}};
+    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,hp:{feed:[],win:null,fresh:'',stale:false,picked:{},chosen:{},collapsed:{dearer:true,nomatch:true},tick:null},cmp:{items:[],sources:{},pick:{}},buy:{qty:{},when:'today'}};
     pin=''; renderDots(); app.classList.add('hide'); gate.classList.remove('hide'); }
   document.getElementById('lock').addEventListener('click', lock);
   function toast(msg,kind){ var h=document.getElementById('toastHost'); h.innerHTML='<div class="toast '+(kind||'info')+'">'+esc(msg)+'</div>'; setTimeout(function(){h.innerHTML='';},2200); }

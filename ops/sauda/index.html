@@ -171,6 +171,29 @@
     .hpitem .hp-open:active{transform:scale(.94)}
     .hp-howto{font-size:12px;color:var(--dim);line-height:1.45;background:var(--gold-soft);border:1px solid var(--gold-bd);border-radius:11px;padding:10px 12px;margin-bottom:11px}
     .hp-howto b{color:var(--gold)}
+    /* strip: added-count chip + stale banner */
+    .hp-cnt{font-size:11px;font-weight:700;color:var(--green);margin-left:8px}
+    .hp-stale{flex-basis:100%;margin-top:6px;font-size:11.5px;line-height:1.4;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-bd);border-radius:9px;padding:7px 10px}
+    /* group headers — sort by buying decision */
+    .hpgrp{display:flex;align-items:center;gap:7px;width:100%;text-align:left;font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:14px 2px 8px;padding:0}
+    .hpgrp:first-child{margin-top:2px}
+    .hpgrp em{font-style:normal;font-weight:700;color:var(--mute);background:var(--e3);border-radius:20px;padding:1px 8px;font-size:11px}
+    .hpgrp .chev{margin-left:auto;color:var(--mute);font-size:12px}
+    .hpgrp.g-ok{color:var(--green)} .hpgrp.g-warn{color:var(--amber)} .hpgrp.g-mut{color:var(--dim)}
+    /* row: matched SKU name (transparency) + honest verdict line + unit price */
+    .hpitem .nm .mt{display:block;font-size:11px;color:var(--mute);line-height:1.3;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .hpitem .nm .vd{display:inline-block;font-size:11.5px;font-weight:700;line-height:1.35;margin-top:3px}
+    .hpitem .nm .vd.ok{color:var(--green)} .hpitem .nm .vd.warn{color:var(--amber)} .hpitem .nm .vd.mut{color:var(--mute);font-weight:600}
+    .hpitem .nm .meta .uu.big{font-size:13px;font-weight:800;color:var(--text)}
+    .hpitem .nm .meta .pk2{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+    /* checklist controls */
+    .hpitem .hp-open.op{background:transparent;color:var(--mute);border-color:var(--line)}
+    .hpitem .hp-open.done{color:var(--green);background:var(--green-soft);border:1px solid rgba(55,211,153,.4)}
+    .hpitem .hp-tick{font-size:11px;font-weight:700;color:var(--mute);background:var(--e2);border:1px solid var(--line);border-radius:9px;min-height:28px;padding:0 10px;white-space:nowrap}
+    .hpitem .hp-tick.on{color:var(--green);border-color:rgba(55,211,153,.4);background:var(--green-soft)}
+    .hpitem .hp-tick:active{transform:scale(.94)}
+    .hpitem.added{opacity:.62}
+    .hpitem.added .nm .vd{display:none}
     .hpitem.in{border-color:var(--gold-bd);background:rgba(212,162,76,.07)}
     .step{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex-shrink:0}
     .step button{width:34px;height:34px;display:grid;place-items:center;font-size:19px;color:var(--gold);background:var(--e2)}
@@ -482,7 +505,7 @@
       </div>
     </div>
     <main class="pane" id="hpPane">
-      <div class="hp-howto">Tap <b>Open ↗</b> on any item to jump straight to it on Hyperpure and add it to your Hyperpure cart. Place &amp; pay there.</div>
+      <div class="hp-howto">Each item shows Hyperpure’s price next to <b>your usual price</b>. Tap <b>Open ↗</b> to jump to it on Hyperpure and add it there, then tap <b>✓</b> to tick it off. Place &amp; pay in Hyperpure.</div>
       <div class="empty" id="hpEmpty">No mandi prices yet.<br>The scout refreshes Hyperpure prices each night.</div>
       <div id="hpFeed"></div>
     </main>
@@ -497,13 +520,6 @@
     <button class="btn primary" id="placeBtn" disabled>Place order</button>
   </div>
 
-  <div class="bottom hide" id="hpBar" style="flex-direction:column;gap:10px">
-    <div class="mov" style="width:100%">
-      <div class="track"><div class="fill" id="movFill"></div></div>
-      <div class="lbl"><span id="movLeft">₹0</span><span id="movRight">of ₹1,500 minimum</span></div>
-    </div>
-    <button class="btn primary" id="hpPlaceBtn" disabled style="width:100%">Add items to start</button>
-  </div>
 
   <!-- COMPARE VIEW (cheapest across platforms, per product) -->
   <div id="viewCompare" class="hide">
@@ -549,6 +565,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=38"></script>
+<script src="/ops/sauda/app.js?v=39"></script>
 </body>
 </html>
