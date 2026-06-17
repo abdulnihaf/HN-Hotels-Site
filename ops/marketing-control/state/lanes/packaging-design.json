@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-06-17T14:05:49+0530",
-  "published_at": "2026-06-17T14:05:49+0530",
+  "updated_at": "2026-06-17T14:30:52+0530",
+  "published_at": "2026-06-17T14:30:52+0530",
   "source": "github-main-static-json",
   "lane_slug": "packaging-design",
   "lane": {
@@ -239,16 +239,6 @@
       "summary": "Confirmed existing Figma flask file cNkjzNFs4Xb1bdJUBB0Xey is accessible and writable: metadata read for node 1:7, created Codex MCP Control Test page/nodes, uploaded a PNG as a new Figma image node, exported screenshots and downloaded them. New blank file creation failed earlier due invalid planKey; direct upload-to-existing-node fill did not apply, but upload-as-new-node works and can be positioned/resized by use_figma.",
       "next_action": "Build final front/back editable panels inside existing NCH flask Figma file using existing page/node 1:7; use supported Figma fonts like Cinzel/Cormorant/Inter and upload raster references as new image nodes.",
       "mutation_status": "Figma test page and uploaded test image node only; no POS/Odoo/ad/vendor mutation."
-    },
-    {
-      "id": "20260525092246-packaging-design",
-      "at": "2026-05-25T09:22:46+0530",
-      "lane": "packaging-design",
-      "task": "Refine NCH 250ml flask back aesthetic with Gemini-guided dual QR system",
-      "status": "ready",
-      "summary": "Built v5 Gemini-refined NCH 250ml flask back production candidate at /Users/nihaf/Downloads/NCH_Flask_Back_Production_2026-05-25_v5_GeminiRefined: larger NCH emblem, simplified premium hierarchy, WhatsApp dynamic QR plus Google review QR, Instagram identity line, dark sepia legal footer, front-matched kraft/border system, and Gemini nano-banana-pro-preview concept reference. Verified qpdf, PDF page size 136x216mm, and zbar decoding of both QRs.",
-      "next_action": "Confirm phone/legal/FSSAI and live /go/flask redirect, then assemble front+back into full 250ml vendor dieline with side/gable panels.",
-      "mutation_status": "Created local print/proof assets and Gemini concept only; no POS/Odoo/ad/vendor mutation."
     }
   ]
 }
