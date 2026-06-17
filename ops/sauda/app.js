@@ -260,15 +260,16 @@
   // ── mode toggle: Place · To pay · Hyperpure · Compare ──
   function setMode(m){
     var buy=document.getElementById('viewBuy'), place=document.getElementById('viewPlace'), pay=document.getElementById('viewPay'),
-        hp=document.getElementById('viewHp'), cmp=document.getElementById('viewCompare');
+        hp=document.getElementById('viewHp'), cmp=document.getElementById('viewCompare'), hist=document.getElementById('viewHistory');
     var buyBar=document.getElementById('buyBar'), placeBar=document.getElementById('placeBar'), hpBar=document.getElementById('hpBar'), cmpBar=document.getElementById('cmpBar');
     var h1=document.querySelector('.top h1');
     document.querySelectorAll('#modeSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.m===m); });
-    [buy,place,pay,hp,cmp].forEach(function(v){ v.classList.add('hide'); });
+    [buy,place,pay,hp,cmp,hist].forEach(function(v){ v.classList.add('hide'); });
     [buyBar,placeBar,hpBar,cmpBar].forEach(function(b){ b.classList.add('hide'); });
     if(m==='pay'){ pay.classList.remove('hide'); if(h1) h1.textContent="To pay"; loadPay(); }
     else if(m==='hp'){ hp.classList.remove('hide'); hpBar.classList.remove('hide'); if(h1) h1.textContent="Tomorrow · Hyperpure"; loadHp(); }
     else if(m==='cmp'){ cmp.classList.remove('hide'); cmpBar.classList.remove('hide'); if(h1) h1.textContent="Compare prices"; loadCompare(); }
+    else if(m==='saved'){ hist.classList.remove('hide'); if(h1) h1.textContent="Saved orders"; loadHistory(); }
     else if(m==='place'){ place.classList.remove('hide'); placeBar.classList.remove('hide'); if(h1) h1.textContent="Today's order"; }
     else { buy.classList.remove('hide'); buyBar.classList.remove('hide'); if(h1) h1.textContent="Tomorrow's buy"; loadBuy(); }
   }
@@ -624,16 +625,18 @@
   // PASTE & DECODE — paste the staff's WhatsApp dump (or a screenshot); Claude
   // decodes it to a clean PO; review/edit; confirm → saved to the PO trail.
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  var decOrders=[], decNotes=[];
+  var decOrders=[], decNotes=[], decBrand='HE';
   document.getElementById('pasteBtn').addEventListener('click', openPasteSheet);
   function openPasteSheet(){
     var host=document.getElementById('sheetHost');
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Paste the WhatsApp order</h2>'+
-      '<div class="skuhint">Copy the staff messages from WhatsApp and paste below — keep the names and times. I’ll clean it and split it by brand. Or attach a screenshot.</div>'+
-      '<textarea class="dec-ta" id="decTa" placeholder="[15/06, 11:39 PM] Azeem Chef: Oil box&#10;Sunflower oil 4 letar&#10;…"></textarea>'+
+      '<div class="seg" id="decBrandSeg" style="margin:0 0 11px"><button data-db="HE"'+(decBrand==='HE'?' class="on"':'')+'>Hamza Express</button><button data-db="NCH"'+(decBrand==='NCH'?' class="on"':'')+'>Nawabi Chai House</button></div>'+
+      '<div class="skuhint">Pick the brand, then paste the items from WhatsApp — the names and times are NOT needed. I’ll clean and structure it. Or attach a screenshot.</div>'+
+      '<textarea class="dec-ta" id="decTa" placeholder="Oil box&#10;Sunflower oil 4 letar&#10;Amul cream 1ltr&#10;Haldi powder 1kg&#10;…"></textarea>'+
       '<label class="dec-file">📷 or attach a screenshot<input type="file" id="decFile" accept="image/*" style="display:block;margin-top:5px"></label>'+
       '<button class="btn primary" id="decGo" style="width:100%;margin-top:12px">Decode</button></div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    document.getElementById('decBrandSeg').addEventListener('click',function(e){ var b=e.target.closest('button[data-db]'); if(!b)return; decBrand=b.dataset.db; this.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);}); });
     document.getElementById('decGo').addEventListener('click', doDecode);
   }
   function doDecode(){
@@ -644,6 +647,7 @@
     if(!text && !file){ toast('Paste the text or attach a screenshot','err'); return; }
     var btn=document.getElementById('decGo'); busy=true; btn.disabled=true; btn.textContent='Decoding… (a few seconds)';
     function send(body){
+      body.brand=decBrand;
       api('decode',{method:'POST',body:body}).then(function(res){
         busy=false;
         if(!res.ok||!res.j||!res.j.ok){ toast((res.j&&(res.j.detail||res.j.error))||'Decode failed','err'); btn.disabled=false; btn.textContent='Decode'; return; }
@@ -686,6 +690,26 @@
       toast('Saved '+res.j.items+' items · '+res.j.orders+' order'+(res.j.orders>1?'s':'')+' for '+(res.j.for_date||'tomorrow'),'ok');
       document.getElementById('sheetHost').innerHTML='';
     }).catch(function(){ busy=false; toast('No connection','err'); btn.disabled=false; btn.textContent='Confirm & save'; });
+  }
+
+  // ── Saved orders (the PO trail) ──
+  function loadHistory(){
+    var list=document.getElementById('histList'), empty=document.getElementById('histEmpty'), head=document.getElementById('histHead');
+    list.innerHTML='<div class="empty">Loading…</div>'; empty.classList.add('hide'); head.innerHTML='';
+    api('po-history').then(function(res){
+      if(!res.ok||!res.j||!res.j.ok){ list.innerHTML=''; toast('Load failed','err'); return; }
+      var orders=res.j.orders||[];
+      if(!orders.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
+      head.innerHTML='<span class="ttl">'+orders.length+' saved order'+(orders.length>1?'s':'')+'</span>';
+      list.innerHTML=orders.map(function(o){
+        var hdr=esc(o.brand||'')+' · '+esc(o.for_date||'')+(o.need_by?' ('+esc(o.need_by)+')':'');
+        var rows=(o.items||[]).map(function(it){
+          var q=(((it.qty||'')+' '+(it.unit||'')).trim())||'—';
+          return '<div class="dec-it"><div class="di"><b>'+esc(it.item||'')+'</b>'+(it.flag?'<span class="fl">⚠ '+esc(it.flag)+'</span>':'')+'</div><span class="du">'+esc(q)+'</span></div>';
+        }).join('');
+        return '<div class="dec-order"><div class="dec-oh"><b>'+hdr+'</b><span style="margin-left:auto;font-size:11px;color:var(--dim)">'+(o.items||[]).length+' items</span></div>'+rows+'</div>';
+      }).join('');
+    }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
 
   // ── misc ──
