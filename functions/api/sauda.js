@@ -248,7 +248,11 @@ async function decodePO(env, body) {
   const image = body && typeof body.image === 'string' ? body.image : '';
   if (!text && !image) return { ok: false, error: 'paste the WhatsApp text or attach a screenshot' };
 
+  const brand = body && (body.brand === 'HE' || body.brand === 'NCH') ? body.brand : '';
   const content = [];
+  if (brand) {
+    content.push({ type: 'text', text: `OPERATOR: all items are ${brand} (${brand === 'HE' ? 'Hamza Express' : 'Nawabi Chai House'}). The paste may have NO sender names and NO timestamps — that is fine; decode the items and assign every one of them to ${brand}.` });
+  }
   if (image) {
     const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(image);
     if (!m) return { ok: false, error: 'unsupported image — use PNG/JPEG' };

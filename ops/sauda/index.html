@@ -94,7 +94,7 @@
 
     .pane{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 14px calc(96px + var(--safe-bot))}
     /* view containers must be flex columns so their .pane becomes a bounded, scrollable area */
-    #viewBuy,#viewPlace,#viewPay,#viewHp,#viewCompare{flex:1;min-height:0;display:flex;flex-direction:column}
+    #viewBuy,#viewPlace,#viewPay,#viewHp,#viewCompare,#viewHistory{flex:1;min-height:0;display:flex;flex-direction:column}
     .empty{text-align:center;color:var(--mute);font-size:14px;padding:48px 24px;line-height:1.6}
     .empty .big{font-size:30px;margin-bottom:10px;color:var(--sauda)}
 
@@ -337,6 +337,7 @@
       <button data-m="pay">To pay</button>
       <button data-m="hp">Hyperpure</button>
       <button data-m="cmp">Compare</button>
+      <button data-m="saved">Saved</button>
     </div>
   </div>
 
@@ -430,11 +431,20 @@
     </main>
   </div>
   <div class="bottom hide" id="cmpBar"><div class="psum" id="cmpSummary"></div></div>
+
+  <!-- SAVED VIEW — the purchase-order trail (decoded + confirmed orders) -->
+  <div id="viewHistory" class="hide">
+    <div class="cmp-h" id="histHead"></div>
+    <main class="pane" id="histPane">
+      <div class="empty" id="histEmpty">No saved orders yet.<br>On the Buy list, paste a WhatsApp order to create one.</div>
+      <div id="histList"></div>
+    </main>
+  </div>
 </div>
 
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=13"></script>
+<script src="/ops/sauda/app.js?v=14"></script>
 </body>
 </html>
