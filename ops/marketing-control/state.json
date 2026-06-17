@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-06-17T14:02:30+0530",
-  "published_at": "2026-06-17T14:02:30+0530",
+  "updated_at": "2026-06-17T14:05:49+0530",
+  "published_at": "2026-06-17T14:05:49+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -149,26 +149,36 @@
       "title": "11 Reel Making",
       "subgroup": "Creative Surface",
       "risk": "creative publishing and claim accuracy",
-      "status": "draft_pr_preview_verified",
-      "last_task": "Ship Reels Approval Desk V1",
-      "last_summary": "Shipped /ops/reels owner-facing V1 in HN-Hotels-Site branch codex/reels-approval-v1: real QISSA HE Tandoori Tikka v3 RTX/NVENC reel, vertical poster, rendered frame strip, first Meta video comparison, Meta learning contract, proof/QA contract, render-stack status, and local owner decision buttons. PR #400 opened as draft. Cloudflare preview verified clean at https://codex-reels-approval-v1.hn-hotels-site.pages.dev/ops/reels/. No packages installed into HN-Hotels-Site.",
-      "next_action": "Use this desk as the owner UX shell; next build is HE Cold Local Classifier V1 parent template with place, old Hamza memory, Express format, seating/comfort, exact food, parcel/takeaway, and final directions CTA. Wire approvals to persistent backend only after the owner decision model is accepted.",
-      "mutation_status": "UI/static asset only; no ad spend, POS, Odoo, or customer mutation",
+      "status": "owner_rejected_creative_quality_define_v2",
+      "last_task": "Define professional reel quality gate after V1 rejection",
+      "last_summary": "Owner rejected current QISSA V1/V3 creative quality as not professional enough. Root issue: engine treated proof-safe footage and brand overlays as sufficient, but did not enforce frame-level quality, stabilization, composition, or premium overlay grammar. Locked V2 definition: every reel must score source windows for clarity/sharpness, stability/shake, exposure, crop/composition, food recognizability, transition handles, and safe overlay space before render. Text/CTA must be Remotion/Figma compositor layers with transparent or near-transparent treatment, no heavy caption-card backgrounds unless final brand lockup requires it. Current PR #400 is shell proof only, not creative-approved.",
+      "next_action": "Build QISSA Quality Gate V2 before rendering another reel: frame scorer, shake rejection/stabilization, clip-window selector, transition-handle selector, transparent overlay grammar, and desk status showing creative FAIL/PASS separately from technical render PASS.",
+      "mutation_status": "Memory + PR comment only; no ad spend, POS, Odoo, or production creative mutation",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command reel-making",
-      "last_run_at": "2026-06-17T14:02:30+0530",
-      "proof": "Chrome desktop/mobile + Cloudflare preview: status 200, video metadata 1080x1920 readyState 4, 6 owner buttons, no console errors; ffprobe h264_nvenc 1080x1920 11.1s 4.13MB",
-      "artifacts": [
-        "PR https://github.com/abdulnihaf/HN-Hotels-Site/pull/400",
-        "preview https://codex-reels-approval-v1.hn-hotels-site.pages.dev/ops/reels/",
-        "branch codex/reels-approval-v1",
-        "local worktree /Users/nihaf/Documents/Tech.nosync/HN-Hotels-Site-codex-reels"
-      ],
+      "last_run_at": "2026-06-17T14:05:49+0530",
+      "proof": "Owner direct feedback: video is shaking, frames not optimized for clarity/stability/transition, Tap Get Directions treatment should be clean overlay without background, UX is bad",
+      "artifacts": "PR #400 comment added as shell-only warning; Cloudflare preview remains review artifact only",
       "live_ids": "hn-hotels-site Cloudflare Pages deployment 6c29f293-0903-4226-8f0b-e93d8ffb8bb6",
       "rollback": "not applicable: read-only extraction",
-      "data_freshness": "2026-06-17T14:02+05:30"
+      "data_freshness": "2026-06-17T14:15+05:30"
     }
   },
   "events": [
+    {
+      "id": "20260617140549-reel-making",
+      "at": "2026-06-17T14:05:49+0530",
+      "lane": "reel-making",
+      "task": "Define professional reel quality gate after V1 rejection",
+      "status": "owner_rejected_creative_quality_define_v2",
+      "summary": "Owner rejected current QISSA V1/V3 creative quality as not professional enough. Root issue: engine treated proof-safe footage and brand overlays as sufficient, but did not enforce frame-level quality, stabilization, composition, or premium overlay grammar. Locked V2 definition: every reel must score source windows for clarity/sharpness, stability/shake, exposure, crop/composition, food recognizability, transition handles, and safe overlay space before render. Text/CTA must be Remotion/Figma compositor layers with transparent or near-transparent treatment, no heavy caption-card backgrounds unless final brand lockup requires it. Current PR #400 is shell proof only, not creative-approved.",
+      "next_action": "Build QISSA Quality Gate V2 before rendering another reel: frame scorer, shake rejection/stabilization, clip-window selector, transition-handle selector, transparent overlay grammar, and desk status showing creative FAIL/PASS separately from technical render PASS.",
+      "mutation_status": "Memory + PR comment only; no ad spend, POS, Odoo, or production creative mutation",
+      "proof": "Owner direct feedback: video is shaking, frames not optimized for clarity/stability/transition, Tap Get Directions treatment should be clean overlay without background, UX is bad",
+      "artifacts": "PR #400 comment added as shell-only warning; Cloudflare preview remains review artifact only",
+      "live_ids": "hn-hotels-site Cloudflare Pages deployment 6c29f293-0903-4226-8f0b-e93d8ffb8bb6",
+      "rollback": "not applicable: read-only extraction",
+      "data_freshness": "2026-06-17T14:15+05:30"
+    },
     {
       "id": "20260617140230-reel-making",
       "at": "2026-06-17T14:02:30+0530",
@@ -1093,16 +1103,6 @@
       "summary": "Built v5 Gemini-refined NCH 250ml flask back production candidate at /Users/nihaf/Downloads/NCH_Flask_Back_Production_2026-05-25_v5_GeminiRefined: larger NCH emblem, simplified premium hierarchy, WhatsApp dynamic QR plus Google review QR, Instagram identity line, dark sepia legal footer, front-matched kraft/border system, and Gemini nano-banana-pro-preview concept reference. Verified qpdf, PDF page size 136x216mm, and zbar decoding of both QRs.",
       "next_action": "Confirm phone/legal/FSSAI and live /go/flask redirect, then assemble front+back into full 250ml vendor dieline with side/gable panels.",
       "mutation_status": "Created local print/proof assets and Gemini concept only; no POS/Odoo/ad/vendor mutation."
-    },
-    {
-      "id": "20260525090431-google-ads",
-      "at": "2026-05-25T09:04:31+0530",
-      "lane": "google-ads",
-      "task": "Add curiosity-led new Hamza face ad conveyance",
-      "status": "ready",
-      "summary": "Revised the late-night Hamza Hotel ad psychology again after Nihaf feedback. Moved from plain bridge to memory-plus-curiosity: 'Hamza Hotel Yaad Hai? | Hamza Express: Naya Andaaz' with description 'HKP Road ka new Hamza face. Wahi Hamza naam. Open till 3 AM. 10% dine-in.' Updated exact config, copy doc, and visual mockup to position Hamza Express as the new face/new andaaz of remembered Hamza rather than a forced redirect.",
-      "next_action": "Use this curiosity-led continuity copy for landing/RSA if approved; verify Google headline length and landing proof before live mutation.",
-      "mutation_status": "No live Google Ads mutation. Local copy/spec/mockup updated only."
     }
   ]
 }
