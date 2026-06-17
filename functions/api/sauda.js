@@ -1155,7 +1155,7 @@ async function payoutVendor(db, body, auth, env) {
       await db.prepare(`UPDATE sauda_purchase SET status='PAID', pay_amount_paise=?, paid_at=?, bank_ref=? WHERE id=?`).bind(amt, now, p.data.id, id).run().catch(() => {});
     }
   }
-  return { ok: true, payout_id: p.data.id, status: p.data.status, utr: p.data.utr || null, fees_paise: p.data.fees || 0, vendor: v.name };
+  return { ok: true, payout_id: p.data.id, status: p.data.status, utr: p.data.utr || null, fees_paise: p.data.fees || 0, vendor: v.name, test: String(env.RAZORPAYX_KEY_ID || '').indexOf('rzp_test_') === 0 };
 }
 async function payoutStatus(db, env, payoutId) {
   if (!payoutId) return { ok: false, error: 'payout id required' };
