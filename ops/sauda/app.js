@@ -347,15 +347,27 @@
     if(scheme==='paytm')   return 'paytmmp://pay?'+q;
     return 'upi://pay?'+q;
   }
+  // Verified-merchant VPAs (paytmqr…@ptys, q<digits>@ybl PhonePe-merchant, vyapar.…)
+  // take you to the ₹1,00,000 rail with no friction. A personal UPI ID is ALSO fine
+  // up to ₹1,00,000 via this redirect — the "₹2,000" PhonePe sometimes shows is a fee
+  // note, not a block. (The only real ₹2,000 cap is an un-KYC'd small-merchant QR, or
+  // paying by uploading a QR screenshot — which this redirect never does.)
+  function upiKind(v){ v=String(v||'').toLowerCase();
+    return (/@ptys$|^paytmqr|^q\d|^vyapar\.|@okbizaxis$/.test(v)) ? 'merchant' : 'personal'; }
   function openPaySheet(vpa, vn, rs, ids){
     var tr='SAUDA'+((ids&&ids[0])||'')+'-'+Math.round(Date.now()/1000);
     if(rs>0 && ids && ids.length){ api('request-pay',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100)}}); }
     var big='₹'+rupees(Math.round(rs*100));
+    var pk=upiKind(vpa);
+    var pkHtml=(pk==='merchant')
+      ? '<div class="skuhint" style="color:#1a7f37">✓ Verified merchant — you can pay up to ₹1,00,000 in one go.</div>'
+      : '<div class="skuhint">Pay up to ₹1,00,000 here. If a payment ever caps at ₹2,000, this vendor’s QR isn’t KYC-verified — ask them for a Business QR.</div>';
     var host=document.getElementById('sheetHost');
     function app(scheme,label,primary){ return '<a class="payapp'+(primary?' pp':'')+'" href="'+payLink(scheme,vpa,vn,rs,tr)+'">'+esc(label)+'</a>'; }
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(vn)+'</h2>'+
       '<div class="paybig">'+big+'</div>'+
       '<div class="skuhint">Opens your UPI app with the amount filled. Check the amount in the app before you confirm.</div>'+
+      pkHtml+
       app('phonepe','Pay '+big+' · PhonePe',true)+
       '<div class="payrow2">'+app('gpay','Google Pay')+app('paytm','Paytm')+app('other','Other UPI')+'</div>'+
       '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(vpa)+'">Copy UPI ID</button><button class="cpy" data-cpy="'+esc(fmtAm(rs))+'">Copy amount</button></div>'+
