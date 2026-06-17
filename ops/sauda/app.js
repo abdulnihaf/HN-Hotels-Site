@@ -372,18 +372,19 @@
     function app(scheme,label,primary){ return '<a class="payapp'+(primary?' pp':'')+'" href="'+payLink(scheme,vpa,vn,rs)+'">'+esc(label)+'</a>'; }
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(vn)+'</h2>'+
       '<div class="paybig">'+big+'</div>'+
-      '<div class="skuhint">PhonePe opens straight to this vendor — then <b>type the amount</b>. We don’t pre-fill it on purpose: a pre-filled amount is what triggers the ₹2,000 cap; entering it yourself has no cap (up to ₹1,00,000).</div>'+
+      '<div class="skuhint">Tap below — it <b>copies the UPI ID and opens PhonePe</b> at this vendor. Type ₹'+rupees(Math.round(rs*100))+' and pay. (If PhonePe doesn’t show the vendor, tap <b>Pay to UPI ID</b> and paste — the ID is already copied.) Any amount, no ₹2,000 cap.</div>'+
       pkHtml+
-      '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(vpa)+'">Copy UPI ID</button><button class="cpy" data-cpy="'+esc(String(Math.round(rs)))+'">Copy ₹'+rupees(Math.round(rs*100))+'</button></div>'+
-      app('phonepe','Open PhonePe — pay '+esc(vn),true)+
+      '<a class="payapp pp" id="ppOpen" href="'+payLink('phonepe',vpa,vn)+'">Copy UPI ID &amp; open PhonePe</a>'+
       '<div class="payrow2">'+app('gpay','Google Pay')+app('paytm','Paytm')+'</div>'+
-      '<div class="manualhelp" style="margin:12px 0 4px;padding:10px 12px;background:rgba(0,0,0,.04);border-radius:10px;font-size:13px;line-height:1.55">'+
-        'Copy the amount first, then enter it in PhonePe. If it doesn’t open the vendor, tap <b>Pay to UPI ID</b>, paste the ID, enter ₹'+rupees(Math.round(rs*100))+', pay.</div>'+
+      '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(vpa)+'">Copy UPI ID</button><button class="cpy" data-cpy="'+esc(String(Math.round(rs)))+'">Copy ₹'+rupees(Math.round(rs*100))+'</button></div>'+
       '<div class="vpa-line">'+esc(vpa)+'</div>'+
       '<button class="btn primary" id="paidBtn" style="width:100%;margin-top:14px">I’ve paid — mark paid</button>'+
       '</div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
     host.querySelectorAll('button[data-cpy]').forEach(function(b){ b.addEventListener('click',function(){ try{ navigator.clipboard.writeText(b.dataset.cpy); toast('Copied','ok'); }catch(e){ toast('Copy failed','err'); } }); });
+    // Primary CTA: copy the UPI ID, then let the <a> open PhonePe (custom-scheme nav doesn't
+    // unload the page, so the clipboard write completes — ID is ready to paste in PhonePe).
+    var ppO=document.getElementById('ppOpen'); if(ppO) ppO.addEventListener('click',function(){ try{ navigator.clipboard.writeText(vpa); }catch(e){} toast('UPI ID copied — opening PhonePe','ok'); });
     document.getElementById('paidBtn').addEventListener('click',function(){
       if(busy) return; busy=true;
       api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:'upi'}})
