@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-31T21:43:30+0530",
-  "published_at": "2026-05-31T21:43:30+0530",
+  "updated_at": "2026-06-17T15:08:21+0530",
+  "published_at": "2026-06-17T15:08:21+0530",
   "source": "github-main-static-json",
   "lane_slug": "google-ads",
   "lane": {
@@ -149,66 +149,6 @@
       "summary": "Adjusted the late-night Brand copy to reflect the core intelligence that the person actively searched Hamza Hotel. Final frame now starts with 'Hamza Hotel Search Kiya?' then opens curiosity with 'Hamza Express: Naya Andaaz', followed by HKP Road/new Hamza face, Wahi Hamza naam, Open till 3 AM, and 10% dine-in. Updated config, copy doc, and mockup; removed blunt action wording.",
       "next_action": "If approved, use this search-mirroring curiosity copy for landing/RSA pins before live campaign mutation.",
       "mutation_status": "No live Google Ads mutation. Local docs/mockup only."
-    },
-    {
-      "id": "20260525090431-google-ads",
-      "at": "2026-05-25T09:04:31+0530",
-      "lane": "google-ads",
-      "task": "Add curiosity-led new Hamza face ad conveyance",
-      "status": "ready",
-      "summary": "Revised the late-night Hamza Hotel ad psychology again after Nihaf feedback. Moved from plain bridge to memory-plus-curiosity: 'Hamza Hotel Yaad Hai? | Hamza Express: Naya Andaaz' with description 'HKP Road ka new Hamza face. Wahi Hamza naam. Open till 3 AM. 10% dine-in.' Updated exact config, copy doc, and visual mockup to position Hamza Express as the new face/new andaaz of remembered Hamza rather than a forced redirect.",
-      "next_action": "Use this curiosity-led continuity copy for landing/RSA if approved; verify Google headline length and landing proof before live mutation.",
-      "mutation_status": "No live Google Ads mutation. Local copy/spec/mockup updated only."
-    },
-    {
-      "id": "20260525085900-google-ads",
-      "at": "2026-05-25T08:59:00+0530",
-      "lane": "google-ads",
-      "task": "Reframe Hamza Hotel to Hamza Express psychology",
-      "status": "ready",
-      "summary": "Reworked the late-night Hamza Hotel ad from blunt redirection ('Go To Hamza Express') into continuity psychology. New conveyance: 'Looking For Hamza Hotel? | Hamza Express HKP Road' with description 'Wahi Hamza naam. Naya zaiqa, naya andaaz. Open till 3 AM. 10% dine-in.' Updated config, copy doc, and mockup to explain Hamza Hotel as remembered name and Hamza Express as current newer HKP Road format.",
-      "next_action": "Use continuity bridge copy for landing and RSA pins; avoid blunt redirect or comparison against old Hamza Hotel. Live mutation still pending landing/readback path.",
-      "mutation_status": "No live Google Ads mutation. Local context/copy/mockup update only."
-    },
-    {
-      "id": "20260525085218-google-ads",
-      "at": "2026-05-25T08:52:18+0530",
-      "lane": "google-ads",
-      "task": "Clarify Hamza Hotel to Hamza Express ad conveyance",
-      "status": "ready",
-      "summary": "Revised the late-night Hamza Hotel campaign copy so the first visible line now redirects action to Hamza Express: 'Searched Hamza Hotel? | Go To Hamza Express'. Updated the exact platform config, copy doc, and HTML mockup to make Hamza Express/HKP Road the destination before food claim and offer; landing CTA must read Get Directions To Hamza Express.",
-      "next_action": "Use the clarified bridge copy in landing update and live Google Ads setup; verify final RSA pins, sitelink text, and landing first CTA all repeat Hamza Express before enabling Rs500/day.",
-      "mutation_status": "No live Google Ads mutation. Local copy/spec/mockup updated only."
-    },
-    {
-      "id": "20260525084933-google-ads",
-      "at": "2026-05-25T08:49:33+0530",
-      "lane": "google-ads",
-      "task": "Confirm readiness for Hamza Hotel late-night campaign configuration",
-      "status": "ready",
-      "summary": "Readiness answer prepared: strategy is finalized for late-night Hamza Hotel intent capture with Rs500/day, 5km presence-only, 10PM-3AM, Search-only, manual CPC, exact/phrase Hamza keywords, 10% dine-in offer, and Maps-first CTA. Remaining execution caveat: do not only mutate budget; live setup must also apply keywords, RSA copy, schedule, assets, and landing proof.",
-      "next_action": "On explicit approval, implement/apply exact campaign setup via purpose-built endpoint or Google Ads UI, verify readback, then enable with rollback plan.",
-      "mutation_status": "No live mutation. Readiness and final configuration confirmation only."
-    },
-    {
-      "id": "20260525083734-google-ads",
-      "at": "2026-05-25T08:37:34+0530",
-      "lane": "google-ads",
-      "task": "Explain Google Ads targeting controls for Hamza Hotel late-night setup",
-      "status": "ready",
-      "summary": "Explained location mode, Search partners, Display, bidding, and audiences from scratch for the Hamza Express late-night Hamza Hotel campaign. Recommended presence-only, Google Search only, Display off, manual CPC initially, and audiences as observation only because the keyword/location/schedule combination is the real targeting brain for physical footfall.",
-      "next_action": "Use these settings when applying the live Brand campaign setup after landing proof and ad asset/keyword/schedule mutation path are ready.",
-      "mutation_status": "No live Google Ads mutation. Explanation and platform guidance only."
-    },
-    {
-      "id": "20260525083002-google-ads",
-      "at": "2026-05-25T08:30:02+0530",
-      "lane": "google-ads",
-      "task": "Exact Google Ads platform configuration for Hamza Hotel late-night campaign",
-      "status": "ready",
-      "summary": "Verified live Google Ads account/campaign state and current API surface. Brand campaign 23845870050 is enabled, Rs50/day, 5km presence proximity, 0 delivery; Late Night 23854158442 is enabled, Rs300/day, 7km, spending on generic open-now searches. Created exact configuration doc for active Rs500/day Hamza Hotel late-night 5km Search campaign plus paused 2km biryani/ghee-rice fallback, including location, schedule, keywords, negatives, device, audiences, assets, text conveyance, landing CTA, conversion measurement, and kill criteria. Found current live mutation endpoint can change budget/status/bids/negatives but cannot safely apply Brand keywords/RSA/schedule/assets.",
-      "next_action": "Before live money mutation, update/verify /go/google-night landing message/tracking and either add a purpose-built Google Ads endpoint or apply exact Brand campaign setup in Google Ads UI; do not only raise Brand budget to Rs500 without keyword/RSA/schedule/asset readback.",
-      "mutation_status": "No live Google Ads mutation. Local exact configuration spec added under _context only."
     }
   ]
 }

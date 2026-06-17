@@ -1022,7 +1022,14 @@ async function handlePost(request, env, auth) {
       vals.push(parseInt(e.id));
       await db.prepare(`UPDATE hr_employees SET ${sets.join(', ')} WHERE id=?`).bind(...vals).run();
       await logSync(db, 'update_employee', 'hr_employees', parseInt(e.id), e.name, { fields: Object.keys(e) }, user.name);
-      return json({ success: true, id: parseInt(e.id) });
+      // If a pin was set/changed, pull this person's attendance from their
+      // first device punch — not just from today. Idempotent, scoped to one pin.
+      let backfill = null;
+      if (e.pin) {
+        try { backfill = await backfillAttendanceFromFirstPunch(db, e.pin, user.name); }
+        catch (err) { console.error('[hr-admin] backfill on update failed:', err.message); }
+      }
+      return json({ success: true, id: parseInt(e.id), backfill });
     }
 
     // INSERT
@@ -1042,7 +1049,14 @@ async function handlePost(request, env, auth) {
       e.emergency_contact || null, e.emergency_phone || null, e.notes || null,
     ).run();
     await logSync(db, 'create_employee', 'hr_employees', ins.meta?.last_row_id, e.name, { pin: e.pin }, user.name);
-    return json({ success: true, id: ins.meta?.last_row_id });
+    // New roster entry: pull attendance from the employee's first device punch,
+    // not from today. Catches days they punched before being added to the roster.
+    let backfill = null;
+    if (e.pin) {
+      try { backfill = await backfillAttendanceFromFirstPunch(db, e.pin, user.name); }
+      catch (err) { console.error('[hr-admin] backfill on create failed:', err.message); }
+    }
+    return json({ success: true, id: ins.meta?.last_row_id, backfill });
   }
 
   /* ━━━ Re-scan Drive folder for new Aadhar/PAN/barcode files ━━━ */
@@ -1801,9 +1815,41 @@ function parseIstWall(s) {
   return new Date(s.replace(' ', 'T') + 'Z');
 }
 
-async function pullAttendance(apiKey, db, from, to, userName) {
+// Roll up a newly-added employee's attendance from their FIRST CAMS punch —
+// NOT from the day they were added to the roster. cams-ingest stores every
+// device punch in hr_cams_punches keyed on pin, but the rollup skips any pin
+// that has no hr_employees row yet (nothing to attribute the day to). So a
+// person who punched for days before being entered on the roster loses those
+// days at rollup time. When they're finally added, reach back to their first
+// device punch and recompute the whole window so no worked day is lost.
+async function backfillAttendanceFromFirstPunch(db, pin, userName) {
+  if (!pin) return null;
+  const p = String(pin);
+  const row = await db.prepare(
+    `SELECT substr(MIN(punch_time), 1, 10) AS first_day
+       FROM hr_cams_punches WHERE pin = ?`
+  ).bind(p).first();
+  const firstDay = row && row.first_day;
+  if (!firstDay) return { backfilled: false, reason: 'no device punches for pin' };
+  const today = istDate();
+  // Scope to this one pin so a long backfill window stays cheap and doesn't
+  // rewrite every other employee's history.
+  const r = await pullAttendance(null, db, firstDay, today, userName, { onlyPins: [p] });
+  return { backfilled: true, from: firstDay, to: today, ...r };
+}
+
+async function pullAttendance(apiKey, db, from, to, userName, opts = {}) {
+  // opts.onlyPins — optional array of pin strings. When given, the recompute is
+  // scoped to just those employees. Used by the roster-add backfill so one new
+  // hire's history can be rolled up over a long window (first punch → today)
+  // without churning the entire roster. Absent → whole-roster recompute (the
+  // cron + per-punch callers rely on this default; do not regress it).
+  const onlyPins = (opts.onlyPins && opts.onlyPins.length)
+    ? opts.onlyPins.map(String)
+    : null;
+
   // Load roster + shift rules once (now includes shift_day_start_hour + missing_checkout_hours)
-  const rosterRows = await db.prepare(
+  let rosterSql =
     `SELECT e.*, r.min_daily_hours, r.expected_daily_hours,
             r.full_day_threshold, r.half_day_threshold,
             r.allow_single_punch, r.week_off, r.applies_to_office,
@@ -1813,8 +1859,14 @@ async function pullAttendance(apiKey, db, from, to, userName) {
        LEFT JOIN hr_shift_rules r
          ON r.brand_label = e.brand_label AND r.pay_type = e.pay_type
       WHERE e.is_active = 1
-        AND e.pin IS NOT NULL AND e.pin != ''`
-  ).all();
+        AND e.pin IS NOT NULL AND e.pin != ''`;
+  const rosterBind = [];
+  if (onlyPins) {
+    rosterSql += ` AND e.pin IN (${onlyPins.map(() => '?').join(',')})`;
+    rosterBind.push(...onlyPins);
+  }
+  const rosterStmt = db.prepare(rosterSql);
+  const rosterRows = await (rosterBind.length ? rosterStmt.bind(...rosterBind) : rosterStmt).all();
   const byPin = new Map();
   for (const e of rosterRows.results) byPin.set(String(e.pin), e);
 

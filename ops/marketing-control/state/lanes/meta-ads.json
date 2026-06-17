@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-05-31T21:43:30+0530",
-  "published_at": "2026-05-31T21:43:30+0530",
+  "updated_at": "2026-06-17T15:08:21+0530",
+  "published_at": "2026-06-17T15:08:21+0530",
   "source": "github-main-static-json",
   "lane_slug": "meta-ads",
   "lane": {
@@ -9,22 +9,37 @@
     "subgroup": "Acquisition",
     "risk": "money mutation",
     "status": "ready",
-    "last_task": "Extract current Meta campaign analytics for video and retargeting static campaigns",
-    "last_summary": "Read-only extracted live Meta/CTWA cockpit analytics from https://hamzaexpress.in/api/ctwa-analytics?period=all at 2026-05-28T16:25:11+0530. Current active campaigns: primary video Maps campaign 120246002668360505 with 168350 impressions, 126689 reach, Rs2985.86 spend, 5369 link/outbound clicks, 2630 landing page views, CTR 3.78022, CPC Rs0.46918, CPM Rs17.736026, 31217 25pct video views, 16385 50pct, 9679 75pct, 5863 95pct, 15114 thruplays; static retargeting campaign 120246050386040505 with 43917 impressions, 36228 reach, Rs492.60 spend, 523 link clicks, 522 outbound clicks, 191 landing page views, CTR 1.530159, CPC Rs0.733036, CPM Rs11.216613. Directions bridge all-period readback: 3790 page views, 2856 unique visitors, 1647 total map opens. Archived April CTWA meta-status endpoint still points to 120243729366800505 archived, so current analysis used ctwa-analytics active-campaign payload.",
-    "next_action": "Use these exact current numbers for Meta readback. If deeper daily/adset export is needed, query Meta Graph directly or extend ctwa endpoint to expose retargeting daily trend; do not mutate campaigns/spend without fresh live verification.",
-    "mutation_status": "read-only analytics extraction; no Meta campaign/adset/ad, WABA, POS, Odoo, budget, customer-data, repo, or Figma mutation",
+    "last_task": "Analyze Meta campaign performance for reel-builder intelligence",
+    "last_summary": "Read live production https://hamzaexpress.in/api/ctwa-analytics?period=all on 2026-06-17. Current campaign history: Apr CTWA combo campaign spent Rs3058.14 for 61898 impressions, 421 link clicks, 145 conversations, cost/conversation Rs21.09 but weak order conversion; May Hamza loyalist Maps video spent Rs3701.32 for 217465 impressions, 6473 link clicks, 3190 LPVs, CTR 3.566%, CPC Rs0.477, CPM Rs17.02, 7638 95pct views; May/Jun static retargeting spent Rs492.60 for 43917 impressions, 523 clicks, 191 LPVs, CTR 1.53%, CPC Rs0.733; Jun video directions campaign spent Rs4392.02 for 66731 impressions, 2861 clicks, 1862 LPVs, CTR 4.989%, CPC Rs1.319, CPM Rs65.82. Best Jun adset was LocalFood HKP2km restaurants/food interests: spend Rs799.35, 37796 impressions, 2120 clicks, 1419 LPVs, CTR 6.21%, CPC Rs0.34, CPM Rs21.15. Warm dinner/late video adsets were much costlier. Direction for reel-builder: generate cold/local classifier reels and local food proof reels before narrow polished warm retargeting reels.",
+    "next_action": "Use Meta learning as a creative contract for new reels: every reel spec must state funnel stage, audience source, target event, UTM content, proof ladder, CTA, and retargeting pool it is meant to feed.",
+    "mutation_status": "read-only analytics and strategy extraction; no Meta/WABA/POS/Odoo/repo/Figma mutation",
     "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command meta-ads",
-    "last_run_at": "2026-05-28T16:25:58+0530",
-    "proof": "Live production API https://hamzaexpress.in/api/ctwa-analytics?period=all and https://hamzaexpress.in/api/meta-status queried successfully; raw responses saved locally at /private/tmp/he_meta_ctwa_analytics_all_20260528.json and /private/tmp/he_meta_status_20260528.json",
-    "artifacts": "/private/tmp/he_meta_ctwa_analytics_all_20260528.json; /private/tmp/he_meta_status_20260528.json",
-    "live_ids": "primary campaign 120246002668360505; primary adset 120246002762660505; primary ad 120246003033080505; retargeting campaign 120246050386040505; retargeting adsets 120246051099560505,120246052671060505,120246052814420505,120246054839720505,120246054881370505; archived old CTWA campaign 120243729366800505",
+    "last_run_at": "2026-06-17T13:09:34+0530",
+    "proof": "Live API saved to /private/tmp/he_meta_ctwa_analytics_all_20260617.json; visual comparison frame strip saved to /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/first_meta_video_frames_20260617.jpg",
+    "artifacts": "/private/tmp/he_meta_ctwa_analytics_all_20260617.json; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/first_meta_video_frames_20260617.jpg",
+    "live_ids": "Jun video campaign 120247496782260505; May loyalist campaign 120246002668360505; static retargeting campaign 120246050386040505; Apr CTWA combo campaign 120243729366800505",
     "rollback": "not applicable: read-only extraction",
-    "data_freshness": "captured 2026-05-28T16:25:11+0530 IST from live production API"
+    "data_freshness": "captured 2026-06-17 IST from production API"
   },
   "lane_prompt": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/prompts/06-meta-ads.md",
   "resume_prompt": "/Users/nihaf/.local/share/hn-marketing-memory/resume-prompts/meta-ads.md",
   "writeback_required": true,
   "recent_events": [
+    {
+      "id": "20260617130934-meta-ads",
+      "at": "2026-06-17T13:09:34+0530",
+      "lane": "meta-ads",
+      "task": "Analyze Meta campaign performance for reel-builder intelligence",
+      "status": "ready",
+      "summary": "Read live production https://hamzaexpress.in/api/ctwa-analytics?period=all on 2026-06-17. Current campaign history: Apr CTWA combo campaign spent Rs3058.14 for 61898 impressions, 421 link clicks, 145 conversations, cost/conversation Rs21.09 but weak order conversion; May Hamza loyalist Maps video spent Rs3701.32 for 217465 impressions, 6473 link clicks, 3190 LPVs, CTR 3.566%, CPC Rs0.477, CPM Rs17.02, 7638 95pct views; May/Jun static retargeting spent Rs492.60 for 43917 impressions, 523 clicks, 191 LPVs, CTR 1.53%, CPC Rs0.733; Jun video directions campaign spent Rs4392.02 for 66731 impressions, 2861 clicks, 1862 LPVs, CTR 4.989%, CPC Rs1.319, CPM Rs65.82. Best Jun adset was LocalFood HKP2km restaurants/food interests: spend Rs799.35, 37796 impressions, 2120 clicks, 1419 LPVs, CTR 6.21%, CPC Rs0.34, CPM Rs21.15. Warm dinner/late video adsets were much costlier. Direction for reel-builder: generate cold/local classifier reels and local food proof reels before narrow polished warm retargeting reels.",
+      "next_action": "Use Meta learning as a creative contract for new reels: every reel spec must state funnel stage, audience source, target event, UTM content, proof ladder, CTA, and retargeting pool it is meant to feed.",
+      "mutation_status": "read-only analytics and strategy extraction; no Meta/WABA/POS/Odoo/repo/Figma mutation",
+      "proof": "Live API saved to /private/tmp/he_meta_ctwa_analytics_all_20260617.json; visual comparison frame strip saved to /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/first_meta_video_frames_20260617.jpg",
+      "artifacts": "/private/tmp/he_meta_ctwa_analytics_all_20260617.json; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/first_meta_video_frames_20260617.jpg",
+      "live_ids": "Jun video campaign 120247496782260505; May loyalist campaign 120246002668360505; static retargeting campaign 120246050386040505; Apr CTWA combo campaign 120243729366800505",
+      "rollback": "not applicable: read-only extraction",
+      "data_freshness": "captured 2026-06-17 IST from production API"
+    },
     {
       "id": "20260528162558-meta-ads",
       "at": "2026-05-28T16:25:58+0530",
@@ -149,16 +164,6 @@
       "summary": "Created editable Figma frame 'Hamza Express Meta Ads - Retargeting Workspace' in creative control file RlpVhTqTghVyfp7vWt1Isz on page 00 README. Frame ID 19:2 includes audience buckets, reference asset slots, generation notes, final creative slots, export matrix, and live audience IDs. No Gemini/API generation, Meta spend, adset, ad, or WhatsApp mutation performed.",
       "next_action": "Shortlist canonical asset references from HN Creative Asset Library, then inspect selected references visually before assembling/generating retargeting creatives in this Figma workspace.",
       "mutation_status": "Figma design mutation only: created workspace frame 19:2; no Meta/WABA money/customer mutation"
-    },
-    {
-      "id": "20260525084731-meta-ads",
-      "at": "2026-05-25T08:47:31+0530",
-      "lane": "meta-ads",
-      "task": "Create Meta retargeting audiences after Custom Audience Terms acceptance",
-      "status": "ready",
-      "summary": "Created four HE website Custom Audiences via Meta access token: HE_DIR_VISIT_7D_20260525=120246563761410505, HE_DIR_VISIT_30D_20260525=120246563767670505, HE_FIND_LOCATION_30D_20260525=120246563775240505, HE_RT_VOUCHER_VISIT_30D_20260525=120246563783970505. Verified first three are delivery-ready; voucher-return pool is created but still too small. Attempted B1 50/75/95 video audiences; Meta rejected video API rule/event schema, so no video audience created.",
-      "next_action": "Use ready website pools plus existing page-engaged 7D/30D for first WABA voucher retargeting adset. Create B1 50/75/95 video-view audiences through Ads Manager UI or continue API schema discovery before using video-view retargeting.",
-      "mutation_status": "created four Meta website Custom Audiences only; no campaign, adset, ad, WhatsApp send, or spend mutation"
     }
   ]
 }

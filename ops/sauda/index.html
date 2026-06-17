@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sauda">
+  <title>Sauda · HN Hotels</title>
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="/ops/sauda/manifest.json">
+  <link rel="apple-touch-icon" href="/ops/sauda/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/ops/sauda/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#000; --e1:#13131a; --e2:#1b1b24; --e3:#24242f;
+      --line:rgba(255,255,255,.09); --line-soft:rgba(255,255,255,.05);
+      --text:#f7f7fa; --dim:#9a9aa3; --mute:#5c5c66;
+      --gold:#d4a24c; --gold-soft:rgba(212,162,76,.16); --gold-bd:rgba(212,162,76,.42);
+      --green:#37d399; --green-soft:rgba(55,211,153,.14);
+      --blue:#5e9eff; --blue-soft:rgba(94,158,255,.14);
+      --amber:#e0a13a; --amber-soft:rgba(224,161,58,.15); --amber-bd:rgba(224,161,58,.45);
+      --red:#ff5c5c; --red-soft:rgba(255,92,92,.14);
+      --sauda:#b9772e; --sauda-bd:rgba(185,119,46,.5);
+      --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+      --r:13px; --ease:cubic-bezier(.22,.61,.36,1);
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+    html{background:var(--bg);-webkit-text-size-adjust:100%}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;
+      font-size:15px;line-height:1.4;-webkit-font-smoothing:antialiased;
+      overscroll-behavior-y:none;width:100vw;height:100dvh;overflow:hidden}
+    h1,h2{font-family:-apple-system,'SF Pro Display',system-ui,sans-serif;letter-spacing:-.02em;margin:0}
+    button,input,select{font-family:inherit;color:inherit;font-size:inherit}
+    button{background:none;border:none;cursor:pointer;padding:0}
+    input{-webkit-appearance:none;appearance:none}
+    .hide{display:none!important}
+    .num{font-variant-numeric:tabular-nums}
+
+    /* ── PIN gate (locked family shell) ── */
+    .gate{position:fixed;inset:0;z-index:80;padding:calc(var(--safe-top) + 24px) 24px calc(var(--safe-bot) + 16px);
+      background:radial-gradient(120% 90% at 50% 38%, #0e0e16 0%, #020205 78%);
+      box-shadow:inset 0 0 0 1px rgba(212,162,76,.18);display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .gate-inner{display:flex;flex-direction:column;align-items:center;width:100%;max-width:300px;margin:auto}
+    .pin-icon{width:74px;height:74px;border-radius:17px;display:grid;place-items:center;background:#1c1c26;
+      border:1px solid var(--sauda-bd);color:var(--gold);box-shadow:0 2px 12px rgba(0,0,0,.55)}
+    .pin-icon svg{width:38px;height:38px}
+    .pin-name{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:54px;line-height:1;color:#f8f8fa;margin-top:18px}
+    .pin-tag{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:500;font-size:15px;color:var(--gold);margin-top:7px;text-align:center}
+    .pin-dots{display:flex;gap:16px;margin-top:32px}
+    .pin-dots span{width:12px;height:12px;border-radius:50%;background:transparent;border:1.5px solid rgba(212,162,76,.6);transition:all .15s}
+    .pin-dots span.on{background:var(--sauda);border-color:var(--sauda);transform:scale(1.08)}
+    .pin-err{color:var(--red);font-size:12.5px;height:15px;margin-top:13px;text-align:center}
+    .keypad{display:grid;grid-template-columns:repeat(3,68px);gap:20px;margin-top:8px;justify-content:center}
+    .keypad button{width:68px;height:68px;border-radius:50%;background:#1c1c26;color:#f8f8fa;font-family:'Inter',sans-serif;
+      font-weight:400;font-size:28px;display:grid;place-items:center;transition:transform .08s,background .15s}
+    .keypad button:active{transform:scale(.92);background:#24242f}
+    .keypad button.del{font-size:24px;color:var(--dim)}
+    .keypad .sp{visibility:hidden}
+    .pin-foot{position:absolute;left:0;right:0;bottom:calc(var(--safe-bot) + 14px);text-align:center;
+      font-family:'Cormorant Garamond',serif;font-style:italic;font-size:11px;color:rgba(212,162,76,.5)}
+    .gate.shake .gate-inner{animation:shake .42s}
+    @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+
+    /* ── app shell ── */
+    #app{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg)}
+    .top{padding:calc(var(--safe-top) + 12px) 16px 10px;border-bottom:1px solid var(--line)}
+    .top .row{display:flex;align-items:center;gap:8px}
+    .top h1{font-size:21px;font-weight:800}
+    .top .sub{font-size:12.5px;color:var(--dim);margin-top:1px}
+    .lock{margin-left:auto;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--dim)}
+    .lock:active{transform:scale(.9);background:rgba(255,255,255,.05)}
+    .seg{display:inline-flex;margin-top:10px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+    .seg button{padding:6px 16px;font-size:13px;font-weight:600;color:var(--dim)}
+    .seg button.on{background:var(--gold-soft);color:var(--gold)}
+    .seg button+button{border-left:1px solid var(--line)}
+
+    .search{padding:11px 16px 4px;position:relative}
+    .search .box{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--e1)}
+    .search input{flex:1;border:none;background:none;outline:none;font-size:15px;color:var(--text)}
+    .search input::placeholder{color:var(--mute)}
+    .sugg{position:absolute;left:16px;right:16px;top:54px;z-index:20;background:var(--e2);border:1px solid var(--line);
+      border-radius:11px;max-height:46vh;overflow-y:auto;box-shadow:0 12px 34px rgba(0,0,0,.55)}
+    .sugg .s{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line-soft)}
+    .sugg .s:active{background:var(--e3)}
+    .sugg .s .nm{font-size:14.5px;flex:1}
+    .sugg .s .vn{font-size:11px;color:var(--dim)}
+    .sugg .s.add{color:var(--gold);font-weight:600}
+
+    .pane{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 14px calc(96px + var(--safe-bot))}
+    /* view containers must be flex columns so their .pane becomes a bounded, scrollable area */
+    #viewBuy,#viewPlace,#viewPay,#viewHp,#viewCompare,#viewHistory,#viewVendors,#viewSettings{flex:1;min-height:0;display:flex;flex-direction:column}
+    .empty{text-align:center;color:var(--mute);font-size:14px;padding:48px 24px;line-height:1.6}
+    .empty .big{font-size:30px;margin-bottom:10px;color:var(--sauda)}
+
+    .basket{margin-bottom:11px;border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;border-left:3px solid var(--sauda)}
+    .basket .bh{padding:9px 12px;background:var(--e1);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .basket .bn{font-weight:700;font-size:14.5px}
+    .tag{font-size:10px;padding:1px 7px;border-radius:9px;font-weight:700;text-transform:lowercase}
+    .tag.f{background:var(--blue-soft);color:var(--blue)}
+    .tag.p{background:rgba(255,255,255,.06);color:var(--dim)}
+    .khata{margin:8px 12px 2px;padding:7px 10px;border-radius:8px;background:var(--amber-soft);display:flex;gap:7px;align-items:flex-start}
+    .khata svg{width:15px;height:15px;color:var(--amber);flex-shrink:0;margin-top:1px}
+    .khata span{font-size:11.5px;color:var(--amber);line-height:1.45}
+    .line{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line-soft)}
+    .line .ln{flex:1;font-size:14px}
+    .line .lb{font-size:10px;color:var(--mute)}
+    .qty{display:flex;align-items:center;gap:6px}
+    .qty input{width:46px;text-align:center;background:var(--e2);border:1px solid var(--line);border-radius:8px;padding:6px 4px;font-size:14px}
+    .qty .u{font-size:12px;color:var(--dim);min-width:30px}
+    .line .x{color:var(--mute);width:26px;height:26px;display:grid;place-items:center;border-radius:50%}
+    .line .x:active{background:var(--red-soft);color:var(--red)}
+
+    .bottom{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + var(--safe-bot));
+      background:linear-gradient(180deg,rgba(0,0,0,0),#000 24%);display:flex;gap:10px}
+    .btn{flex:1;text-align:center;padding:14px;border-radius:12px;font-weight:700;font-size:15px}
+    .btn.primary{background:var(--gold);color:#1a1206}
+    .btn.primary:active{transform:scale(.98)}
+    .btn[disabled]{opacity:.4}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + var(--safe-bot));padding:11px 18px;border-radius:11px;
+      font-size:13.5px;font-weight:600;z-index:90;max-width:90vw;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+    .toast.ok{background:var(--green);color:#04130c}.toast.err{background:var(--red);color:#fff}.toast.info{background:var(--e3);color:var(--text)}
+
+    .ov{position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(5px);z-index:70;display:flex;align-items:flex-end;justify-content:center}
+    @media(min-width:560px){.ov{align-items:center}}
+    .sheet{background:var(--e1);border-radius:18px 18px 0 0;width:100%;max-width:480px;padding:18px 18px calc(18px + var(--safe-bot));border:1px solid var(--line)}
+    @media(min-width:560px){.sheet{border-radius:18px}}
+    .sheet h2{font-size:19px;font-weight:800;margin-bottom:12px}
+    .fld{margin-bottom:11px}
+    .fld label{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+    .fld input,.fld select{width:100%;background:var(--e2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:15px;padding:11px 12px}
+
+    /* ── to-pay view ── */
+    .pb{padding:10px 12px;border-top:1px solid var(--line-soft)}
+    .pb .its{font-size:12.5px;color:var(--dim);margin-bottom:9px;line-height:1.5}
+    .pay-row{display:flex;align-items:center;gap:9px}
+    .pay-row .rupee{font-size:15px;color:var(--dim)}
+    .pay-row input{width:96px;background:var(--e2);border:1px solid var(--line);border-radius:9px;color:var(--text);font-size:16px;padding:9px 10px;font-variant-numeric:tabular-nums}
+    .pay-acts{display:flex;gap:8px;margin-top:10px}
+    .pay-acts a,.pay-acts button{flex:1;text-align:center;padding:11px;border-radius:10px;font-weight:700;font-size:13.5px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+    .pay-acts .upi{background:var(--green);color:#04130c}
+    .pay-acts .upi.dis{background:var(--e3);color:var(--mute);pointer-events:none}
+    .pay-acts .done{background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd)}
+    .pay-acts .done:active{transform:scale(.97)}
+    .pday{padding:14px 18px 4px;font:800 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+
+    /* ── Hyperpure (tomorrow's planned basket) ── */
+    .hp-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 16px 2px}
+    .hp-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 11px;border-radius:10px;
+      background:var(--green-soft);color:var(--green);border:1px solid rgba(55,211,153,.32)}
+    .hp-pill.warn{background:var(--amber-soft);color:var(--amber);border-color:var(--amber-bd)}
+    .hp-pill svg{width:13px;height:13px}
+    .hp-fresh{font-size:11px;color:var(--mute);margin-left:auto}
+    .hp-fresh.stale{color:var(--amber)}
+    .hpitem{display:flex;align-items:center;gap:11px;padding:9px 11px;border:1px solid var(--line-soft);border-radius:13px;margin-bottom:9px;background:var(--e1)}
+    .hpitem .ph{width:56px;height:56px;border-radius:10px;flex-shrink:0;background:var(--e3) center/cover no-repeat;display:grid;place-items:center;overflow:hidden;border:1px solid var(--line-soft)}
+    .hpitem .ph span{font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--mute)}
+    .hpitem .nm{flex:1;min-width:0}
+    .hpitem .nm b{font-size:13.5px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .hpitem .nm .meta{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
+    .hpitem .nm .pk{font-size:10.5px;font-weight:700;color:var(--dim);background:rgba(255,255,255,.06);padding:1.5px 7px;border-radius:6px}
+    .hpitem .nm .uu{font-size:10.5px;color:var(--mute);font-variant-numeric:tabular-nums}
+    .hpitem .right{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex-shrink:0}
+    .hpitem .pr{font-size:14.5px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1}
+    .hpitem.in{border-color:var(--gold-bd);background:rgba(212,162,76,.07)}
+    .step{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex-shrink:0}
+    .step button{width:34px;height:34px;display:grid;place-items:center;font-size:19px;color:var(--gold);background:var(--e2)}
+    .step button:active{background:var(--e3)}
+    .step input{width:42px;height:34px;text-align:center;background:var(--bg);border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);
+      color:var(--text);font-size:14px;font-variant-numeric:tabular-nums}
+    .add-pill{flex-shrink:0;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--gold-soft);color:var(--gold);
+      border:1px solid var(--gold-bd);font-size:21px;font-weight:400}
+    .add-pill:active{transform:scale(.92)}
+    .mov{display:flex;flex-direction:column;gap:7px}
+    .mov .track{height:7px;border-radius:5px;background:var(--e3);overflow:hidden}
+    .mov .fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--sauda),var(--gold));width:0;transition:width .3s var(--ease)}
+    .mov .fill.met{background:linear-gradient(90deg,var(--green),#5ee0a8)}
+    .mov .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+    .mov .lbl b{color:var(--text)}
+    .hpitem .tap{display:flex;align-items:center;gap:11px;flex:1;min-width:0;cursor:pointer}
+    .hpitem .tap:active{opacity:.7}
+    .hpitem .nm .more{font-size:10.5px;color:var(--gold);font-weight:700}
+    /* SKU chooser sheet */
+    .skuhint{font-size:12px;color:var(--dim);line-height:1.45;margin-bottom:12px}
+    .skulist{max-height:48vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px}
+    .skurow{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line-soft);border-radius:11px;margin-bottom:7px}
+    .skurow:active{background:var(--e3)}
+    .skurow.sel{border-color:var(--gold-bd);background:rgba(212,162,76,.08)}
+    .skurow .ph.sm{width:44px;height:44px;border-radius:8px}
+    .skurow .ph.sm span{font-size:20px}
+    .skurow .si{flex:1;min-width:0}
+    .skurow .si b{font-size:13px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .skurow .si small{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+    .skurow .sp{font-size:13.5px;font-weight:700;color:var(--gold);white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+    .skurow .bdg{display:block;font-size:8.5px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+    .hpsearch{display:block;text-align:center;padding:13px;border-radius:11px;background:var(--e2);border:1px solid var(--line);color:var(--gold);font-weight:700;font-size:13.5px;text-decoration:none}
+    .hpsearch:active{background:var(--e3)}
+    /* vendor-first picker (Place) */
+    .vlist-h{font:800 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;padding:10px 4px 9px}
+    .vrow{display:flex;align-items:center;gap:8px;padding:13px 12px;border:1px solid var(--line-soft);border-radius:12px;margin-bottom:8px;cursor:pointer}
+    .vrow:active{background:var(--e2)}
+    .vrow.has{border-color:var(--sauda-bd);background:rgba(185,119,46,.07)}
+    .vrow .vn{flex:1;min-width:0;font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .vrow .vcount{font-size:11px;font-weight:800;color:#1a1206;background:var(--gold);border-radius:9px;padding:2px 9px;flex-shrink:0}
+    .vrow .chev{color:var(--mute);font-size:20px;flex-shrink:0;line-height:1}
+    .vitem{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line-soft)}
+    .vitem .vinm{flex:1;min-width:0}
+    .vitem .vinm b{font-size:14px;font-weight:500}
+    .vitem .vinm small{display:block;font-size:11px;color:var(--mute)}
+    .vlist-sheet{max-height:54vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px}
+    .vnew{display:flex;gap:8px;margin-top:10px}
+    .vnew input{flex:1;background:var(--e2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:14px;padding:10px 12px}
+    .vnew button{flex-shrink:0;padding:0 16px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700}
+    /* scrollable mode tabs */
+    .seg.scrollx{max-width:calc(100vw - 32px);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .seg.scrollx::-webkit-scrollbar{display:none}
+    .seg.scrollx button{white-space:nowrap;flex:0 0 auto}
+    /* Compare view */
+    .cmp-h{padding:10px 16px 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .cmp-h .ttl{font-size:13px;color:var(--dim)}
+    .cmp-h .fresh{font-size:11px;color:var(--mute);margin-left:auto}
+    .cmprow{display:flex;align-items:center;gap:11px;padding:10px 11px;border:1px solid var(--line-soft);border-radius:13px;margin-bottom:9px;background:var(--e1);cursor:pointer}
+    .cmprow:active{background:var(--e2)}
+    .cmprow .ph{width:50px;height:50px;border-radius:9px;flex-shrink:0;background:var(--e3) center/cover no-repeat;display:grid;place-items:center;overflow:hidden;border:1px solid var(--line-soft)}
+    .cmprow .ph span{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--mute)}
+    .cmprow .ci{flex:1;min-width:0}
+    .cmprow .ci .nm{font-size:14px;font-weight:600;text-transform:capitalize}
+    .cmprow .ci .src{display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap}
+    .src-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:7px;text-transform:uppercase;letter-spacing:.03em}
+    .src-badge.hyperpure{background:var(--gold-soft);color:var(--gold)}
+    .src-badge.zepto{background:rgba(124,77,255,.18);color:#b39dff}
+    .src-badge.blinkit{background:rgba(248,203,70,.20);color:#f6c945}
+    .src-badge.instamart{background:rgba(255,82,0,.16);color:#ff7a3d}
+    .src-badge.bigbasket{background:rgba(132,194,37,.18);color:#a4d65e}
+    .src-badge.jiomart{background:rgba(0,142,204,.18);color:#4fb6e0}
+    .src-badge.amazon{background:rgba(255,153,0,.16);color:#ffb74d}
+    .src-badge.flipkart{background:rgba(40,116,240,.18);color:#6ea8ff}
+    .cmprow .ci .save{font-size:10.5px;color:var(--green);font-weight:700}
+    .cmprow .cr{text-align:right;flex-shrink:0}
+    .cmprow .cr .pr{font-size:15px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+    .cmprow .cr .pu{font-size:10.5px;color:var(--mute);font-variant-numeric:tabular-nums}
+    .cmprow .cr .chev{font-size:11px;color:var(--gold);font-weight:700;margin-top:2px}
+    /* swipe platform cards */
+    .pcards{display:flex;gap:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding:2px 2px 14px;margin:0 -2px}
+    .pcards::-webkit-scrollbar{display:none}
+    .pcard{flex:0 0 78%;scroll-snap-align:center;border:1px solid var(--line);border-radius:15px;background:var(--e1);overflow:hidden}
+    .pcard.best{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
+    .pcard .pc-top{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid var(--line-soft)}
+    .pcard .pc-top .sb{flex:1}
+    .pcard .pc-ph{width:100%;height:150px;background:var(--e3) center/contain no-repeat;display:grid;place-items:center}
+    .pcard .pc-ph span{font-family:'Cormorant Garamond',serif;font-size:44px;color:var(--mute)}
+    .pcard .pc-body{padding:11px 13px}
+    .pcard .pc-nm{font-size:13.5px;font-weight:600;line-height:1.3;min-height:35px}
+    .pcard .pc-meta{display:flex;align-items:center;gap:7px;margin-top:6px}
+    .pcard .pc-pack{font-size:10.5px;font-weight:700;color:var(--dim);background:rgba(255,255,255,.06);padding:1.5px 7px;border-radius:6px}
+    .pcard .pc-price{display:flex;align-items:baseline;gap:8px;margin-top:9px}
+    .pcard .pc-price b{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums}
+    .pcard .pc-price small{font-size:11px;color:var(--mute)}
+    .pcard .pc-buy{display:block;text-align:center;margin-top:11px;padding:11px;border-radius:10px;font-weight:700;font-size:13px;text-decoration:none}
+    .pcard .pc-buy.pick{background:var(--gold);color:#1a1206}
+    .pcard .pc-buy.open{background:var(--e2);color:var(--gold);border:1px solid var(--gold-bd)}
+    .pc-cut{font-size:10.5px;color:var(--amber);margin-top:8px}
+    /* per-platform cart summary */
+    .psum{display:flex;gap:8px;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .psum::-webkit-scrollbar{display:none}
+    .pchip{flex:0 0 auto;border:1px solid var(--line);border-radius:11px;padding:8px 11px;min-width:120px}
+    .pchip .ph-n{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+    .pchip .ph-t{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
+    .pchip .ph-s{font-size:10px;margin-top:2px}
+    .pchip.ok .ph-s{color:var(--green)}
+    .pchip.under .ph-s{color:var(--amber)}
+    /* Buy list — paste & decode a WhatsApp order */
+    .paste-btn{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 16px 0;width:calc(100% - 32px);padding:13px;border-radius:12px;
+      background:var(--sauda);color:#fff;font-weight:700;font-size:14px;border:none;box-shadow:0 2px 10px rgba(185,119,46,.35)}
+    .paste-btn:active{transform:scale(.98)}
+    .paste-btn svg{width:16px;height:16px}
+    .dec-ta{width:100%;min-height:150px;background:var(--e2);border:1px solid var(--line);border-radius:11px;color:var(--text);
+      font-size:14px;line-height:1.5;padding:12px;resize:vertical;font-family:inherit}
+    .dec-file{display:block;margin:11px 0 0;font-size:12.5px;color:var(--gold)}
+    .dec-order{margin-bottom:13px;border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;border-left:3px solid var(--sauda)}
+    .dec-oh{padding:9px 12px;background:var(--e1);display:flex;align-items:center;gap:8px}
+    .dec-oh b{font-size:14.5px}
+    .dec-oh .bdg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:8px;background:var(--gold-soft);color:var(--gold)}
+    .dec-it{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line-soft)}
+    .dec-it .di{flex:1;min-width:0}
+    .dec-it .di b{font-size:13.5px;font-weight:600}
+    .dec-it .di small{display:block;font-size:10.5px;color:var(--mute)}
+    .dec-it .di .fl{display:block;font-size:10.5px;color:var(--amber);margin-top:2px;line-height:1.4}
+    .dec-it input{width:52px;text-align:center;background:var(--e2);border:1px solid var(--line);border-radius:8px;padding:7px 4px;font-size:13.5px;color:var(--text)}
+    .dec-it .du{font-size:11px;color:var(--dim);min-width:32px}
+    .dec-it .dx{color:var(--mute);width:24px;height:24px;display:grid;place-items:center;border-radius:50%;flex-shrink:0}
+    .dec-it .dx:active{background:var(--red-soft);color:var(--red)}
+    .dec-note{font-size:11.5px;color:var(--amber);background:var(--amber-soft);border-radius:8px;padding:7px 10px;margin-bottom:8px;line-height:1.45}
+    /* Place — per-line qty + price (SKU price captured for today's buy) */
+    .line{flex-direction:column;align-items:stretch;gap:7px}
+    .line .lhead{display:flex;align-items:center;gap:8px}
+    .line .lhead .ln{flex:1;font-size:14px}
+    .line .lf{display:flex;gap:8px}
+    .line .lf .ff{flex:1;display:flex;align-items:center;gap:6px}
+    .line .lf .ff label{font-size:10px;color:var(--mute);min-width:30px}
+    .line .lf .ff input{flex:1;min-width:0;text-align:center;background:var(--e2);border:1px solid var(--line);border-radius:8px;padding:8px 4px;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+    .line .lf .ff .u{font-size:11px;color:var(--dim)}
+    .bsub{padding:8px 12px;text-align:right;font-size:12px;color:var(--dim);border-top:1px solid var(--line-soft)}
+    .bsub b{color:var(--text);font-variant-numeric:tabular-nums}
+    /* Vendors — per-vendor records ledger */
+    .ven{margin-bottom:10px;border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;border-left:3px solid var(--sauda);background:var(--e1)}
+    .ven .vhd{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer}
+    .ven .vleft{flex:1;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+    .ven .vleft .bn{font-weight:700;font-size:14.5px}
+    .ven .vright .due{font-size:12.5px;font-weight:800;color:var(--amber);white-space:nowrap}
+    .ven .vright .clr{font-size:12px;font-weight:700;color:var(--green)}
+    .ven .vmeta{display:flex;gap:14px;padding:0 12px 10px;font-size:11.5px;color:var(--dim);flex-wrap:wrap;font-variant-numeric:tabular-nums}
+    .ven .vpay{display:flex;align-items:center;gap:8px;padding:0 12px 9px}
+    .ven .vpay .vid{flex:1;font-size:11.5px;color:var(--mute);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ven .vpay .paynow{flex-shrink:0;padding:7px 15px;border-radius:9px;background:var(--green);color:#04130c;font-weight:700;font-size:12.5px}
+    .ven .vpay .paynow:active{transform:scale(.97)}
+    /* Settings grid */
+    #viewSettings .search{display:flex;align-items:center;gap:8px}
+    #viewSettings .search .box{flex:1}
+    .needtog{flex-shrink:0;font-size:11px;color:var(--gold);background:var(--gold-soft);border:1px solid var(--gold-bd);border-radius:9px;padding:9px 11px;white-space:nowrap}
+    .needtog.on{background:var(--gold);color:#1a1206}
+    .setcount{padding:2px 4px 8px;font-size:11.5px;color:var(--dim)}
+    .srow{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line-soft);border-radius:11px;margin-bottom:8px;background:var(--e1)}
+    .srow.need{border-color:var(--amber-bd);background:var(--amber-soft)}
+    .srow .sl{flex:1;min-width:0}
+    .srow .sl b{font-size:13.5px;font-weight:600;display:block}
+    .srow .sl small{font-size:10.5px;color:var(--mute);display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .srow .sf{display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0}
+    .srow .sf .r1,.srow .sf .r2{display:flex;align-items:center;gap:6px}
+    .srow select{background:var(--e2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px;padding:6px 5px;max-width:110px}
+    .srow .spin{width:64px;text-align:right;background:var(--e2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:13px;padding:6px 7px;font-variant-numeric:tabular-nums}
+    .srow .rs{font-size:12px;color:var(--dim)}
+    .srow .modet{font-size:10px;font-weight:700;padding:6px 9px;border-radius:7px;border:1px solid var(--line);color:var(--dim);background:var(--e2)}
+    .srow .modet.live{background:var(--blue-soft);color:var(--blue);border-color:transparent}
+    .srow .phin{width:130px;background:var(--e2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12.5px;padding:6px 7px}
+    .srow.col{flex-direction:column;align-items:stretch}
+    .srow.col .top{display:flex;gap:10px;align-items:flex-start}
+    .srow.col .top .sl{flex:1;min-width:0}
+    .srow .skuline{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft)}
+    .srow .formt{font-size:10px;font-weight:700;padding:6px 12px;border-radius:7px;border:1px solid var(--line);background:var(--e2);color:var(--dim);flex-shrink:0}
+    .srow .formt.sku{background:var(--gold-soft);color:var(--gold);border-color:var(--gold-bd)}
+    .srow .brin,.srow .pkin{flex:1;min-width:74px;background:var(--e2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px}
+    .srow .loosehint{font-size:10.5px;color:var(--mute)}
+    .ven .vtrail{border-top:1px solid var(--line-soft);padding:4px 12px 8px}
+    .ven .tr{display:grid;grid-template-columns:auto 1fr auto;gap:3px 9px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-soft)}
+    .ven .tr:last-child{border-bottom:none}
+    .ven .tr .ts{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:2px 6px;border-radius:6px;white-space:nowrap}
+    .ven .tr .ts.ok{background:var(--green-soft);color:var(--green)}
+    .ven .tr .ts.amber{background:var(--amber-soft);color:var(--amber)}
+    .ven .tr .ts.dim{background:rgba(255,255,255,.06);color:var(--dim)}
+    .ven .tr .ti{font-size:12px;color:var(--text)}
+    .ven .tr .ta{font-size:12.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;text-align:right}
+    .ven .tr .tw{grid-column:2/4;font-size:10.5px;color:var(--mute)}
+    /* Pay sheet — choose UPI app + always-on fallbacks */
+    .paybig{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin:2px 0 8px}
+    .payapp{display:block;text-align:center;padding:13px;border-radius:11px;background:var(--e2);border:1px solid var(--line);color:var(--text);font-weight:700;font-size:14px;text-decoration:none;margin-bottom:9px}
+    .payapp.pp{background:#5f259f;color:#fff;border-color:#5f259f}
+    .payapp:active{transform:scale(.98)}
+    .payrow2{display:flex;gap:8px;margin-bottom:10px}
+    .payrow2 .payapp{flex:1;margin-bottom:0;font-size:12.5px;padding:11px 6px}
+    .cpyrow{display:flex;gap:8px;margin-bottom:8px}
+    .cpyrow .cpy{flex:1;padding:10px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700;font-size:12.5px}
+    .vpa-line{font-size:12px;color:var(--mute);text-align:center;font-variant-numeric:tabular-nums}
+  </style>
+</head>
+<body>
+
+<section id="gate" class="gate">
+  <div class="gate-inner">
+    <div class="pin-icon" aria-hidden="true">
+      <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 17 L24 8 L40 17"/><path d="M11 17 V39"/><path d="M37 17 V39"/><path d="M8 39 H40"/>
+        <path d="M18 39 V27 h12 v12"/>
+      </svg>
+    </div>
+    <h1 class="pin-name">Sauda</h1>
+    <div class="pin-tag">The day's buying</div>
+    <div class="pin-dots" id="pinDots"><span></span><span></span><span></span><span></span></div>
+    <div class="pin-err" id="pinErr"></div>
+    <div class="keypad" id="keypad">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <span class="sp"></span><button data-k="0">0</button><button data-k="del" class="del" aria-label="delete">⌫</button>
+    </div>
+  </div>
+  <div class="pin-foot">HN Hotels · since 1918</div>
+</section>
+
+<div id="app" class="hide">
+  <div class="top">
+    <div class="row">
+      <div>
+        <h1>Today's order</h1>
+        <div class="sub" id="topSub">—</div>
+      </div>
+      <button class="lock" id="gear" aria-label="Settings">⚙</button>
+      <button class="lock" id="lock" aria-label="Lock">⏻</button>
+    </div>
+    <div class="seg scrollx" id="modeSeg">
+      <button data-m="buy" class="on">Buy list</button>
+      <button data-m="place">Place</button>
+      <button data-m="pay">To pay</button>
+      <button data-m="vendors">Vendors</button>
+      <button data-m="hp">Hyperpure</button>
+      <button data-m="cmp">Compare</button>
+      <button data-m="saved">Saved</button>
+    </div>
+  </div>
+
+  <!-- BUY LIST VIEW — need-first: add what to buy for tomorrow; the engine routes where -->
+  <div id="viewBuy" class="hide">
+    <div class="seg" id="whenSeg" style="margin:10px 16px 0">
+      <button data-w="today" class="on">For today</button>
+      <button data-w="tomorrow">For tomorrow</button>
+    </div>
+    <button id="pasteBtn" class="paste-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Paste a WhatsApp order</button>
+    <div class="hp-strip" id="buyHint"></div>
+    <div class="search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="buySearch" type="text" placeholder="Filter items… (paneer, oil, rice)" autocomplete="off">
+      </div>
+    </div>
+    <main class="pane" id="buyPane">
+      <div class="empty" id="buyEmpty">Loading items…</div>
+      <div id="buyFeed"></div>
+    </main>
+  </div>
+
+  <!-- PLACE VIEW -->
+  <div id="viewPlace">
+    <div class="seg" id="brandSeg" style="margin:0 16px 2px">
+      <button data-b="both" class="on">Both</button>
+      <button data-b="HE">HE</button>
+      <button data-b="NCH">NCH</button>
+    </div>
+    <div class="search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="searchInput" type="text" placeholder="Add an item… (carrot, oil, coke)" autocomplete="off">
+      </div>
+      <div class="sugg hide" id="sugg"></div>
+    </div>
+    <main class="pane" id="pane">
+      <div id="baskets"></div>
+      <div id="vendorList"></div>
+      <div class="empty hide" id="emptyState"><div class="big">سودا</div>Loading vendors…</div>
+    </main>
+  </div>
+
+  <!-- TO-PAY VIEW -->
+  <div id="viewPay" class="hide">
+    <main class="pane" id="payPane">
+      <div class="empty" id="payEmpty">Nothing waiting for payment.</div>
+      <div id="payList"></div>
+    </main>
+  </div>
+
+  <!-- HYPERPURE VIEW (tomorrow's planned basket) -->
+  <div id="viewHp" class="hide">
+    <div class="hp-strip" id="hpStrip"></div>
+    <div class="search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="hpSearch" type="text" placeholder="Filter mandi items… (ghee, paneer, oil)" autocomplete="off">
+      </div>
+    </div>
+    <main class="pane" id="hpPane">
+      <div class="empty" id="hpEmpty">No mandi prices yet.<br>The scout refreshes Hyperpure prices each night.</div>
+      <div id="hpFeed"></div>
+    </main>
+  </div>
+
+  <div class="bottom hide" id="buyBar" style="flex-direction:column;gap:8px">
+    <div id="buyTot" style="width:100%;font-size:12.5px;color:var(--dim);text-align:center"></div>
+    <button class="btn primary" id="buySendBtn" disabled style="width:100%">Add items for tomorrow</button>
+  </div>
+
+  <div class="bottom" id="placeBar">
+    <button class="btn primary" id="placeBtn" disabled>Place order</button>
+  </div>
+
+  <div class="bottom hide" id="hpBar" style="flex-direction:column;gap:10px">
+    <div class="mov" style="width:100%">
+      <div class="track"><div class="fill" id="movFill"></div></div>
+      <div class="lbl"><span id="movLeft">₹0</span><span id="movRight">of ₹1,500 minimum</span></div>
+    </div>
+    <button class="btn primary" id="hpPlaceBtn" disabled style="width:100%">Add items to start</button>
+  </div>
+
+  <!-- COMPARE VIEW (cheapest across platforms, per product) -->
+  <div id="viewCompare" class="hide">
+    <div class="cmp-h" id="cmpHead"></div>
+    <main class="pane" id="cmpPane">
+      <div class="empty hide" id="cmpEmpty">No price comparison yet.<br>The scout compares Hyperpure &amp; Zepto each night.</div>
+      <div id="cmpList"></div>
+    </main>
+  </div>
+  <div class="bottom hide" id="cmpBar"><div class="psum" id="cmpSummary"></div></div>
+
+  <!-- SAVED VIEW — the purchase-order trail (decoded + confirmed orders) -->
+  <div id="viewHistory" class="hide">
+    <div class="cmp-h" id="histHead"></div>
+    <main class="pane" id="histPane">
+      <div class="empty" id="histEmpty">No saved orders yet.<br>On the Buy list, paste a WhatsApp order to create one.</div>
+      <div id="histList"></div>
+    </main>
+  </div>
+
+  <!-- VENDORS VIEW — per-vendor records: paid / outstanding / full trail -->
+  <div id="viewVendors" class="hide">
+    <main class="pane" id="venPane">
+      <div class="empty" id="venEmpty">No vendor records yet.<br>Place an order with prices and they’ll appear here.</div>
+      <div id="venList"></div>
+    </main>
+  </div>
+
+  <!-- SETTINGS VIEW — item + vendor master (price · unit · vendor · fixed/live · phones/UPIs) -->
+  <div id="viewSettings" class="hide">
+    <div class="seg" id="setSeg" style="margin:10px 16px 4px"><button data-s="items" class="on">Items</button><button data-s="vendors">Vendors</button></div>
+    <div class="search">
+      <div class="box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="setSearch" type="text" placeholder="Filter items / vendors…" autocomplete="off"></div>
+      <button id="setNeed" class="needtog">to fill</button>
+    </div>
+    <main class="pane" id="setPane"><div class="empty" id="setEmpty">Loading…</div><div id="setList"></div></main>
+  </div>
+</div>
+
+<div id="sheetHost"></div>
+<div id="toastHost"></div>
+
+<script src="/ops/sauda/app.js?v=24"></script>
+</body>
+</html>

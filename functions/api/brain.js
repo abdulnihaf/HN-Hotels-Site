@@ -49,9 +49,10 @@ export async function onRequest(context) {
   if (!question) return json({ ok: false, error: 'q_required' }, 400);
 
   const originBase = `${url.protocol}//${url.host}`;
+  const model = url.searchParams.get('model') || '';
   const t0 = Date.now();
   try {
-    const answer = await answerBrainQuery(env, { question, originBase });
+    const answer = await answerBrainQuery(env, { question, originBase, model });
     return json({ ok: true, question, answer, ms: Date.now() - t0 });
   } catch (e) {
     return json({ ok: false, error: String(e.message || e), ms: Date.now() - t0 });

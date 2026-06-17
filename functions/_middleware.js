@@ -49,6 +49,25 @@ export async function onRequest(context) {
     return next();
   }
 
+  // ── sauda.hnhotels.in (and sawda.) — the purchase chamber. App at /ops/sauda/ ──
+  if (host === 'sauda.hnhotels.in' || host === 'sawda.hnhotels.in') {
+    const MAP = {
+      '/': '/ops/sauda/',
+      '/index.html': '/ops/sauda/',
+      '/manifest.json': '/ops/sauda/manifest.json',
+      '/icon-180.png': '/ops/sauda/icon-180.png',
+      '/icon-192.png': '/ops/sauda/icon-192.png',
+      '/icon-512.png': '/ops/sauda/icon-512.png',
+    };
+    const target = MAP[url.pathname];
+    if (target) {
+      const t = new URL(target, url);
+      t.search = url.search;
+      return rewriteTo(request, t);
+    }
+    return next();
+  }
+
   // Only intervene for the trade subdomain
   if (host !== 'trade.hnhotels.in') {
     return next();

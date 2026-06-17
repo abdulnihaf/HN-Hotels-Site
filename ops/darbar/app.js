@@ -466,6 +466,9 @@ async function fixPunch(empId, date) {
 }
 
 /* ━━━━━━━━━━━━━━ PAY ━━━━━━━━━━━━━━ */
+// Closed set of payment methods — the only values paid_via may take. Used to
+// build the dropdowns AND to clamp the value before it goes into inline handlers.
+const PAY_VIA = ['cash', 'upi', 'bank', 'razorpay', 'paytm'];
 document.querySelectorAll('#payBrand button').forEach(b => b.onclick = () => {
   S.payBrand = b.dataset.b;
   document.querySelectorAll('#payBrand button').forEach(x => x.classList.toggle('on', x === b));
@@ -654,15 +657,18 @@ function attGridHTML(c) {
   for (let d = 1; d <= nDays; d++) {
     const ds = `${month}-${String(d).padStart(2, '0')}`;
     const r = map[ds];
-    let cls = 'nodata';
+    let cls = 'nodata', hrs = '';
     if (ds > biz) cls = 'future';
     else if (ds === biz) cls = 'open';                       // today — still open till 4am
     else if (r) {
       if (r.status === 'week_off' || r.status === 'leave') cls = 'off';
       else if ((r.punch_count || 0) === 0) cls = 'absent';
       else cls = (r.punch_count % 2 === 1) ? 'err' : 'ok';   // any tap = worked; odd = punch missing
+      // On a GREEN (complete) day, show how many hours were worked under the date.
+      // Hours only compute on an even punch set; a single/odd punch (yellow) has none.
+      if (cls === 'ok' && Number(r.total_hours) >= 0.5) hrs = `<span class="agc-h">${Math.round(Number(r.total_hours))}h</span>`;
     }
-    cells += `<div class="agc ${cls}">${d}</div>`;
+    cells += `<div class="agc ${cls}"><span class="agc-d">${d}</span>${hrs}</div>`;
   }
   const isCur = month === currentMonthIST();
   return `<div class="agrid">${wd}${cells}</div>
@@ -699,6 +705,35 @@ async function undoPayLine(id, amount, mode, empId, month) {
   } catch (e) { toast(e.message || 'could not remove', true); }
 }
 
+// Rewrite a mis-entered money line IN PLACE — fix the amount, the month it
+// belongs to (e.g. a settlement logged under May that was really June), or how
+// it was paid. Owner-only. No fused math: the owner types the corrected number.
+function editPayLine(id, amount, paidVia, mode, empId, month) {
+  if (needToken()) return;
+  if (!S.fin) return toast('Editing pay is owner-only', 'info');
+  const months = [...new Set([prevMonthIST(), currentMonthIST(), month])];
+  const monthOpts = months.map(mm => `<option value="${mm}" ${mm === month ? 'selected' : ''}>${esc(monthLabel(mm))}</option>`).join('');
+  const viaOpts = PAY_VIA.map(v => `<option ${v === paidVia ? 'selected' : ''}>${v}</option>`).join('');
+  sheet(`<h2>Edit entry</h2>
+    <div class="sd">Fix a mis-entry — change the amount, the month it belongs to, or how it was paid. This rewrites the record in place.</div>
+    <div class="fld"><label>Amount ₹</label><input id="edAmt" type="number" inputmode="numeric" value="${Number(amount)}"></div>
+    <div class="fld"><label>Belongs to month</label><select id="edMonth">${monthOpts}</select></div>
+    <div class="fld"><label>Paid via</label><select id="edVia">${viaOpts}</select></div>
+    <div class="acts"><button class="btn primary" onclick='savePayLine(${id},"${mode}",${Number(empId)},"${month}")'>Save change</button><button class="btn ghost-b" onclick='loadPayCtx("${mode}",${Number(empId)},"${month}")'>Cancel</button></div>`);
+}
+async function savePayLine(id, mode, empId, month) {
+  const amount = Number(($('edAmt') || {}).value);
+  if (!amount) return toast('Enter an amount', 'err');
+  const pay_period = ($('edMonth') || {}).value || month;
+  const paid_via = ($('edVia') || {}).value || 'cash';
+  try {
+    await post('/api/hr-payroll?action=update-advance', { id, amount, pay_period, paid_via });
+    toast('✓ entry updated');
+    // Re-open on the month it now lives in, so a moved entry is visible where it went.
+    loadPayCtx(mode, empId, pay_period);
+  } catch (e) { toast(e.message || 'could not update', 'err'); }
+}
+
 async function loadPayCtx(mode, empId, month) {
   empId = empId || ($('payEmp') && $('payEmp').value);
   if (!empId) return;
@@ -719,7 +754,14 @@ async function loadPayCtx(mode, empId, month) {
   // THE TRAIL — every piece on its own line: ₹ · date · mode · receipt mark.
   // Each money line carries its own undo (✕) — mis-entries die in the app,
   // never in a chat. delete-advance is admin-gated server-side (fin token).
-  const payLine = r => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px dashed var(--line-soft)"><span class="num" style="font-weight:700;color:var(--text)">${inr(r.amount)}</span><span style="flex:1;text-align:right">${esc(fmtDayShort(String(r.advance_date || '').slice(0, 10)))} · ${esc(r.paid_via || '')}${rmark(r)}</span><span onclick="event.stopPropagation();undoPayLine(${r.id},${Number(r.amount)},'${mode}',${Number(empId)},'${month}')" style="color:var(--red);font-weight:800;font-size:13px;padding:2px 6px;cursor:pointer">✕</span></div>`;
+  const payLine = r => {
+    // Clamp paid_via to the known set before embedding it in the inline handler —
+    // it's a closed dimension (the select enforces it), and clamping guarantees no
+    // stray quote can break out of the onclick attribute. The display below still
+    // shows the raw value via esc().
+    const pv = PAY_VIA.includes(r.paid_via) ? r.paid_via : 'cash';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px dashed var(--line-soft)"><span class="num" style="font-weight:700;color:var(--text)">${inr(r.amount)}</span><span style="flex:1;text-align:right">${esc(fmtDayShort(String(r.advance_date || '').slice(0, 10)))} · ${esc(r.paid_via || '')}${rmark(r)}</span><span onclick='event.stopPropagation();editPayLine(${r.id},${Number(r.amount)},"${pv}","${mode}",${Number(empId)},"${month}")' style="color:var(--gold);font-weight:800;font-size:13px;padding:2px 6px;cursor:pointer">✎</span><span onclick="event.stopPropagation();undoPayLine(${r.id},${Number(r.amount)},'${mode}',${Number(empId)},'${month}')" style="color:var(--red);font-weight:800;font-size:13px;padding:2px 6px;cursor:pointer">✕</span></div>`;
+  };
   const advs = (c.advances.rows || []).map(payLine).join('') || 'none';
   const setts = ((c.settlements && c.settlements.rows) || []).map(payLine).join('') || 'none';
   const salaryLbl = emp.monthly_salary ? inr(emp.monthly_salary) + '/mo' : emp.daily_rate ? inr(emp.daily_rate) + '/day' : '—';
