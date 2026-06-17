@@ -20,6 +20,9 @@
 const TTL_MS = 5 * 60 * 1000;
 
 const PLATFORM_HINTS = [
+  ['zomato_partner', /zomato\s*(merchant|partner|restaurant|business)|merchant[-\s]?zomato|zomato/i],
+  ['swiggy_partner', /swiggy\s*(partner|restaurant|merchant)|partner\.swiggy|rms\.swiggy/i],
+  ['eazydiner_partner', /eazy\s*diner|eazydiner/i],
   ['hyperpure', /hyperpure/i],
   ['zepto', /zepto/i],
   ['blinkit', /blink ?it|grofers/i],
@@ -32,12 +35,37 @@ const PLATFORM_HINTS = [
   ['metro', /metro/i],
 ];
 
+const PLATFORM_ALIASES = {
+  zomato: 'zomato_partner',
+  zomato_merchant: 'zomato_partner',
+  zomato_partner: 'zomato_partner',
+  swiggy: 'swiggy_partner',
+  swiggy_merchant: 'swiggy_partner',
+  swiggy_partner: 'swiggy_partner',
+  eazydiner: 'eazydiner_partner',
+  eazy_diner: 'eazydiner_partner',
+  eazydiner_partner: 'eazydiner_partner',
+};
+
+const PLATFORM_READ_ALIASES = {
+  zomato_partner: ['zomato_partner', 'zomato_merchant', 'zomato'],
+  swiggy_partner: ['swiggy_partner', 'swiggy_merchant', 'swiggy'],
+  eazydiner_partner: ['eazydiner_partner', 'eazydiner', 'eazy_diner'],
+};
+
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json' } });
 
 function guessPlatform(s) {
   const hay = String(s || '').toLowerCase();
   for (const [name, re] of PLATFORM_HINTS) if (re.test(hay)) return name;
   return 'unknown';
+}
+function normalizePlatform(value) {
+  const raw = String(value || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
+  return PLATFORM_ALIASES[raw] || raw || '';
+}
+function platformReadValues(value) {
+  return PLATFORM_READ_ALIASES[value] || [value];
 }
 function extractOtp(text) {
   const t = String(text || '');
@@ -66,7 +94,8 @@ export async function onRequest(context) {
       const text = body.text || body.message || '';
       const otp = extractOtp(text);
       if (!otp) return json({ ok: false, error: 'no code found in text' }, 422);
-      const platform = (body.platform && String(body.platform).toLowerCase()) || guessPlatform(`${body.sender || ''} ${text}`);
+      const explicitPlatform = normalizePlatform(body.platform);
+      const platform = explicitPlatform || guessPlatform(`${body.sender || ''} ${text}`);
       const source = body.source === 'email' ? 'email' : 'sms';
       await db.prepare(
         `INSERT INTO otp_inbox (platform, otp, sender, raw, source, received_at) VALUES (?,?,?,?,?,?)`
@@ -76,10 +105,11 @@ export async function onRequest(context) {
 
     // ── READ (login driver on the box) ──
     if (request.method === 'GET') {
-      const platform = (url.searchParams.get('platform') || '').toLowerCase();
+      const platform = normalizePlatform(url.searchParams.get('platform'));
       const cutoff = new Date(Date.now() - TTL_MS).toISOString();
-      const where = platform ? `AND platform = ?` : '';
-      const binds = platform ? [cutoff, platform] : [cutoff];
+      const platforms = platform ? platformReadValues(platform).filter(Boolean) : [];
+      const where = platforms.length ? `AND platform IN (${platforms.map(() => '?').join(',')})` : '';
+      const binds = platforms.length ? [cutoff, ...platforms] : [cutoff];
       const row = await db.prepare(
         `SELECT id, platform, otp, received_at FROM otp_inbox
           WHERE consumed_at IS NULL AND received_at >= ? ${where}
