@@ -292,7 +292,7 @@
   function loadPay(){
     var list=document.getElementById('payList'), empty=document.getElementById('payEmpty');
     list.innerHTML='<div class="empty">Loading…</div>'; empty.classList.add('hide');
-    api('open').then(function(res){
+    api('auto-settle').then(function(){ return api('open'); }).then(function(res){
       var orders=(res.j&&res.j.orders)||[];
       if(!orders.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
       var html='';

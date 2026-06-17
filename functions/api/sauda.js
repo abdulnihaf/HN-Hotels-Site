@@ -48,6 +48,9 @@ const SAUDA_PINS = {
   '2026': { name: 'Zoya',    role: 'purchase', fin: false },
 };
 
+// shared with the settle cron worker — low-harm: only triggers bank-feed reconcile
+const SAUDA_CRON_TOKEN = 'sauda-settle-9k2f7x';
+
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
 function withCors(resp, request) {
@@ -74,6 +77,16 @@ export async function onRequest(context) {
       if (!u) return withCors(json({ error: 'invalid PIN' }, 401), request);
       const token = await mintToken(env, u);
       return withCors(json({ token, user: u.name, role: u.role, fin: u.fin }), request);
+    }
+
+    // ── auto-settle: the bank feed confirms payment, live. Callable by the settle
+    //    cron (token) OR by the app on a valid PIN (To-pay refresh). No manual tap. ──
+    if (action === 'auto-settle') {
+      if ((url.searchParams.get('token') || '') !== SAUDA_CRON_TOKEN) {
+        const a = await verifyToken(env, request);
+        if (!a) return withCors(json({ error: 'unauthorized' }, 401), request);
+      }
+      return withCors(json(await autoSettle(db)), request);
     }
 
     // ── everything else needs a valid token ──
@@ -787,6 +800,40 @@ async function markPaid(db, body, auth) {
   } catch (e) { /* reconcile is best-effort; the PAID status still stands */ }
 
   return { ok: true, ids, paid_by: (auth && auth.u) || '', reconciled: !!reconciled, bank_ref: reconciled ? reconciled.bank_ref : '' };
+}
+
+// ── Live auto-settle: the bank feed IS the confirmation. For every order the owner
+// has initiated payment on (REQUESTED), or marked paid but not yet bank-matched,
+// find the matching UPI debit and settle it PAID + reconciled — no manual tap. ──
+async function autoSettle(db) {
+  const settled = [];
+  let rows = [];
+  try {
+    rows = ((await db.prepare(
+      `SELECT id, vendor_name, pay_amount_paise, expected_amount_paise, pay_requested_at, ordered_at
+         FROM sauda_purchase
+        WHERE (pay_timing IS NULL OR pay_timing != 'online')
+          AND ( status='REQUESTED' OR (status='PAID' AND reconciled_at IS NULL) )
+          AND for_date >= date('now','-7 days')
+        ORDER BY id DESC LIMIT 100`).all()).results) || [];
+  } catch (e) { return { ok: true, settled: [], count: 0 }; }
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  for (const r of rows) {
+    const v = vendorView(canonVendorKey(r.vendor_name) || 'unassigned');
+    const amt = r.pay_amount_paise || r.expected_amount_paise || 0;
+    if (!v.vpa || !amt) continue;
+    const since = String(r.pay_requested_at || r.ordered_at || '').slice(0, 10) || '2000-01-01';
+    const m = await findVendorDebit(db, v.vpa, amt, since);
+    if (!m) continue;
+    await db.prepare(
+      `UPDATE sauda_purchase
+          SET status='PAID', paid_at=COALESCE(paid_at,?),
+              pay_method=CASE WHEN pay_method IS NULL OR pay_method='' THEN 'upi' ELSE pay_method END,
+              bank_event_id=?, bank_ref=?, reconciled_at=?, updated_at=? WHERE id=?`
+    ).bind(now, m.bank_event_id, m.bank_ref, now, now, r.id).run();
+    settled.push({ id: r.id, vendor: v.name, amount_paise: amt, bank_ref: m.bank_ref });
+  }
+  return { ok: true, settled, count: settled.length };
 }
 
 // ── Hyperpure delivery window from the cutoff (IST). Order before 23:00 → tomorrow. ──
