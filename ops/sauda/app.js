@@ -835,24 +835,25 @@
   function renderSettings(){
     var list=document.getElementById('setList'); document.getElementById('setEmpty').classList.add('hide');
     document.querySelectorAll('#setSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.s===SET.tab); });
-    document.getElementById('setNeed').style.display = SET.tab==='items'?'':'none';
     if(SET.tab==='items') renderSetItems(list); else renderSetVendors(list);
   }
+  function itemMissing(i){ var m=[]; if(i.price_mode!=='live' && !(i.price_paise>0))m.push('price'); if(!i.unit)m.push('unit'); if(!i.default_vendor)m.push('vendor'); return m; }
   function renderSetItems(list){
     var q=SET.q;
-    var need=SET.items.filter(function(i){return i.price_mode!=='live' && !(i.price_paise>0);});
+    var need=SET.items.filter(function(i){return itemMissing(i).length;});
     var rows=SET.items.filter(function(i){
-      if(SET.needOnly && need.indexOf(i)<0) return false;
+      if(SET.needOnly && !itemMissing(i).length) return false;
       return !q || (i.label+' '+(i.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0;
     });
-    var html='<div class="setcount">'+rows.length+' of '+SET.items.length+' items · '+need.length+' need a price</div>';
+    var html='<div class="setcount">'+rows.length+' of '+SET.items.length+' items · <b style="color:var(--amber)">'+need.length+' to fill</b> (price / unit / vendor)</div>';
     html+=rows.map(function(i){
       var live=i.price_mode==='live';
       var price=live
         ? '<button class="modet live" data-mode="'+esc(i.item_code)+'">LIVE</button>'
         : '<span class="rs">₹</span><input class="spin" data-sp="'+esc(i.item_code)+'" inputmode="decimal" value="'+(i.price_paise>0?(i.price_paise/100):'')+'" placeholder="price"><button class="modet" data-mode="'+esc(i.item_code)+'">fix</button>';
-      var nc=(!live && !(i.price_paise>0))?' need':'';
-      return '<div class="srow'+nc+'"><div class="sl"><b>'+esc(i.label)+(i.flagged?' ⚠':'')+'</b><small>'+esc((i.aliases||[]).slice(0,5).join(', '))+'</small></div>'+
+      var miss=itemMissing(i); var nc=miss.length?' need':'';
+      var sub=miss.length?('<span style="color:var(--amber)">⚠ needs '+miss.join(' / ')+'</span>'):esc((i.aliases||[]).slice(0,5).join(', '));
+      return '<div class="srow'+nc+'"><div class="sl"><b>'+esc(i.label)+(i.flagged?' ⚠':'')+'</b><small>'+sub+'</small></div>'+
         '<div class="sf"><div class="r1">'+price+'</div><div class="r2"><select data-su="'+esc(i.item_code)+'">'+unitOpts(i.unit)+'</select>'+
         '<select data-sv="'+esc(i.item_code)+'">'+vendorOpts(i.default_vendor)+'</select></div></div></div>';
     }).join('');
@@ -863,12 +864,14 @@
     list.querySelectorAll('select[data-sv]').forEach(function(s){ s.addEventListener('change',function(){ saveItem(s.dataset.sv,{default_vendor:s.value}); }); });
     list.querySelectorAll('[data-mode]').forEach(function(b){ b.addEventListener('click',function(){ var it=SET.items.find(function(x){return x.item_code===b.dataset.mode;}); saveItem(b.dataset.mode,{price_mode:(it&&it.price_mode==='live')?'fixed':'live'},true); }); });
   }
+  function vendorMissing(v){ var m=[]; if(!v.phone)m.push('phone'); if(!(v.vpas&&v.vpas.length))m.push('UPI'); return m; }
   function renderSetVendors(list){
     var q=SET.q, FUL=['deliver','collect','standing','porter'], PAY=['per','khata_roll','khata_periodic'];
-    var rows=SET.vendors.filter(function(v){ return !q || (v.name+' '+(v.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
-    list.innerHTML='<div class="setcount">'+rows.length+' vendors</div>'+rows.map(function(v){
-      var vpa=(v.vpas&&v.vpas[0])||'';
-      return '<div class="srow"><div class="sl"><b>'+esc(v.name)+'</b><small>'+esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI</small></div>'+
+    var inc=SET.vendors.filter(function(v){return vendorMissing(v).length;});
+    var rows=SET.vendors.filter(function(v){ if(SET.needOnly && !vendorMissing(v).length) return false; return !q || (v.name+' '+(v.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
+    list.innerHTML='<div class="setcount">'+rows.length+' vendors · <b style="color:var(--amber)">'+inc.length+' to fill</b> (phone / UPI)</div>'+rows.map(function(v){
+      var vpa=(v.vpas&&v.vpas[0])||''; var miss=vendorMissing(v); var nc=miss.length?' need':'';
+      return '<div class="srow'+nc+'"><div class="sl"><b>'+esc(v.name)+'</b><small>'+(miss.length?'<span style="color:var(--amber)">⚠ add '+miss.join(' / ')+'</span>':esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI')+'</small></div>'+
         '<div class="sf"><div class="r1"><input class="phin" data-vph="'+esc(v.vendor_key)+'" inputmode="tel" value="'+esc(v.phone||'')+'" placeholder="phone"></div>'+
         '<div class="r1"><input class="phin" data-vpa="'+esc(v.vendor_key)+'" value="'+esc(vpa)+'" placeholder="name@bank"></div>'+
         '<div class="r2"><select data-vf="'+esc(v.vendor_key)+'">'+FUL.map(function(f){return '<option'+(f===v.fulfilment?' selected':'')+'>'+f+'</option>';}).join('')+'</select>'+
