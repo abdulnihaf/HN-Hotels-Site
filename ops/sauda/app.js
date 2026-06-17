@@ -340,13 +340,14 @@
   //    one iOS mis-routes to WhatsApp Pay). Amount is shown big — for a normal
   //    vendor VPA it can't be hard-locked, so the owner confirms it himself. ──
   function fmtAm(rs){ return (Math.round(rs*100)/100).toFixed(2); }
-  // CLEAN, standard UPI intent ONLY. Earlier we appended `&mam=null` (the literal string
-  // "null") + a custom `&tr=` — a pre-filled-amount intent carrying junk params is exactly
-  // what trips "Payment failed as per UPI risk policy" (a direct in-app payment, which has
-  // none of this, goes through). Reconciliation matches on VPA+amount+date, not tr, so tr is
-  // not needed in the link. Keep it to the bare NPCI params: pa, pn, am, cu, tn.
-  function payLink(scheme, vpa, vn, rs){
-    var q='pa='+encodeURIComponent(vpa)+'&pn='+encodeURIComponent(vn||'Vendor')+'&am='+fmtAm(rs)+'&cu=INR&tn='+encodeURIComponent('Sauda');
+  // PAYEE-ONLY intent — deliberately NO amount. A pre-filled `am` makes the PSP treat the
+  // payment like a static/gallery QR, which NPCI caps at ₹2,000 to a personal VPA (owner hit
+  // exactly this on a ₹5,500 payment: "pay up to ₹2,000 … or pay with mobile number / scan QR").
+  // Opening to the payee and letting the owner type the amount IN-APP is the uncapped manual
+  // path (up to ₹1,00,000) — same as a direct payment, which works. (We also dropped the old
+  // `mam=null`/`tr` junk that earlier tripped "UPI risk policy".)
+  function payLink(scheme, vpa, vn){
+    var q='pa='+encodeURIComponent(vpa)+'&pn='+encodeURIComponent(vn||'Vendor')+'&cu=INR&tn='+encodeURIComponent('Sauda');
     if(scheme==='phonepe') return 'phonepe://pay?'+q;
     if(scheme==='gpay')    return 'tez://upi/pay?'+q;
     if(scheme==='paytm')   return 'paytmmp://pay?'+q;
@@ -366,19 +367,18 @@
     var pk=upiKind(vpa);
     var pkHtml=(pk==='merchant')
       ? '<div class="skuhint" style="color:#1a7f37">✓ Verified merchant — you can pay up to ₹1,00,000 in one go.</div>'
-      : '<div class="skuhint">Pay up to ₹1,00,000 here. If a payment ever caps at ₹2,000, this vendor’s QR isn’t KYC-verified — ask them for a Business QR.</div>';
+      : '<div class="skuhint">Pay up to ₹1,00,000 — just type the amount in PhonePe (we don’t pre-fill it, so there’s no ₹2,000 cap).</div>';
     var host=document.getElementById('sheetHost');
     function app(scheme,label,primary){ return '<a class="payapp'+(primary?' pp':'')+'" href="'+payLink(scheme,vpa,vn,rs)+'">'+esc(label)+'</a>'; }
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(vn)+'</h2>'+
       '<div class="paybig">'+big+'</div>'+
-      '<div class="skuhint">Tap PhonePe to pay with the amount filled in. Check the amount before you confirm.</div>'+
+      '<div class="skuhint">PhonePe opens straight to this vendor — then <b>type the amount</b>. We don’t pre-fill it on purpose: a pre-filled amount is what triggers the ₹2,000 cap; entering it yourself has no cap (up to ₹1,00,000).</div>'+
       pkHtml+
-      app('phonepe','Pay '+big+' · PhonePe',true)+
+      '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(vpa)+'">Copy UPI ID</button><button class="cpy" data-cpy="'+esc(String(Math.round(rs)))+'">Copy ₹'+rupees(Math.round(rs*100))+'</button></div>'+
+      app('phonepe','Open PhonePe — pay '+esc(vn),true)+
       '<div class="payrow2">'+app('gpay','Google Pay')+app('paytm','Paytm')+'</div>'+
-      '<div class="manualhelp" style="margin:14px 0 6px;padding:10px 12px;background:rgba(0,0,0,.04);border-radius:10px;font-size:13px;line-height:1.55">'+
-        '<b>If it says “payment failed / UPI risk policy”</b> — pay it by hand (this always works):<br>'+
-        '1 · Copy UPI ID&nbsp;&nbsp;2 · Copy amount&nbsp;&nbsp;3 · open PhonePe → <b>Pay to UPI ID</b> / New payment → paste → enter amount → pay.</div>'+
-      '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(vpa)+'">1 · Copy UPI ID</button><button class="cpy" data-cpy="'+esc(fmtAm(rs))+'">2 · Copy amount</button></div>'+
+      '<div class="manualhelp" style="margin:12px 0 4px;padding:10px 12px;background:rgba(0,0,0,.04);border-radius:10px;font-size:13px;line-height:1.55">'+
+        'Copy the amount first, then enter it in PhonePe. If it doesn’t open the vendor, tap <b>Pay to UPI ID</b>, paste the ID, enter ₹'+rupees(Math.round(rs*100))+', pay.</div>'+
       '<div class="vpa-line">'+esc(vpa)+'</div>'+
       '<button class="btn primary" id="paidBtn" style="width:100%;margin-top:14px">I’ve paid — mark paid</button>'+
       '</div></div>';
