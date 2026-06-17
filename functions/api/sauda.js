@@ -127,6 +127,15 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await decodePO(env, body)), request);
     }
+    // save-po: a confirmed decoded PO → the purchase-order trail (history)
+    if (action === 'save-po' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await savePO(db, body, auth)), request);
+    }
+    if (action === 'po-history' && request.method === 'GET') {
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '60', 10) || 60, 200);
+      return withCors(json(await poHistory(db, limit)), request);
+    }
     return withCors(json({ error: `unknown action: ${action}` }, 400), request);
   } catch (e) {
     return withCors(json({ error: 'server error' }, 500), request);
@@ -280,6 +289,70 @@ async function decodePO(env, body) {
   let parsed;
   try { parsed = JSON.parse(tb.text); } catch (e) { return { ok: false, error: 'decode parse error' }; }
   return { ok: true, orders: Array.isArray(parsed.orders) ? parsed.orders : [], notes: Array.isArray(parsed.notes) ? parsed.notes : [] };
+}
+
+// ── PO trail: a confirmed decoded order, saved as the purchase-order history ──
+async function ensurePoTable(db) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS sauda_po (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       brand TEXT,
+       for_date TEXT,
+       need_by TEXT,
+       sender TEXT,
+       items_json TEXT NOT NULL,
+       source TEXT DEFAULT 'whatsapp-decode',
+       by_user TEXT,
+       created_at TEXT NOT NULL
+     )`
+  ).run();
+}
+async function savePO(db, body, auth) {
+  const orders = Array.isArray(body && body.orders) ? body.orders : [];
+  const clean = orders
+    .map((o) => ({
+      brand: String((o && o.brand) || '').trim() || 'NA',
+      sender: String((o && o.sender) || '').trim(),
+      items: (Array.isArray(o && o.items) ? o.items : [])
+        .map((i) => ({
+          raw: String((i && i.raw) || ''),
+          item: String((i && i.item) || '').trim(),
+          qty: String((i && i.qty) || ''),
+          unit: String((i && i.unit) || ''),
+          category: String((i && i.category) || ''),
+          flag: String((i && i.flag) || ''),
+        }))
+        .filter((i) => i.item),
+    }))
+    .filter((o) => o.items.length);
+  if (!clean.length) return { ok: false, error: 'nothing to save' };
+  const needBy = (body && body.need_by) === 'today' ? 'today' : 'tomorrow';
+  const forDate = (body && body.for_date) || (needBy === 'today' ? todayIST() : nextDayIST());
+  const source = String((body && body.source) || 'whatsapp-decode');
+  await ensurePoTable(db);
+  const now = new Date().toISOString();
+  let saved = 0;
+  for (const o of clean) {
+    await db
+      .prepare(`INSERT INTO sauda_po (brand, for_date, need_by, sender, items_json, source, by_user, created_at) VALUES (?,?,?,?,?,?,?,?)`)
+      .bind(o.brand, forDate, needBy, o.sender, JSON.stringify(o.items), source, (auth && auth.name) || '', now)
+      .run();
+    saved += 1;
+  }
+  return { ok: true, for_date: forDate, need_by: needBy, orders: saved, items: clean.reduce((n, o) => n + o.items.length, 0) };
+}
+async function poHistory(db, limit) {
+  await ensurePoTable(db);
+  const rows = ((await db
+    .prepare(`SELECT id, brand, for_date, need_by, sender, items_json, source, by_user, created_at FROM sauda_po ORDER BY id DESC LIMIT ?`)
+    .bind(limit)
+    .all()).results) || [];
+  const orders = rows.map((r) => {
+    let items = [];
+    try { items = JSON.parse(r.items_json); } catch (e) {}
+    return { id: r.id, brand: r.brand, for_date: r.for_date, need_by: r.need_by, sender: r.sender, source: r.source, by_user: r.by_user, created_at: r.created_at, items };
+  });
+  return { ok: true, orders };
 }
 
 // ── Build the live item master from the last 30 days, routed to canonical vendors ──

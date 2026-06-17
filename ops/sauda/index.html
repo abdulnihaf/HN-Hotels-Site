@@ -274,6 +274,28 @@
     .pchip .ph-s{font-size:10px;margin-top:2px}
     .pchip.ok .ph-s{color:var(--green)}
     .pchip.under .ph-s{color:var(--amber)}
+    /* Buy list — paste & decode a WhatsApp order */
+    .paste-btn{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 16px 0;width:calc(100% - 32px);padding:13px;border-radius:12px;
+      background:var(--sauda);color:#fff;font-weight:700;font-size:14px;border:none;box-shadow:0 2px 10px rgba(185,119,46,.35)}
+    .paste-btn:active{transform:scale(.98)}
+    .paste-btn svg{width:16px;height:16px}
+    .dec-ta{width:100%;min-height:150px;background:var(--e2);border:1px solid var(--line);border-radius:11px;color:var(--text);
+      font-size:14px;line-height:1.5;padding:12px;resize:vertical;font-family:inherit}
+    .dec-file{display:block;margin:11px 0 0;font-size:12.5px;color:var(--gold)}
+    .dec-order{margin-bottom:13px;border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;border-left:3px solid var(--sauda)}
+    .dec-oh{padding:9px 12px;background:var(--e1);display:flex;align-items:center;gap:8px}
+    .dec-oh b{font-size:14.5px}
+    .dec-oh .bdg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:8px;background:var(--gold-soft);color:var(--gold)}
+    .dec-it{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line-soft)}
+    .dec-it .di{flex:1;min-width:0}
+    .dec-it .di b{font-size:13.5px;font-weight:600}
+    .dec-it .di small{display:block;font-size:10.5px;color:var(--mute)}
+    .dec-it .di .fl{display:block;font-size:10.5px;color:var(--amber);margin-top:2px;line-height:1.4}
+    .dec-it input{width:52px;text-align:center;background:var(--e2);border:1px solid var(--line);border-radius:8px;padding:7px 4px;font-size:13.5px;color:var(--text)}
+    .dec-it .du{font-size:11px;color:var(--dim);min-width:32px}
+    .dec-it .dx{color:var(--mute);width:24px;height:24px;display:grid;place-items:center;border-radius:50%;flex-shrink:0}
+    .dec-it .dx:active{background:var(--red-soft);color:var(--red)}
+    .dec-note{font-size:11.5px;color:var(--amber);background:var(--amber-soft);border-radius:8px;padding:7px 10px;margin-bottom:8px;line-height:1.45}
   </style>
 </head>
 <body>
@@ -324,6 +346,7 @@
       <button data-w="today" class="on">For today</button>
       <button data-w="tomorrow">For tomorrow</button>
     </div>
+    <button id="pasteBtn" class="paste-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Paste a WhatsApp order</button>
     <div class="hp-strip" id="buyHint"></div>
     <div class="search">
       <div class="box">
@@ -412,6 +435,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=12"></script>
+<script src="/ops/sauda/app.js?v=13"></script>
 </body>
 </html>

@@ -620,6 +620,74 @@
     }).catch(function(){ busy=false; toast('No connection','err'); updateBuyBar(); });
   });
 
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // PASTE & DECODE — paste the staff's WhatsApp dump (or a screenshot); Claude
+  // decodes it to a clean PO; review/edit; confirm → saved to the PO trail.
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  var decOrders=[], decNotes=[];
+  document.getElementById('pasteBtn').addEventListener('click', openPasteSheet);
+  function openPasteSheet(){
+    var host=document.getElementById('sheetHost');
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Paste the WhatsApp order</h2>'+
+      '<div class="skuhint">Copy the staff messages from WhatsApp and paste below — keep the names and times. I’ll clean it and split it by brand. Or attach a screenshot.</div>'+
+      '<textarea class="dec-ta" id="decTa" placeholder="[15/06, 11:39 PM] Azeem Chef: Oil box&#10;Sunflower oil 4 letar&#10;…"></textarea>'+
+      '<label class="dec-file">📷 or attach a screenshot<input type="file" id="decFile" accept="image/*" style="display:block;margin-top:5px"></label>'+
+      '<button class="btn primary" id="decGo" style="width:100%;margin-top:12px">Decode</button></div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    document.getElementById('decGo').addEventListener('click', doDecode);
+  }
+  function doDecode(){
+    if(busy) return;
+    var ta=document.getElementById('decTa'), fileInp=document.getElementById('decFile');
+    var text=((ta&&ta.value)||'').trim();
+    var file=fileInp&&fileInp.files&&fileInp.files[0];
+    if(!text && !file){ toast('Paste the text or attach a screenshot','err'); return; }
+    var btn=document.getElementById('decGo'); busy=true; btn.disabled=true; btn.textContent='Decoding… (a few seconds)';
+    function send(body){
+      api('decode',{method:'POST',body:body}).then(function(res){
+        busy=false;
+        if(!res.ok||!res.j||!res.j.ok){ toast((res.j&&(res.j.detail||res.j.error))||'Decode failed','err'); btn.disabled=false; btn.textContent='Decode'; return; }
+        renderDecodeReview(res.j.orders||[], res.j.notes||[]);
+      }).catch(function(){ busy=false; toast('No connection','err'); btn.disabled=false; btn.textContent='Decode'; });
+    }
+    if(file){ var fr=new FileReader(); fr.onload=function(){ send(text?{image:fr.result,text:text}:{image:fr.result}); }; fr.readAsDataURL(file); }
+    else { send({text:text}); }
+  }
+  function renderDecodeReview(orders, notes){
+    decOrders=orders; decNotes=notes;
+    var host=document.getElementById('sheetHost');
+    var noteHtml=(notes&&notes.length)? notes.map(function(n){return '<div class="dec-note">⚠ '+esc(n)+'</div>';}).join('') : '';
+    var body=orders.map(function(o,oi){
+      var rows=(o.items||[]).map(function(it,ii){
+        var sub=[(it.raw&&it.raw.toLowerCase()!==String(it.item||'').toLowerCase())?'from “'+esc(it.raw)+'”':'', it.category?esc(it.category):''].filter(Boolean).join(' · ');
+        return '<div class="dec-it"><div class="di"><b>'+esc(it.item||'')+'</b>'+(sub?'<small>'+sub+'</small>':'')+(it.flag?'<span class="fl">⚠ '+esc(it.flag)+'</span>':'')+'</div>'+
+          '<input inputmode="decimal" data-o="'+oi+'" data-i="'+ii+'" value="'+esc(it.qty||'')+'" placeholder="qty"><span class="du">'+esc(it.unit||'')+'</span>'+
+          '<button class="dx" data-rmo="'+oi+'" data-rmi="'+ii+'" aria-label="remove">×</button></div>';
+      }).join('');
+      return '<div class="dec-order"><div class="dec-oh"><b>'+esc(o.brand||'')+'</b>'+(o.sender?'<span class="bdg">'+esc(o.sender)+'</span>':'')+'<span style="margin-left:auto;font-size:11px;color:var(--dim)">'+(o.items||[]).length+' items</span></div>'+rows+'</div>';
+    }).join('');
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Review the order</h2>'+
+      '<div class="skuhint">Cleaned and split by brand. Fix a quantity, drop a line with ×, then confirm. Amber means it needs your eye.</div>'+
+      noteHtml+'<div style="max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px">'+(body||'<div class="empty" style="padding:20px">Nothing decoded.</div>')+'</div>'+
+      '<button class="btn primary" id="decConfirm" style="width:100%">Confirm &amp; save</button></div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    host.querySelectorAll('input[data-o]').forEach(function(inp){ inp.addEventListener('input',function(){ var o=decOrders[+inp.dataset.o]; if(o&&o.items[+inp.dataset.i]) o.items[+inp.dataset.i].qty=inp.value; }); });
+    host.querySelectorAll('[data-rmo]').forEach(function(b){ b.addEventListener('click',function(){ var o=decOrders[+b.dataset.rmo]; if(o){ o.items.splice(+b.dataset.rmi,1); renderDecodeReview(decOrders, decNotes); } }); });
+    document.getElementById('decConfirm').addEventListener('click', confirmDecode);
+  }
+  function confirmDecode(){
+    if(busy) return;
+    var orders=decOrders.filter(function(o){return o.items&&o.items.length;});
+    if(!orders.length){ toast('Nothing to save','err'); return; }
+    var btn=document.getElementById('decConfirm'); busy=true; btn.disabled=true; btn.textContent='Saving…';
+    api('save-po',{method:'POST',body:{ orders:orders, need_by:S.buy.when }}).then(function(res){
+      busy=false;
+      if(!res.ok||!res.j||!res.j.ok){ toast((res.j&&res.j.error)||'Save failed','err'); btn.disabled=false; btn.textContent='Confirm & save'; return; }
+      toast('Saved '+res.j.items+' items · '+res.j.orders+' order'+(res.j.orders>1?'s':'')+' for '+(res.j.for_date||'tomorrow'),'ok');
+      document.getElementById('sheetHost').innerHTML='';
+    }).catch(function(){ busy=false; toast('No connection','err'); btn.disabled=false; btn.textContent='Confirm & save'; });
+  }
+
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
     try{ localStorage.removeItem('sauda_work'); }catch(e){}
