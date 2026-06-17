@@ -393,12 +393,40 @@
     });
   }
 
-  // ── Direct pay: pay ANY vendor an ad-hoc amount (Vendors tab). Sauda PUSHES the money
-  //    via RazorpayX — no UPI app, no redirect, no "risk policy". A payout id/UTR returns. ──
+  // ── Direct pay (Vendors tab). Until RazorpayX activates (~10-12 days), PAYOUT_LIVE stays
+  //    false → MANUAL flow (you pay by UPI, then mark paid; recorded in the trail). The day
+  //    RazorpayX is live + funded, flip PAYOUT_LIVE → true and Sauda pushes the money itself
+  //    via the payout API. SAME button, no rebuild. ──
+  var PAYOUT_LIVE = false;
   function openDirectPay(vk, name, vpa){
+    if(PAYOUT_LIVE){ openDirectPayout(vk, name, vpa); return; }
+    if(!vpa){ toast('No UPI saved for '+name,'err'); return; }
     var host=document.getElementById('sheetHost');
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(name)+'</h2>'+
-      '<div class="skuhint">Sauda sends the money <b>straight to the vendor</b> via RazorpayX — no UPI app, no redirect. A payout reference comes back instantly.</div>'+
+      '<div class="skuhint">Enter the amount, pay '+esc(name)+' in your UPI app, then tap “mark paid”. Recorded in your trail.</div>'+
+      '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" id="dpAmt" placeholder="amount"></div>'+
+      '<div class="vpa-line" style="margin:8px 0 0">'+esc(vpa)+'</div>'+
+      '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Continue to pay</button>'+
+      '</div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    var amtEl=document.getElementById('dpAmt'); if(amtEl) amtEl.focus();
+    document.getElementById('dpGo').addEventListener('click',function(){
+      var rs=num(document.getElementById('dpAmt').value);
+      if(rs<=0){ toast('Enter an amount','err'); return; }
+      if(busy) return; busy=true;
+      api('direct-pay',{method:'POST',body:{vendorKey:vk, amount_paise:Math.round(rs*100)}}).then(function(r){
+        busy=false;
+        if(!r.ok||!r.j||!r.j.ok){ toast((r.j&&r.j.error)||'Failed','err'); return; }
+        host.innerHTML='';
+        openPaySheet(vpa, name, rs, [r.j.id]);
+      }).catch(function(){ busy=false; toast('No connection','err'); });
+    });
+  }
+  // RazorpayX automated payout — used once PAYOUT_LIVE is flipped on (account live + funded).
+  function openDirectPayout(vk, name, vpa){
+    var host=document.getElementById('sheetHost');
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(name)+'</h2>'+
+      '<div class="skuhint">Sauda sends the money <b>straight to the vendor</b> via RazorpayX — no UPI app. A payout reference comes back instantly.</div>'+
       '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" id="dpAmt" placeholder="amount"></div>'+
       (vpa?'<div class="vpa-line" style="margin:8px 0 0">'+esc(vpa)+'</div>':'')+
       '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Pay '+esc(name)+'</button>'+
