@@ -898,7 +898,7 @@
   }
 
   // ── Settings: the item + vendor master (price · unit · vendor · fixed/live · phones/UPIs) ──
-  var SET={items:[],vendors:[],tab:'items',q:'',needOnly:false};
+  var SET={items:[],vendors:[],tab:'items',q:'',needOnly:false,chip:'all'};
   var SET_UNITS=['kg','g','L','ml','pc','birds','crate','bunch','katta','bora','bag','cylinder','case','box','bundle','packet','bottle'];
   function loadSettings(){
     var list=document.getElementById('setList'), empty=document.getElementById('setEmpty');
@@ -917,16 +917,35 @@
   }
   function itemMissing(i){ var m=[]; if(i.price_mode!=='live' && !(i.price_paise>0))m.push('price'); if(!i.unit)m.push('unit'); if(!i.default_vendor)m.push('vendor'); if(i.form==='defined'){ if(!i.brand)m.push('brand'); if(!i.pack_label)m.push('pack'); } return m; }
   function renderSetItems(list){
-    var q=SET.q;
+    var q=SET.q, chip=SET.chip||'all';
     function attn(i){ return i.flagged || itemMissing(i).length; }
     var pricedN=SET.items.filter(function(i){return !i.flagged && i.price_mode!=='live' && i.price_paise>0;}).length;
     var confirmN=SET.items.filter(function(i){return i.flagged;}).length;
     var noPriceN=SET.items.filter(function(i){return !i.flagged && i.price_mode!=='live' && !(i.price_paise>0);}).length;
-    var rows=SET.items.filter(function(i){
-      if(SET.needOnly && !attn(i)) return false;
-      return !q || (i.label+' '+(i.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0;
-    });
-    var html='<div class="setcount"><b style="color:var(--green)">'+pricedN+' priced ✓</b> · <b style="color:var(--amber)">'+confirmN+' to confirm ⚠</b> · <b style="color:var(--dim)">'+noPriceN+' no price</b> · '+SET.items.filter(function(i){return i.price_mode==='live';}).length+' live</div>';
+    var liveN=SET.items.filter(function(i){return i.price_mode==='live';}).length;
+    var noVenN=SET.items.filter(function(i){return !i.default_vendor;}).length;
+    var vcount={}; SET.items.forEach(function(i){ if(i.default_vendor) vcount[i.default_vendor]=(vcount[i.default_vendor]||0)+1; });
+    function vname(k){ var v=SET.vendors.find(function(x){return x.vendor_key===k;}); return v?v.name:k; }
+    // ── filter chips: by VENDOR + by state, so it isn't one dead scroll ──
+    function ch(key,label,am){ return '<button class="fchip'+(am?' am':'')+(chip===key?' on':'')+'" data-chip="'+esc(key)+'">'+label+'</button>'; }
+    var chipsEl=document.getElementById('setChips');
+    if(chipsEl){
+      var vchips=Object.keys(vcount).sort(function(a,b){return vcount[b]-vcount[a];}).map(function(k){return ch('v:'+k, esc(vname(k))+' '+vcount[k]);}).join('');
+      chipsEl.innerHTML=ch('all','All '+SET.items.length)+ch('novendor','◇ No vendor '+noVenN,true)+ch('noprice','○ No price '+noPriceN)+ch('confirm','⚠ Confirm '+confirmN,true)+ch('live','⏱ Live '+liveN)+vchips;
+      chipsEl.classList.remove('hide');
+      chipsEl.querySelectorAll('[data-chip]').forEach(function(b){ b.addEventListener('click',function(){ SET.chip=b.dataset.chip; renderSettings(); }); });
+    }
+    function pass(i){
+      if(chip==='novendor') return !i.default_vendor;
+      if(chip==='noprice') return !i.flagged && i.price_mode!=='live' && !(i.price_paise>0);
+      if(chip==='confirm') return i.flagged;
+      if(chip==='live') return i.price_mode==='live';
+      if(chip==='attn') return attn(i);
+      if(chip.indexOf('v:')===0) return i.default_vendor===chip.slice(2);
+      return true;
+    }
+    var rows=SET.items.filter(function(i){ if(!pass(i)) return false; return !q || (i.label+' '+(i.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
+    var html='<div class="setcount">'+rows.length+' shown · <b style="color:var(--green)">'+pricedN+' priced</b> · <b style="color:var(--amber)">'+confirmN+' confirm</b> · <b style="color:var(--dim)">'+noPriceN+' no price</b> · <b style="color:var(--amber)">'+noVenN+' no vendor</b></div>';
     html+=rows.map(function(i){
       var live=i.price_mode==='live', def=i.form==='defined';
       var price=live
@@ -959,8 +978,9 @@
   function vendorMissing(v){ var m=[]; if(!v.phone)m.push('phone'); if(!(v.vpas&&v.vpas.length))m.push('UPI'); return m; }
   function renderSetVendors(list){
     var q=SET.q, FUL=['deliver','collect','standing','porter'], PAY=['per','khata_roll','khata_periodic'];
+    var ce=document.getElementById('setChips'); if(ce) ce.classList.add('hide');
     var inc=SET.vendors.filter(function(v){return vendorMissing(v).length;});
-    var rows=SET.vendors.filter(function(v){ if(SET.needOnly && !vendorMissing(v).length) return false; return !q || (v.name+' '+(v.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
+    var rows=SET.vendors.filter(function(v){ if(SET.chip==='attn' && !vendorMissing(v).length) return false; return !q || (v.name+' '+(v.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
     list.innerHTML='<div class="setcount">'+rows.length+' vendors · <b style="color:var(--amber)">'+inc.length+' to fill</b> (phone / UPI)</div>'+rows.map(function(v){
       var vpa=(v.vpas&&v.vpas[0])||''; var miss=vendorMissing(v); var nc=miss.length?' need':'';
       return '<div class="srow'+nc+'"><div class="sl"><b>'+esc(v.name)+'</b><small>'+(miss.length?'<span style="color:var(--amber)">⚠ add '+miss.join(' / ')+'</span>':esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI')+'</small></div>'+
@@ -1004,7 +1024,7 @@
   document.getElementById('gear').addEventListener('click', function(){ setMode('settings'); });
   document.getElementById('setSeg').addEventListener('click', function(e){ var b=e.target.closest('button[data-s]'); if(b){ SET.tab=b.dataset.s; renderSettings(); } });
   document.getElementById('setSearch').addEventListener('input', function(){ SET.q=(this.value||'').trim().toLowerCase(); renderSettings(); });
-  document.getElementById('setNeed').addEventListener('click', function(){ SET.needOnly=!SET.needOnly; this.classList.toggle('on',SET.needOnly); renderSettings(); });
+  document.getElementById('setNeed').addEventListener('click', function(){ SET.chip=(SET.chip==='attn'?'all':'attn'); this.classList.toggle('on',SET.chip==='attn'); renderSettings(); });
 
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
