@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-06-17T10:04:15+0530",
-  "published_at": "2026-06-17T10:04:15+0530",
+  "updated_at": "2026-06-17T10:20:24+0530",
+  "published_at": "2026-06-17T10:20:24+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -149,21 +149,36 @@
       "title": "11 Reel Making",
       "subgroup": "Creative Surface",
       "risk": "creative publishing and claim accuracy",
-      "status": "ready",
-      "last_task": "Upgrade QISSA HE Meta reel from proof-safe to ad-grade v2",
-      "last_summary": "Nihaf correctly flagged v1: real footage/proof-safe but CTA too quiet and transitions missing. Built v2: added sticky CTA primitive, heat-flash transition primitive, ad_contract validation requiring sticky CTA + transitions, stronger TAP GET DIRECTIONS copy, and rendered locally + RTX/NVENC.",
-      "next_action": "Use v2 as the actual Meta ad-grade template. Future specs must include ad_contract.sticky_cta_required=true and transitions_required=true unless deliberately making a raw organic reel.",
-      "mutation_status": "HE-Raw-Clips only: scripts/apply_cta_overlays.py gains sticky_cta + transition_flash; scripts/qissa_factory.py enforces ad contracts; specs/qissa_meta_tandoori_tikka_v2.json added. No HN-Hotels-Site install or deploy.",
+      "status": "done",
+      "last_task": "HE reel engine design-spine lock",
+      "last_summary": "Built QISSA v3 overlay system from locked HE Figma template RY9rwiESuyYtpp0R27EYct node 139:2: exact portable HE icon/wordmark assets, Cinzel/Inter fonts, parchment rail/frame, spine_lower, spine_sticky_cta, spine_final_cta; qissa_factory now validates design_contract and rejects legacy generic overlay positions for he_locked_theme_v1.",
+      "next_action": "Use specs/qissa_meta_tandoori_tikka_v3.json as the repeatable Meta ad-grade template. Future HE paid reels must declare design_contract.theme=he_locked_theme_v1 and use spine_* overlays. Extend same pattern per bucket before scaling batch output.",
+      "mutation_status": "Edited /Users/nihaf/Documents/HE-Raw-Clips/scripts/apply_cta_overlays.py, scripts/qissa_factory.py, VIDEO-CREATIVE-SPINE.md, specs/qissa_meta_tandoori_tikka_v3.json; added brand-assets/ portable exact marks/fonts.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command reel-making",
-      "last_run_at": "2026-06-17T10:04:15+0530",
-      "proof": "RTX QA PASS. Exact RTX upload pulled to /Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_v2_RTX_2026-06-17.mp4. Frame strip: /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v2_rtx_frames.jpg. Upload: 1080x1920 H264/AAC, 11.12s, 4.21MB, sticky_cta_contract PASS, transition_contract PASS.",
-      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/specs/qissa_meta_tandoori_tikka_v2.json; /Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_v2_RTX_2026-06-17.mp4; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v2.qa.md",
+      "last_run_at": "2026-06-17T10:20:24+0530",
+      "proof": "Local QA and RTX QA pass; RTX worker verified RTX 3060 + h264_nvenc; no-wrong-food contract still passes with H34/H40/H49 Tier-1 exact proof.",
+      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_v3_RTX_2026-06-17.mp4; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v3_rtx_frames.jpg; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v3_rtx.qa.md",
       "live_ids": "hn-rtx-worker 100.107.54.16; GPU NVIDIA GeForce RTX 3060; Google Chrome 149.0.7827.114; Node v22.22.1",
       "rollback": "No product/customer mutation to roll back. Remove ~/.ssh/known_hosts hn-rtx-worker entry only if Tailscale host identity is later found wrong.",
-      "data_freshness": "2026-06-17 10:04 IST"
+      "data_freshness": "2026-06-17T10:22+05:30"
     }
   },
   "events": [
+    {
+      "id": "20260617102024-reel-making",
+      "at": "2026-06-17T10:20:24+0530",
+      "lane": "reel-making",
+      "task": "HE reel engine design-spine lock",
+      "status": "done",
+      "summary": "Built QISSA v3 overlay system from locked HE Figma template RY9rwiESuyYtpp0R27EYct node 139:2: exact portable HE icon/wordmark assets, Cinzel/Inter fonts, parchment rail/frame, spine_lower, spine_sticky_cta, spine_final_cta; qissa_factory now validates design_contract and rejects legacy generic overlay positions for he_locked_theme_v1.",
+      "next_action": "Use specs/qissa_meta_tandoori_tikka_v3.json as the repeatable Meta ad-grade template. Future HE paid reels must declare design_contract.theme=he_locked_theme_v1 and use spine_* overlays. Extend same pattern per bucket before scaling batch output.",
+      "mutation_status": "Edited /Users/nihaf/Documents/HE-Raw-Clips/scripts/apply_cta_overlays.py, scripts/qissa_factory.py, VIDEO-CREATIVE-SPINE.md, specs/qissa_meta_tandoori_tikka_v3.json; added brand-assets/ portable exact marks/fonts.",
+      "proof": "Local QA and RTX QA pass; RTX worker verified RTX 3060 + h264_nvenc; no-wrong-food contract still passes with H34/H40/H49 Tier-1 exact proof.",
+      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_v3_RTX_2026-06-17.mp4; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v3_rtx_frames.jpg; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v3_rtx.qa.md",
+      "live_ids": "hn-rtx-worker 100.107.54.16; GPU NVIDIA GeForce RTX 3060; Google Chrome 149.0.7827.114; Node v22.22.1",
+      "rollback": "No product/customer mutation to roll back. Remove ~/.ssh/known_hosts hn-rtx-worker entry only if Tailscale host identity is later found wrong.",
+      "data_freshness": "2026-06-17T10:22+05:30"
+    },
     {
       "id": "20260617100415-reel-making",
       "at": "2026-06-17T10:04:15+0530",
@@ -1063,16 +1078,6 @@
       "summary": "Revised the late-night Hamza Hotel campaign copy so the first visible line now redirects action to Hamza Express: 'Searched Hamza Hotel? | Go To Hamza Express'. Updated the exact platform config, copy doc, and HTML mockup to make Hamza Express/HKP Road the destination before food claim and offer; landing CTA must read Get Directions To Hamza Express.",
       "next_action": "Use the clarified bridge copy in landing update and live Google Ads setup; verify final RSA pins, sitelink text, and landing first CTA all repeat Hamza Express before enabling Rs500/day.",
       "mutation_status": "No live Google Ads mutation. Local copy/spec/mockup updated only."
-    },
-    {
-      "id": "20260525084933-google-ads",
-      "at": "2026-05-25T08:49:33+0530",
-      "lane": "google-ads",
-      "task": "Confirm readiness for Hamza Hotel late-night campaign configuration",
-      "status": "ready",
-      "summary": "Readiness answer prepared: strategy is finalized for late-night Hamza Hotel intent capture with Rs500/day, 5km presence-only, 10PM-3AM, Search-only, manual CPC, exact/phrase Hamza keywords, 10% dine-in offer, and Maps-first CTA. Remaining execution caveat: do not only mutate budget; live setup must also apply keywords, RSA copy, schedule, assets, and landing proof.",
-      "next_action": "On explicit approval, implement/apply exact campaign setup via purpose-built endpoint or Google Ads UI, verify readback, then enable with rollback plan.",
-      "mutation_status": "No live mutation. Readiness and final configuration confirmation only."
     }
   ]
 }
