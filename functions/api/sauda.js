@@ -17,6 +17,7 @@ import { mintToken, verifyToken, corsHeaders } from './_lib/darbar-auth.js';
 import { canonVendorKey, vendorView, VENDORS } from './_lib/sauda-vendors.js';
 import { HP_CATALOG } from './_lib/hyperpure-catalog.js';
 import { DECODE_SYSTEM } from './_lib/decode-ruleset.js';
+import { sendWithFallback } from './_lib/comms-core.js';
 
 // ── Hyperpure: the planned next-day B2B basket (distinct from local trip vendors) ──
 // Bangalore rules (researched 2026-06-15): order by ~23:00 IST → next-day delivery,
@@ -88,10 +89,14 @@ export async function onRequest(context) {
     }
     if (action === 'place' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
-      return withCors(json(await placeOrders(db, body, auth)), request);
+      return withCors(json(await placeOrders(db, body, auth, env, context)), request);
     }
     if (action === 'open' && request.method === 'GET') {
       return withCors(json(await openOrders(db)), request);
+    }
+    if (action === 'vendor-ledger' && request.method === 'GET') {
+      const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10) || 30, 120);
+      return withCors(json(await vendorLedger(db, days)), request);
     }
     if (action === 'request-pay' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
@@ -478,35 +483,147 @@ async function ordersForDay(db, forDate) {
   return { for_date: forDate, orders: rows?.results || [] };
 }
 
+// parse a leading numeric quantity from a string like "2", "2.5", "2 kg", "1.5L"
+function qtyNum(q) { const m = String(q == null ? '' : q).match(/-?[\d.]+/); return m ? (parseFloat(m[0]) || 0) : 0; }
+
 // ── Place: one sauda_purchase row per vendor basket ──
-// body = { for_date?, lines: [{ item, qty, unit, vendorKey, brand }] }
-async function placeOrders(db, body, auth) {
+// body = { for_date?, lines: [{ item, sku?, qty, unit, vendorKey, brand, price_paise? }] }
+// price_paise = the per-unit price staff captured for today's buy. The vendor's
+// basket total (expected_amount_paise) is summed from it, so "To pay" is never
+// a blank field someone has to re-type — today's prices ARE the bill.
+async function placeOrders(db, body, auth, env, context) {
   const forDate = (body.for_date || todayIST()).slice(0, 10);
   const lines = Array.isArray(body.lines) ? body.lines : [];
-  if (!lines.length) return json({ error: 'no lines' }, 400);
+  if (!lines.length) return { ok: false, error: 'no lines' };
 
   // group lines by vendor
   const byVendor = new Map();
   for (const ln of lines) {
     const vk = ln.vendorKey && VENDORS[ln.vendorKey] ? ln.vendorKey : 'unassigned';
     if (!byVendor.has(vk)) byVendor.set(vk, []);
-    byVendor.get(vk).push({ item: String(ln.item || '').trim(), qty: ln.qty ?? '', unit: ln.unit || '', brand: ln.brand || 'both' });
+    byVendor.get(vk).push({
+      item: String(ln.item || '').trim(),
+      sku: String(ln.sku || ln.item || '').trim(),   // the resolved product identity
+      qty: ln.qty ?? '',
+      unit: ln.unit || '',
+      brand: ln.brand || 'both',
+      price_paise: Math.max(0, Math.round(+ln.price_paise || 0)),
+    });
   }
 
   const nowIso = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   const created = [];
   for (const [vk, vlines] of byVendor.entries()) {
     const v = vendorView(vk);
+    const expected = vlines.reduce((s, l) => s + Math.round(qtyNum(l.qty) * (l.price_paise || 0)), 0);
     const res = await db.prepare(
-      `INSERT INTO sauda_purchase (brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, ordered_at, ordered_by)
-       VALUES (?,?,?,?,?,?,?,?,?)`
+      `INSERT INTO sauda_purchase (brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, expected_amount_paise, ordered_at, ordered_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       v.brand || 'both', v.name, forDate, v.fulfilment, v.pay,
-      JSON.stringify(vlines), 'ORDERED', nowIso, auth.u || ''
+      JSON.stringify(vlines), 'ORDERED', expected, nowIso, (auth && auth.u) || ''
     ).run();
-    created.push({ vendor: v.name, vendorKey: vk, lines: vlines.length, id: res?.meta?.last_row_id });
+    created.push({ vendor: v.name, vendorKey: vk, fulfilment: v.fulfilment, lines: vlines, expected_amount_paise: expected, id: res?.meta?.last_row_id });
   }
-  return { ok: true, for_date: forDate, placed: created.length, orders: created };
+
+  // Notify the runner: collect items → Basheer (he goes & buys); everything else
+  // → Zoya (places it with the vendor for delivery). Non-blocking + fail-safe.
+  try { const p = notifyOnPlace(env, created, forDate); if (context && context.waitUntil) context.waitUntil(p); } catch (e) {}
+
+  return {
+    ok: true, for_date: forDate, placed: created.length,
+    orders: created.map((c) => ({ vendor: c.vendor, vendorKey: c.vendorKey, lines: c.lines.length, expected_amount_paise: c.expected_amount_paise, id: c.id })),
+  };
+}
+
+// ── WhatsApp the right person the moment an order is placed ──
+// collect → Basheer (go & buy) · deliver/porter/standing → Zoya (order it in).
+// GATED: unless env.SAUDA_STAFF_NOTIFY === '1', the alert is routed to the OWNER
+// (test mode, "[TEST → Basheer]" prefix) so staff are never spammed while testing.
+// Reuses the approved ops_alert_v1 WABA template via the Sparksol (non-customer) line.
+async function notifyOnPlace(env, created, forDate) {
+  if (!env) return;
+  const owner = env.OWNER_PHONE || '917010426808';
+  const live = env.SAUDA_STAFF_NOTIFY === '1';
+  const targets = {
+    collect: { name: 'Basheer', phone: '9061906916' },
+    other:   { name: 'Zoya',    phone: '8147120714' },
+  };
+  const groups = { collect: [], other: [] };
+  for (const c of created) {
+    if (c.vendorKey === 'unassigned') continue;
+    (c.fulfilment === 'collect' ? groups.collect : groups.other).push(c);
+  }
+  const link = 'https://sauda.hnhotels.in/';
+  for (const g of Object.keys(groups)) {
+    const list = groups[g];
+    if (!list.length) continue;
+    const t = targets[g];
+    const itemCount = list.reduce((n, c) => n + c.lines.length, 0);
+    const head = (g === 'collect' ? `Sauda: go & buy from ${list.length} vendor(s)` : `Sauda: ${list.length} order(s) to place`);
+    const detail = (`${list.map((c) => c.vendor).join(', ')} — ${itemCount} item(s) for ${forDate}.`).slice(0, 600);
+    const instr = (g === 'collect' ? 'Collect today; clear any khata on the trip.' : 'Send each vendor their order for delivery.');
+    const phone = live ? t.phone : owner;
+    const prefix = live ? '' : `[TEST → ${t.name}] `;
+    try {
+      await sendWithFallback(env, {
+        brand: 'sparksol', tier: 'warn',
+        alert_id: `sauda_place:${g}:${forDate}:${Math.round(Date.now() / 60000)}`,
+        phone, template: 'ops_alert_v1', language: 'en',
+        vars: [(prefix + head).slice(0, 60), detail, instr, link],
+      });
+    } catch (e) { /* never block a placed order on a comms failure */ }
+  }
+}
+
+// ── Per-vendor records: count, paid, outstanding, and the full trail (timestamps + method) ──
+// Reads the same sauda_purchase rows; online (prepaid Hyperpure) excluded. This is
+// the "every record for a vendor" view: how much is paid, how much is left, when.
+async function vendorLedger(db, days) {
+  const since = `date('now','-${days} days')`;
+  let rows = [];
+  try {
+    rows = ((await db.prepare(
+      `SELECT id, vendor_name, for_date, fulfilment, pay_timing, items_json, status,
+              expected_amount_paise, pay_amount_paise, ordered_at, pay_requested_at, paid_at, pay_method
+         FROM sauda_purchase
+        WHERE (pay_timing IS NULL OR pay_timing != 'online') AND for_date >= ${since}
+        ORDER BY id DESC`
+    ).all()).results) || [];
+  } catch (e) { rows = []; }
+
+  const byVendor = new Map();
+  for (const r of rows) {
+    const vk = canonVendorKey(r.vendor_name) || 'unassigned';
+    if (!byVendor.has(vk)) byVendor.set(vk, []);
+    byVendor.get(vk).push(r);
+  }
+  const vendors = [];
+  for (const [vk, list] of byVendor.entries()) {
+    const v = vendorView(vk);
+    let paid = 0, outstanding = 0, lastPaidAt = '';
+    const trail = [];
+    for (const r of list) {
+      const amt = (r.pay_amount_paise || r.expected_amount_paise || 0);
+      const isPaid = !!r.paid_at || r.status === 'PAID';
+      if (isPaid) { paid += amt; if (r.paid_at && r.paid_at > lastPaidAt) lastPaidAt = r.paid_at; }
+      else outstanding += amt;
+      let itemCount = 0; try { itemCount = JSON.parse(r.items_json || '[]').length; } catch (e) {}
+      trail.push({
+        id: r.id, for_date: r.for_date, status: r.status, amount_paise: amt, items: itemCount,
+        ordered_at: r.ordered_at || '', pay_requested_at: r.pay_requested_at || '',
+        paid_at: r.paid_at || '', method: r.pay_method || '',
+      });
+    }
+    vendors.push({
+      vendorKey: v.key, vendor_name: v.name, vpa: v.vpa || '',
+      fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
+      order_count: list.length, paid_paise: paid, outstanding_paise: outstanding,
+      last_paid_at: lastPaidAt, trail,
+    });
+  }
+  vendors.sort((a, b) => (b.outstanding_paise - a.outstanding_paise) || (b.paid_paise - a.paid_paise));
+  return { ok: true, days, vendors };
 }
 
 // ── Owner "to pay": ONE consolidated payment per vendor ──

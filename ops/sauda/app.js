@@ -111,11 +111,12 @@
 
   // ── order model ──
   function addLine(it){
-    S.order.push({ id:++S.seq, item:it.name, qty:'', unit:it.unit||'', vendorKey:it.vendorKey||'unassigned', vendorName:it.vendorName||'Unassigned', brand:it.brand||'both' });
+    S.order.push({ id:++S.seq, item:it.name, qty:'', price:'', unit:it.unit||'', vendorKey:it.vendorKey||'unassigned', vendorName:it.vendorName||'Unassigned', brand:it.brand||'both' });
     renderOrder(); toast(it.name+' added','info');
   }
   function removeLine(id){ S.order=S.order.filter(function(l){return l.id!==id;}); renderOrder(); }
   function setQty(id,v){ var l=S.order.find(function(x){return x.id===id;}); if(l) l.qty=v; updatePlaceBtn(); }
+  function setPrice(id,v){ var l=S.order.find(function(x){return x.id===id;}); if(l) l.price=v; updatePlaceBtn(); }
 
   function vendorMeta(key){ var v=(S.cat&&S.cat.vendors||[]).find(function(x){return x.key===key;}); return v||{key:key,name:key,fulfilment:'deliver',pay:'per',fulfilmentLabel:'delivers',payLabel:'pay per order'}; }
 
@@ -138,15 +139,20 @@
         html+='<div class="khata"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>'+
           '<span>On this trip, clear <b>yesterday’s bill</b>. Today’s items are paid tomorrow.</span></div>';
       }
+      var sub=0;
       lines.forEach(function(l){
-        html+='<div class="line"><div class="ln">'+esc(l.item)+(l.brand&&l.brand!=='both'?' <span class="lb">'+esc(l.brand)+'</span>':'')+'</div>'+
-          '<div class="qty"><input inputmode="decimal" value="'+esc(l.qty)+'" data-q="'+l.id+'" placeholder="qty"><span class="u">'+esc(l.unit||'')+'</span></div>'+
-          '<button class="x" data-x="'+l.id+'" aria-label="remove">×</button></div>';
+        var qn=parseFloat((String(l.qty).match(/[\d.]+/)||[''])[0])||0, pr=parseFloat(l.price)||0; sub+=qn*pr;
+        html+='<div class="line"><div class="lhead"><div class="ln">'+esc(l.item)+(l.brand&&l.brand!=='both'?' <span class="lb">'+esc(l.brand)+'</span>':'')+'</div>'+
+          '<button class="x" data-x="'+l.id+'" aria-label="remove">×</button></div>'+
+          '<div class="lf"><div class="ff"><label>Qty</label><input inputmode="decimal" value="'+esc(l.qty)+'" data-q="'+l.id+'" placeholder="qty"><span class="u">'+esc(l.unit||'')+'</span></div>'+
+          '<div class="ff"><label>₹'+(l.unit?'/'+esc(l.unit):'')+'</label><input inputmode="decimal" value="'+esc(l.price||'')+'" data-p="'+l.id+'" placeholder="rate"></div></div></div>';
       });
+      html+='<div class="bsub">basket ₹<b>'+(Math.round(sub).toLocaleString('en-IN'))+'</b></div>';
       html+='</div>';
     });
     host.innerHTML=html;
     host.querySelectorAll('input[data-q]').forEach(function(inp){ inp.addEventListener('input',function(){ setQty(+inp.dataset.q, inp.value); }); });
+    host.querySelectorAll('input[data-p]').forEach(function(inp){ inp.addEventListener('input',function(){ setPrice(+inp.dataset.p, inp.value); }); });
     host.querySelectorAll('button[data-x]').forEach(function(b){ b.addEventListener('click',function(){ removeLine(+b.dataset.x); }); });
     renderVendorList();
     updatePlaceBtn();
@@ -155,7 +161,9 @@
     var btn=document.getElementById('placeBtn');
     var n=S.order.length;
     var vendors=Object.keys(S.order.reduce(function(a,l){a[l.vendorKey]=1;return a;},{})).length;
-    btn.disabled=!n; btn.textContent=n?('Place '+vendors+' vendor order'+(vendors>1?'s':'')+' · '+n+' item'+(n>1?'s':'')):'Place order';
+    var tot=S.order.reduce(function(s,l){ var qn=parseFloat((String(l.qty).match(/[\d.]+/)||[''])[0])||0; return s+qn*(parseFloat(l.price)||0); },0);
+    btn.disabled=!n;
+    btn.textContent=n?('Place '+vendors+' order'+(vendors>1?'s':'')+(tot>0?' · ₹'+Math.round(tot).toLocaleString('en-IN'):' · '+n+' item'+(n>1?'s':''))):'Place order';
   }
 
   // ── add-new-item sheet ──
@@ -198,7 +206,7 @@
   function vLineFor(key,nm){ return S.order.find(function(l){ return l.vendorKey===key && l.item.toLowerCase()===String(nm).toLowerCase(); }); }
   function vSetQty(key,item,qty){
     var l=vLineFor(key,item.name);
-    if(qty>0){ if(l){ l.qty=qty; } else { S.order.push({ id:++S.seq, item:item.name, qty:qty, unit:item.unit||'', vendorKey:key, vendorName:vendorMeta(key).name, brand:item.brand||S.brand }); } }
+    if(qty>0){ if(l){ l.qty=qty; } else { S.order.push({ id:++S.seq, item:item.name, qty:qty, price:'', unit:item.unit||'', vendorKey:key, vendorName:vendorMeta(key).name, brand:item.brand||S.brand }); } }
     else if(l){ S.order=S.order.filter(function(x){return x!==l;}); }
   }
   function openVendorSheet(key){
@@ -240,7 +248,7 @@
     var bad=S.order.filter(function(l){ return String(l.qty).trim()===''; });
     if(bad.length && !confirm(bad.length+' item(s) have no quantity. Place anyway? (vendor will fill)')) return;
     busy=true; var btn=this; btn.disabled=true; btn.textContent='Placing…';
-    var lines=S.order.map(function(l){ return { item:l.item, qty:l.qty, unit:l.unit, vendorKey:l.vendorKey, brand:l.brand }; });
+    var lines=S.order.map(function(l){ return { item:l.item, sku:l.item, qty:l.qty, unit:l.unit, vendorKey:l.vendorKey, brand:l.brand, price_paise:Math.round((parseFloat(l.price)||0)*100) }; });
     api('place',{method:'POST',body:{ lines:lines }}).then(function(res){
       busy=false;
       if(!res.ok||!res.j||!res.j.ok){ toast(res.j&&res.j.error||'Place failed','err'); updatePlaceBtn(); return; }
@@ -260,13 +268,15 @@
   // ── mode toggle: Place · To pay · Hyperpure · Compare ──
   function setMode(m){
     var buy=document.getElementById('viewBuy'), place=document.getElementById('viewPlace'), pay=document.getElementById('viewPay'),
-        hp=document.getElementById('viewHp'), cmp=document.getElementById('viewCompare'), hist=document.getElementById('viewHistory');
+        hp=document.getElementById('viewHp'), cmp=document.getElementById('viewCompare'), hist=document.getElementById('viewHistory'),
+        vend=document.getElementById('viewVendors');
     var buyBar=document.getElementById('buyBar'), placeBar=document.getElementById('placeBar'), hpBar=document.getElementById('hpBar'), cmpBar=document.getElementById('cmpBar');
     var h1=document.querySelector('.top h1');
     document.querySelectorAll('#modeSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.m===m); });
-    [buy,place,pay,hp,cmp,hist].forEach(function(v){ v.classList.add('hide'); });
+    [buy,place,pay,hp,cmp,hist,vend].forEach(function(v){ if(v) v.classList.add('hide'); });
     [buyBar,placeBar,hpBar,cmpBar].forEach(function(b){ b.classList.add('hide'); });
     if(m==='pay'){ pay.classList.remove('hide'); if(h1) h1.textContent="To pay"; loadPay(); }
+    else if(m==='vendors'){ vend.classList.remove('hide'); if(h1) h1.textContent="Vendors"; loadVendors(); }
     else if(m==='hp'){ hp.classList.remove('hide'); hpBar.classList.remove('hide'); if(h1) h1.textContent="Tomorrow · Hyperpure"; loadHp(); }
     else if(m==='cmp'){ cmp.classList.remove('hide'); cmpBar.classList.remove('hide'); if(h1) h1.textContent="Compare prices"; loadCompare(); }
     else if(m==='saved'){ hist.classList.remove('hide'); if(h1) h1.textContent="Saved orders"; loadHistory(); }
@@ -316,7 +326,7 @@
           if(rs>0) api('request-pay',{method:'POST',body:{ids:idsOf(a), amount_paise:Math.round(rs*100)}});
         });
       });
-      list.querySelectorAll('button[data-done]').forEach(function(b){
+      list.querySelectorAll('button[data-ids]').forEach(function(b){
         b.addEventListener('click', function(){
           var ids=idsOf(b); var pb=b.closest('.pb'); var rs=parseFloat(pb.querySelector('input[data-amt]').value||'0')||0;
           if(busy||!ids.length) return; busy=true;
@@ -709,6 +719,35 @@
         }).join('');
         return '<div class="dec-order"><div class="dec-oh"><b>'+hdr+'</b><span style="margin-left:auto;font-size:11px;color:var(--dim)">'+(o.items||[]).length+' items</span></div>'+rows+'</div>';
       }).join('');
+    }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
+  }
+
+  // ── Vendors — per-vendor records: paid / outstanding / full trail (timestamps + method) ──
+  function fmtTs(s){ if(!s) return ''; try{ return String(s).slice(0,16).replace('T',' '); }catch(e){ return s; } }
+  function loadVendors(){
+    var list=document.getElementById('venList'), empty=document.getElementById('venEmpty');
+    list.innerHTML='<div class="empty">Loading…</div>'; empty.classList.add('hide');
+    api('vendor-ledger').then(function(res){
+      if(!res.ok||!res.j||!res.j.ok){ list.innerHTML=''; toast('Load failed','err'); return; }
+      var vs=res.j.vendors||[];
+      if(!vs.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
+      list.innerHTML=vs.map(function(v,vi){
+        var trail=(v.trail||[]).map(function(t){
+          var when = t.paid_at?('paid '+fmtTs(t.paid_at)+(t.method?' · '+esc(t.method):'')) : (t.pay_requested_at?('asked '+fmtTs(t.pay_requested_at)) : ('placed '+fmtTs(t.ordered_at)));
+          var stcls = t.status==='PAID'?'ok':(t.status==='REQUESTED'?'amber':'dim');
+          return '<div class="tr"><span class="ts '+stcls+'">'+esc(t.status||'')+'</span>'+
+            '<span class="ti">'+esc(t.for_date||'')+' · '+t.items+' item'+(t.items!==1?'s':'')+'</span>'+
+            '<span class="ta">₹'+rupees(t.amount_paise)+'</span>'+
+            '<span class="tw">'+esc(when)+'</span></div>';
+        }).join('');
+        return '<div class="ven"><div class="vhd" data-vi="'+vi+'">'+
+          '<div class="vleft"><span class="bn">'+esc(v.vendor_name)+'</span>'+
+            '<span class="tag f">'+esc(v.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(v.payLabel||'')+'</span></div>'+
+          '<div class="vright">'+(v.outstanding_paise>0?'<span class="due">₹'+rupees(v.outstanding_paise)+' due</span>':'<span class="clr">clear</span>')+'</div></div>'+
+          '<div class="vmeta"><span>'+v.order_count+' order'+(v.order_count!==1?'s':'')+'</span><span>paid ₹'+rupees(v.paid_paise)+'</span>'+(v.last_paid_at?'<span>last '+esc(fmtTs(v.last_paid_at))+'</span>':'')+'</div>'+
+          '<div class="vtrail hide" id="vt'+vi+'">'+(trail||'<div class="dim" style="padding:8px;color:var(--mute)">No orders.</div>')+'</div></div>';
+      }).join('');
+      list.querySelectorAll('.vhd[data-vi]').forEach(function(h){ h.addEventListener('click',function(){ var el=document.getElementById('vt'+h.dataset.vi); if(el) el.classList.toggle('hide'); }); });
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
 
