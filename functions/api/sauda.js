@@ -147,6 +147,15 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await directPay(db, body, auth)), request);
     }
+    // payout: RazorpayX pushes money STRAIGHT to the vendor (UPI/bank) — replaces the dead
+    // consumer-UPI redirect. Idempotency-protected so a retry never double-pays.
+    if (action === 'payout' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await payoutVendor(db, body, auth, env)), request);
+    }
+    if (action === 'payout-status' && request.method === 'GET') {
+      return withCors(json(await payoutStatus(db, env, url.searchParams.get('id') || '')), request);
+    }
     if (action === 'hyperpure-feed' && request.method === 'GET') {
       return withCors(json(await hyperpureFeed(db)), request);
     }
@@ -1071,6 +1080,89 @@ async function directPay(db, body, auth) {
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(v.brand || 'both', v.name, forDate, v.fulfilment, v.pay, JSON.stringify(items), 'REQUESTED', amt, amt, now, now, (auth && auth.u) || '').run();
   return { ok: true, id: res?.meta?.last_row_id, vendor: v.name, vpa: v.vpa || '', amount_paise: amt };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// RAZORPAYX PAYOUTS — software moves the money. The consumer-UPI redirect was
+// structurally dead (unsigned web intents are risk-declined "as per UPI risk
+// policy"). RazorpayX pushes funds straight to the vendor's VPA on business
+// rails — no app, no link, a real UTR back. Keys/account come from env secrets.
+// ════════════════════════════════════════════════════════════════════════════
+function rzpHeaders(env) {
+  return { Authorization: 'Basic ' + btoa((env.RAZORPAYX_KEY_ID || '') + ':' + (env.RAZORPAYX_KEY_SECRET || '')), 'Content-Type': 'application/json' };
+}
+async function rzpFetch(env, path, method, body, extra) {
+  const res = await fetch('https://api.razorpay.com/v1' + path, {
+    method: method || 'GET',
+    headers: Object.assign(rzpHeaders(env), extra || {}),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+// Ensure a Razorpay Contact + Fund Account exist for this vendor; cache ids on sauda_vendor.
+async function ensureRzpFundAccount(db, env, vk, v) {
+  const row = await db.prepare(`SELECT rzp_contact_id, rzp_fund_account_id FROM sauda_vendor WHERE vendor_key=?`).bind(vk).first().catch(() => null);
+  if (row && row.rzp_fund_account_id) return { fund_account_id: row.rzp_fund_account_id };
+  const vpa = String((v && v.vpa) || '').trim();
+  if (!vpa) return { error: 'no UPI on file for ' + ((v && v.name) || vk) };
+  let contactId = row && row.rzp_contact_id;
+  if (!contactId) {
+    const c = await rzpFetch(env, '/contacts', 'POST', { name: (v && v.name) || vk, type: 'vendor', reference_id: 'sauda_vendor_' + vk, contact: (v && v.phone) || undefined });
+    if (!c.ok || !c.data.id) return { error: 'contact failed: ' + ((c.data.error && c.data.error.description) || c.status) };
+    contactId = c.data.id;
+  }
+  const fa = await rzpFetch(env, '/fund_accounts', 'POST', { contact_id: contactId, account_type: 'vpa', vpa: { address: vpa } });
+  if (!fa.ok || !fa.data.id) return { error: 'fund account failed: ' + ((fa.data.error && fa.data.error.description) || fa.status) };
+  await db.prepare(`UPDATE sauda_vendor SET rzp_contact_id=?, rzp_fund_account_id=? WHERE vendor_key=?`).bind(contactId, fa.data.id, vk).run().catch(() => {});
+  return { fund_account_id: fa.data.id, contact_id: contactId };
+}
+async function payoutVendor(db, body, auth, env) {
+  const acct = env.RAZORPAYX_ACCOUNT_NUMBER || '';
+  if (!acct) return { ok: false, error: 'payout account not configured' };
+  const rawVk = String((body && body.vendorKey) || '');
+  const vk = VENDORS[rawVk] ? rawVk : (canonVendorKey(rawVk) || '');
+  if (!vk || !VENDORS[vk]) return { ok: false, error: 'unknown vendor' };
+  const v = vendorView(vk);
+  const amt = Math.round(+(body && body.amount_paise) || 0);
+  if (amt <= 0) return { ok: false, error: 'amount required' };
+  const orderIds = Array.isArray(body && body.ids) ? body.ids.filter(Boolean) : [];
+
+  const ensured = await ensureRzpFundAccount(db, env, vk, v);
+  if (ensured.error) return { ok: false, error: ensured.error };
+
+  // persist the idempotency key BEFORE the call — a network retry must never double-pay
+  const idem = crypto.randomUUID();
+  const ref = 'sauda_' + (orderIds[0] || ('d' + Date.now()));
+  await db.prepare(`INSERT INTO sauda_payout (idempotency_key, vendor_key, order_ids, amount_paise, mode, ref, status) VALUES (?,?,?,?,?,?,?)`)
+    .bind(idem, vk, JSON.stringify(orderIds), amt, 'UPI', ref, 'creating').run().catch(() => {});
+
+  const p = await rzpFetch(env, '/payouts', 'POST', {
+    account_number: acct, fund_account_id: ensured.fund_account_id, amount: amt, currency: 'INR',
+    mode: 'UPI', purpose: 'vendor bill', queue_if_low_balance: true, reference_id: ref, narration: ('HN Hotels ' + ((v && v.name) || '')).slice(0, 30),
+  }, { 'X-Payout-Idempotency': idem });
+
+  if (!p.ok || !p.data.id) {
+    const reason = (p.data.error && p.data.error.description) || ('http ' + p.status);
+    await db.prepare(`UPDATE sauda_payout SET status='failed', failure_reason=?, updated_at=datetime('now') WHERE idempotency_key=?`).bind(reason, idem).run().catch(() => {});
+    return { ok: false, error: reason };
+  }
+  await db.prepare(`UPDATE sauda_payout SET rzp_payout_id=?, status=?, utr=?, fees_paise=?, tax_paise=?, updated_at=datetime('now') WHERE idempotency_key=?`)
+    .bind(p.data.id, p.data.status || 'processing', p.data.utr || null, p.data.fees || null, p.data.tax || null, idem).run().catch(() => {});
+  if (orderIds.length) {
+    const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+    for (const id of orderIds) {
+      await db.prepare(`UPDATE sauda_purchase SET status='PAID', pay_amount_paise=?, paid_at=?, bank_ref=? WHERE id=?`).bind(amt, now, p.data.id, id).run().catch(() => {});
+    }
+  }
+  return { ok: true, payout_id: p.data.id, status: p.data.status, utr: p.data.utr || null, fees_paise: p.data.fees || 0, vendor: v.name };
+}
+async function payoutStatus(db, env, payoutId) {
+  if (!payoutId) return { ok: false, error: 'payout id required' };
+  const p = await rzpFetch(env, '/payouts/' + encodeURIComponent(payoutId), 'GET');
+  if (!p.ok || !p.data.id) return { ok: false, error: (p.data.error && p.data.error.description) || 'fetch failed' };
+  await db.prepare(`UPDATE sauda_payout SET status=?, utr=?, updated_at=datetime('now') WHERE rzp_payout_id=?`).bind(p.data.status, p.data.utr || null, payoutId).run().catch(() => {});
+  return { ok: true, status: p.data.status, utr: p.data.utr || null };
 }
 
 // ── Hyperpure delivery window from the cutoff (IST). Order before 23:00 → tomorrow. ──
