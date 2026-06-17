@@ -271,7 +271,7 @@
     else if(m==='cmp'){ cmp.classList.remove('hide'); cmpBar.classList.remove('hide'); if(h1) h1.textContent="Compare prices"; loadCompare(); }
     else if(m==='saved'){ hist.classList.remove('hide'); if(h1) h1.textContent="Saved orders"; loadHistory(); }
     else if(m==='place'){ place.classList.remove('hide'); placeBar.classList.remove('hide'); if(h1) h1.textContent="Today's order"; }
-    else { buy.classList.remove('hide'); buyBar.classList.remove('hide'); if(h1) h1.textContent="Tomorrow's buy"; loadBuy(); }
+    else { buy.classList.remove('hide'); buyBar.classList.remove('hide'); if(h1) h1.textContent="Buy list"; loadBuy(); }
   }
   document.getElementById('modeSeg').addEventListener('click', function(e){ var b=e.target.closest('button[data-m]'); if(b) setMode(b.dataset.m); });
 
