@@ -599,7 +599,7 @@
   function openHpHandoff(lines, forDate, subPaise){
     lines = lines || [];
     var rows=lines.map(function(l){
-      var nm=l.matched||l.name, srch='https://www.hyperpure.com/in/search/'+encodeURIComponent(l.name||nm);
+      var nm=l.matched||l.name, srch='https://www.hyperpure.com/in/search/'+encodeURIComponent(nm)+'?query='+encodeURIComponent(nm);
       var ph=l.image?' style="background-image:url('+esc(l.image)+')"':'';
       return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft)">'+
         '<div class="ph sm"'+ph+'>'+(l.image?'':'<span>'+esc(String(nm).slice(0,1))+'</span>')+'</div>'+
