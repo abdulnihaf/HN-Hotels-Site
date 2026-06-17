@@ -429,31 +429,33 @@ async function routePlan(db, when) {
 async function buildCatalog(db) {
   const since = `date('now','-30 days')`;
   const [bl, dp] = await Promise.all([
-    db.prepare(`SELECT item AS name, vendor AS vend, uom AS unit, brand FROM buy_lines WHERE biz_date >= ${since} AND item != ''`).all(),
+    db.prepare(`SELECT item AS name, vendor AS vend, uom AS unit, brand, unit_cost_paise FROM buy_lines WHERE biz_date >= ${since} AND item != '' ORDER BY biz_date DESC`).all(),
     db.prepare(`SELECT item_name AS name, vendor_name AS vend, unit, brand FROM sauda_day_po WHERE for_date >= ${since} AND item_name NOT IN ('NEW','')`).all(),
   ]);
 
   // dedupe by normalized name; prefer a row whose vendor we recognise.
   const items = new Map();
+  const priceByKey = new Map();   // norm(name) -> most-recent non-zero unit price (paise), so Place can pre-fill it
   const ingest = (rows, weight) => {
     for (const r of (rows?.results || [])) {
       const key = norm(r.name);
       if (!key) continue;
+      if (r.unit_cost_paise > 0 && !priceByKey.has(key)) priceByKey.set(key, r.unit_cost_paise); // buy_lines is DESC → first seen = latest price
       const vk = canonVendorKey(r.vend);
       const prev = items.get(key);
       const cand = { name: r.name.trim(), vendorKey: vk, unit: (r.unit || '').trim(), brand: (r.brand || 'both'), w: weight + (vk ? 5 : 0) };
       if (!prev || cand.w > prev.w) items.set(key, cand);
     }
   };
-  ingest(bl, 1);      // buy_lines (recent)
+  ingest(bl, 1);      // buy_lines (recent, carries the last price paid)
   ingest(dp, 2);      // sauda_day_po (richer names) wins ties
 
   // group into vendor baskets
   const baskets = new Map();
-  for (const it of items.values()) {
+  for (const [key, it] of items.entries()) {
     const vk = it.vendorKey || 'unassigned';
     if (!baskets.has(vk)) baskets.set(vk, []);
-    baskets.get(vk).push({ name: it.name, unit: it.unit, brand: it.brand });
+    baskets.get(vk).push({ name: it.name, unit: it.unit, brand: it.brand, price_paise: priceByKey.get(key) || 0 });
   }
 
   const vendors = [...baskets.entries()].map(([vk, list]) => ({
