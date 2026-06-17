@@ -136,6 +136,11 @@ export async function onRequest(context) {
       const limit = Math.min(parseInt(url.searchParams.get('limit') || '60', 10) || 60, 200);
       return withCors(json(await poHistory(db, limit)), request);
     }
+    // route: take the latest saved order(s) → lanes (local / plan-ahead / quick) by price + timing
+    if (action === 'route' && request.method === 'GET') {
+      const when = url.searchParams.get('when') === 'today' ? 'today' : 'tomorrow';
+      return withCors(json(await routePlan(db, when)), request);
+    }
     return withCors(json({ error: `unknown action: ${action}` }, 400), request);
   } catch (e) {
     return withCors(json({ error: 'server error' }, 500), request);
@@ -357,6 +362,62 @@ async function poHistory(db, limit) {
     return { id: r.id, brand: r.brand, for_date: r.for_date, need_by: r.need_by, sender: r.sender, source: r.source, by_user: r.by_user, created_at: r.created_at, items };
   });
   return { ok: true, orders };
+}
+
+// ── Route: latest saved order(s) → lanes (local / plan-ahead / quick) ──
+// Uses the live price comparison for the items we have prices on; everything
+// else defaults to the local vendor. Hyperpure only counts when buying for
+// tomorrow (next-day). This is the "decide what to buy from where" engine.
+async function routePlan(db, when) {
+  const isToday = when === 'today';
+  const cmp = await sourcesCompare(db);
+  // index the online "wins" (item where a source beats the local price) by name
+  const wins = {};
+  for (const it of cmp.items || []) {
+    if (it.beats_baseline && it.cheapest_source) {
+      wins[norm(it.label)] = {
+        source: it.cheapest_source,
+        save_unit_paise: it.save_unit_paise || 0,
+        unit: it.unit || '',
+        srcLabel: (cmp.sources[it.cheapest_source] && cmp.sources[it.cheapest_source].label) || it.cheapest_source,
+      };
+    }
+  }
+  function matchWin(name) {
+    const n = norm(name);
+    if (wins[n]) return wins[n];
+    for (const k in wins) { if (n && (n.indexOf(k) >= 0 || k.indexOf(n) >= 0)) return wins[k]; }
+    return null;
+  }
+  // most recent saved order per brand
+  const po = await poHistory(db, 12);
+  const seen = {};
+  const orders = [];
+  for (const o of po.orders) { if (!seen[o.brand]) { seen[o.brand] = 1; orders.push(o); } }
+  const lanes = { local: [], plan: [], quick: [] };
+  for (const o of orders) {
+    for (const it of o.items) {
+      const win = matchWin(it.item);
+      let lane = 'local', src = '', srcLabel = '', save = 0;
+      if (win) {
+        if (win.source === 'hyperpure') {
+          if (!isToday) { lane = 'plan'; src = 'hyperpure'; srcLabel = win.srcLabel; save = win.save_unit_paise; }
+          // for today, Hyperpure can't deliver → stays local
+        } else {
+          lane = 'quick'; src = win.source; srcLabel = win.srcLabel; save = win.save_unit_paise;
+        }
+      }
+      lanes[lane].push({ brand: o.brand, item: it.item, qty: it.qty, unit: it.unit, category: it.category, flag: it.flag || '', source: src, source_label: srcLabel, save_unit_paise: save });
+    }
+  }
+  return {
+    ok: true,
+    when,
+    note: isToday ? 'Buying for today — Hyperpure (next-day) is out; instant + local only.' : 'Buying for tomorrow — Hyperpure is available (order by 11pm).',
+    counts: { local: lanes.local.length, plan: lanes.plan.length, quick: lanes.quick.length },
+    lanes,
+    orders: orders.map((o) => ({ id: o.id, brand: o.brand, for_date: o.for_date })),
+  };
 }
 
 // ── Build the live item master from the last 30 days, routed to canonical vendors ──
