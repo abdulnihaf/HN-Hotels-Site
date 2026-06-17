@@ -814,6 +814,21 @@
   }
 
   // ── Saved orders (the PO trail) ──
+  // Relative day label from the order's for_date vs TODAY (device is IST). Fixes the old bug
+  // where every row showed the static need_by ("tomorrow") forever, regardless of the real date.
+  function fmtDayLabel(fd){
+    if(!fd){ return {t:'—', sub:'', c:'dim'}; }
+    var p=String(fd).split('-'); if(p.length<3){ return {t:fd, sub:'', c:'dim'}; }
+    var d=new Date(+p[0], +p[1]-1, +p[2]);
+    var n=new Date(); var t0=new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    var diff=Math.round((d - t0)/86400000);
+    var WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var pretty=WD[d.getDay()]+' '+(+p[2])+' '+MO[d.getMonth()];
+    if(diff===0) return {t:'Today', sub:pretty, c:'today'};
+    if(diff===1) return {t:'Tomorrow', sub:pretty, c:'tom'};
+    if(diff===-1) return {t:'Yesterday', sub:pretty, c:'dim'};
+    return {t:pretty, sub:'', c:'dim'};
+  }
   function loadHistory(){
     var list=document.getElementById('histList'), empty=document.getElementById('histEmpty'), head=document.getElementById('histHead');
     list.innerHTML='<div class="empty">Loading…</div>'; empty.classList.add('hide'); head.innerHTML='';
@@ -821,14 +836,26 @@
       if(!res.ok||!res.j||!res.j.ok){ list.innerHTML=''; toast('Load failed','err'); return; }
       var orders=res.j.orders||[];
       if(!orders.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
-      head.innerHTML='<span class="ttl">'+orders.length+' saved order'+(orders.length>1?'s':'')+'</span>';
-      list.innerHTML=orders.map(function(o){
-        var hdr=esc(o.brand||'')+' · '+esc(o.for_date||'')+(o.need_by?' ('+esc(o.need_by)+')':'');
-        var rows=(o.items||[]).map(function(it){
-          var q=(((it.qty||'')+' '+(it.unit||'')).trim())||'—';
-          return '<div class="dec-it"><div class="di"><b>'+esc(it.item||'')+'</b>'+(it.flag?'<span class="fl">⚠ '+esc(it.flag)+'</span>':'')+'</div><span class="du">'+esc(q)+'</span></div>';
+      // group by for_date, newest day first; label each day relative to today
+      var byDate={};
+      orders.forEach(function(o){ var d=o.for_date||'—'; (byDate[d]=byDate[d]||[]).push(o); });
+      var dates=Object.keys(byDate).sort(function(a,b){ return a<b?1:(a>b?-1:0); });
+      head.innerHTML='<span class="ttl">'+orders.length+' saved order'+(orders.length>1?'s':'')+' · '+dates.length+' day'+(dates.length>1?'s':'')+'</span>';
+      function chipStyle(c){ return c==='today'?'background:var(--green-soft);color:var(--green)':(c==='tom'?'background:var(--gold-soft);color:var(--gold)':'background:rgba(255,255,255,.06);color:var(--dim)'); }
+      list.innerHTML=dates.map(function(d){
+        var L=fmtDayLabel(d), os=byDate[d];
+        var dayhdr='<div style="display:flex;align-items:center;gap:8px;margin:16px 0 8px">'+
+          '<span style="font-size:12.5px;font-weight:700;padding:3px 11px;border-radius:9px;'+chipStyle(L.c)+'">'+esc(L.t)+'</span>'+
+          (L.sub?'<span style="font-size:12px;color:var(--dim)">'+esc(L.sub)+'</span>':'')+
+          '<span style="margin-left:auto;font-size:11px;color:var(--mute)">'+os.length+' order'+(os.length>1?'s':'')+'</span></div>';
+        var cards=os.map(function(o){
+          var rows=(o.items||[]).map(function(it){
+            var q=(((it.qty||'')+' '+(it.unit||'')).trim())||'—';
+            return '<div class="dec-it"><div class="di"><b>'+esc(it.item||'')+'</b>'+(it.flag?'<span class="fl">⚠ '+esc(it.flag)+'</span>':'')+'</div><span class="du">'+esc(q)+'</span></div>';
+          }).join('');
+          return '<div class="dec-order"><div class="dec-oh"><b>'+esc(o.brand||'')+'</b>'+(o.sender?'<span style="font-size:11px;color:var(--dim);margin-left:6px">'+esc(o.sender)+'</span>':'')+'<span style="margin-left:auto;font-size:11px;color:var(--dim)">'+(o.items||[]).length+' items</span></div>'+rows+'</div>';
         }).join('');
-        return '<div class="dec-order"><div class="dec-oh"><b>'+hdr+'</b><span style="margin-left:auto;font-size:11px;color:var(--dim)">'+(o.items||[]).length+' items</span></div>'+rows+'</div>';
+        return dayhdr+cards;
       }).join('');
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
