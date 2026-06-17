@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-06-17T07:31:22+0530",
-  "published_at": "2026-06-17T07:31:22+0530",
+  "updated_at": "2026-06-17T10:04:15+0530",
+  "published_at": "2026-06-17T10:04:15+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -150,20 +150,50 @@
       "subgroup": "Creative Surface",
       "risk": "creative publishing and claim accuracy",
       "status": "ready",
-      "last_task": "Take over reel-making lane and verify local/fleet render stack",
-      "last_summary": "Read the Claude reel-making handoff, local HE Remotion engine, HE raw-clip workflow, CLIP-INTELLIGENCE, May 25 classification, MENU, FILMING-GUIDE, and VIDEO-CREATIVE-SPINE. Verified hn-rtx-worker over Tailscale: Ubuntu Linux, RTX 3060 12GB, NVIDIA driver 595.71.05/CUDA 13.2, ffmpeg h264_nvenc/hevc_nvenc/av1_nvenc present, 1s h264_nvenc smoke test passed. Worker already has /home/nihaf/hn-video-workspace/he-video-engine and HE-Raw-Clips, but npm/npx is absent and node_modules/.bin/remotion is not currently runnable; existing scripts render with libx264 unless changed. Recommended repeatable Tier-1 template: tandoori_tikka_food_conviction using safe exact tandoori/tikka footage only.",
-      "next_action": "Build the Tandoori/Tikka Food Conviction reel template first: H10 fire hook -> Z08 tandoor process -> H34 tandoori plate -> H40 tikka plate -> H49 tandoori plate -> Z05 storefront -> FollowCTA/Get Directions. Create storyboard/contact sheet, render MP4, QA 1080x1920 H.264, first-frame nonblank, text/CTA safe zones, and footage honesty. Do not use ghee rice candidates IMG_0435/0449/0476 or butter-chicken candidates until Nihaf confirms exact identity.",
-      "mutation_status": "Read-only local/fleet verification plus memory sync only; no reel rendered/exported/posted, no ad spend, no POS/Odoo, WABA, aggregator, PiSignage, customer-facing, or HN checkout mutation. SSH known_hosts accepted hn-rtx-worker Tailscale key and /tmp NVENC smoke file was removed.",
+      "last_task": "Upgrade QISSA HE Meta reel from proof-safe to ad-grade v2",
+      "last_summary": "Nihaf correctly flagged v1: real footage/proof-safe but CTA too quiet and transitions missing. Built v2: added sticky CTA primitive, heat-flash transition primitive, ad_contract validation requiring sticky CTA + transitions, stronger TAP GET DIRECTIONS copy, and rendered locally + RTX/NVENC.",
+      "next_action": "Use v2 as the actual Meta ad-grade template. Future specs must include ad_contract.sticky_cta_required=true and transitions_required=true unless deliberately making a raw organic reel.",
+      "mutation_status": "HE-Raw-Clips only: scripts/apply_cta_overlays.py gains sticky_cta + transition_flash; scripts/qissa_factory.py enforces ad contracts; specs/qissa_meta_tandoori_tikka_v2.json added. No HN-Hotels-Site install or deploy.",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command reel-making",
-      "last_run_at": "2026-06-17T07:31:22+0530",
-      "proof": "Local files read: /Users/nihaf/Documents/Tech.nosync/he-video-engine, /Users/nihaf/Documents/HE-Raw-Clips/{CLAUDE.md,CLIP-INTELLIGENCE.md,NEW-BATCH-2026-05-25-CLASSIFICATION.md,MENU.md,FILMING-GUIDE.md,VIDEO-CREATIVE-SPINE.md}. Worker proof: nvidia-smi showed RTX 3060 12GB; ffmpeg encoders showed h264_nvenc/hevc_nvenc/av1_nvenc; /tmp h264_nvenc smoke returned NVENC_SMOKE_OK.",
-      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/specs/tandoori_tikka_food_conviction_2026-06-08.json; /Users/nihaf/Documents/HE-Raw-Clips/storyboards/tandoori_tikka_food_conviction_2026-06-08.html; /home/nihaf/hn-video-workspace/he-video-engine on hn-rtx-worker",
+      "last_run_at": "2026-06-17T10:04:15+0530",
+      "proof": "RTX QA PASS. Exact RTX upload pulled to /Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_v2_RTX_2026-06-17.mp4. Frame strip: /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v2_rtx_frames.jpg. Upload: 1080x1920 H264/AAC, 11.12s, 4.21MB, sticky_cta_contract PASS, transition_contract PASS.",
+      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/specs/qissa_meta_tandoori_tikka_v2.json; /Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_v2_RTX_2026-06-17.mp4; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v2.qa.md",
       "live_ids": "hn-rtx-worker 100.107.54.16; GPU NVIDIA GeForce RTX 3060; Google Chrome 149.0.7827.114; Node v22.22.1",
       "rollback": "No product/customer mutation to roll back. Remove ~/.ssh/known_hosts hn-rtx-worker entry only if Tailscale host identity is later found wrong.",
-      "data_freshness": "Captured 2026-06-17 07:29-07:35 IST from laptop local filesystem and live hn-rtx-worker SSH"
+      "data_freshness": "2026-06-17 10:04 IST"
     }
   },
   "events": [
+    {
+      "id": "20260617100415-reel-making",
+      "at": "2026-06-17T10:04:15+0530",
+      "lane": "reel-making",
+      "task": "Upgrade QISSA HE Meta reel from proof-safe to ad-grade v2",
+      "status": "ready",
+      "summary": "Nihaf correctly flagged v1: real footage/proof-safe but CTA too quiet and transitions missing. Built v2: added sticky CTA primitive, heat-flash transition primitive, ad_contract validation requiring sticky CTA + transitions, stronger TAP GET DIRECTIONS copy, and rendered locally + RTX/NVENC.",
+      "next_action": "Use v2 as the actual Meta ad-grade template. Future specs must include ad_contract.sticky_cta_required=true and transitions_required=true unless deliberately making a raw organic reel.",
+      "mutation_status": "HE-Raw-Clips only: scripts/apply_cta_overlays.py gains sticky_cta + transition_flash; scripts/qissa_factory.py enforces ad contracts; specs/qissa_meta_tandoori_tikka_v2.json added. No HN-Hotels-Site install or deploy.",
+      "proof": "RTX QA PASS. Exact RTX upload pulled to /Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_v2_RTX_2026-06-17.mp4. Frame strip: /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v2_rtx_frames.jpg. Upload: 1080x1920 H264/AAC, 11.12s, 4.21MB, sticky_cta_contract PASS, transition_contract PASS.",
+      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/specs/qissa_meta_tandoori_tikka_v2.json; /Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_v2_RTX_2026-06-17.mp4; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v2.qa.md",
+      "live_ids": "hn-rtx-worker 100.107.54.16; GPU NVIDIA GeForce RTX 3060; Google Chrome 149.0.7827.114; Node v22.22.1",
+      "rollback": "No product/customer mutation to roll back. Remove ~/.ssh/known_hosts hn-rtx-worker entry only if Tailscale host identity is later found wrong.",
+      "data_freshness": "2026-06-17 10:04 IST"
+    },
+    {
+      "id": "20260617095516-reel-making",
+      "at": "2026-06-17T09:55:16+0530",
+      "lane": "reel-making",
+      "task": "Build QISSA Meta reel factory and first HE template",
+      "status": "ready",
+      "summary": "Built QISSA factory in HE-Raw-Clips: strict spec validation, no-wrong-food proof contract, storyboard/contact-sheet generation, local render, Meta upload compression, QA JSON/MD, and RTX/NVENC render path. Produced first Tier-1 HE Tandoori/Tikka Get Directions reel.",
+      "next_action": "Use specs/qissa_meta_tandoori_tikka_v1.json as the repeatable template; duplicate spec per campaign, keep exact Tier-1 food proof, then run python3 scripts/qissa_factory.py <spec> --prefer-nvenc --target-mb 4.9 on hn-rtx-worker.",
+      "mutation_status": "Local/RTX video workspace only: scripts/qissa_factory.py added; render_daily_video.py/apply_cta_overlays.py/assemble.py/daily_video_planner.py patched for portability/NVENC/timing guard; no HN-Hotels-Site install or site deploy.",
+      "proof": "Mac QA PASS and RTX QA PASS. Upload: /Users/nihaf/Documents/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_2026-06-17.mp4. RTX upload: /home/nihaf/hn-video-workspace/HE-Raw-Clips/Exports/QISSA_HE_Tandoori_Tikka_Meta_UPLOAD_2026-06-17.mp4. QA: /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v1.qa.md. RTX render_codec/meta_codec h264_nvenc.",
+      "artifacts": "/Users/nihaf/Documents/HE-Raw-Clips/scripts/qissa_factory.py; /Users/nihaf/Documents/HE-Raw-Clips/specs/qissa_meta_tandoori_tikka_v1.json; /Users/nihaf/Documents/HE-Raw-Clips/storyboards/qissa_meta_tandoori_tikka_v1.html; /Users/nihaf/Documents/HE-Raw-Clips/qissa-reports/qissa_meta_tandoori_tikka_v1_rtx_frames.jpg",
+      "live_ids": "hn-rtx-worker 100.107.54.16; GPU NVIDIA GeForce RTX 3060; Google Chrome 149.0.7827.114; Node v22.22.1",
+      "rollback": "No product/customer mutation to roll back. Remove ~/.ssh/known_hosts hn-rtx-worker entry only if Tailscale host identity is later found wrong.",
+      "data_freshness": "2026-06-17 09:55 IST"
+    },
     {
       "id": "20260617073122-reel-making",
       "at": "2026-06-17T07:31:22+0530",
@@ -1043,26 +1073,6 @@
       "summary": "Readiness answer prepared: strategy is finalized for late-night Hamza Hotel intent capture with Rs500/day, 5km presence-only, 10PM-3AM, Search-only, manual CPC, exact/phrase Hamza keywords, 10% dine-in offer, and Maps-first CTA. Remaining execution caveat: do not only mutate budget; live setup must also apply keywords, RSA copy, schedule, assets, and landing proof.",
       "next_action": "On explicit approval, implement/apply exact campaign setup via purpose-built endpoint or Google Ads UI, verify readback, then enable with rollback plan.",
       "mutation_status": "No live mutation. Readiness and final configuration confirmation only."
-    },
-    {
-      "id": "20260525084731-meta-ads",
-      "at": "2026-05-25T08:47:31+0530",
-      "lane": "meta-ads",
-      "task": "Create Meta retargeting audiences after Custom Audience Terms acceptance",
-      "status": "ready",
-      "summary": "Created four HE website Custom Audiences via Meta access token: HE_DIR_VISIT_7D_20260525=120246563761410505, HE_DIR_VISIT_30D_20260525=120246563767670505, HE_FIND_LOCATION_30D_20260525=120246563775240505, HE_RT_VOUCHER_VISIT_30D_20260525=120246563783970505. Verified first three are delivery-ready; voucher-return pool is created but still too small. Attempted B1 50/75/95 video audiences; Meta rejected video API rule/event schema, so no video audience created.",
-      "next_action": "Use ready website pools plus existing page-engaged 7D/30D for first WABA voucher retargeting adset. Create B1 50/75/95 video-view audiences through Ads Manager UI or continue API schema discovery before using video-view retargeting.",
-      "mutation_status": "created four Meta website Custom Audiences only; no campaign, adset, ad, WhatsApp send, or spend mutation"
-    },
-    {
-      "id": "20260525083734-google-ads",
-      "at": "2026-05-25T08:37:34+0530",
-      "lane": "google-ads",
-      "task": "Explain Google Ads targeting controls for Hamza Hotel late-night setup",
-      "status": "ready",
-      "summary": "Explained location mode, Search partners, Display, bidding, and audiences from scratch for the Hamza Express late-night Hamza Hotel campaign. Recommended presence-only, Google Search only, Display off, manual CPC initially, and audiences as observation only because the keyword/location/schedule combination is the real targeting brain for physical footfall.",
-      "next_action": "Use these settings when applying the live Brand campaign setup after landing proof and ad asset/keyword/schedule mutation path are ready.",
-      "mutation_status": "No live Google Ads mutation. Explanation and platform guidance only."
     }
   ]
 }
