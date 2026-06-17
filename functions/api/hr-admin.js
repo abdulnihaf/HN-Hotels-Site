@@ -56,6 +56,36 @@ function json(data, status = 200) {
   });
 }
 
+// ── Darbar-owned app login PIN (staff_pin) ─────────────────────────────────
+// One 4-digit PIN per employee (FOH + BOH), generated ONCE here at the source.
+// Distinct from `pin` (CAMS biometric device id). Consumed downstream: Takht
+// (FOH) now, Anbar (BOH) later. The 5 Darbar-admin AUTH codes + trivial codes
+// are kept out of the pool so a staff PIN can never collide/confuse with them.
+const RESERVED_STAFF_PINS = new Set(['0305', '8523', '2026', '4040', '5050', '0000', '1234', '1111']);
+async function loadTakenStaffPins(db) {
+  const taken = new Set(RESERVED_STAFF_PINS);
+  try {
+    const r = await db.prepare("SELECT staff_pin FROM hr_employees WHERE staff_pin IS NOT NULL").all();
+    for (const x of (r.results || [])) if (x.staff_pin) taken.add(String(x.staff_pin));
+  } catch (e) { /* column may not exist pre-migration */ }
+  return taken;
+}
+function nextStaffPin(taken) {
+  for (let i = 0; i < 20000; i++) {
+    const p = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    if (!taken.has(p)) { taken.add(p); return p; }
+  }
+  return null;
+}
+async function assignStaffPin(db, id) {
+  if (!id) return null;
+  const taken = await loadTakenStaffPins(db);
+  const p = nextStaffPin(taken);
+  if (!p) return null;
+  await db.prepare("UPDATE hr_employees SET staff_pin=? WHERE id=? AND (staff_pin IS NULL OR staff_pin='')").bind(p, id).run();
+  return p;
+}
+
 // Role capability map. Higher rank = more privilege.
 //   admin (2)       → everything, including financials
 //   onboarding (1.5)→ create/edit employees + same read-view as manager
@@ -1049,6 +1079,11 @@ async function handlePost(request, env, auth) {
       e.emergency_contact || null, e.emergency_phone || null, e.notes || null,
     ).run();
     await logSync(db, 'create_employee', 'hr_employees', ins.meta?.last_row_id, e.name, { pin: e.pin }, user.name);
+    // Darbar mechanism: every new employee (FOH + BOH) gets a 4-digit app PIN at
+    // creation — owned by Darbar, consumed later by Takht/Anbar. Never blocks the add.
+    let staff_pin = null;
+    try { staff_pin = await assignStaffPin(db, ins.meta?.last_row_id); }
+    catch (err) { console.error('[hr-admin] staff_pin assign on create failed:', err.message); }
     // New roster entry: pull attendance from the employee's first device punch,
     // not from today. Catches days they punched before being added to the roster.
     let backfill = null;
@@ -1056,7 +1091,7 @@ async function handlePost(request, env, auth) {
       try { backfill = await backfillAttendanceFromFirstPunch(db, e.pin, user.name); }
       catch (err) { console.error('[hr-admin] backfill on create failed:', err.message); }
     }
-    return json({ success: true, id: ins.meta?.last_row_id, backfill });
+    return json({ success: true, id: ins.meta?.last_row_id, staff_pin, backfill });
   }
 
   /* ━━━ Re-scan Drive folder for new Aadhar/PAN/barcode files ━━━ */
