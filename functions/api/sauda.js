@@ -126,7 +126,7 @@ export async function onRequest(context) {
     }
     if (action === 'settings-vendor' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
-      return withCors(json(await settingsVendor(db, body)), request);
+      return withCors(json(await settingsVendor(db, body, auth)), request);
     }
     // match-payment: preview whether the bank feed already shows this payment (before/without marking)
     if (action === 'match-payment' && request.method === 'GET') {
@@ -480,6 +480,7 @@ async function routePlan(db, when) {
 //    carry no price so the rate stays blank for today's number. Search also matches
 //    aliases (haldi → Turmeric). Vendor baskets group by each item's default_vendor. ──
 async function buildCatalog(db) {
+  const vdir = await getVendorDirectory(db);
   const [itemsRes, aliasRes] = await Promise.all([
     db.prepare(`SELECT item_code,label,unit,price_paise,price_mode,default_vendor FROM sauda_item WHERE active=1 ORDER BY label`).all(),
     db.prepare(`SELECT alias,item_code FROM sauda_item_alias`).all(),
@@ -497,7 +498,7 @@ async function buildCatalog(db) {
   const baskets = new Map();
   for (const it of items) {
     const live = it.price_mode === 'live';
-    const vk = (it.default_vendor && VENDORS[it.default_vendor]) ? it.default_vendor : 'unassigned';
+    const vk = (it.default_vendor && vdir.byKey[it.default_vendor]) ? it.default_vendor : 'unassigned';
     if (!baskets.has(vk)) baskets.set(vk, []);
     baskets.get(vk).push({
       name: it.label,
@@ -510,7 +511,7 @@ async function buildCatalog(db) {
     });
   }
   const vendors = [...baskets.entries()].map(([vk, list]) => ({
-    ...vendorView(vk),
+    ...(vdir.byKey[vk] || vdir.byKey.unassigned),
     items: list.sort((a, b) => a.name.localeCompare(b.name)),
   })).sort((a, b) => b.items.length - a.items.length);
 
@@ -547,11 +548,13 @@ async function placeOrders(db, body, auth, env, context) {
   const forDate = (body.for_date || todayIST()).slice(0, 10);
   const lines = Array.isArray(body.lines) ? body.lines : [];
   if (!lines.length) return { ok: false, error: 'no lines' };
+  const vdir = await getVendorDirectory(db);
 
   // group lines by vendor
   const byVendor = new Map();
   for (const ln of lines) {
-    const vk = ln.vendorKey && VENDORS[ln.vendorKey] ? ln.vendorKey : 'unassigned';
+    const v = resolveVendor(vdir, ln.vendorKey);
+    const vk = v.key;
     if (!byVendor.has(vk)) byVendor.set(vk, []);
     byVendor.get(vk).push({
       item: String(ln.item || '').trim(),
@@ -566,7 +569,7 @@ async function placeOrders(db, body, auth, env, context) {
   const nowIso = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   const created = [];
   for (const [vk, vlines] of byVendor.entries()) {
-    const v = vendorView(vk);
+    const v = vdir.byKey[vk] || vdir.byKey.unassigned;
     const expected = vlines.reduce((s, l) => s + Math.round(qtyNum(l.qty) * (l.price_paise || 0)), 0);
     const res = await db.prepare(
       `INSERT INTO sauda_purchase (brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, expected_amount_paise, ordered_at, ordered_by)
@@ -707,6 +710,86 @@ async function seedSettings(db) {
   return { seeded: true, vendors: Object.keys(VENDORS).length, items: HP_CATALOG.length };
 }
 
+const FULFILMENT_LABEL = {
+  deliver: 'delivers',
+  collect: 'collect',
+  standing: 'standing',
+  porter: 'porter',
+};
+const PAY_LABEL = {
+  per: 'pay per order',
+  khata_roll: 'khata',
+  khata_periodic: 'khata (weekly)',
+};
+function jsonArray(s) {
+  try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a.map((x) => String(x).trim()).filter(Boolean) : []; } catch (e) { return []; }
+}
+function vendorKeyBase(s) {
+  const slug = String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 42);
+  return slug || 'vendor';
+}
+async function uniqueVendorKey(db, name) {
+  const base = vendorKeyBase(name);
+  let key = base, n = 1;
+  while (await db.prepare('SELECT 1 FROM sauda_vendor WHERE vendor_key=?').bind(key).first()) key = (base + '_' + (++n)).slice(0, 48);
+  return key;
+}
+function cleanVpas(vpas, vpa) {
+  const raw = Array.isArray(vpas) ? vpas : (vpa ? [vpa] : []);
+  return raw.map((x) => String(x || '').trim()).filter(Boolean);
+}
+function validPhone(phone) {
+  return String(phone || '').replace(/\D/g, '').length >= 10;
+}
+function validVpaList(vpas) {
+  return Array.isArray(vpas) && vpas.some((x) => /@/.test(String(x || '')));
+}
+function vendorFromRow(r) {
+  const vpas = jsonArray(r.vpa_json);
+  const aliases = jsonArray(r.aliases_json);
+  const fulfilment = r.fulfilment || 'deliver';
+  const pay = r.pay || 'per';
+  return {
+    key: r.vendor_key,
+    name: r.name || r.vendor_key,
+    brand: r.brand || 'both',
+    fulfilment,
+    pay,
+    phone: r.phone || '',
+    vpas,
+    vpa: vpas[0] || '',
+    aliases,
+    cat: r.cat || '',
+    flagged: r.flagged ? 1 : 0,
+    fulfilmentLabel: FULFILMENT_LABEL[fulfilment] || fulfilment,
+    payLabel: PAY_LABEL[pay] || pay,
+  };
+}
+async function getVendorDirectory(db) {
+  await ensureSettingsTables(db);
+  await seedSettings(db);
+  const rows = ((await db.prepare(`SELECT vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged FROM sauda_vendor WHERE active=1 ORDER BY name`).all()).results) || [];
+  const byKey = { unassigned: vendorView('unassigned') };
+  const byAlias = {};
+  for (const r of rows) {
+    const v = vendorFromRow(r);
+    byKey[v.key] = v;
+    byAlias[norm(v.key)] = v;
+    byAlias[norm(v.name)] = v;
+    for (const a of v.aliases || []) byAlias[norm(a)] = v;
+  }
+  return { byKey, byAlias, list: Object.values(byKey) };
+}
+function resolveVendor(vdir, raw) {
+  const key = String(raw || '').trim();
+  if (key && vdir.byKey[key]) return vdir.byKey[key];
+  const canonical = canonVendorKey(key);
+  if (canonical && vdir.byKey[canonical]) return vdir.byKey[canonical];
+  const alias = norm(key);
+  if (alias && vdir.byAlias[alias]) return vdir.byAlias[alias];
+  return vdir.byKey.unassigned;
+}
+
 async function getSettings(db) {
   await ensureSettingsTables(db);
   const seed = await seedSettings(db);
@@ -716,7 +799,7 @@ async function getSettings(db) {
   const aliasByItem = {};
   for (const r of aliasRows) (aliasByItem[r.item_code] = aliasByItem[r.item_code] || []).push(r.alias);
   for (const it of items) it.aliases = aliasByItem[it.item_code] || [];
-  for (const v of vendors) { try { v.vpas = JSON.parse(v.vpa_json || '[]'); } catch (e) { v.vpas = []; } try { v.aliases = JSON.parse(v.aliases_json || '[]'); } catch (e) { v.aliases = []; } }
+  for (const v of vendors) { v.vpas = jsonArray(v.vpa_json); v.aliases = jsonArray(v.aliases_json); }
   return { ok: true, seeded: seed.seeded, counts: { items: items.length, vendors: vendors.length, aliases: aliasRows.length }, items, vendors };
 }
 
@@ -796,21 +879,48 @@ async function settingsItem(db, body, auth) {
 }
 
 // ── Settings grid: edit a vendor (phone, UPIs, fulfilment, pay, aliases) ──
-async function settingsVendor(db, body) {
+async function settingsVendor(db, body, auth) {
   await ensureSettingsTables(db);
-  const key = String((body && body.vendor_key) || '').trim();
-  if (!key) return { ok: false, error: 'vendor_key required' };
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const by = (auth && auth.u) || '';
+  let key = String((body && body.vendor_key) || '').trim();
+  const vpas = cleanVpas(body && body.vpas, body && body.vpa);
+  const phone = String((body && body.phone) || '').trim();
+  if (!key || key === 'NEW') {
+    const name = String((body && body.name) || '').trim();
+    if (!name) return { ok: false, error: 'vendor name required' };
+    if (!validPhone(phone)) return { ok: false, error: 'vendor phone required' };
+    if (!validVpaList(vpas)) return { ok: false, error: 'vendor UPI required' };
+    key = await uniqueVendorKey(db, name);
+    await db.prepare(`INSERT INTO sauda_vendor (vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged,updated_by,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      key, name, body.brand || 'both', body.fulfilment || 'deliver', body.pay || 'per',
+      phone, JSON.stringify(vpas), JSON.stringify(cleanVpas(body && body.aliases)), body.cat || '', 0, by, now
+    ).run();
+    return { ok: true, created: true, vendor_key: key, vendor: vendorFromRow({
+      vendor_key: key, name, brand: body.brand || 'both', fulfilment: body.fulfilment || 'deliver',
+      pay: body.pay || 'per', phone, vpa_json: JSON.stringify(vpas), aliases_json: JSON.stringify(cleanVpas(body && body.aliases)),
+      cat: body.cat || '', flagged: 0,
+    }) };
+  }
+  const existing = await db.prepare('SELECT * FROM sauda_vendor WHERE vendor_key=? AND active=1').bind(key).first();
+  if (!existing) return { ok: false, error: 'vendor not found' };
+  const nextPhone = ('phone' in body) ? phone : (existing.phone || '');
+  const nextVpas = ('vpas' in body || 'vpa' in body) ? vpas : jsonArray(existing.vpa_json);
+  if (!validPhone(nextPhone)) return { ok: false, error: 'vendor phone required' };
+  if (!validVpaList(nextVpas)) return { ok: false, error: 'vendor UPI required' };
   const sets = [], vals = [];
   if ('name' in body) { sets.push('name=?'); vals.push(String(body.name || '')); }
-  if ('phone' in body) { sets.push('phone=?'); vals.push(String(body.phone || '')); }
-  if ('vpas' in body) { const a = Array.isArray(body.vpas) ? body.vpas.map((x) => String(x).trim()).filter(Boolean) : []; sets.push('vpa_json=?'); vals.push(JSON.stringify(a)); }
+  if ('brand' in body) { sets.push('brand=?'); vals.push(String(body.brand || 'both')); }
+  if ('cat' in body) { sets.push('cat=?'); vals.push(String(body.cat || '')); }
+  if ('phone' in body) { sets.push('phone=?'); vals.push(nextPhone); }
+  if ('vpas' in body || 'vpa' in body) { sets.push('vpa_json=?'); vals.push(JSON.stringify(nextVpas)); }
   if ('fulfilment' in body) { sets.push('fulfilment=?'); vals.push(String(body.fulfilment || 'deliver')); }
   if ('pay' in body) { sets.push('pay=?'); vals.push(String(body.pay || 'per')); }
   if ('aliases' in body) { const a = Array.isArray(body.aliases) ? body.aliases.map((x) => String(x).trim()).filter(Boolean) : []; sets.push('aliases_json=?'); vals.push(JSON.stringify(a)); }
   if ('flagged' in body) { sets.push('flagged=?'); vals.push(body.flagged ? 1 : 0); }
   if (!sets.length) return { ok: false, error: 'nothing to update' };
-  sets.push('updated_at=?'); vals.push(now);
+  sets.push('updated_by=?', 'updated_at=?'); vals.push(by, now);
   await db.prepare(`UPDATE sauda_vendor SET ${sets.join(', ')} WHERE vendor_key=?`).bind(...vals, key).run();
   return { ok: true };
 }
@@ -821,6 +931,7 @@ async function settingsVendor(db, body) {
 // catch-up reconcile: bank email alerts lag, so retry matching any PAID-but-unconfirmed
 // order against the feed whenever the records are viewed (self-heals delayed confirmations).
 async function reconcileSweep(db, sinceFloor) {
+  const vdir = await getVendorDirectory(db);
   let rows = [];
   try {
     rows = ((await db.prepare(
@@ -832,7 +943,7 @@ async function reconcileSweep(db, sinceFloor) {
   if (!rows.length) return;
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   for (const r of rows) {
-    const v = vendorView(canonVendorKey(r.vendor_name) || 'unassigned');
+    const v = resolveVendor(vdir, r.vendor_name);
     const amt = r.pay_amount_paise || r.expected_amount_paise || 0;
     if (!v.vpa || !amt) continue;
     const since = String(r.pay_requested_at || r.ordered_at || '').slice(0, 10) || '2000-01-01';
@@ -844,6 +955,7 @@ async function reconcileSweep(db, sinceFloor) {
 async function vendorLedger(db, days) {
   const since = `date('now','-${days} days')`;
   await autoSettle(db);   // live: settle anything the bank now confirms (orders + direct pays)
+  const vdir = await getVendorDirectory(db);
   let rows = [];
   try {
     rows = ((await db.prepare(
@@ -858,13 +970,13 @@ async function vendorLedger(db, days) {
 
   const byVendor = new Map();
   for (const r of rows) {
-    const vk = canonVendorKey(r.vendor_name) || 'unassigned';
+    const vk = resolveVendor(vdir, r.vendor_name).key;
     if (!byVendor.has(vk)) byVendor.set(vk, []);
     byVendor.get(vk).push(r);
   }
 
   function summarize(vk, list) {
-    const v = vendorView(vk);
+    const v = vdir.byKey[vk] || vdir.byKey.unassigned;
     let paid = 0, outstanding = 0, lastPaidAt = '';
     const trail = [];
     for (const r of list) {
@@ -890,7 +1002,7 @@ async function vendorLedger(db, days) {
 
   // EVERY canonical vendor appears (with its UPI id) so this tab is also the
   // pay-any-vendor directory; plus any 'unassigned' bucket that has orders.
-  const vendors = Object.keys(VENDORS).map((vk) => summarize(vk, byVendor.get(vk) || []));
+  const vendors = vdir.list.filter((v) => v.key !== 'unassigned').map((v) => summarize(v.key, byVendor.get(v.key) || []));
   if (byVendor.has('unassigned')) vendors.push(summarize('unassigned', byVendor.get('unassigned')));
   vendors.sort((a, b) =>
     (b.outstanding_paise - a.outstanding_paise) ||
@@ -904,6 +1016,7 @@ async function vendorLedger(db, days) {
 // a single card with one summed amount and one UPI — never per-item payments.
 // Hyperpure orders are prepaid online at checkout, so they never enter the list.
 async function openOrders(db) {
+  const vdir = await getVendorDirectory(db);
   const rows = await db.prepare(
     `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, pay_amount_paise, expected_amount_paise, for_date
        FROM sauda_purchase WHERE paid_at IS NULL AND (pay_timing IS NULL OR pay_timing != 'online')
@@ -912,13 +1025,13 @@ async function openOrders(db) {
   // group every unpaid row under its canonical vendor
   const byVendor = new Map();
   for (const o of (rows?.results || [])) {
-    const vk = canonVendorKey(o.vendor_name) || 'unassigned';
+    const vk = resolveVendor(vdir, o.vendor_name).key;
     if (!byVendor.has(vk)) byVendor.set(vk, []);
     byVendor.get(vk).push(o);
   }
   const orders = [];
   for (const [vk, list] of byVendor.entries()) {
-    const v = vendorView(vk);
+    const v = vdir.byKey[vk] || vdir.byKey.unassigned;
     let items = [], amount = 0; const ids = []; const dates = new Set();
     for (const o of list) {
       ids.push(o.id);
@@ -989,7 +1102,7 @@ async function previewMatch(db, ids, amount) {
   if (!ids.length || !amount) return { ok: true, matched: false };
   const o = await db.prepare(`SELECT vendor_name, pay_requested_at, ordered_at FROM sauda_purchase WHERE id=?`).bind(ids[0]).first();
   if (!o) return { ok: true, matched: false };
-  const v = vendorView(canonVendorKey(o.vendor_name) || 'unassigned');
+  const v = resolveVendor(await getVendorDirectory(db), o.vendor_name);
   const since = String(o.pay_requested_at || o.ordered_at || '').slice(0, 10) || todayIST();
   const m = await findVendorDebit(db, v.vpa, amount, since);
   return { ok: true, matched: !!m, bank_ref: m ? m.bank_ref : '', txn_at: m ? m.txn_at : '', vendor: v.name };
@@ -1013,7 +1126,7 @@ async function markPaid(db, body, auth) {
   let reconciled = null;
   try {
     const o = await db.prepare(`SELECT vendor_name, pay_requested_at, ordered_at FROM sauda_purchase WHERE id=?`).bind(ids[0]).first();
-    const v = vendorView(canonVendorKey(o && o.vendor_name) || 'unassigned');
+    const v = resolveVendor(await getVendorDirectory(db), o && o.vendor_name);
     const since = String((o && (o.pay_requested_at || o.ordered_at)) || now).slice(0, 10);
     if (amt > 0 && v.vpa) {
       const m = await findVendorDebit(db, v.vpa, amt, since);
@@ -1033,6 +1146,7 @@ async function markPaid(db, body, auth) {
 // find the matching UPI debit and settle it PAID + reconciled — no manual tap. ──
 async function autoSettle(db) {
   const settled = [];
+  const vdir = await getVendorDirectory(db);
   let rows = [];
   try {
     rows = ((await db.prepare(
@@ -1045,7 +1159,7 @@ async function autoSettle(db) {
   } catch (e) { return { ok: true, settled: [], count: 0 }; }
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   for (const r of rows) {
-    const v = vendorView(canonVendorKey(r.vendor_name) || 'unassigned');
+    const v = resolveVendor(vdir, r.vendor_name);
     const amt = r.pay_amount_paise || r.expected_amount_paise || 0;
     if (!v.vpa || !amt) continue;
     const since = String(r.pay_requested_at || r.ordered_at || '').slice(0, 10) || '2000-01-01';
@@ -1066,10 +1180,11 @@ async function autoSettle(db) {
 // Records a REQUESTED sauda_purchase row so it shows in the vendor trail and gets
 // bank-verified by auto-settle when the debit lands — same rails as a normal order. ──
 async function directPay(db, body, auth) {
+  const vdir = await getVendorDirectory(db);
   const rawVk = String((body && body.vendorKey) || '');
-  const vk = VENDORS[rawVk] ? rawVk : (canonVendorKey(rawVk) || '');
-  if (!vk || !VENDORS[vk]) return { ok: false, error: 'unknown vendor' };
-  const v = vendorView(vk);
+  const v = resolveVendor(vdir, rawVk);
+  const vk = v.key;
+  if (!rawVk || vk === 'unassigned') return { ok: false, error: 'unknown vendor' };
   const amt = Math.round(+(body && body.amount_paise) || 0);
   if (amt <= 0) return { ok: false, error: 'amount required' };
   const forDate = todayIST();
@@ -1120,10 +1235,11 @@ async function ensureRzpFundAccount(db, env, vk, v) {
 async function payoutVendor(db, body, auth, env) {
   const acct = env.RAZORPAYX_ACCOUNT_NUMBER || '';
   if (!acct) return { ok: false, error: 'payout account not configured' };
+  const vdir = await getVendorDirectory(db);
   const rawVk = String((body && body.vendorKey) || '');
-  const vk = VENDORS[rawVk] ? rawVk : (canonVendorKey(rawVk) || '');
-  if (!vk || !VENDORS[vk]) return { ok: false, error: 'unknown vendor' };
-  const v = vendorView(vk);
+  const v = resolveVendor(vdir, rawVk);
+  const vk = v.key;
+  if (!rawVk || vk === 'unassigned') return { ok: false, error: 'unknown vendor' };
   const amt = Math.round(+(body && body.amount_paise) || 0);
   if (amt <= 0) return { ok: false, error: 'amount required' };
   const orderIds = Array.isArray(body && body.ids) ? body.ids.filter(Boolean) : [];

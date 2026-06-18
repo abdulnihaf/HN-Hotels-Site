@@ -928,6 +928,7 @@
   // ── Settings: the item + vendor master (price · unit · vendor · fixed/live · phones/UPIs) ──
   var SET={items:[],vendors:[],tab:'items',q:'',needOnly:false,chip:'all'};
   var SET_UNITS=['kg','g','L','ml','pc','birds','crate','bunch','katta','bora','bag','cylinder','case','box','bundle','packet','bottle'];
+  var SET_FUL=['deliver','collect','standing','porter'], SET_PAY=['per','khata_roll','khata_periodic'], SET_BRANDS=['both','NCH','HE'];
   function loadSettings(){
     var list=document.getElementById('setList'), empty=document.getElementById('setEmpty');
     empty.classList.remove('hide'); empty.textContent='Loading…'; list.innerHTML='';
@@ -1005,32 +1006,85 @@
   }
   function vendorMissing(v){ var m=[]; if(!v.phone)m.push('phone'); if(!(v.vpas&&v.vpas.length))m.push('UPI'); return m; }
   function renderSetVendors(list){
-    var q=SET.q, FUL=['deliver','collect','standing','porter'], PAY=['per','khata_roll','khata_periodic'];
+    var q=SET.q;
     var ce=document.getElementById('setChips'); if(ce) ce.classList.add('hide');
     var inc=SET.vendors.filter(function(v){return vendorMissing(v).length;});
     var rows=SET.vendors.filter(function(v){ if(SET.chip==='attn' && !vendorMissing(v).length) return false; return !q || (v.name+' '+(v.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
-    list.innerHTML='<div class="setcount">'+rows.length+' vendors · <b style="color:var(--amber)">'+inc.length+' to fill</b> (phone / UPI)</div>'+rows.map(function(v){
+    function opts(arr,sel,lab){ return arr.map(function(x){return '<option value="'+esc(x)+'"'+(x===sel?' selected':'')+'>'+esc(lab?lab(x):x)+'</option>';}).join(''); }
+    list.innerHTML='<div class="setcount">'+rows.length+' vendors · <b style="color:var(--amber)">'+inc.length+' to fill</b> · phone + UPI mandatory</div>'+
+      '<button class="setadd" onclick="openAddVendor()">+ add vendor</button>'+rows.map(function(v){
       var vpa=(v.vpas&&v.vpas[0])||''; var miss=vendorMissing(v); var nc=miss.length?' need':'';
-      return '<div class="srow'+nc+'"><div class="sl"><b>'+esc(v.name)+'</b><small>'+(miss.length?'<span style="color:var(--amber)">⚠ add '+miss.join(' / ')+'</span>':esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI')+'</small></div>'+
-        '<div class="sf"><div class="r1"><input class="phin" data-vph="'+esc(v.vendor_key)+'" inputmode="tel" value="'+esc(v.phone||'')+'" placeholder="phone"></div>'+
-        '<div class="r1"><input class="phin" data-vpa="'+esc(v.vendor_key)+'" value="'+esc(vpa)+'" placeholder="name@bank"></div>'+
-        '<div class="r2"><select data-vf="'+esc(v.vendor_key)+'">'+FUL.map(function(f){return '<option'+(f===v.fulfilment?' selected':'')+'>'+f+'</option>';}).join('')+'</select>'+
-        '<select data-vpy="'+esc(v.vendor_key)+'">'+PAY.map(function(p){return '<option'+(p===v.pay?' selected':'')+'>'+p.replace('khata_','khata ')+'</option>';}).join('')+'</select></div></div></div>';
+      return '<div class="srow col'+nc+'" data-vrow="'+esc(v.vendor_key)+'"><div class="top"><div class="sl"><b>'+esc(v.name)+'</b><small>'+(miss.length?'<span style="color:var(--amber)">⚠ add '+miss.join(' / ')+'</span>':esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI')+'</small></div></div>'+
+        '<div class="vendor-edit">'+
+          '<input data-vph="'+esc(v.vendor_key)+'" inputmode="tel" value="'+esc(v.phone||'')+'" placeholder="phone required">'+
+          '<input data-vpa="'+esc(v.vendor_key)+'" value="'+esc(vpa)+'" placeholder="UPI ID required">'+
+          '<input class="wide" data-vcat="'+esc(v.vendor_key)+'" value="'+esc(v.cat||'')+'" placeholder="supplies e.g. tissues / packaging">'+
+          '<select data-vbrand="'+esc(v.vendor_key)+'">'+opts(SET_BRANDS,v.brand||'both')+'</select>'+
+          '<select data-vf="'+esc(v.vendor_key)+'">'+opts(SET_FUL,v.fulfilment||'deliver')+'</select>'+
+          '<select data-vpy="'+esc(v.vendor_key)+'">'+opts(SET_PAY,v.pay||'per',function(p){return p.replace('khata_','khata ');})+'</select>'+
+          '<button class="vsave" data-vsave="'+esc(v.vendor_key)+'">Save vendor</button>'+
+        '</div></div>';
     }).join('');
-    list.querySelectorAll('input[data-vph]').forEach(function(p){ p.addEventListener('change',function(){ saveVendor(p.dataset.vph,{phone:p.value}); }); });
-    list.querySelectorAll('input[data-vpa]').forEach(function(p){ p.addEventListener('change',function(){ saveVendor(p.dataset.vpa,{vpas:[p.value]}); }); });
-    list.querySelectorAll('select[data-vf]').forEach(function(s){ s.addEventListener('change',function(){ saveVendor(s.dataset.vf,{fulfilment:s.value}); }); });
-    list.querySelectorAll('select[data-vpy]').forEach(function(s){ s.addEventListener('change',function(){ saveVendor(s.dataset.vpy,{pay:s.value}); }); });
+    list.querySelectorAll('[data-vsave]').forEach(function(b){ b.addEventListener('click',function(){ saveVendorFromRow(b.dataset.vsave); }); });
   }
   function saveItem(code,fields,rerender){
     var it=SET.items.find(function(x){return x.item_code===code;}); if(it) for(var k in fields) it[k]=fields[k];
     api('settings-item',{method:'POST',body:Object.assign({item_code:code},fields)}).then(function(r){ var ok=r&&r.j&&r.j.ok; toast(ok?'saved ✓':'save failed',ok?'ok':'err'); if(rerender&&ok) renderSettings(); });
   }
-  function saveVendor(key,fields){
-    var v=SET.vendors.find(function(x){return x.vendor_key===key;}); if(v){ if('phone' in fields)v.phone=fields.phone; if('vpas' in fields)v.vpas=fields.vpas; if('fulfilment' in fields)v.fulfilment=fields.fulfilment; if('pay' in fields)v.pay=fields.pay; }
-    api('settings-vendor',{method:'POST',body:Object.assign({vendor_key:key},fields)}).then(function(r){ var ok=r&&r.j&&r.j.ok; toast(ok?'saved ✓':'save failed',ok?'ok':'err'); });
+  function fieldVal(sel){ var el=document.querySelector(sel); return el ? el.value.trim() : ''; }
+  function validPhoneText(x){ return String(x||'').replace(/\D/g,'').length>=10; }
+  function validVpaText(x){ return /@/.test(String(x||'')); }
+  function saveVendorFromRow(key){
+    var fields={
+      phone:fieldVal('[data-vph="'+key+'"]'),
+      vpas:[fieldVal('[data-vpa="'+key+'"]')].filter(Boolean),
+      cat:fieldVal('[data-vcat="'+key+'"]'),
+      brand:fieldVal('[data-vbrand="'+key+'"]')||'both',
+      fulfilment:fieldVal('[data-vf="'+key+'"]')||'deliver',
+      pay:fieldVal('[data-vpy="'+key+'"]')||'per'
+    };
+    if(!validPhoneText(fields.phone)){ toast('phone required','err'); return; }
+    if(!fields.vpas.length||!validVpaText(fields.vpas[0])){ toast('UPI ID required','err'); return; }
+    saveVendor(key,fields,true);
   }
-  window.openAddItem=function(){
+  function saveVendor(key,fields,reload){
+    var v=SET.vendors.find(function(x){return x.vendor_key===key;});
+    if(v){ if('phone' in fields)v.phone=fields.phone; if('vpas' in fields)v.vpas=fields.vpas; if('fulfilment' in fields)v.fulfilment=fields.fulfilment; if('pay' in fields)v.pay=fields.pay; if('cat' in fields)v.cat=fields.cat; if('brand' in fields)v.brand=fields.brand; }
+    api('settings-vendor',{method:'POST',body:Object.assign({vendor_key:key},fields)}).then(function(r){ var ok=r&&r.j&&r.j.ok; toast(ok?'saved ✓':((r&&r.j&&r.j.error)||'save failed'),ok?'ok':'err'); if(ok&&reload) loadSettings(); });
+  }
+  function simpleOpts(arr,sel,lab){ return arr.map(function(x){return '<option value="'+esc(x)+'"'+(x===sel?' selected':'')+'>'+esc(lab?lab(x):x)+'</option>';}).join(''); }
+  window.openAddVendor=function(){
+    var host=document.getElementById('sheetHost');
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Add vendor</h2>'+
+      '<div class="fld"><label>Vendor name</label><input id="av_name" placeholder="shop / person name"></div>'+
+      '<div class="fld"><label>Phone required</label><input id="av_phone" inputmode="tel" placeholder="10 digit mobile"></div>'+
+      '<div class="fld"><label>UPI ID required</label><input id="av_vpa" placeholder="name@bank"></div>'+
+      '<div class="fld"><label>Supplies</label><input id="av_cat" placeholder="tissues / packaging"></div>'+
+      '<div class="fld"><label>Brand</label><select id="av_brand">'+simpleOpts(SET_BRANDS,'both')+'</select></div>'+
+      '<div class="fld"><label>Fulfilment</label><select id="av_ful">'+simpleOpts(SET_FUL,'deliver')+'</select></div>'+
+      '<div class="fld"><label>Payment rule</label><select id="av_pay">'+simpleOpts(SET_PAY,'per',function(p){return p.replace('khata_','khata ');})+'</select></div>'+
+      '<div class="fld"><label>First item to map (optional)</label><input id="av_item" placeholder="Tissue"></div>'+
+      '<div class="fld"><label>Unit</label><select id="av_unit">'+unitOpts('')+'</select></div>'+
+      '<div class="fld"><label>Price ₹ (optional)</label><input id="av_price" inputmode="decimal" placeholder="per unit"></div>'+
+      '<button class="btn primary" id="av_go" style="width:100%">Add vendor</button></div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    document.getElementById('av_go').addEventListener('click',function(){
+      var name=fieldVal('#av_name'), phone=fieldVal('#av_phone'), vpa=fieldVal('#av_vpa');
+      if(!name){ toast('vendor name required','err'); return; }
+      if(!validPhoneText(phone)){ toast('phone required','err'); return; }
+      if(!validVpaText(vpa)){ toast('UPI ID required','err'); return; }
+      var btn=document.getElementById('av_go'); btn.disabled=true; btn.textContent='Adding...';
+      var body={vendor_key:'NEW',name:name,phone:phone,vpas:[vpa],cat:fieldVal('#av_cat'),brand:fieldVal('#av_brand')||'both',fulfilment:fieldVal('#av_ful')||'deliver',pay:fieldVal('#av_pay')||'per'};
+      api('settings-vendor',{method:'POST',body:body}).then(function(r){
+        if(!r||!r.j||!r.j.ok){ toast((r&&r.j&&r.j.error)||'vendor failed','err'); btn.disabled=false; btn.textContent='Add vendor'; return; }
+        var key=r.j.vendor_key, item=fieldVal('#av_item'), price=parseFloat(fieldVal('#av_price'))||0;
+        if(!item){ toast('vendor added ✓','ok'); host.innerHTML=''; loadSettings(); return; }
+        api('settings-item',{method:'POST',body:{item_code:'NEW',label:item,form:'loose',unit:fieldVal('#av_unit'),price_paise:Math.round(price*100),price_mode:price>0?'fixed':'live',default_vendor:key,category:fieldVal('#av_cat')}})
+          .then(function(ir){ if(ir&&ir.j&&ir.j.ok){ toast('vendor + item added ✓','ok'); SET.tab='items'; } else toast('vendor added, item failed','err'); host.innerHTML=''; loadSettings(); });
+      }).catch(function(){ toast('No connection','err'); btn.disabled=false; btn.textContent='Add vendor'; });
+    });
+  };
+  window.openAddItem=function(prefVendor){
     var host=document.getElementById('sheetHost');
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Add an item</h2>'+
       '<div class="fld"><label>Name</label><input id="ai_label"></div>'+
@@ -1039,7 +1093,7 @@
       '<div class="fld"><label>Pack (if SKU)</label><input id="ai_pack" placeholder="e.g. 500 g"></div>'+
       '<div class="fld"><label>Unit</label><select id="ai_unit">'+unitOpts('')+'</select></div>'+
       '<div class="fld"><label>Price ₹ (leave blank if live-priced)</label><input id="ai_price" inputmode="decimal"></div>'+
-      '<div class="fld"><label>Vendor</label><select id="ai_vendor">'+vendorOpts('')+'</select></div>'+
+      '<div class="fld"><label>Vendor</label><select id="ai_vendor">'+vendorOpts(prefVendor||'')+'</select></div>'+
       '<button class="btn primary" id="ai_go" style="width:100%">Add to master</button></div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
     document.getElementById('ai_go').addEventListener('click',function(){
