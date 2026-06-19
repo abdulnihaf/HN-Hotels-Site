@@ -4,7 +4,7 @@
 // place the merge lives, so the catalog can route every item to a real vendor.
 //
 // Each vendor carries its own behaviour, so the placing UI never has to ask:
-//   fulfilment: deliver | collect | standing | porter
+//   fulfilment: deliver | collect | standing | porter | bus
 //   pay:        per | khata_roll | khata_periodic
 //
 // FLAGGED for owner confirmation (ground truth lives in Odoo purchase.hnhotels.in
@@ -17,6 +17,7 @@ export const FULFILMENT = {
   collect:  'collect',     // Basheer goes & fetches
   standing: 'standing',    // arrives daily, no daily order (e.g. milk)
   porter:   'porter',      // sent via Porter
+  bus:      'intercity',    // city-to-city shipment, then local pickup/porter
 };
 export const PAY = {
   per:            'pay per order',
@@ -58,6 +59,8 @@ export const VENDORS = {
                 aliases: ['rehan osmania', 'rehan', 'farook', 'farooq', 'm farooq ahmed siddique'] },  // bank: paid to Farook (M Farooq Ahmed Siddique)
   charcoal:   { name: 'Mudassir (Charcoal)',    cat: 'Charcoal',                           fulfilment: 'collect',  pay: 'per',            brand: 'HE',   vpa: 'muddu14321@axl',
                 aliases: ['mudassir pasha', 'mudassir', 'muda sir'] },  // bank: Mudassir Pasha
+  afeefa:     { name: 'Afeefa Impex Agencies',  cat: 'Tea powder - intercity; HDFC beneficiary ending 2951; transport/Porter as separate refs', fulfilment: 'bus', pay: 'per', brand: 'NCH', vpa: '',
+                aliases: ['afeefa impex agencies', 'afeefa impex', 'afifa impex', 'afifa impacts', 'lakhimi tea industries', 'tea powder vendor', 'liberty premium'] },
   jayjay:     { name: 'Jay & Jay',              cat: 'Milk powder',                        fulfilment: 'deliver',  pay: 'per',            brand: 'NCH',  vpa: 'vyapar.177783669496@hdfcbank',
                 aliases: ['jay & jay', 'jay and jay', 'j&j'] },
 };

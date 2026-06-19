@@ -306,14 +306,16 @@
         var amt=o.pay_amount_paise?String(o.pay_amount_paise/100):'';
         var ids=(o.ids||[]).join(',');
         var multi=(o.order_count>1)?'<span class="tag p">'+items.length+' items · '+o.order_count+' orders</span>':'<span class="tag p">'+items.length+' item'+(items.length>1?'s':'')+'</span>';
+        var vendorNote=o.cat?'<div class="skuhint" style="margin-bottom:8px">'+esc(o.cat)+'</div>':'';
+        var manualHint=!o.vpa?'<div class="skuhint" style="margin-bottom:9px;color:var(--amber)">No UPI saved. Pay manually from invoice / bank / Porter, then record it here. Sauda will keep one payable trail.</div>':'';
         html+='<div class="basket"><div class="bh"><span class="bn">'+esc(o.vendor_name)+'</span>'+
           '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span>'+multi+'</div>'+
-          '<div class="pb"><div class="its">'+(itemsTxt||'—')+'</div>'+
+          '<div class="pb">'+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
           '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt value="'+esc(amt)+'" placeholder="one payment for all items"></div>'+
           '<div class="pay-acts">'+
             '<button class="upi'+(o.vpa?'':' dis')+'" data-pay="'+esc(o.vpa)+'" data-vn="'+esc(o.vendor_name)+'">'+(o.vpa?'Pay':'No UPI saved')+'</button>'+
-            '<button class="done" data-ids="'+ids+'">Mark paid</button>'+
+            '<button class="done" data-ids="'+ids+'">'+(o.vpa?'Mark paid':'Record paid')+'</button>'+
           '</div></div></div>';
       });
       list.innerHTML=html;
@@ -329,8 +331,9 @@
       list.querySelectorAll('button[data-ids]').forEach(function(b){
         b.addEventListener('click', function(){
           var ids=idsOf(b); var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
+          var payBtn=pb.querySelector('button[data-pay]'); var method=(payBtn&&payBtn.dataset.pay)?'upi':'manual_bank';
           if(busy||!ids.length) return; busy=true;
-          api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:'upi'}})
+          api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:method}})
              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(r.j.reconciled?'✓ Bank-confirmed paid':'Marked paid · bank not seen yet','ok'); loadPay(); } else toast('Failed','err'); })
              .catch(function(){ busy=false; toast('No connection','err'); });
         });
@@ -395,6 +398,24 @@
         .catch(function(){ busy=false; toast('No connection','err'); });
     });
   }
+  function openManualPaySheet(vn, rs, ids, note){
+    var big='₹'+rupees(Math.round(rs*100));
+    var host=document.getElementById('sheetHost');
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Record '+esc(vn)+'</h2>'+
+      '<div class="paybig">'+big+'</div>'+
+      '<div class="skuhint">'+esc(note||'Pay manually from the invoice, bank beneficiary, cash, or Porter app. Then tap record paid here. Reopening this same payment will not create a duplicate bill.').replace(/\n/g,'<br>')+'</div>'+
+      '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(String(Math.round(rs)))+'">Copy ₹'+rupees(Math.round(rs*100))+'</button></div>'+
+      '<button class="btn primary" id="paidBtn" style="width:100%;margin-top:14px">Payment done — record paid</button>'+
+      '</div></div>';
+    document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    host.querySelectorAll('button[data-cpy]').forEach(function(b){ b.addEventListener('click',function(){ try{ navigator.clipboard.writeText(b.dataset.cpy); toast('Copied','ok'); }catch(e){ toast('Copy failed','err'); } }); });
+    document.getElementById('paidBtn').addEventListener('click',function(){
+      if(busy) return; busy=true;
+      api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:'manual_bank'}})
+        .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Payment recorded','ok'); host.innerHTML=''; loadPay(); } else toast('Failed','err'); })
+        .catch(function(){ busy=false; toast('No connection','err'); });
+    });
+  }
 
   // ── Direct pay (Vendors tab). Until RazorpayX activates (~10-12 days), PAYOUT_LIVE stays
   //    false → MANUAL flow (you pay by UPI, then mark paid; recorded in the trail). The day
@@ -403,12 +424,13 @@
   var PAYOUT_LIVE = false;
   function openDirectPay(vk, name, vpa){
     if(PAYOUT_LIVE){ openDirectPayout(vk, name, vpa); return; }
-    if(!vpa){ toast('No UPI saved for '+name,'err'); return; }
     var host=document.getElementById('sheetHost');
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(name)+'</h2>'+
-      '<div class="skuhint">Enter the amount, pay '+esc(name)+' in your UPI app, then tap “mark paid”. Recorded in your trail.</div>'+
+      '<div class="skuhint">Enter the amount and invoice/reference. If UPI is saved, Sauda opens the pay sheet; otherwise it records a manual bank/cash payment trail.</div>'+
       '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" id="dpAmt" placeholder="amount"></div>'+
-      '<div class="vpa-line" style="margin:8px 0 0">'+esc(vpa)+'</div>'+
+      '<div class="fld" style="margin-top:11px"><label>Invoice / reference</label><input id="dpRef" placeholder="e.g. T-431"></div>'+
+      '<div class="fld"><label>Payment reason</label><input id="dpNote" placeholder="e.g. Tea powder invoice"></div>'+
+      '<div class="vpa-line" style="margin:8px 0 0">'+(vpa?esc(vpa):'No UPI saved · manual bank / cash record')+'</div>'+
       '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Continue to pay</button>'+
       '</div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
@@ -417,12 +439,17 @@
       var rs=num(document.getElementById('dpAmt').value);
       if(rs<=0){ toast('Enter an amount','err'); return; }
       if(busy) return; busy=true;
-      api('direct-pay',{method:'POST',body:{vendorKey:vk, amount_paise:Math.round(rs*100)}}).then(function(r){
+      var btn=document.getElementById('dpGo'); btn.disabled=true; btn.textContent='Recording...';
+      var ref=(document.getElementById('dpRef').value||'').trim();
+      var note=(document.getElementById('dpNote').value||'').trim() || (ref?('Invoice '+ref):'Direct payment');
+      api('direct-pay',{method:'POST',body:{vendorKey:vk, amount_paise:Math.round(rs*100), ref:ref, note:note}}).then(function(r){
         busy=false;
-        if(!r.ok||!r.j||!r.j.ok){ toast((r.j&&r.j.error)||'Failed','err'); return; }
+        if(!r.ok||!r.j||!r.j.ok){ toast((r.j&&r.j.error)||'Failed','err'); btn.disabled=false; btn.textContent='Continue to pay'; return; }
+        if(r.j.duplicate) toast('Already recorded — opening existing payment','ok');
         host.innerHTML='';
-        openPaySheet(vpa, name, rs, [r.j.id]);
-      }).catch(function(){ busy=false; toast('No connection','err'); });
+        if(vpa) openPaySheet(vpa, name, rs, [r.j.id]);
+        else openManualPaySheet(name, rs, [r.j.id], 'Pay manually, then record it here. Ref: '+(ref||note));
+      }).catch(function(){ busy=false; btn.disabled=false; btn.textContent='Continue to pay'; toast('No connection','err'); });
     });
   }
   // RazorpayX automated payout — used once PAYOUT_LIVE is flipped on (account live + funded).
@@ -915,8 +942,8 @@
           '<div class="vleft"><span class="bn">'+esc(v.vendor_name)+'</span>'+
             '<span class="tag f">'+esc(v.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(v.payLabel||'')+'</span></div>'+
           '<div class="vright">'+right+'</div></div>'+
-          '<div class="vpay"><span class="vid">'+(v.vpa?esc(v.vpa):'no UPI saved')+'</span>'+
-            (v.vpa?'<button class="paynow" data-vk="'+esc(v.vendorKey)+'" data-vn="'+esc(v.vendor_name)+'" data-vpa="'+esc(v.vpa)+'">Pay now</button>':'')+'</div>'+
+          '<div class="vpay"><span class="vid">'+(v.vpa?esc(v.vpa):'manual/bank only'+(v.cat?' · '+esc(v.cat):''))+'</span>'+
+            '<button class="paynow'+(v.vpa?'':' manual')+'" data-vk="'+esc(v.vendorKey)+'" data-vn="'+esc(v.vendor_name)+'" data-vpa="'+esc(v.vpa||'')+'">'+(v.vpa?'Pay now':'Record payment')+'</button></div>'+
           '<div class="vmeta">'+meta+'</div>'+
           '<div class="vtrail hide" id="vt'+vi+'">'+(trail||'<div style="padding:8px;color:var(--mute)">No orders in the last 30 days.</div>')+'</div></div>';
       }).join('');
@@ -927,8 +954,8 @@
 
   // ── Settings: the item + vendor master (price · unit · vendor · fixed/live · phones/UPIs) ──
   var SET={items:[],vendors:[],tab:'items',q:'',needOnly:false,chip:'all'};
-  var SET_UNITS=['kg','g','L','ml','pc','birds','crate','bunch','katta','bora','bag','cylinder','case','box','bundle','packet','bottle'];
-  var SET_FUL=['deliver','collect','standing','porter'], SET_PAY=['per','khata_roll','khata_periodic'], SET_BRANDS=['both','NCH','HE'];
+  var SET_UNITS=['kg','g','L','ml','pc','birds','crate','bunch','katta','bora','bag','cylinder','case','box','bundle','packet','bottle','trip'];
+  var SET_FUL=['deliver','collect','standing','porter','bus'], SET_PAY=['per','khata_roll','khata_periodic'], SET_BRANDS=['both','NCH','HE'];
   function loadSettings(){
     var list=document.getElementById('setList'), empty=document.getElementById('setEmpty');
     empty.classList.remove('hide'); empty.textContent='Loading…'; list.innerHTML='';

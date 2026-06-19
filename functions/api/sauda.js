@@ -667,6 +667,134 @@ const ITEM_ALIASES = {
   coke:['cock','coca cola','coca-cola'], thumsup:['thums up','thampsup','thumbs up'], egg:['eggs','anda'],
 };
 
+const MN_BROILERS_CHICKEN = [
+  {
+    item_code: 'HE_BONELESS',
+    label: 'Boneless chicken',
+    unit: 'kg',
+    aliases: ['boneless chicken', 'boneless', 'chicken boneless'],
+  },
+  {
+    item_code: 'HE_SHAWARMA',
+    label: 'Shawarma chicken',
+    unit: 'kg',
+    aliases: ['shawarma chicken', 'shawarama chicken', 'chicken shawarma', 'shawarma'],
+  },
+  {
+    item_code: 'HE_KEBAB',
+    label: 'Kebab chicken',
+    unit: 'birds',
+    aliases: ['kebab chicken', 'kabab chicken', 'chicken kebab', 'kebab'],
+  },
+  {
+    item_code: 'HE_TANDOORI',
+    label: 'Tandoori chicken',
+    unit: 'birds',
+    aliases: ['tandoori chicken', 'chicken tandoori', 'tandoori cut'],
+  },
+  {
+    item_code: 'HE_GRILL',
+    label: 'Grill chicken',
+    unit: 'birds',
+    aliases: ['grill chicken'],
+  },
+  {
+    item_code: 'HE_TANGDI',
+    label: 'Tangdi (drumstick)',
+    unit: 'pc',
+    aliases: ['tangdi chicken', 'chicken drumstick', 'drumstick', 'tangdi'],
+  },
+  {
+    item_code: 'HE_LOLLIPOP',
+    label: 'Lollipop / wings',
+    unit: 'pc',
+    aliases: ['lollipop chicken', 'chicken lollipop', 'chicken wings', 'wings', 'lollipop wings'],
+  },
+];
+
+const LOCAL_VENDOR_ITEMS = [
+  {
+    item_code: 'NCH_TEA_POWDER',
+    label: 'Tea Powder - Liberty Premium',
+    unit: 'kg',
+    pack_label: '5 kg bag',
+    pack_qty: 5,
+    price_paise: 47000,
+    price_mode: 'fixed',
+    form: 'loose',
+    brand: 'NCH',
+    default_vendor: 'afeefa',
+    category: 'Beverage Inputs',
+    note: 'Afeefa invoice T-431: effective rate includes 5% IGST; 50 kg = Rs 23,500.',
+    aliases: ['tea powder', 'liberty premium', 'liberty premium 5kg', 'afeefa tea', 'afifa tea'],
+  },
+];
+
+async function upsertChickenItems(db, now) {
+  const stmts = [];
+  for (const item of MN_BROILERS_CHICKEN) {
+    stmts.push(db.prepare(`
+      INSERT INTO sauda_item (
+        item_code, label, unit, pack_label, pack_qty, price_paise, price_mode,
+        form, brand, default_vendor, category, cmp_query, cmp_must, cmp_not, cmp_band,
+        note, flagged, active, updated_by, updated_at
+      ) VALUES (?, ?, ?, '', 1, 0, 'live', 'defined', 'HE', 'mnbroilers', 'Meat & Poultry', '', '[]', '[]', '[]', '', 0, 1, 'seed', ?)
+      ON CONFLICT(item_code) DO UPDATE SET
+        label=excluded.label,
+        unit=excluded.unit,
+        pack_label=excluded.pack_label,
+        pack_qty=excluded.pack_qty,
+        price_paise=excluded.price_paise,
+        price_mode=excluded.price_mode,
+        form=excluded.form,
+        brand=excluded.brand,
+        default_vendor=excluded.default_vendor,
+        category=excluded.category,
+        cmp_query=excluded.cmp_query,
+        cmp_must=excluded.cmp_must,
+        cmp_not=excluded.cmp_not,
+        cmp_band=excluded.cmp_band,
+        note=excluded.note,
+        flagged=excluded.flagged,
+        active=excluded.active,
+        updated_by=excluded.updated_by,
+        updated_at=excluded.updated_at
+    `).bind(item.item_code, item.label, item.unit, now));
+    for (const alias of item.aliases || []) {
+      stmts.push(db.prepare(`
+        INSERT INTO sauda_item_alias (alias, item_code, created_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(alias) DO UPDATE SET item_code=excluded.item_code, created_at=excluded.created_at
+      `).bind(String(alias).toLowerCase(), item.item_code, now));
+    }
+  }
+  for (let i = 0; i < stmts.length; i += 20) await db.batch(stmts.slice(i, i + 20));
+}
+
+async function upsertLocalVendorItems(db, now) {
+  const stmts = [];
+  for (const item of LOCAL_VENDOR_ITEMS) {
+    stmts.push(db.prepare(`
+      INSERT OR IGNORE INTO sauda_item (
+        item_code, label, unit, pack_label, pack_qty, price_paise, price_mode,
+        form, brand, default_vendor, category, note, flagged, active, updated_by, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 'seed', ?)
+    `).bind(
+      item.item_code, item.label, item.unit, item.pack_label || '', item.pack_qty || 1,
+      item.price_paise || 0, item.price_mode || 'fixed', item.form || 'loose',
+      item.brand || '', item.default_vendor || '', item.category || '', item.note || '', now
+    ));
+    for (const alias of item.aliases || []) {
+      stmts.push(db.prepare(`
+        INSERT INTO sauda_item_alias (alias, item_code, created_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(alias) DO UPDATE SET item_code=excluded.item_code, created_at=excluded.created_at
+      `).bind(String(alias).toLowerCase(), item.item_code, now));
+    }
+  }
+  for (let i = 0; i < stmts.length; i += 20) await db.batch(stmts.slice(i, i + 20));
+}
+
 async function ensureSettingsTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS sauda_item (item_code TEXT PRIMARY KEY, label TEXT, unit TEXT, pack_label TEXT, pack_qty REAL,
@@ -692,7 +820,7 @@ async function ensureSettingsTables(db) {
 
 async function seedSettings(db) {
   const row = await db.prepare('SELECT COUNT(*) AS n FROM sauda_item').first();
-  if (row && row.n > 0) return { seeded: false };
+  const seeded = !(row && row.n > 0);
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   const stmts = [];
   for (const [k, v] of Object.entries(VENDORS)) {
@@ -707,7 +835,9 @@ async function seedSettings(db) {
     stmts.push(db.prepare(`INSERT OR IGNORE INTO sauda_item_alias (alias,item_code,created_at) VALUES (?,?,?)`).bind(String(a).toLowerCase(), code, now));
   }
   for (let i = 0; i < stmts.length; i += 20) await db.batch(stmts.slice(i, i + 20));
-  return { seeded: true, vendors: Object.keys(VENDORS).length, items: HP_CATALOG.length };
+  await upsertChickenItems(db, now);
+  await upsertLocalVendorItems(db, now);
+  return { seeded, vendors: Object.keys(VENDORS).length, items: HP_CATALOG.length + MN_BROILERS_CHICKEN.length + LOCAL_VENDOR_ITEMS.length };
 }
 
 const FULFILMENT_LABEL = {
@@ -715,6 +845,7 @@ const FULFILMENT_LABEL = {
   collect: 'collect',
   standing: 'standing',
   porter: 'porter',
+  bus: 'intercity',
 };
 const PAY_LABEL = {
   per: 'pay per order',
@@ -1043,7 +1174,7 @@ async function openOrders(db) {
     orders.push({
       ids, order_count: list.length,
       vendorKey: v.key, vendor_name: v.name, brand: list[0].brand,
-      vpa: v.vpa || '', fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
+      vpa: v.vpa || '', cat: v.cat || '', fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
       items_json: JSON.stringify(items),
       pay_amount_paise: amount,                       // summed; 0 if not yet known
       for_date: forDates[forDates.length - 1] || '', for_dates: forDates,
@@ -1179,6 +1310,18 @@ async function autoSettle(db) {
 // ── Direct pay: pay ANY vendor an ad-hoc amount, not tied to a placed order.
 // Records a REQUESTED sauda_purchase row so it shows in the vendor trail and gets
 // bank-verified by auto-settle when the debit lands — same rails as a normal order. ──
+function cleanDirectText(value, fallback) {
+  const s = String(value || '').trim().replace(/\s+/g, ' ');
+  return (s || fallback || '').slice(0, 180);
+}
+function directItemMatch(items, note, ref) {
+  const first = Array.isArray(items) ? items[0] : null;
+  if (!first || !first.direct) return false;
+  const existingRef = norm(first.ref || first.invoice_ref || '');
+  const nextRef = norm(ref || '');
+  if (nextRef) return existingRef === nextRef;
+  return norm(first.item || '') === norm(note || '');
+}
 async function directPay(db, body, auth) {
   const vdir = await getVendorDirectory(db);
   const rawVk = String((body && body.vendorKey) || '');
@@ -1187,14 +1330,32 @@ async function directPay(db, body, auth) {
   if (!rawVk || vk === 'unassigned') return { ok: false, error: 'unknown vendor' };
   const amt = Math.round(+(body && body.amount_paise) || 0);
   if (amt <= 0) return { ok: false, error: 'amount required' };
+  const ref = cleanDirectText((body && (body.ref || body.invoice_ref || body.invoice_no)) || '', '');
+  const note = cleanDirectText((body && body.note) || '', ref ? ('Invoice ' + ref) : 'Direct payment');
   const forDate = todayIST();
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
-  const items = [{ item: String((body && body.note) || 'Direct payment'), qty: '', unit: '', price_paise: amt, direct: true }];
+
+  // Idempotency for the manual/RazorpayX simulation button: the same vendor,
+  // same day, same amount, same invoice/ref should reopen the existing payable.
+  const existing = ((await db.prepare(
+    `SELECT id, status, items_json FROM sauda_purchase
+      WHERE vendor_name=? AND for_date=? AND pay_amount_paise=? AND status IN ('REQUESTED','PAID')
+      ORDER BY id DESC LIMIT 30`
+  ).bind(v.name, forDate, amt).all()).results) || [];
+  for (const row of existing) {
+    let parsed = [];
+    try { parsed = JSON.parse(row.items_json || '[]'); } catch (e) {}
+    if (directItemMatch(parsed, note, ref)) {
+      return { ok: true, id: row.id, duplicate: true, status: row.status, vendor: v.name, vpa: v.vpa || '', amount_paise: amt };
+    }
+  }
+
+  const items = [{ item: note, qty: '', unit: '', price_paise: amt, direct: true, ref, method_hint: v.vpa ? 'upi' : 'manual' }];
   const res = await db.prepare(
     `INSERT INTO sauda_purchase (brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, expected_amount_paise, pay_amount_paise, pay_requested_at, ordered_at, ordered_by)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(v.brand || 'both', v.name, forDate, v.fulfilment, v.pay, JSON.stringify(items), 'REQUESTED', amt, amt, now, now, (auth && auth.u) || '').run();
-  return { ok: true, id: res?.meta?.last_row_id, vendor: v.name, vpa: v.vpa || '', amount_paise: amt };
+  return { ok: true, id: res?.meta?.last_row_id, duplicate: false, vendor: v.name, vpa: v.vpa || '', amount_paise: amt };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
