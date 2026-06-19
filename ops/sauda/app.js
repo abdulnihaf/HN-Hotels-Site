@@ -14,9 +14,10 @@
   var pin = '', busy = false;
 
   var S = { token: null, user: '', role: '', cat: null, brand: 'both', order: [] /* lines */, seq: 0,
+            placeDate: defaultPurchaseDateIST(), hist: { date: defaultPurchaseDateIST() },
             hp: { feed: [], win: null, fresh: '', stale: false, picked: {} /* item_key -> 'opened'|'added' */, chosen: {} /* item_key -> picked SKU override */, collapsed: { dearer: true, nomatch: true }, tick: null },
             cmp: { items: [], sources: {}, pick: {} /* item_key -> chosen source */ },
-            buy: { qty: {} /* item_key -> qty */, when: 'today' /* today | tomorrow — decides feasible sources */ } };
+            buy: { qty: {} /* item_key -> qty */, when: defaultNeedWhen() /* today | tomorrow — decides feasible sources */ } };
 
   // ── token / session ──
   function tokenExp(t){ try{ var b=t.split('.')[0].replace(/-/g,'+').replace(/_/g,'/'); while(b.length%4)b+='='; return (JSON.parse(atob(b)).exp||0)*1000; }catch(e){ return 0; } }
@@ -65,9 +66,10 @@
 
   // ── persist in-progress work so a Safari/iOS reload never loses it ──
   function saveWork(){ try{ localStorage.setItem('sauda_work', JSON.stringify({
-    order:S.order, seq:S.seq, hpPicked:S.hp.picked, hpChosen:S.hp.chosen, cmpPick:S.cmp.pick, buyQty:S.buy.qty, buyWhen:S.buy.when })); }catch(e){} }
+    order:S.order, seq:S.seq, placeDate:S.placeDate, histDate:S.hist.date, hpPicked:S.hp.picked, hpChosen:S.hp.chosen, cmpPick:S.cmp.pick, buyQty:S.buy.qty, buyWhen:S.buy.when })); }catch(e){} }
   function restoreWork(){ try{ var w=JSON.parse(localStorage.getItem('sauda_work')||'null'); if(!w) return;
     if(Array.isArray(w.order)) S.order=w.order; if(w.seq) S.seq=w.seq;
+    if(w.placeDate) S.placeDate=w.placeDate; if(w.histDate) S.hist.date=w.histDate;
     if(w.hpPicked && typeof w.hpPicked==='object') S.hp.picked=w.hpPicked; if(w.hpChosen && typeof w.hpChosen==='object') S.hp.chosen=w.hpChosen;
     if(w.cmpPick) S.cmp.pick=w.cmpPick; if(w.buyQty) S.buy.qty=w.buyQty; if(w.buyWhen) S.buy.when=w.buyWhen; }catch(e){} }
   var _persist;
@@ -76,6 +78,14 @@
     document.addEventListener('visibilitychange', function(){ if(document.hidden) saveWork(); }); }
   function fmtDate(){ var d=new Date(Date.now()+330*60000); return d.toUTCString().slice(0,11); }
   function ymdIST(offsetDays){ var d=new Date(Date.now()+330*60000+(offsetDays||0)*86400000); return d.toISOString().slice(0,10); }
+  function defaultNeedWhen(){ var d=new Date(Date.now()+330*60000); return d.getUTCHours()>=18 ? 'tomorrow' : 'today'; }
+  function defaultPurchaseDateIST(){ return ymdIST(defaultNeedWhen()==='tomorrow'?1:0); }
+  function addDaysYmd(ymd, delta){
+    var p=String(ymd||defaultPurchaseDateIST()).split('-');
+    var d=p.length===3 ? new Date(+p[0], +p[1]-1, +p[2]) : new Date();
+    d.setDate(d.getDate()+(delta||0));
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
 
   function loadCatalog(){
     api('catalog').then(function(res){
@@ -123,6 +133,23 @@
   function setPrice(id,v){ var l=S.order.find(function(x){return x.id===id;}); if(l) l.price=v; updatePlaceBtn(); }
 
   function vendorMeta(key){ var v=(S.cat&&S.cat.vendors||[]).find(function(x){return x.key===key;}); return v||{key:key,name:key,fulfilment:'deliver',pay:'per',fulfilmentLabel:'delivers',payLabel:'pay per order'}; }
+  function dateTitle(d){
+    var today=ymdIST(0), tom=ymdIST(1);
+    if(d===today) return "Today's order";
+    if(d===tom) return "Tomorrow's order";
+    return 'Order · '+d;
+  }
+  function syncPlaceDate(){
+    if(!S.placeDate) S.placeDate=defaultPurchaseDateIST();
+    var el=document.getElementById('placeDate'); if(el) el.value=S.placeDate;
+    var h1=document.querySelector('.top h1');
+    if(h1 && document.querySelector('#modeSeg button[data-m="place"].on')) h1.textContent=dateTitle(S.placeDate);
+  }
+  function setPlaceDate(d){
+    S.placeDate=(d||defaultPurchaseDateIST()).slice(0,10);
+    syncPlaceDate();
+    saveWork();
+  }
 
   // ── render the baskets ──
   function renderOrder(){
@@ -270,14 +297,14 @@
     if(bad.length && !confirm(bad.length+' item(s) have no quantity. Place anyway? (vendor will fill)')) return;
     busy=true; var btn=this; btn.disabled=true; btn.textContent='Placing…';
     var lines=S.order.map(function(l){ return { item:l.item, sku:l.item_code||l.item, qty:l.qty, unit:l.unit, vendorKey:l.vendorKey, brand:l.brand, price_paise:Math.round((parseFloat(l.price)||0)*100) }; });
-    api('place',{method:'POST',body:{ lines:lines }}).then(function(res){
+    api('place',{method:'POST',body:{ for_date:S.placeDate||defaultPurchaseDateIST(), lines:lines }}).then(function(res){
       busy=false;
       if(!res.ok||!res.j||!res.j.ok){ toast(res.j&&res.j.error||'Place failed','err'); updatePlaceBtn(); return; }
       var dup=res.j.duplicates||0;
       var msg=res.j.placed>0
         ? ('Placed '+res.j.placed+' vendor order'+(res.j.placed>1?'s':'')+(dup?' · skipped '+dup+' duplicate':''))
         : (dup?'Already placed — duplicate skipped':'No new order placed');
-      toast(msg,'ok');
+      toast(msg+' · '+(res.j.for_date||S.placeDate),'ok');
       S.order=[]; renderOrder();
     }).catch(function(){ busy=false; toast('No connection','err'); updatePlaceBtn(); });
   });
@@ -288,6 +315,13 @@
     S.brand=b.dataset.b;
     this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
     onSearch(); renderVendorList();
+  });
+  var placeDateInput=document.getElementById('placeDate');
+  if(placeDateInput) placeDateInput.addEventListener('change', function(){ setPlaceDate(this.value); });
+  var placeDateBar=document.getElementById('placeDateBar');
+  if(placeDateBar) placeDateBar.addEventListener('click', function(e){
+    var b=e.target.closest('button[data-pquick]'); if(!b) return;
+    setPlaceDate(b.dataset.pquick==='tomorrow'?ymdIST(1):ymdIST(0));
   });
 
   // ── mode toggle: Place · To pay · Hyperpure · Compare ──
@@ -305,8 +339,8 @@
     else if(m==='settings'){ vset.classList.remove('hide'); if(h1) h1.textContent="Settings"; loadSettings(); }
     else if(m==='hp'){ hp.classList.remove('hide'); if(h1) h1.textContent="Tomorrow · Hyperpure"; loadHp(); }
     else if(m==='cmp'){ cmp.classList.remove('hide'); cmpBar.classList.remove('hide'); if(h1) h1.textContent="Compare prices"; loadCompare(); }
-    else if(m==='saved'){ hist.classList.remove('hide'); if(h1) h1.textContent="Saved orders"; loadHistory(); }
-    else if(m==='place'){ place.classList.remove('hide'); placeBar.classList.remove('hide'); if(h1) h1.textContent="Today's order"; }
+    else if(m==='orders'){ hist.classList.remove('hide'); if(h1) h1.textContent="Purchase diary"; loadHistory(); }
+    else if(m==='place'){ place.classList.remove('hide'); placeBar.classList.remove('hide'); syncPlaceDate(); if(h1) h1.textContent=dateTitle(S.placeDate); }
     else { buy.classList.remove('hide'); buyBar.classList.remove('hide'); if(h1) h1.textContent="Buy list"; loadBuy(); }
   }
   document.getElementById('modeSeg').addEventListener('click', function(e){ var b=e.target.closest('button[data-m]'); if(b) setMode(b.dataset.m); });
@@ -1124,14 +1158,12 @@
     api('save-po',{method:'POST',body:{ orders:orders, need_by:S.buy.when }}).then(function(res){
       busy=false;
       if(!res.ok||!res.j||!res.j.ok){ toast((res.j&&res.j.error)||'Save failed','err'); btn.disabled=false; btn.textContent='Confirm & save'; return; }
-      toast('Saved '+res.j.items+' items · '+res.j.orders+' order'+(res.j.orders>1?'s':'')+' for '+(res.j.for_date||'tomorrow'),'ok');
+      toast('Recorded '+res.j.items+' items · '+res.j.orders+' order'+(res.j.orders>1?'s':'')+' for '+(res.j.for_date||'tomorrow'),'ok');
       document.getElementById('sheetHost').innerHTML='';
     }).catch(function(){ busy=false; toast('No connection','err'); btn.disabled=false; btn.textContent='Confirm & save'; });
   }
 
-  // ── Saved orders (the PO trail) ──
-  // Relative day label from the order's for_date vs TODAY (device is IST). Fixes the old bug
-  // where every row showed the static need_by ("tomorrow") forever, regardless of the real date.
+  // ── Purchase diary: selected business date, PO inputs + placed vendor orders ──
   function fmtDayLabel(fd){
     if(!fd){ return {t:'—', sub:'', c:'dim'}; }
     var p=String(fd).split('-'); if(p.length<3){ return {t:fd, sub:'', c:'dim'}; }
@@ -1145,36 +1177,72 @@
     if(diff===-1) return {t:'Yesterday', sub:pretty, c:'dim'};
     return {t:pretty, sub:'', c:'dim'};
   }
+  function syncHistoryDate(){
+    if(!S.hist.date) S.hist.date=defaultPurchaseDateIST();
+    var el=document.getElementById('histDate'); if(el) el.value=S.hist.date;
+  }
+  function setHistoryDate(d, reload){
+    S.hist.date=(d||defaultPurchaseDateIST()).slice(0,10);
+    syncHistoryDate();
+    saveWork();
+    if(reload!==false) loadHistory();
+  }
+  function orderLineText(it){
+    var q=(((it.qty||'')+' '+(it.unit||'')).trim())||'—';
+    return '<div class="hline"><div class="hi"><b>'+esc(it.item||it.name||'')+'</b>'+
+      ((it.raw&&it.raw!==it.item)?'<small>from '+esc(it.raw)+'</small>':'')+
+      (it.flag?'<small style="color:var(--amber)">⚠ '+esc(it.flag)+'</small>':'')+
+      (it.sku&&it.sku!==it.item?'<small>'+esc(it.sku)+'</small>':'')+'</div><span class="hq">'+esc(q)+'</span></div>';
+  }
+  function renderPoCard(o){
+    var items=o.items||[];
+    return '<div class="hist-card"><div class="hhd"><b>'+esc(o.brand||'')+'</b>'+
+      (o.sender?'<small>'+esc(o.sender)+'</small>':'')+
+      '<small style="margin-left:auto">'+items.length+' item'+(items.length===1?'':'s')+'</small></div>'+
+      items.map(orderLineText).join('')+'</div>';
+  }
+  function renderPlacedCard(o){
+    var items=o.items||[], amt=+o.expected_amount_paise||0;
+    var note=/ashrafiya/i.test(o.vendor_name||'') ? '<div class="hist-note">Ashrafiya is one combined HE+NCH khata. This vendor can contain both brands, but settlement is one payment.</div>' : '';
+    return '<div class="hist-card"><div class="hhd"><b>'+esc(o.vendor_name||'')+'</b>'+
+      '<span class="tag f">'+esc(o.fulfilmentLabel||o.fulfilment||'')+'</span><span class="tag p">'+esc(o.payLabel||o.pay_timing||'')+'</span>'+
+      '<small>'+esc(o.status||'')+'</small>'+(amt?'<span class="hamt">₹'+rupees(amt)+'</span>':'')+'</div>'+
+      note+items.map(orderLineText).join('')+'</div>';
+  }
   function loadHistory(){
     var list=document.getElementById('histList'), empty=document.getElementById('histEmpty'), head=document.getElementById('histHead');
+    syncHistoryDate();
+    var fd=S.hist.date||defaultPurchaseDateIST();
     list.innerHTML='<div class="empty">Loading…</div>'; empty.classList.add('hide'); head.innerHTML='';
-    api('po-history').then(function(res){
+    api('purchase-day&for_date='+encodeURIComponent(fd)).then(function(res){
       if(!res.ok||!res.j||!res.j.ok){ list.innerHTML=''; toast('Load failed','err'); return; }
-      var orders=res.j.orders||[];
-      if(!orders.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
-      // group by for_date, newest day first; label each day relative to today
-      var byDate={};
-      orders.forEach(function(o){ var d=o.for_date||'—'; (byDate[d]=byDate[d]||[]).push(o); });
-      var dates=Object.keys(byDate).sort(function(a,b){ return a<b?1:(a>b?-1:0); });
-      head.innerHTML='<span class="ttl">'+orders.length+' saved order'+(orders.length>1?'s':'')+' · '+dates.length+' day'+(dates.length>1?'s':'')+'</span>';
-      function chipStyle(c){ return c==='today'?'background:var(--green-soft);color:var(--green)':(c==='tom'?'background:var(--gold-soft);color:var(--gold)':'background:rgba(255,255,255,.06);color:var(--dim)'); }
-      list.innerHTML=dates.map(function(d){
-        var L=fmtDayLabel(d), os=byDate[d];
-        var dayhdr='<div style="display:flex;align-items:center;gap:8px;margin:16px 0 8px">'+
-          '<span style="font-size:12.5px;font-weight:700;padding:3px 11px;border-radius:9px;'+chipStyle(L.c)+'">'+esc(L.t)+'</span>'+
-          (L.sub?'<span style="font-size:12px;color:var(--dim)">'+esc(L.sub)+'</span>':'')+
-          '<span style="margin-left:auto;font-size:11px;color:var(--mute)">'+os.length+' order'+(os.length>1?'s':'')+'</span></div>';
-        var cards=os.map(function(o){
-          var rows=(o.items||[]).map(function(it){
-            var q=(((it.qty||'')+' '+(it.unit||'')).trim())||'—';
-            return '<div class="dec-it"><div class="di"><b>'+esc(it.item||'')+'</b>'+(it.flag?'<span class="fl">⚠ '+esc(it.flag)+'</span>':'')+'</div><span class="du">'+esc(q)+'</span></div>';
-          }).join('');
-          return '<div class="dec-order"><div class="dec-oh"><b>'+esc(o.brand||'')+'</b>'+(o.sender?'<span style="font-size:11px;color:var(--dim);margin-left:6px">'+esc(o.sender)+'</span>':'')+'<span style="margin-left:auto;font-size:11px;color:var(--dim)">'+(o.items||[]).length+' items</span></div>'+rows+'</div>';
-        }).join('');
-        return dayhdr+cards;
-      }).join('');
+      var po=res.j.po_orders||[], placed=res.j.placed_orders||[], s=res.j.summary||{};
+      var L=fmtDayLabel(res.j.for_date||fd);
+      head.innerHTML='<span class="ttl">'+esc(L.t)+(L.sub?' · '+esc(L.sub):'')+'</span>'+
+        '<span class="fresh">'+(s.po_items||0)+' input item'+((s.po_items||0)===1?'':'s')+' · '+(s.placed_orders||0)+' vendor order'+((s.placed_orders||0)===1?'':'s')+'</span>';
+      if(!po.length && !placed.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
+      var html='<div class="hist-summary">'+
+        '<div class="hist-box"><b>'+esc(String(s.po_items||0))+'</b><span>items entered</span></div>'+
+        '<div class="hist-box"><b>'+esc(String(s.placed_orders||0))+'</b><span>vendor orders placed</span></div>'+
+        '<div class="hist-box"><b>₹'+rupees(s.expected_amount_paise||0)+'</b><span>placed bill basis</span></div>'+
+        '</div>';
+      if(po.length) html+='<div class="hist-section">Purchase inputs</div>'+po.map(renderPoCard).join('');
+      if(placed.length) html+='<div class="hist-section">Vendor orders placed</div>'+placed.map(renderPlacedCard).join('');
+      list.innerHTML=html;
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
+  var histDateInput=document.getElementById('histDate');
+  if(histDateInput) histDateInput.addEventListener('change', function(){ setHistoryDate(this.value); });
+  var histDateBar=document.getElementById('histDateBar');
+  if(histDateBar) histDateBar.addEventListener('click', function(e){
+    var b=e.target.closest('button[data-hshift]'); if(!b) return;
+    setHistoryDate(addDaysYmd(S.hist.date||defaultPurchaseDateIST(), parseInt(b.dataset.hshift,10)||0));
+  });
+  var histQuick=document.querySelector('.diary-quick');
+  if(histQuick) histQuick.addEventListener('click', function(e){
+    var b=e.target.closest('button[data-hquick]'); if(!b) return;
+    setHistoryDate(b.dataset.hquick==='tomorrow'?ymdIST(1):ymdIST(0));
+  });
 
   // ── Vendor diary — per-vendor records: paid / outstanding / full trail ──
   function fmtTs(s){ if(!s) return ''; try{ return String(s).slice(0,16).replace('T',' '); }catch(e){ return s; } }
@@ -1574,7 +1642,7 @@
         : 'Items below do not have a vendor mapped yet.';
       body+='<section><h2>'+esc(vendorName(k))+' <span class="n">'+by[k].length+' item'+(by[k].length===1?'':'s')+'</span></h2>'+
         '<div class="vmeta '+((v&&vm.length)||!v?'warn':'')+'">'+vmeta+'</div>'+
-        '<table><tr><th>Item</th><th>Unit / pack</th><th>Saved rate</th><th>Bill basis</th><th>Status / missing</th><th>Today qty</th><th>Bill Rs / correction</th></tr>';
+        '<table><tr><th>Item</th><th>Unit / pack</th><th>Current rate</th><th>Bill basis</th><th>Status / missing</th><th>Today qty</th><th>Bill Rs / correction</th></tr>';
       by[k].sort(function(a,b){return a.label.localeCompare(b.label);}).forEach(function(i){
         var miss=itemMissing(i), bad=i.flagged||miss.length;
         var cls=bad?' class="bad"':(i.price_mode==='live'?' class="live"':'');

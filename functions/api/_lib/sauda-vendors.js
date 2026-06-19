@@ -27,7 +27,7 @@ export const PAY = {
 
 // canonical vendors. `aliases` = every spelling seen in the legacy data (lower-cased).
 export const VENDORS = {
-  ashrafiya:  { name: 'Ashrafiya Store',        cat: 'Provisions, spices, oils, cleaning', fulfilment: 'collect',  pay: 'khata_roll',     brand: 'both', vpa: 'q318394880@ybl',
+  ashrafiya:  { name: 'Ashrafiya Store',        cat: 'Provisions, spices, oils, cleaning - combined HE+NCH khata; one settlement payment', fulfilment: 'collect',  pay: 'khata_roll',     brand: 'both', vpa: 'q318394880@ybl',
                 aliases: ['ashrafiya store', 'ashrafia', 'ashrafiya'] },
   manju:      { name: 'Manju Veg Supplier',     cat: 'Vegetables, herbs, lemon',           fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: 'q025257178@ybl',
                 aliases: ['manju veg supplier', 'manjunath', 'manju'] },
@@ -53,6 +53,8 @@ export const VENDORS = {
                 aliases: ['sameer hamza samosa vendor', 'krishnamoorthi', 'krishnamurthy', 'samosa vendor'] },
   eggs:       { name: 'Eggs (Syed Lais)',       cat: 'Eggs (go & buy, UPI tracked)',       fulfilment: 'collect',  pay: 'per',            brand: 'HE',   vpa: '9916374699ssa@ybl',
                 aliases: ['eggs (syed lais)', 'syed siraj ahmed', 'syed lais', 'eggs'] },
+  he_local_dairy: { name: 'HE Local Dairy (walk-in)', cat: 'Hamza Express milk and curd - bought locally; never part of Ashrafiya khata', fulfilment: 'collect', pay: 'per', brand: 'HE', vpa: '',
+                aliases: ['he local dairy', 'hamza local dairy', 'local dairy', 'milk curd local', 'he milk vendor', 'he curd vendor'] },
   gas:        { name: 'Ahmed (Gas)',            cat: 'LPG cylinder',                       fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: '9845956333@ibl',
                 aliases: ['ahmed - gas cylinder', 'ahmed gas', 'ahmed', 'a m ruba bharat gas', 'am ruba bharat gas'] },  // bank: A M Ruba Bharat Gas
   osmania:    { name: 'Rehan (Osmania)',        cat: 'Osmania biscuits (occasional)',      fulfilment: 'deliver',  pay: 'per',            brand: 'NCH',  vpa: '7259834218@ybl',

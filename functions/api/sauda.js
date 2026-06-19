@@ -206,6 +206,10 @@ export async function onRequest(context) {
       const limit = Math.min(parseInt(url.searchParams.get('limit') || '60', 10) || 60, 200);
       return withCors(json(await poHistory(db, limit)), request);
     }
+    if (action === 'purchase-day' && request.method === 'GET') {
+      const forDate = (url.searchParams.get('for_date') || defaultPurchaseWorkDateIST()).slice(0, 10);
+      return withCors(json(await purchaseDay(db, forDate)), request);
+    }
     // route: take the latest saved order(s) → lanes (local / plan-ahead / quick) by price + timing
     if (action === 'route' && request.method === 'GET') {
       const when = url.searchParams.get('when') === 'today' ? 'today' : 'tomorrow';
@@ -224,6 +228,12 @@ function todayIST() {
 }
 function nextDayIST() {
   const t = new Date(Date.now() + 330 * 60000 + 24 * 3600000);
+  return t.toISOString().slice(0, 10);
+}
+function defaultPurchaseWorkDateIST() {
+  const t = new Date(Date.now() + 330 * 60000);
+  const hour = t.getUTCHours();
+  if (hour >= 18) t.setUTCDate(t.getUTCDate() + 1);
   return t.toISOString().slice(0, 10);
 }
 
@@ -386,6 +396,43 @@ async function ensurePoTable(db) {
      )`
   ).run();
 }
+async function ensurePurchaseTable(db) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS sauda_purchase (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       brand TEXT NOT NULL,
+       vendor_id INTEGER,
+       vendor_name TEXT NOT NULL,
+       vendor_vpa TEXT,
+       for_date TEXT NOT NULL,
+       fulfilment TEXT,
+       pay_timing TEXT,
+       items_json TEXT,
+       expected_amount_paise INTEGER,
+       status TEXT NOT NULL DEFAULT 'ORDERED',
+       ordered_at TEXT,
+       ordered_by TEXT,
+       received_at TEXT,
+       received_by TEXT,
+       received_station TEXT,
+       received_items_json TEXT,
+       receive_note TEXT,
+       has_bill INTEGER DEFAULT 0,
+       has_goods INTEGER DEFAULT 0,
+       pay_amount_paise INTEGER,
+       pay_requested_at TEXT,
+       pay_requested_by TEXT,
+       paid_at TEXT,
+       pay_method TEXT,
+       bank_event_id INTEGER,
+       bank_ref TEXT,
+       reconciled_at TEXT,
+       created_at TEXT DEFAULT (datetime('now')),
+       updated_at TEXT DEFAULT (datetime('now'))
+     )`
+  ).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sp_status ON sauda_purchase(brand, for_date, status)`).run();
+}
 async function savePO(db, body, auth) {
   const orders = Array.isArray(body && body.orders) ? body.orders : [];
   const clean = orders
@@ -432,6 +479,67 @@ async function poHistory(db, limit) {
     return { id: r.id, brand: r.brand, for_date: r.for_date, need_by: r.need_by, sender: r.sender, source: r.source, by_user: r.by_user, created_at: r.created_at, items };
   });
   return { ok: true, orders };
+}
+function parsePoRow(r) {
+  let items = [];
+  try { items = JSON.parse(r.items_json); } catch (e) {}
+  return { id: r.id, brand: r.brand, for_date: r.for_date, need_by: r.need_by, sender: r.sender, source: r.source, by_user: r.by_user, created_at: r.created_at, items };
+}
+function parsePurchaseRow(r, vdir) {
+  let items = [];
+  try { items = JSON.parse(r.items_json || '[]'); } catch (e) {}
+  const v = vdir ? resolveVendor(vdir, r.vendor_name) : null;
+  return {
+    id: r.id,
+    brand: r.brand,
+    vendor_name: r.vendor_name,
+    vendorKey: v ? v.key : '',
+    fulfilment: r.fulfilment,
+    fulfilmentLabel: FULFILMENT_LABEL[r.fulfilment] || r.fulfilment || '',
+    pay_timing: r.pay_timing,
+    payLabel: PAY_LABEL[r.pay_timing] || r.pay_timing || '',
+    for_date: r.for_date,
+    status: r.status,
+    expected_amount_paise: r.expected_amount_paise || 0,
+    ordered_by: r.ordered_by,
+    ordered_at: r.ordered_at,
+    items,
+  };
+}
+async function purchaseDay(db, forDate) {
+  await ensurePoTable(db);
+  await ensurePurchaseTable(db);
+  const vdir = await getVendorDirectory(db);
+  const poRows = ((await db.prepare(
+    `SELECT id, brand, for_date, need_by, sender, items_json, source, by_user, created_at
+       FROM sauda_po
+      WHERE for_date = ?
+      ORDER BY id DESC`
+  ).bind(forDate).all()).results) || [];
+  const purchaseRows = ((await db.prepare(
+    `SELECT id, brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, expected_amount_paise, ordered_by, ordered_at
+       FROM sauda_purchase
+      WHERE for_date = ?
+      ORDER BY id DESC`
+  ).bind(forDate).all()).results) || [];
+  const poOrders = poRows.map(parsePoRow);
+  const placedOrders = purchaseRows.map((r) => parsePurchaseRow(r, vdir));
+  const poItems = poOrders.reduce((n, o) => n + ((o.items || []).length || 0), 0);
+  const placedItems = placedOrders.reduce((n, o) => n + ((o.items || []).length || 0), 0);
+  const expected = placedOrders.reduce((s, o) => s + (+o.expected_amount_paise || 0), 0);
+  return {
+    ok: true,
+    for_date: forDate,
+    po_orders: poOrders,
+    placed_orders: placedOrders,
+    summary: {
+      po_orders: poOrders.length,
+      po_items: poItems,
+      placed_orders: placedOrders.length,
+      placed_items: placedItems,
+      expected_amount_paise: expected,
+    },
+  };
 }
 
 // ── Route: latest saved order(s) → lanes (local / plan-ahead / quick) ──
@@ -572,6 +680,7 @@ async function buildCatalog(db) {
 
 // ── Orders already placed for a given day ──
 async function ordersForDay(db, forDate) {
+  await ensurePurchaseTable(db);
   const rows = await db.prepare(
     `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, expected_amount_paise, ordered_by, ordered_at
        FROM sauda_purchase WHERE for_date = ? ORDER BY id DESC`
@@ -637,6 +746,7 @@ async function placeOrders(db, body, auth, env, context) {
   const forDate = (body.for_date || todayIST()).slice(0, 10);
   const lines = Array.isArray(body.lines) ? body.lines : [];
   if (!lines.length) return { ok: false, error: 'no lines' };
+  await ensurePurchaseTable(db);
   const vdir = await getVendorDirectory(db);
 
   // group lines by vendor
@@ -829,6 +939,66 @@ const MN_BROILERS_CHICKEN = [
 ];
 
 const LOCAL_VENDOR_ITEMS = [
+  {
+    item_code: 'milk',
+    label: 'Milk',
+    unit: 'L',
+    pack_label: '',
+    pack_qty: 1,
+    price_paise: 5000,
+    price_mode: 'fixed',
+    form: 'loose',
+    brand: 'NCH',
+    default_vendor: 'prabhu',
+    category: 'Dairy',
+    note: 'NCH milk stays with the standing dairy vendor. HE milk is separate as a local walk-in purchase.',
+    aliases: ['milk', 'nch milk', 'buffalo milk', 'prabhu milk'],
+  },
+  {
+    item_code: 'curd',
+    label: 'Curd',
+    unit: 'L',
+    pack_label: '',
+    pack_qty: 1,
+    price_paise: 5800,
+    price_mode: 'fixed',
+    form: 'loose',
+    brand: 'NCH',
+    default_vendor: 'prabhu',
+    category: 'Dairy',
+    note: 'NCH curd stays with the dairy lane. HE curd is separate as a local walk-in purchase.',
+    aliases: ['curd', 'nch curd', 'dahi', 'yogurt', 'yoghurt'],
+  },
+  {
+    item_code: 'HE_MILK_LOCAL',
+    label: 'Milk (HE local dairy)',
+    unit: 'L',
+    pack_label: '',
+    pack_qty: 1,
+    price_paise: 0,
+    price_mode: 'live',
+    form: 'loose',
+    brand: 'HE',
+    default_vendor: 'he_local_dairy',
+    category: 'Dairy',
+    note: 'Hamza Express milk is bought by walking to a local dairy/outlet. Keep it out of Ashrafiya khata.',
+    aliases: ['he milk', 'hamza milk', 'milk he', 'local milk', 'milk local'],
+  },
+  {
+    item_code: 'HE_CURD_LOCAL',
+    label: 'Curd (HE local dairy)',
+    unit: 'L',
+    pack_label: '',
+    pack_qty: 1,
+    price_paise: 0,
+    price_mode: 'live',
+    form: 'loose',
+    brand: 'HE',
+    default_vendor: 'he_local_dairy',
+    category: 'Dairy',
+    note: 'Hamza Express curd is bought by walking to a local dairy/outlet. Keep it out of Ashrafiya khata.',
+    aliases: ['he curd', 'hamza curd', 'curd he', 'local curd', 'curd local', 'he dahi', 'hamza dahi'],
+  },
   {
     item_code: 'butter_unsalted',
     label: 'Amul unsalted butter 500g',

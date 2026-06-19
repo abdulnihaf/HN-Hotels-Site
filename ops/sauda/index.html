@@ -386,6 +386,30 @@
     .ven .vpay .paynow:active{transform:scale(.97)}
     .quickdates{display:flex;gap:8px;margin:-4px 0 11px}
     .quickdates button{flex:1;min-height:38px;border-radius:9px;background:var(--e2);border:1px solid var(--line);color:var(--gold);font-size:12.5px;font-weight:800}
+    .datebar{display:grid;grid-template-columns:1fr minmax(132px,1.35fr) 1fr;gap:8px;margin:10px 16px 8px;align-items:center}
+    .datebar button,.datebar input{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--e2);color:var(--text);font-size:13px;font-weight:800;text-align:center;padding:0 10px}
+    .datebar button{color:var(--gold);background:var(--gold-soft);border-color:var(--gold-bd)}
+    .datebar input{font-variant-numeric:tabular-nums;color:var(--text)}
+    .diary-datebar{margin-bottom:4px}
+    .diary-quick{margin:0 16px 4px}
+    .hist-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 12px}
+    .hist-box{border:1px solid var(--line-soft);border-radius:11px;background:var(--e1);padding:9px 10px}
+    .hist-box b{display:block;font-size:16px;font-weight:850;font-variant-numeric:tabular-nums}
+    .hist-box span{display:block;margin-top:2px;font-size:10.5px;color:var(--dim);line-height:1.25}
+    .hist-section{margin:12px 0 8px;font:850 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+    .hist-card{margin-bottom:10px;border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;border-left:3px solid var(--sauda);background:var(--e1)}
+    .hist-card .hhd{display:flex;align-items:center;gap:7px;padding:10px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line-soft)}
+    .hist-card .hhd b{font-size:14px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .hist-card .hhd small{font-size:11px;color:var(--dim);white-space:nowrap}
+    .hist-card .hamt{margin-left:auto;color:var(--gold);font-weight:850;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .hist-card .hline{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-top:1px solid var(--line-soft)}
+    .hist-card .hline:first-of-type{border-top:0}
+    .hist-card .hline .hi{flex:1;min-width:0}
+    .hist-card .hline .hi b{font-size:13.5px;font-weight:650}
+    .hist-card .hline .hi small{display:block;margin-top:2px;font-size:10.5px;color:var(--mute);line-height:1.35}
+    .hist-card .hline .hq{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+    .hist-note{font-size:11.5px;line-height:1.4;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-bd);border-radius:10px;padding:8px 10px;margin:0 0 10px}
+    @media(max-width:390px){.hist-summary{grid-template-columns:1fr}.datebar{grid-template-columns:72px 1fr 72px}}
     /* Settings grid */
     #viewSettings .search{display:flex;align-items:center;gap:8px}
     #viewSettings .search .box{flex:1}
@@ -504,7 +528,7 @@
       <button data-m="vendors">Diary</button>
       <button data-m="hp">Hyperpure</button>
       <button data-m="cmp">Compare</button>
-      <button data-m="saved">Saved</button>
+      <button data-m="orders">Orders</button>
     </div>
   </div>
 
@@ -530,6 +554,11 @@
 
   <!-- PLACE VIEW -->
   <div id="viewPlace">
+    <div class="datebar" id="placeDateBar">
+      <button data-pquick="today">Today</button>
+      <input id="placeDate" type="date" aria-label="Purchase date">
+      <button data-pquick="tomorrow">Tomorrow</button>
+    </div>
     <div class="seg" id="brandSeg" style="margin:0 16px 2px">
       <button data-b="both" class="on">Both</button>
       <button data-b="HE">HE</button>
@@ -593,11 +622,20 @@
   </div>
   <div class="bottom hide" id="cmpBar"><div class="psum" id="cmpSummary"></div></div>
 
-  <!-- SAVED VIEW — the purchase-order trail (decoded + confirmed orders) -->
+  <!-- ORDERS VIEW — dated purchase diary: PO inputs + placed vendor orders -->
   <div id="viewHistory" class="hide">
+    <div class="datebar diary-datebar" id="histDateBar">
+      <button data-hshift="-1">‹</button>
+      <input id="histDate" type="date" aria-label="Purchase diary date">
+      <button data-hshift="1">›</button>
+    </div>
+    <div class="quickdates diary-quick">
+      <button data-hquick="today">Today</button>
+      <button data-hquick="tomorrow">Tomorrow</button>
+    </div>
     <div class="cmp-h" id="histHead"></div>
     <main class="pane" id="histPane">
-      <div class="empty" id="histEmpty">No saved orders yet.<br>On the Buy list, paste a WhatsApp order to create one.</div>
+      <div class="empty" id="histEmpty">No purchase orders for this date yet.<br>Use Buy list or Place to create one.</div>
       <div id="histList"></div>
     </main>
   </div>
@@ -635,6 +673,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app-v52.js"></script>
+<script src="/ops/sauda/app-v53.js"></script>
 </body>
 </html>
