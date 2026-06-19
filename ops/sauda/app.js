@@ -295,6 +295,7 @@
 
   function rupees(p){ return (Math.round(+p||0)/100).toLocaleString('en-IN'); }
   function num(v){ return parseFloat(String(v==null?'':v).replace(/,/g,''))||0; }  // strips thousands-commas; "5,500" -> 5500 (not 5)
+  function qtyNum(v){ var m=String(v==null?'':v).match(/-?[\d.]+/); return m ? (parseFloat(m[0])||0) : 0; }
   function upiHref(vpa,vn,rs){ return vpa ? ('upi://pay?pa='+encodeURIComponent(vpa)+'&pn='+encodeURIComponent(vn)+(rs>0?'&am='+rs:'')+'&cu=INR&tn='+encodeURIComponent('Sauda')) : '#'; }
   function parseJsonAttr(s){ try{ var o=JSON.parse(s||'{}'); return o&&typeof o==='object'?o:{}; }catch(e){ return {}; } }
   function bankObj(v){ return (v&&v.bank&&typeof v.bank==='object') ? v.bank : {}; }
@@ -322,6 +323,19 @@
         var rail=o.payRail || paymentRail(o), bank=bankObj(o), bankText=bankSummary(bank);
         var itemsTxt=items.map(function(i){ return esc(i.item)+(i.qty?(' '+esc(i.qty)+(i.unit?' '+esc(i.unit):'')):''); }).join(' · ');
         var amt=o.pay_amount_paise?String(o.pay_amount_paise/100):'';
+        var rateItems=items.filter(function(i){ return i && i.order_id && i.line_idx!=null && !i.direct && qtyNum(i.qty)>0; });
+        var needsRate=rateItems.some(function(i){ return !(+i.price_paise>0); });
+        var rateBox='';
+        if(rateItems.length){
+          rateBox='<div class="ratebox" data-ratebox><div class="ratehead"><b>Live rates</b><span>'+esc(o.vendor_name)+'</span></div>'+
+            rateItems.map(function(i){
+              var q=qtyNum(i.qty), p=+i.price_paise||0, line=Math.round(q*p);
+              return '<div class="raterow"><div class="ri"><b>'+esc(i.item||'')+'</b><small>'+esc(String(i.qty||''))+(i.unit?' '+esc(i.unit):'')+(line?' · ₹'+rupees(line):'')+'</small></div>'+
+                '<span class="rs">₹</span><input inputmode="decimal" data-rate data-order="'+esc(i.order_id)+'" data-idx="'+esc(i.line_idx)+'" value="'+(p>0?esc(String(p/100)):'')+'" placeholder="rate">'+
+                '<span class="pu">'+(i.unit?('/ '+esc(i.unit)):'')+'</span></div>';
+            }).join('')+
+            '<button class="save-rates" data-save-rates>Save live rates</button></div>';
+        }
         var ids=(o.ids||[]).join(',');
         var multi=(o.order_count>1)?'<span class="tag p">'+items.length+' items · '+o.order_count+' orders</span>':'<span class="tag p">'+items.length+' item'+(items.length>1?'s':'')+'</span>';
         var vendorNote=o.cat?'<div class="skuhint" style="margin-bottom:8px">'+esc(o.cat)+'</div>':'';
@@ -333,9 +347,9 @@
         var payClass=o.vpa?'upi':(rail==='bank'?'upi bank':'upi dis');
         html+='<div class="basket"><div class="bh"><span class="bn">'+esc(o.vendor_name)+'</span>'+
           '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span>'+multi+'</div>'+
-          '<div class="pb">'+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+
+          '<div class="pb" data-needs-rate="'+(needsRate?'1':'0')+'">'+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+rateBox+
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
-          '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt value="'+esc(amt)+'" placeholder="one payment for all items"></div>'+
+          '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt '+(rateItems.length?'readonly':'')+' value="'+esc(amt)+'" placeholder="'+(rateItems.length?'auto after rates':'one payment for all items')+'"></div>'+
           '<div class="pay-acts">'+
             '<button class="'+payClass+'" data-pay="'+esc(o.vpa||'')+'" data-rail="'+esc(rail)+'" data-bank="'+bankAttr+'" data-vn="'+esc(o.vendor_name)+'">'+payLabel+'</button>'+
             '<button class="done" data-ids="'+ids+'" data-rail="'+esc(rail)+'">'+(o.vpa?'Mark paid':'Record paid')+'</button>'+
@@ -343,10 +357,23 @@
       });
       list.innerHTML=html;
       function idsOf(el){ return (el.closest('.pb').querySelector('button[data-ids]').dataset.ids||'').split(',').map(Number).filter(Boolean); }
+      list.querySelectorAll('[data-save-rates]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var pb=b.closest('.pb'), inputs=[].slice.call(pb.querySelectorAll('input[data-rate]'));
+          var missing=inputs.some(function(inp){ return num(inp.value)<=0; });
+          if(missing){ toast('Enter every live rate first','err'); return; }
+          if(busy) return; busy=true; b.disabled=true; b.textContent='Saving...';
+          var lines=inputs.map(function(inp){ return { id:+inp.dataset.order, line_idx:+inp.dataset.idx, price_paise:Math.round(num(inp.value)*100) }; });
+          api('purchase-prices',{method:'POST',body:{lines:lines}})
+            .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Live rates saved · bill updated','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'rate save failed','err'); b.disabled=false; b.textContent='Save live rates'; } })
+            .catch(function(){ busy=false; b.disabled=false; b.textContent='Save live rates'; toast('No connection','err'); });
+        });
+      });
       list.querySelectorAll('button[data-pay]').forEach(function(b){
         b.addEventListener('click', function(){
           if(!b.dataset.pay && b.dataset.rail!=='bank') return;
           var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
+          if(pb.dataset.needsRate==='1'){ toast('Save all live rates first','err'); return; }
           if(rs<=0){ toast('Enter the amount first','err'); return; }
           if(b.dataset.pay) openPaySheet(b.dataset.pay, b.dataset.vn, rs, idsOf(b));
           else openManualPaySheet(b.dataset.vn, rs, idsOf(b), 'Transfer to the saved bank account, then record it here.', parseJsonAttr(b.dataset.bank));
@@ -356,6 +383,7 @@
         b.addEventListener('click', function(){
           var ids=idsOf(b); var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
           var payBtn=pb.querySelector('button[data-pay]'); var method=payMethodForRail((payBtn&&payBtn.dataset.rail)||b.dataset.rail||'manual');
+          if(pb.dataset.needsRate==='1'){ toast('Save all live rates first','err'); return; }
           if(busy||!ids.length) return; busy=true;
           api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:method}})
              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(r.j.reconciled?'✓ Bank-confirmed paid':'Marked paid · bank not seen yet','ok'); loadPay(); } else toast('Failed','err'); })
@@ -465,13 +493,13 @@
     if(PAYOUT_LIVE){ openDirectPayout(vk, name, vpa, bank); return; }
     var railLine=vpa?esc(vpa):(validBankObj(bank)?esc(bankSummary(bank)):'No UPI/bank saved · manual record only');
     var host=document.getElementById('sheetHost');
-    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(name)+'</h2>'+
-      '<div class="skuhint">Enter the amount and invoice/reference. Sauda records one payment request first, then opens the correct payment rail.</div>'+
+    host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Record payment</h2>'+
+      '<div class="skuhint">Pay '+esc(name)+' manually first. Then record the amount here so the vendor due and diary are updated without creating another bill.</div>'+
       '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" id="dpAmt" placeholder="amount"></div>'+
       '<div class="fld" style="margin-top:11px"><label>Invoice / reference</label><input id="dpRef" placeholder="e.g. T-431"></div>'+
-      '<div class="fld"><label>Payment reason</label><input id="dpNote" placeholder="e.g. Tea powder invoice"></div>'+
+      '<div class="fld"><label>Payment note</label><input id="dpNote" placeholder="e.g. Khata payment"></div>'+
       '<div class="vpa-line" style="margin:8px 0 0">'+railLine+'</div>'+
-      '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Continue to pay</button>'+
+      '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Record payment</button>'+
       '</div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
     var amtEl=document.getElementById('dpAmt'); if(amtEl) amtEl.focus();
@@ -481,15 +509,14 @@
       if(busy) return; busy=true;
       var btn=document.getElementById('dpGo'); btn.disabled=true; btn.textContent='Recording...';
       var ref=(document.getElementById('dpRef').value||'').trim();
-      var note=(document.getElementById('dpNote').value||'').trim() || (ref?('Invoice '+ref):'Direct payment');
-      api('direct-pay',{method:'POST',body:{vendorKey:vk, amount_paise:Math.round(rs*100), ref:ref, note:note}}).then(function(r){
+      var note=(document.getElementById('dpNote').value||'').trim() || (ref?('Payment '+ref):'Manual payment');
+      api('vendor-event',{method:'POST',body:{vendorKey:vk, event_type:'payment', amount_paise:Math.round(rs*100), ref:ref, note:note, source:'manual_ui'}}).then(function(r){
         busy=false;
-        if(!r.ok||!r.j||!r.j.ok){ toast((r.j&&r.j.error)||'Failed','err'); btn.disabled=false; btn.textContent='Continue to pay'; return; }
-        if(r.j.duplicate) toast('Already recorded — opening existing payment','ok');
+        if(!r.ok||!r.j||!r.j.ok){ toast((r.j&&r.j.error)||'Failed','err'); btn.disabled=false; btn.textContent='Record payment'; return; }
+        toast('Payment recorded in vendor diary','ok');
         host.innerHTML='';
-        if(vpa) openPaySheet(vpa, name, rs, [r.j.id]);
-        else openManualPaySheet(name, rs, [r.j.id], 'Pay manually, then record it here. Ref: '+(ref||note), (r.j&&r.j.bank)||bank);
-      }).catch(function(){ busy=false; btn.disabled=false; btn.textContent='Continue to pay'; toast('No connection','err'); });
+        loadVendors();
+      }).catch(function(){ busy=false; btn.disabled=false; btn.textContent='Record payment'; toast('No connection','err'); });
     });
   }
   // RazorpayX automated payout — used once PAYOUT_LIVE is flipped on (account live + funded).
@@ -969,17 +996,25 @@
       list.innerHTML=vs.map(function(v,vi){
         var rail=v.payRail || paymentRail(v), bank=bankObj(v), bankText=bankSummary(bank);
         var trail=(v.trail||[]).map(function(t){
-          var when = t.paid_at?('paid '+fmtTs(t.paid_at)+(t.method?' · '+esc(t.method):'')+(t.reconciled?' · ✓ bank':'')) : (t.pay_requested_at?('asked '+fmtTs(t.pay_requested_at)) : ('placed '+fmtTs(t.ordered_at)));
-          var stcls = t.status==='PAID'?'ok':(t.status==='REQUESTED'?'amber':'dim');
+          var signed = (typeof t.signed_amount_paise==='number') ? t.signed_amount_paise : (+t.amount_paise||0);
+          var amtText = (signed<0?'-':'')+'₹'+rupees(Math.abs(signed));
+          var isEvent = !!t.event;
+          var detail = isEvent
+            ? [t.bank_ref||'', t.note||''].filter(Boolean).join(' · ')
+            : (t.items+' item'+(t.items!==1?'s':''));
+          var when = isEvent
+            ? ((t.method||'ledger')+' · '+(t.for_date||'')).replace(/\s+·\s+$/,'')
+            : (t.paid_at?('paid '+fmtTs(t.paid_at)+(t.method?' · '+esc(t.method):'')+(t.reconciled?' · ✓ bank':'')) : (t.pay_requested_at?('asked '+fmtTs(t.pay_requested_at)) : ('placed '+fmtTs(t.ordered_at))));
+          var stcls = (signed<0 || t.status==='PAID')?'ok':(t.status==='REQUESTED'||t.status==='BILL'||t.status==='OPENING'?'amber':'dim');
           return '<div class="tr"><span class="ts '+stcls+'">'+esc(t.status||'')+'</span>'+
-            '<span class="ti">'+esc(t.for_date||'')+' · '+t.items+' item'+(t.items!==1?'s':'')+'</span>'+
-            '<span class="ta">₹'+rupees(t.amount_paise)+'</span>'+
+            '<span class="ti">'+esc(t.for_date||'')+' · '+esc(detail||'ledger')+'</span>'+
+            '<span class="ta '+(signed<0?'neg':'')+'">'+esc(amtText)+'</span>'+
             '<span class="tw">'+esc(when)+'</span></div>';
         }).join('');
         var right = v.outstanding_paise>0 ? '<span class="due">₹'+rupees(v.outstanding_paise)+' due</span>'
-                  : (v.order_count>0 ? '<span class="clr">clear</span>' : '');
-        var meta = v.order_count>0
-          ? '<span>'+v.order_count+' order'+(v.order_count!==1?'s':'')+'</span><span>paid ₹'+rupees(v.paid_paise)+'</span>'+(v.last_paid_at?'<span>last '+esc(fmtTs(v.last_paid_at))+'</span>':'')
+                  : (v.entry_count>0 ? '<span class="clr">clear</span>' : '');
+        var meta = v.entry_count>0
+          ? '<span>'+v.order_count+' order'+(v.order_count!==1?'s':'')+'</span><span>billed ₹'+rupees(v.billed_paise||0)+'</span><span>paid ₹'+rupees(v.paid_paise)+'</span>'+(v.last_paid_at?'<span>last '+esc(fmtTs(v.last_paid_at))+'</span>':'')
           : '<span>'+esc(v.cat||'no orders in 30 days')+'</span>';
         var railText=v.vpa?esc(v.vpa):(bankText?esc(bankText):'manual only'+(v.cat?' · '+esc(v.cat):''));
         var buttonText=v.vpa?'Pay now':(rail==='bank'?'Record bank payment':'Record payment');

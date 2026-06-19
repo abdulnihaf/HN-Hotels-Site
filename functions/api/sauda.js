@@ -111,6 +111,10 @@ export async function onRequest(context) {
       const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10) || 30, 120);
       return withCors(json(await vendorLedger(db, days)), request);
     }
+    if (action === 'vendor-event' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await vendorEvent(db, body, auth)), request);
+    }
     // settings: the item + vendor master (Slice 1 — creates + seeds tables on first read)
     if (action === 'settings' && request.method === 'GET') {
       return withCors(json(await getSettings(db)), request);
@@ -137,6 +141,10 @@ export async function onRequest(context) {
     if (action === 'request-pay' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await requestPay(db, body)), request);
+    }
+    if (action === 'purchase-prices' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await purchasePrices(db, body, auth)), request);
     }
     if (action === 'mark-paid' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
@@ -574,9 +582,27 @@ function orderLineSignature(lines) {
       qty: String(l.qty ?? '').trim(),
       unit: String(l.unit || '').trim().toLowerCase(),
       brand: String(l.brand || 'both').trim().toLowerCase(),
-      price_paise: Math.max(0, Math.round(+l.price_paise || 0)),
     }))
     .sort((a, b) => (a.sku + a.item).localeCompare(b.sku + b.item)));
+}
+function purchaseTotal(items) {
+  return (Array.isArray(items) ? items : []).reduce((s, l) => s + Math.round(qtyNum(l.qty) * (Math.max(0, Math.round(+l.price_paise || 0)))), 0);
+}
+function ledgerEventType(value) {
+  const t = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+  return ['opening', 'bill', 'payment', 'credit', 'debit', 'adjustment'].includes(t) ? t : 'adjustment';
+}
+function ledgerEventAmount(e) {
+  const src = e || {};
+  let amt = Math.round(+src.signed_amount_paise || +src.amount_paise || 0);
+  if (!amt && src.amount_rupees != null) amt = Math.round(+src.amount_rupees * 100);
+  const type = ledgerEventType(src.event_type || src.type);
+  if (['payment', 'credit'].includes(type)) return -Math.abs(amt);
+  if (['opening', 'bill', 'debit'].includes(type)) return Math.abs(amt);
+  return amt;
+}
+function ledgerEventKey(vendorKey, eventDate, type, amount, ref, note) {
+  return [vendorKey, eventDate, type, amount, norm(ref || ''), norm(note || '')].join('|').slice(0, 420);
 }
 
 // ── Place: one sauda_purchase row per vendor basket ──
@@ -623,7 +649,7 @@ async function placeOrders(db, body, auth, env, context) {
     const dup = existing.find((r) => {
       let old = [];
       try { old = JSON.parse(r.items_json || '[]'); } catch (e) {}
-      return (r.expected_amount_paise || 0) === expected && orderLineSignature(old) === sig;
+      return orderLineSignature(old) === sig;
     });
     if (dup) {
       duplicates += 1;
@@ -1205,6 +1231,59 @@ async function settingsVendor(db, body, auth) {
 // the "every record for a vendor" view: how much is paid, how much is left, when.
 // catch-up reconcile: bank email alerts lag, so retry matching any PAID-but-unconfirmed
 // order against the feed whenever the records are viewed (self-heals delayed confirmations).
+async function ensureVendorEventTable(db) {
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS sauda_vendor_event (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor_key TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      event_date TEXT NOT NULL,
+      amount_paise INTEGER NOT NULL DEFAULT 0,
+      ref TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      source TEXT DEFAULT 'manual',
+      active INTEGER DEFAULT 1,
+      event_key TEXT UNIQUE,
+      created_by TEXT DEFAULT '',
+      created_at TEXT DEFAULT '',
+      updated_at TEXT DEFAULT ''
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_sauda_vendor_event_vendor_date ON sauda_vendor_event(vendor_key,event_date)`),
+  ]);
+}
+async function vendorEvent(db, body, auth) {
+  await ensureVendorEventTable(db);
+  const vdir = await getVendorDirectory(db);
+  const rows = Array.isArray(body && body.events) ? body.events : [body || {}];
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const by = (auth && auth.u) || '';
+  const out = [];
+  for (const raw of rows) {
+    const v = resolveVendor(vdir, (raw && (raw.vendor_key || raw.vendorKey || raw.vendor_name || raw.vendor)) || (body && (body.vendor_key || body.vendorKey || body.vendor_name || body.vendor)));
+    if (!v || v.key === 'unassigned') return { ok: false, error: 'unknown vendor' };
+    const eventDate = String((raw && (raw.event_date || raw.date)) || todayIST()).slice(0, 10);
+    const type = ledgerEventType(raw && (raw.event_type || raw.type));
+    const amount = ledgerEventAmount({ ...(raw || {}), event_type: type });
+    if (!amount) return { ok: false, error: 'amount required', vendor: v.name };
+    const ref = String((raw && (raw.ref || raw.invoice_ref || raw.invoice_no)) || '').trim().slice(0, 120);
+    const note = String((raw && raw.note) || '').trim().slice(0, 500);
+    const source = String((raw && raw.source) || (body && body.source) || 'manual').trim().slice(0, 40);
+    const key = String((raw && raw.event_key) || ledgerEventKey(v.key, eventDate, type, amount, ref, note));
+    const res = await db.prepare(
+      `INSERT INTO sauda_vendor_event (vendor_key,event_type,event_date,amount_paise,ref,note,source,active,event_key,created_by,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(event_key) DO UPDATE SET
+         amount_paise=excluded.amount_paise,
+         ref=excluded.ref,
+         note=excluded.note,
+         source=excluded.source,
+         active=excluded.active,
+         updated_at=excluded.updated_at`
+    ).bind(v.key, type, eventDate, amount, ref, note, source, raw && raw.active === false ? 0 : 1, key, by, now, now).run();
+    out.push({ id: res?.meta?.last_row_id || null, vendorKey: v.key, vendor: v.name, event_type: type, event_date: eventDate, amount_paise: amount, ref, note });
+  }
+  return { ok: true, count: out.length, events: out };
+}
 async function reconcileSweep(db, sinceFloor) {
   const vdir = await getVendorDirectory(db);
   let rows = [];
@@ -1230,6 +1309,7 @@ async function reconcileSweep(db, sinceFloor) {
 async function vendorLedger(db, days) {
   const since = `date('now','-${days} days')`;
   await autoSettle(db);   // live: settle anything the bank now confirms (orders + direct pays)
+  await ensureVendorEventTable(db);
   const vdir = await getVendorDirectory(db);
   let rows = [];
   try {
@@ -1250,13 +1330,44 @@ async function vendorLedger(db, days) {
     byVendor.get(vk).push(r);
   }
 
-  function summarize(vk, list) {
+  let eventRows = [];
+  try {
+    eventRows = ((await db.prepare(
+      `SELECT id, vendor_key, event_type, event_date, amount_paise, ref, note, source, created_at
+         FROM sauda_vendor_event
+        WHERE active=1
+        ORDER BY event_date DESC, id DESC`
+    ).all()).results) || [];
+  } catch (e) { eventRows = []; }
+  const byEvent = new Map();
+  for (const e of eventRows) {
+    const vk = resolveVendor(vdir, e.vendor_key).key;
+    if (!byEvent.has(vk)) byEvent.set(vk, []);
+    byEvent.get(vk).push(e);
+  }
+
+  function summarize(vk, list, events) {
     const v = vdir.byKey[vk] || vdir.byKey.unassigned;
-    let paid = 0, outstanding = 0, lastPaidAt = '';
+    let paid = 0, billed = 0, outstanding = 0, lastPaidAt = '';
     const trail = [];
+    for (const e of events) {
+      const signed = Math.round(+e.amount_paise || 0);
+      if (signed < 0) { paid += Math.abs(signed); if (e.event_date && e.event_date > lastPaidAt) lastPaidAt = e.event_date; }
+      else billed += signed;
+      outstanding += signed;
+      const status = String(e.event_type || 'event').toUpperCase();
+      trail.push({
+        id: 'event-' + e.id, event: true, for_date: e.event_date, status,
+        amount_paise: Math.abs(signed), signed_amount_paise: signed, items: 0,
+        ordered_at: e.created_at || e.event_date || '', pay_requested_at: '',
+        paid_at: signed < 0 ? (e.event_date || '') : '', method: e.event_type || '',
+        reconciled: false, bank_ref: e.ref || '', note: e.note || '', source: e.source || '',
+      });
+    }
     for (const r of list) {
       const amt = (r.pay_amount_paise || r.expected_amount_paise || 0);
       const isPaid = !!r.paid_at || r.status === 'PAID';
+      billed += amt;
       if (isPaid) { paid += amt; if (r.paid_at && r.paid_at > lastPaidAt) lastPaidAt = r.paid_at; }
       else outstanding += amt;
       let itemCount = 0; try { itemCount = JSON.parse(r.items_json || '[]').length; } catch (e) {}
@@ -1267,19 +1378,21 @@ async function vendorLedger(db, days) {
         reconciled: !!r.reconciled_at, bank_ref: r.bank_ref || '',
       });
     }
+    trail.sort((a, b) => String(b.paid_at || b.pay_requested_at || b.ordered_at || b.for_date || '').localeCompare(String(a.paid_at || a.pay_requested_at || a.ordered_at || a.for_date || '')));
     return {
       vendorKey: v.key, vendor_name: v.name, cat: v.cat || '', vpa: v.vpa || '',
       bank: v.bank || {}, bankLabel: v.bankLabel || '', payRail: v.payRail || payRail(v),
       fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
-      order_count: list.length, paid_paise: paid, outstanding_paise: outstanding,
+      order_count: list.length, ledger_event_count: events.length, entry_count: list.length + events.length,
+      billed_paise: billed, paid_paise: paid, outstanding_paise: outstanding,
       last_paid_at: lastPaidAt, trail,
     };
   }
 
   // EVERY canonical vendor appears (with its UPI id) so this tab is also the
   // pay-any-vendor directory; plus any 'unassigned' bucket that has orders.
-  const vendors = vdir.list.filter((v) => v.key !== 'unassigned').map((v) => summarize(v.key, byVendor.get(v.key) || []));
-  if (byVendor.has('unassigned')) vendors.push(summarize('unassigned', byVendor.get('unassigned')));
+  const vendors = vdir.list.filter((v) => v.key !== 'unassigned').map((v) => summarize(v.key, byVendor.get(v.key) || [], byEvent.get(v.key) || []));
+  if (byVendor.has('unassigned') || byEvent.has('unassigned')) vendors.push(summarize('unassigned', byVendor.get('unassigned') || [], byEvent.get('unassigned') || []));
   vendors.sort((a, b) =>
     (b.outstanding_paise - a.outstanding_paise) ||
     (b.order_count - a.order_count) ||
@@ -1311,7 +1424,10 @@ async function openOrders(db) {
     let items = [], amount = 0; const ids = []; const dates = new Set();
     for (const o of list) {
       ids.push(o.id);
-      try { items = items.concat(JSON.parse(o.items_json || '[]')); } catch (e) {}
+      try {
+        const parsed = JSON.parse(o.items_json || '[]');
+        parsed.forEach((it, idx) => items.push({ ...it, order_id: o.id, line_idx: idx }));
+      } catch (e) {}
       amount += (o.pay_amount_paise || o.expected_amount_paise || 0);
       if (o.for_date) dates.add(o.for_date);
     }
@@ -1345,6 +1461,60 @@ async function requestPay(db, body) {
   await db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=?, pay_requested_at=?, status='REQUESTED', updated_at=? WHERE id=?`)
     .bind(amt, now, now, ids[0]).run();
   return { ok: true, ids, amount_paise: amt };
+}
+
+// Live-priced vendors (chicken, mutton, vegetables) can receive the rate later
+// in the day. The bill amount must then be recomputed from the saved order lines,
+// not typed as an unrelated total.
+async function purchasePrices(db, body, auth) {
+  const updates = Array.isArray(body && body.lines) ? body.lines : [];
+  if (!updates.length) return { ok: false, error: 'no rate lines' };
+  const byId = new Map();
+  for (const u of updates) {
+    const id = Math.round(+u.id || +u.order_id || 0);
+    const idx = Math.round(+u.line_idx);
+    if (!id || idx < 0) continue;
+    if (!byId.has(id)) byId.set(id, []);
+    byId.get(id).push({
+      line_idx: idx,
+      price_paise: Math.max(0, Math.round(+u.price_paise || 0)),
+      qty: u.qty == null ? null : String(u.qty).trim(),
+    });
+  }
+  if (!byId.size) return { ok: false, error: 'no valid rate lines' };
+
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  let changed = 0;
+  let total = 0;
+  const orders = [];
+  for (const [id, lines] of byId.entries()) {
+    const row = await db.prepare(
+      `SELECT id, items_json, status, paid_at FROM sauda_purchase
+        WHERE id=? AND (pay_timing IS NULL OR pay_timing != 'online')`
+    ).bind(id).first();
+    if (!row) continue;
+    if (row.paid_at) return { ok: false, error: 'already paid; cannot change bill lines', id };
+    let items = [];
+    try { items = JSON.parse(row.items_json || '[]'); } catch (e) {}
+    for (const u of lines) {
+      if (!items[u.line_idx]) continue;
+      items[u.line_idx].price_paise = u.price_paise;
+      if (u.qty !== null && u.qty !== '') items[u.line_idx].qty = u.qty;
+      changed += 1;
+    }
+    const expected = purchaseTotal(items);
+    total += expected;
+    const paySql = row.status === 'REQUESTED' ? ', pay_amount_paise=?' : '';
+    const stmt = db.prepare(
+      `UPDATE sauda_purchase
+          SET items_json=?, expected_amount_paise=?, updated_at=?${paySql}
+        WHERE id=?`
+    );
+    if (row.status === 'REQUESTED') await stmt.bind(JSON.stringify(items), expected, now, expected, id).run();
+    else await stmt.bind(JSON.stringify(items), expected, now, id).run();
+    orders.push({ id, expected_amount_paise: expected, items: items.length });
+  }
+  return { ok: true, changed, total_paise: total, orders, updated_by: (auth && auth.u) || '' };
 }
 
 // ── Bank-feed match: find the debit that proves this vendor was paid ──
