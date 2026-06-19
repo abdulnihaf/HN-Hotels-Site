@@ -255,7 +255,11 @@
     api('place',{method:'POST',body:{ lines:lines }}).then(function(res){
       busy=false;
       if(!res.ok||!res.j||!res.j.ok){ toast(res.j&&res.j.error||'Place failed','err'); updatePlaceBtn(); return; }
-      toast('Placed '+res.j.placed+' vendor order'+(res.j.placed>1?'s':''),'ok');
+      var dup=res.j.duplicates||0;
+      var msg=res.j.placed>0
+        ? ('Placed '+res.j.placed+' vendor order'+(res.j.placed>1?'s':'')+(dup?' · skipped '+dup+' duplicate':''))
+        : (dup?'Already placed — duplicate skipped':'No new order placed');
+      toast(msg,'ok');
       S.order=[]; renderOrder();
     }).catch(function(){ busy=false; toast('No connection','err'); updatePlaceBtn(); });
   });

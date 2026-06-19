@@ -479,10 +479,29 @@ async function routePlan(db, when) {
 //    prices). Rates auto-fill from price_paise; live items (chicken/mutton/veg)
 //    carry no price so the rate stays blank for today's number. Search also matches
 //    aliases (haldi → Turmeric). Vendor baskets group by each item's default_vendor. ──
+function catalogNameKey(label) {
+  return String(label || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\bkabab\b/g, 'kebab')
+    .replace(/\broasted?\s+chicken\b/g, 'grill chicken')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function catalogPickRank(it) {
+  const code = String((it && it.item_code) || '');
+  let rank = 0;
+  if (/^HE_/.test(code)) rank += 100;
+  if (!/^itm_/.test(code)) rank += 20;
+  if (!(it && it.flagged)) rank += 5;
+  if ((it && it.price_paise) > 0) rank += 1;
+  return rank;
+}
 async function buildCatalog(db) {
   const vdir = await getVendorDirectory(db);
   const [itemsRes, aliasRes] = await Promise.all([
-    db.prepare(`SELECT item_code,label,unit,price_paise,price_mode,default_vendor FROM sauda_item WHERE active=1 ORDER BY label`).all(),
+    db.prepare(`SELECT item_code,label,unit,price_paise,price_mode,default_vendor,flagged FROM sauda_item WHERE active=1 ORDER BY label`).all(),
     db.prepare(`SELECT alias,item_code FROM sauda_item_alias`).all(),
   ]);
   const items = (itemsRes && itemsRes.results) || [];
@@ -495,12 +514,11 @@ async function buildCatalog(db) {
     if (!aliasByCode.has(a.item_code)) aliasByCode.set(a.item_code, []);
     if (String(a.alias).toLowerCase() !== String(a.item_code)) aliasByCode.get(a.item_code).push(a.alias);
   }
-  const baskets = new Map();
+  const picked = new Map();
   for (const it of items) {
     const live = it.price_mode === 'live';
     const vk = (it.default_vendor && vdir.byKey[it.default_vendor]) ? it.default_vendor : 'unassigned';
-    if (!baskets.has(vk)) baskets.set(vk, []);
-    baskets.get(vk).push({
+    const row = {
       name: it.label,
       item_code: it.item_code,
       unit: it.unit || '',
@@ -508,7 +526,15 @@ async function buildCatalog(db) {
       live,
       price_paise: live ? 0 : (it.price_paise || 0),
       alias: (aliasByCode.get(it.item_code) || []).slice(0, 8).join(' '),
-    });
+    };
+    const key = [vk, catalogNameKey(it.label), String(it.unit || '').toLowerCase()].join('|');
+    const current = picked.get(key);
+    if (!current || catalogPickRank(it) > catalogPickRank(current.raw)) picked.set(key, { vk, row, raw: it });
+  }
+  const baskets = new Map();
+  for (const p of picked.values()) {
+    if (!baskets.has(p.vk)) baskets.set(p.vk, []);
+    baskets.get(p.vk).push(p.row);
   }
   const vendors = [...baskets.entries()].map(([vk, list]) => ({
     ...(vdir.byKey[vk] || vdir.byKey.unassigned),
@@ -538,6 +564,18 @@ async function ordersForDay(db, forDate) {
 
 // parse a leading numeric quantity from a string like "2", "2.5", "2 kg", "1.5L"
 function qtyNum(q) { const m = String(q == null ? '' : q).match(/-?[\d.]+/); return m ? (parseFloat(m[0]) || 0) : 0; }
+function orderLineSignature(lines) {
+  return JSON.stringify((Array.isArray(lines) ? lines : [])
+    .map((l) => ({
+      sku: String(l.sku || l.item || '').trim().toLowerCase(),
+      item: String(l.item || '').trim().toLowerCase(),
+      qty: String(l.qty ?? '').trim(),
+      unit: String(l.unit || '').trim().toLowerCase(),
+      brand: String(l.brand || 'both').trim().toLowerCase(),
+      price_paise: Math.max(0, Math.round(+l.price_paise || 0)),
+    }))
+    .sort((a, b) => (a.sku + a.item).localeCompare(b.sku + b.item)));
+}
 
 // ── Place: one sauda_purchase row per vendor basket ──
 // body = { for_date?, lines: [{ item, sku?, qty, unit, vendorKey, brand, price_paise? }] }
@@ -568,9 +606,28 @@ async function placeOrders(db, body, auth, env, context) {
 
   const nowIso = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   const created = [];
+  let inserted = 0;
+  let duplicates = 0;
   for (const [vk, vlines] of byVendor.entries()) {
     const v = vdir.byKey[vk] || vdir.byKey.unassigned;
     const expected = vlines.reduce((s, l) => s + Math.round(qtyNum(l.qty) * (l.price_paise || 0)), 0);
+    const sig = orderLineSignature(vlines);
+    const existing = ((await db.prepare(
+      `SELECT id, items_json, expected_amount_paise, status
+         FROM sauda_purchase
+        WHERE vendor_name=? AND for_date=? AND status IN ('ORDERED','REQUESTED','PAID')
+        ORDER BY id DESC LIMIT 20`
+    ).bind(v.name, forDate).all()).results) || [];
+    const dup = existing.find((r) => {
+      let old = [];
+      try { old = JSON.parse(r.items_json || '[]'); } catch (e) {}
+      return (r.expected_amount_paise || 0) === expected && orderLineSignature(old) === sig;
+    });
+    if (dup) {
+      duplicates += 1;
+      created.push({ vendor: v.name, vendorKey: vk, fulfilment: v.fulfilment, lines: vlines, expected_amount_paise: expected, id: dup.id, duplicate: true });
+      continue;
+    }
     const res = await db.prepare(
       `INSERT INTO sauda_purchase (brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, expected_amount_paise, ordered_at, ordered_by)
        VALUES (?,?,?,?,?,?,?,?,?,?)`
@@ -579,6 +636,7 @@ async function placeOrders(db, body, auth, env, context) {
       JSON.stringify(vlines), 'ORDERED', expected, nowIso, (auth && auth.u) || ''
     ).run();
     created.push({ vendor: v.name, vendorKey: vk, fulfilment: v.fulfilment, lines: vlines, expected_amount_paise: expected, id: res?.meta?.last_row_id });
+    inserted += 1;
   }
 
   // Notify the runner: collect items → Basheer (he goes & buys); everything else
@@ -586,8 +644,8 @@ async function placeOrders(db, body, auth, env, context) {
   try { const p = notifyOnPlace(env, created, forDate); if (context && context.waitUntil) context.waitUntil(p); } catch (e) {}
 
   return {
-    ok: true, for_date: forDate, placed: created.length,
-    orders: created.map((c) => ({ vendor: c.vendor, vendorKey: c.vendorKey, lines: c.lines.length, expected_amount_paise: c.expected_amount_paise, id: c.id })),
+    ok: true, for_date: forDate, placed: inserted, duplicates,
+    orders: created.map((c) => ({ vendor: c.vendor, vendorKey: c.vendorKey, lines: c.lines.length, expected_amount_paise: c.expected_amount_paise, id: c.id, duplicate: !!c.duplicate })),
   };
 }
 
@@ -1047,6 +1105,13 @@ async function settingsItem(db, body, auth) {
   if (!code || code === 'NEW') {
     const label = String((body && body.label) || '').trim();
     if (!label) return { ok: false, error: 'label required' };
+    const targetVendor = String((body && body.default_vendor) || '').trim();
+    if (targetVendor) {
+      const rows = ((await db.prepare(`SELECT item_code,label,unit,default_vendor FROM sauda_item WHERE active=1 AND default_vendor=?`).bind(targetVendor).all()).results) || [];
+      const nextKey = [targetVendor, catalogNameKey(label), String((body && body.unit) || '').toLowerCase()].join('|');
+      const existing = rows.find((r) => [targetVendor, catalogNameKey(r.label), String(r.unit || '').toLowerCase()].join('|') === nextKey);
+      if (existing) return { ok: true, item_code: existing.item_code, created: false, duplicate: true };
+    }
     const slug = (s) => ('itm_' + s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')).slice(0, 40) || 'itm';
     let base = slug(label), c = base, n = 1;
     while (await db.prepare('SELECT 1 FROM sauda_item WHERE item_code=?').bind(c).first()) c = base + '_' + (++n);
