@@ -45,6 +45,7 @@ const VENDOR_VPAS = {
   'Deepak Packaging Store': ['paytmqr6pdq3f@ptys'],
   'M. irshad ahmed': ['imeaty@icici'],
   'Buffalo Milk Vendor': ['9886806395@axl'],
+  'Afeefa Impex Agencies': ['50200116872951', 'AFEEFA IMPEX AGENCIES', 'HDFC0011941'],
 };
 const PORTAL_VPA = [['zepto', 'Zepto'], ['swiggy', 'Swiggy'], ['instamart', 'Swiggy'], ['blinkit', 'Blinkit'], ['bigbasket', 'BigBasket'], ['jiomart', 'JioMart'], ['hyperpure', 'Hyperpure']];
 
@@ -102,6 +103,83 @@ async function ensureSchema(DB) {
 }
 
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+function canonItemName(name) {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\bkabab\b/g, 'kebab')
+    .replace(/\bshawarama\b/g, 'shawarma')
+    .replace(/\bshawarma\s+chicken\s*\(?\s*boneless\s*\)?/g, 'shawarma chicken')
+    .replace(/\bboneless\s+shawarma\s+chicken\b/g, 'shawarma chicken')
+    .replace(/\bshawarma\s+boneless\s+chicken\b/g, 'shawarma chicken')
+    .replace(/\broasted?\s+chicken\b/g, 'grill chicken')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function titleCase(s) {
+  return String(s || '').trim().split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+}
+function orderItemKey(it) {
+  return canonItemName(it && (it.name || it.item || it.item_name || it.product_code || it.id));
+}
+function normalizeOrderItems(items) {
+  const out = [];
+  const seen = new Map();
+  for (const raw of (Array.isArray(items) ? items : [])) {
+    if (raw && raw.direct) {
+      out.push(raw);
+      continue;
+    }
+    const label = String(raw && (raw.item || raw.name || raw.item_name) || '').trim();
+    if (!label) continue;
+    const key = orderItemKey({ name: label });
+    const unit = String(raw && raw.unit || '').trim();
+    const mapKey = [key, unit].join('|');
+    const qty = raw && raw.qty != null ? String(raw.qty).trim() : '';
+    const current = seen.get(mapKey);
+    if (!current) {
+      const next = { ...raw, item: titleCase(key), name: titleCase(key), item_name: titleCase(key), canonical_name: key };
+      if (qty !== '') next.qty = qty;
+      seen.set(mapKey, next);
+      out.push(next);
+      continue;
+    }
+    const a = Number(current.qty);
+    const b = Number(qty);
+    if (Number.isFinite(a) && Number.isFinite(b)) current.qty = String(Math.round((a + b) * 100) / 100);
+  }
+  return out;
+}
+function mergeDayPoRows(rows) {
+  const out = [];
+  const seen = new Map();
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const key = orderItemKey({ name: row.item_name });
+    if (!key) continue;
+    const unit = String(row.unit || '').trim();
+    const mapKey = [key, unit].join('|');
+    const current = seen.get(mapKey);
+    const qty = String(row.qty ?? '').trim();
+    if (!current) {
+      const next = { ...row, item_name: titleCase(key) };
+      if (qty !== '') next.qty = qty;
+      next._sort = Number(row.sort || 0);
+      seen.set(mapKey, next);
+      out.push(next);
+      continue;
+    }
+    const a = Number(current.qty);
+    const b = Number(qty);
+    if (Number.isFinite(a) && Number.isFinite(b)) current.qty = String(Math.round((a + b) * 100) / 100);
+    if (!current.vendor_name && row.vendor_name) current.vendor_name = row.vendor_name;
+    if (!current.vendor_id && row.vendor_id) current.vendor_id = row.vendor_id;
+    if (!current.fulfilment && row.fulfilment) current.fulfilment = row.fulfilment;
+    if (!current.pay_timing && row.pay_timing) current.pay_timing = row.pay_timing;
+    current._sort = Math.min(current._sort ?? Number(row.sort || 0), Number(row.sort || 0));
+  }
+  return out.sort((a, b) => (a._sort || 0) - (b._sort || 0)).map(({ _sort, ...rest }) => rest);
+}
 
 // Default receive method inferred from the item name (owner can override in Sauda).
 // weight is what you pay for → meat weighs; bread is sealed-box count; rest count.
@@ -117,7 +195,7 @@ function defaultMethod(name) {
 }
 
 async function receiveConfigFor(DB, name) {
-  const row = await DB.prepare('SELECT method, params_json, display_unit FROM sauda_receive_config WHERE item_key=?').bind(norm(name)).first().catch(() => null);
+  const row = await DB.prepare('SELECT method, params_json, display_unit FROM sauda_receive_config WHERE item_key=?').bind(norm(canonItemName(name))).first().catch(() => null);
   if (row) return { method: row.method, params: row.params_json ? JSON.parse(row.params_json) : {}, display_unit: row.display_unit, source: 'set' };
   return { ...defaultMethod(name), source: 'default' };
 }
@@ -139,11 +217,8 @@ function vendorFromEvent(ev, vpaRows) {
 }
 async function getVpaRows(DB) {
   // seed once from the hardcoded harvest, then it's owner-extensible in DB
-  const cnt = await DB.prepare('SELECT COUNT(*) n FROM sauda_vendor_vpa').first().catch(() => ({ n: 0 }));
-  if (!cnt || !cnt.n) {
-    for (const [name, vpas] of Object.entries(VENDOR_VPAS)) for (const v of vpas)
-      await DB.prepare('INSERT OR IGNORE INTO sauda_vendor_vpa (vpa,vendor_name,source) VALUES (?,?,?)').bind(v.toLowerCase(), name, 'seed').run();
-  }
+  for (const [name, vpas] of Object.entries(VENDOR_VPAS)) for (const v of vpas)
+    await DB.prepare('INSERT OR IGNORE INTO sauda_vendor_vpa (vpa,vendor_name,source) VALUES (?,?,?)').bind(String(v || '').toLowerCase(), name, 'seed').run();
   return (await DB.prepare('SELECT vpa,vendor_name,vendor_id FROM sauda_vendor_vpa').all()).results || [];
 }
 
@@ -317,7 +392,7 @@ export async function onRequest(context) {
       const date = b.for_date || istToday();
       // upsert: one open ORDERED row per vendor per brand per day
       const ex = await DB.prepare(`SELECT id FROM sauda_purchase WHERE brand=? AND vendor_name=? AND for_date=? AND status='ORDERED'`).bind(brand, vendor, date).first();
-      const items = b.items ? JSON.stringify(b.items) : null;
+      const items = b.items ? JSON.stringify(normalizeOrderItems(b.items)) : null;
       const vpa = b.vendor_vpa || (VENDOR_VPAS[vendor] ? VENDOR_VPAS[vendor][0] : null);
       const amt = b.expected_amount != null ? Math.round(Number(b.expected_amount) * 100) : null;
       if (ex) {
@@ -346,7 +421,7 @@ export async function onRequest(context) {
       const cfgs = (await DB.prepare('SELECT item_key, method, params_json, display_unit, updated_at FROM sauda_receive_config ORDER BY item_key').all()).results || [];
       const seen = (await DB.prepare(`SELECT DISTINCT items_json FROM sauda_purchase WHERE items_json IS NOT NULL ORDER BY id DESC LIMIT 400`).all()).results || [];
       const names = new Set();
-      for (const r of seen) { try { for (const it of JSON.parse(r.items_json)) names.add(it.name); } catch (_) {} }
+      for (const r of seen) { try { for (const it of JSON.parse(r.items_json)) names.add(titleCase(orderItemKey(it))); } catch (_) {} }
       const items = [];
       for (const name of names) items.push({ name, ...(await receiveConfigFor(DB, name)) });
       return json({ success: true, configured: cfgs, items: items.sort((a, b) => a.name.localeCompare(b.name)) });
@@ -354,7 +429,7 @@ export async function onRequest(context) {
     if (action === 'set-method' && request.method === 'POST') {
       const b = await request.json();
       if (!isOwner(b.pin)) return json({ success: false, error: 'owner only' }, 401);
-      const key = norm(b.item_key || b.name);
+      const key = norm(canonItemName(b.item_key || b.name));
       if (!key || !b.method) return json({ success: false, error: 'item + method required' }, 400);
       await DB.prepare(`INSERT INTO sauda_receive_config (item_key,method,params_json,display_unit,updated_by,updated_at)
         VALUES (?,?,?,?,?,datetime('now'))
@@ -384,7 +459,7 @@ export async function onRequest(context) {
     if (action === 'import-po' && request.method === 'POST') {
       const b = await request.json();
       if (!isOwner(b.pin)) return json({ success: false, error: 'owner only' }, 401);
-      const brand = b.brand, date = b.for_date, items = Array.isArray(b.items) ? b.items : [];
+      const brand = b.brand, date = b.for_date, items = normalizeOrderItems(b.items);
       if (!brand || !date) return json({ success: false, error: 'brand + for_date required' }, 400);
       if (b.replace) await DB.prepare('DELETE FROM sauda_day_po WHERE brand=? AND for_date=?').bind(brand, date).run();
       let n = 0;
@@ -403,8 +478,8 @@ export async function onRequest(context) {
     if (action === 'day-po') {
       const brand = url.searchParams.get('brand') || 'NCH';
       const date = url.searchParams.get('date') || istToday();
-      const rows = (await DB.prepare(`SELECT item_name,qty,unit,category,vendor_name,vendor_id,fulfilment,pay_timing FROM sauda_day_po WHERE brand=? AND for_date=? ORDER BY sort`).bind(brand, date).all()).results || [];
-      return json({ success: true, brand, date, items: rows });
+      const rows = (await DB.prepare(`SELECT item_name,qty,unit,category,vendor_name,vendor_id,fulfilment,pay_timing,sort FROM sauda_day_po WHERE brand=? AND for_date=? ORDER BY sort`).bind(brand, date).all()).results || [];
+      return json({ success: true, brand, date, items: mergeDayPoRows(rows) });
     }
     if (action === 'po-dates') {
       const brand = url.searchParams.get('brand') || 'NCH';

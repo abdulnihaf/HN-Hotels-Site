@@ -44,13 +44,20 @@
   .b.legs{background:rgba(207,91,78,.14);color:#e08b80}
   .vnote{font-size:11px;color:var(--dim);margin:1px 0 10px;line-height:1.4}
   .items{display:flex;flex-direction:column;gap:7px;margin-bottom:12px}
-  .row{display:flex;align-items:center;gap:8px}
+  .vsearch{display:flex;gap:8px;align-items:center;margin:0 0 10px}
+  .vsearch input{flex:1;background:#0b0b13;border:1px solid var(--line);border-radius:11px;color:var(--txt);font-size:14px;padding:12px;outline:none}
+  .vsearch input::placeholder{color:var(--dim)}
+  .vsearch .count{font-size:11px;color:var(--dim);white-space:nowrap}
+  .vsearch .empty{font-size:11px;color:var(--dim);display:none;margin-top:-2px}
+  .row{display:flex;align-items:center;gap:8px;scroll-margin-top:100px}
   .row .nm{flex:1;font-size:13.5px;line-height:1.25}
   .row .nm small{display:block;font-size:10.5px;margin-top:1px;color:var(--amber)}
   .step{display:flex;align-items:center;background:#0b0b13;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex:none}
   .step button{background:transparent;border:none;color:var(--gold);width:30px;height:32px;font-size:17px}
   .step input{width:44px;height:32px;background:transparent;border:none;color:var(--txt);text-align:center;font-size:14px;font-weight:700;outline:none}
   .step .u{font-size:10px;color:var(--dim);padding:0 7px 0 2px}
+  .row.hide{display:none!important}
+  .row.focused{outline:1px solid rgba(201,161,74,.28);background:rgba(201,161,74,.06);border-radius:10px}
   .actwrap{}
   .act{display:block;width:100%;border:none;border-radius:12px;padding:13px;font-size:14.5px;font-weight:700;text-align:center;text-decoration:none;cursor:pointer}
   .act.wa{background:var(--wa);color:#06310f}
@@ -107,10 +114,12 @@
 <script>
 const API='/api/purchase-control';const FLOW='/api/sauda-flow';let PIN='',BRAND='NCH',DATA=[],CATALOG=[],PODATES=[];const $=id=>document.getElementById(id);
 const QTY={};
+const CARD_FILTERS={};
+let pendingFocusItemKey=null;
 // the order is YOURS to build: added items + removed items, saved per day+brand so it survives a reload
 let ADDED=new Set(), REMOVED=new Set();
 function ordKey(){return `sauda_ord_${VIEWDATE}_${BRAND}`;}
-function loadOrderState(){try{const s=JSON.parse(localStorage.getItem(ordKey())||'{}');ADDED=new Set(s.added||[]);REMOVED=new Set(s.removed||[]);}catch(_){ADDED=new Set();REMOVED=new Set();}}
+function loadOrderState(){try{const s=JSON.parse(localStorage.getItem(ordKey())||'{}');ADDED=new Set((s.added||[]).map(canonItemKey).filter(Boolean));REMOVED=new Set((s.removed||[]).map(canonItemKey).filter(Boolean));}catch(_){ADDED=new Set();REMOVED=new Set();}}
 function saveOrderState(){try{localStorage.setItem(ordKey(),JSON.stringify({added:[...ADDED],removed:[...REMOVED]}));}catch(_){}}
 function istNow(){return new Date(Date.now()+5.5*3600e3);}
 function istDate(){return istNow().toISOString().slice(0,10);}
@@ -156,7 +165,26 @@ const PAY={per:'Pay on delivery — cash if you’re there, else UPI',khata_roll
 function daysAgo(d){if(!d)return 9999;const t=istNow();const p=new Date(d.slice(0,10)+'T00:00:00Z');return Math.round((t-p)/86400000);}
 function isRegular(it){return daysAgo(it.last_purchase_date)<=2;} // only the truly-daily pre-fill; add the rest with ＋ Add
 function waPhone(p){let d=(p||'').replace(/[^0-9]/g,'');if(d.length===10)d='91'+d;return d;}
-function mid(it){return it.product_code||it.id;}
+function canonItemKey(raw){
+  return String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\bkabab\b/g, 'kebab')
+    .replace(/\bshawarama\b/g, 'shawarma')
+    .replace(/\bshawarma\s+chicken\s*\(?\s*boneless\s*\)?/g, 'shawarma chicken')
+    .replace(/\bboneless\s+shawarma\s+chicken\b/g, 'shawarma chicken')
+    .replace(/\bshawarma\s+boneless\s+chicken\b/g, 'shawarma chicken')
+    .replace(/\broasted?\s+chicken\b/g, 'grill chicken')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function prettyItemName(raw){
+  const key=canonItemKey(raw);
+  if(!key)return String(raw||'').trim();
+  return key.split(' ').map(w=>w ? (w[0].toUpperCase()+w.slice(1)) : w).join(' ');
+}
+function mid(it){return canonItemKey(it.name||it.item_name||it.product_code||it.id);}
 function qtyOf(it){const k=mid(it);if(QTY[k]!=null)return QTY[k];const q=Number(it.last_qty||it.suggested_qty||0);return q>0?Math.round(q*100)/100:0;}
 function isMilk(v,it){return /buffalo milk|^milk$/i.test(v)||/^milk$|buffalo milk/i.test(it.name||'');}
 function isChicken(v){return /broiler/i.test(v);}
@@ -175,13 +203,39 @@ function bestFor(name){
   for(const h of NAME_HINTS){ if(h.re.test(nm)){ const e=PRICE_INDEX.find(x=>x.re===h.grp.source||new RegExp(x.re,'i').test('condensed milk')); if(e)return e; }}
   return null;
 }
-function lineToItem(l){const ph=PHONES[l.vendor_name]||{};const b=bestFor(l.item_name)||{};
-  return {name:l.item_name,product_code:l.item_name,id:l.item_name,uom:l.unit||'',
+function lineToItem(l){const ph=PHONES[l.vendor_name]||{};const b=bestFor(l.item_name)||{};const key=canonItemKey(l.item_name);const name=prettyItemName(l.item_name);
+  return {name,source_name:l.item_name,product_code:key,id:key,uom:l.unit||'',
   last_qty:parseFloat(l.qty)||0,suggested_qty:parseFloat(l.qty)||0,
   primary_vendor:l.vendor_name?{name:l.vendor_name,vendor_id:l.vendor_id||ph.id,whatsapp_phone:ph.phone||''}:null,
   journey:l.fulfilment?{fulfil:l.fulfilment,pay:l.pay_timing}:{fulfil:'collect',pay:'per'},
   best_src:b.src||null,best_price:b.price||null,best_unit_price:b.unit_price||null,best_unit:b.unit||null,best_pack:b.pack||null,best_sku:b.sku||null,comparable:!!b.src,
-  category:l.category,lane:l.vendor_name?'VENDOR':'MARKET'};}
+  category:l.category,lane:l.vendor_name?'VENDOR':'MARKET',search_text:[name,l.item_name,l.vendor_name,l.category,l.unit].filter(Boolean).join(' ').toLowerCase()};}
+function mergeItems(items){
+  const out=[];
+  const seen=new Map();
+  for(const it of items){
+    const key=mid(it);
+    if(!key) continue;
+    const cur=seen.get(key);
+    if(cur){
+      const a=Number(cur.last_qty||cur.suggested_qty||0);
+      const b=Number(it.last_qty||it.suggested_qty||0);
+      if(Number.isFinite(a) && Number.isFinite(b)){
+        const sum=Math.round((a+b)*100)/100;
+        cur.last_qty=sum;
+        cur.suggested_qty=sum;
+      }
+      if(!cur.uom && it.uom) cur.uom=it.uom;
+      if(!cur.category && it.category) cur.category=it.category;
+      if(!cur.source_name && it.source_name) cur.source_name=it.source_name;
+      continue;
+    }
+    const clone={...it};
+    seen.set(key, clone);
+    out.push(clone);
+  }
+  return out;
+}
 async function load(){
   $('groups').innerHTML='<div class="small">Loading your order…</div>';
   const [po,cat,pd,vn]=await Promise.all([
@@ -198,7 +252,7 @@ async function load(){
   for(const it of CATALOG){const pv=it.primary_vendor; if(pv&&pv.whatsapp_phone&&!PHONES[pv.name])PHONES[pv.name]={phone:pv.whatsapp_phone,id:pv.vendor_id};}
   // cheapest-online index from the materials feed (one entry per comparable group)
   PRICE_INDEX=(cat&&cat.price_index)||[];
-  DATA=((po&&po.items)||[]).map(lineToItem);
+  DATA=mergeItems(((po&&po.items)||[]).map(lineToItem));
   loadOrderState();
   render();
 }
@@ -223,6 +277,8 @@ function render(){
     const cb=$('copyBtn'); if(cb)cb.onclick=()=>copyFrom(last);
   }
   bind();
+  applyCardFilters();
+  focusPendingItem();
 }
 async function copyFrom(date){
   const po=await fetch(`${FLOW}?action=day-po&brand=${BRAND}&date=${date}`).then(r=>r.json()).catch(()=>({}));
@@ -233,12 +289,15 @@ async function copyFrom(date){
 }
 // commodity / departmental items with no delivery vendor = a buy-at-shop checklist
 function collectCard(items){
+  const key='__collect__';
   const rows=items.map(it=>{const k=mid(it);const q=qtyOf(it);
-    return `<div class="row"><div class="nm">${esc(it.name)}${it.category?`<small style="color:var(--dim)">${esc(it.category)}</small>`:''}</div>
+    return `<div class="row" data-row-k="${esc(k)}" data-row-search="${esc((it.search_text||[it.name,it.source_name,it.category,it.uom].filter(Boolean).join(' ')).toLowerCase())}"><div class="nm">${esc(it.name)}${it.category?`<small style="color:var(--dim)">${esc(it.category)}</small>`:''}</div>
       <div class="step"><button data-dec="${k}">−</button><input data-q="${k}" inputmode="decimal" value="${q}"><span class="u">${esc(it.uom||'')}</span><button data-inc="${k}">+</button></div><button class="rm" data-rm="${k}">×</button></div>`;}).join('');
-  return `<div class="vcard"><div class="vhead"><div><div class="vname">🛒 Buy / collect</div>
+  const search = items.length > 5 ? `<div class="vsearch"><input type="search" data-search-vendor="${esc(key)}" value="${esc(CARD_FILTERS[key]||'')}" placeholder="Search this vendor's items…" inputmode="search"><div class="count">${items.length} items</div></div><div class="empty" data-search-empty>No items match.</div>` : '';
+  return `<div class="vcard" data-vendor="${esc(key)}"><div class="vhead"><div><div class="vname">🛒 Buy / collect</div>
     <div class="badges"><span class="b collect">Departmental & market</span></div></div></div>
     <div class="vnote">Commodities — buy at Ashrafiya / market, compare where cheaper.</div>
+    ${search}
     <div class="items">${rows}</div></div>`;
 }
 function vendorCard(c, items){
@@ -251,9 +310,10 @@ function vendorCard(c, items){
   const itemsHtml=items.map(it=>{
     const k=mid(it);const q=qtyOf(it);const unit=it.uom||'';
     const cheap=it.best_src?`<small class="cheap">⚡ ${it.best_src.replace(/_/g,' ').toLowerCase()} · ₹${it.best_unit_price||it.best_price}${it.best_unit?'/'+it.best_unit:''}${it.best_pack?` (${it.best_pack})`:''}</small>`:'';
-    return `<div class="row"><div class="nm">${esc(it.name)}${cheap}</div>
+    return `<div class="row" data-row-k="${esc(k)}" data-row-search="${esc((it.search_text||[it.name,it.source_name,it.category,it.uom].filter(Boolean).join(' ')).toLowerCase())}"><div class="nm">${esc(it.name)}${cheap}</div>
       <div class="step"><button data-dec="${k}">−</button><input data-q="${k}" inputmode="decimal" value="${q}"><span class="u">${esc(unit)}</span><button data-inc="${k}">+</button></div><button class="rm" data-rm="${k}" title="remove">×</button></div>`;
   }).join('');
+  const search = items.length > 5 ? `<div class="vsearch"><input type="search" data-search-vendor="${esc(name)}" value="${esc(CARD_FILTERS[name]||'')}" placeholder="Search this vendor's items…" inputmode="search"><div class="count">${items.length} items</div></div><div class="empty" data-search-empty>No items match.</div>` : '';
   let action='';
   if(milk){ action=`<a class="act info" href="/milk">🥛 Open milk flow — standing order & weigh</a>`; }
   else if(chick){ action=`<a class="act wa" data-wa="${esc(name)}" data-phone="${phone}" href="#">📲 Send chicken order</a><a class="act ghost" href="/ops/chicken-price-entry/">Rate & receive → chicken engine</a>`; }
@@ -265,6 +325,7 @@ function vendorCard(c, items){
     <div class="vhead"><div><div class="vname">${esc(name.split('(')[0].trim())}${done?'<span class="ok">✓ ordered</span>':''}</div>
       <div class="badges"><span class="b ${j.fulfil}">${FULFIL[j.fulfil]||'Order'}</span><span class="b pay">${(PAY[j.pay]||'').split('—')[0].trim()}</span>${legs}</div></div></div>
     ${note?`<div class="vnote">${esc(note)}</div>`:''}
+    ${search}
     <div class="items">${itemsHtml}</div>
     <div class="actwrap">${action}</div>
     <div class="pay">${PAY[j.pay]||''}</div>
@@ -278,23 +339,82 @@ function bind(){
   document.querySelectorAll('[data-wa]').forEach(a=>a.onclick=e=>{e.preventDefault();sendWa(a.dataset.wa,a.dataset.phone);});
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>{const v=b.dataset.toggle;setDone(v,!isDone(v));render();});
   document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>removeItem(b.dataset.rm));
+  document.querySelectorAll('[data-search-vendor]').forEach(input=>input.oninput=()=>filterCardRows(input.dataset.searchVendor, input.value));
 }
 function removeItem(k){ADDED.delete(k);REMOVED.add(k);saveOrderState();render();}
 // ── Add item: search your catalog, tap to add it (with its vendor) to the order ──
 function openAdd(){$('ovl').classList.add('on');$('osearch').value='';renderResults('');setTimeout(()=>$('osearch').focus(),100);}
 function closeAdd(){$('ovl').classList.remove('on');}
-function inThisOrder(code){ if(REMOVED.has(code))return false; if(ADDED.has(code))return true; return DATA.some(it=>mid(it)===code); }
+function inThisOrder(code){ const k=canonItemKey(code); if(REMOVED.has(k))return false; if(ADDED.has(k))return true; return DATA.some(it=>mid(it)===k); }
 function renderResults(q){
   q=(q||'').toLowerCase().trim();
-  const pool=CATALOG.filter(it=>!inThisOrder(mid(it)));
+  const seen=new Set();
+  const pool=[];
+  for(const it of CATALOG){
+    const k=mid(it);
+    if(!k || seen.has(k) || inThisOrder(k)) continue;
+    seen.add(k);
+    pool.push(it);
+  }
   const list=(q?pool.filter(it=>(it.name+' '+((it.primary_vendor&&it.primary_vendor.name)||'')).toLowerCase().includes(q)):pool).slice(0,60);
   $('oresults').innerHTML=list.map(it=>{
     const k=mid(it);const v=it.primary_vendor?it.primary_vendor.name.split('(')[0].trim():'Buy / collect';
     return `<div class="ores"><div><div class="on">${esc(it.name)}</div><div class="om">${esc(v)} · ${esc(it.uom||'')}</div></div><button class="add" data-addk="${esc(k)}">＋ Add</button></div>`;
   }).join('')||'<div class="small">No match. Try another word.</div>';
-  $('oresults').querySelectorAll('[data-addk]').forEach(b=>b.onclick=()=>{ADDED.add(b.dataset.addk);REMOVED.delete(b.dataset.addk);saveOrderState();renderResults($('osearch').value);render();});
+  $('oresults').querySelectorAll('[data-addk]').forEach(b=>b.onclick=()=>{
+    const k=canonItemKey(b.dataset.addk);
+    ADDED.add(k);
+    REMOVED.delete(k);
+    saveOrderState();
+    pendingFocusItemKey=k;
+    closeAdd();
+    render();
+  });
 }
 function nudge(k,dir){const i=document.querySelector(`[data-q="${CSS.escape(k)}"]`);if(!i)return;let v=Math.max(0,Math.round(((Number(i.value)||0)+dir)*100)/100);i.value=v;QTY[k]=v;}
+function filterCardRows(vendor,q){
+  const key=String(vendor||'');
+  const term=String(q||'').trim().toLowerCase();
+  CARD_FILTERS[key]=term;
+  applySingleCardFilter(key, term);
+}
+function applySingleCardFilter(vendor,term){
+  const card=[...document.querySelectorAll('.vcard')].find(c=>c.dataset.vendor===String(vendor||''));
+  if(!card)return;
+  const rows=[...card.querySelectorAll('.row')];
+  let shown=0;
+  rows.forEach(r=>{
+    const hay=String(r.dataset.rowSearch||'');
+    const ok=!term || hay.includes(term);
+    r.classList.toggle('hide', !ok);
+    if(ok) shown += 1;
+  });
+  const empty=card.querySelector('[data-search-empty]');
+  if(empty) empty.style.display = (rows.length && !shown) ? 'block' : 'none';
+}
+function applyCardFilters(){ for(const [vendor,term] of Object.entries(CARD_FILTERS)) applySingleCardFilter(vendor, term); }
+function focusPendingItem(){
+  if(!pendingFocusItemKey)return;
+  const key=pendingFocusItemKey;
+  pendingFocusItemKey=null;
+  const row=document.querySelector(`[data-row-k="${CSS.escape(key)}"]`);
+  if(!row)return;
+  if(row.classList.contains('hide')){
+    const card=row.closest('.vcard');
+    const vendor=card?card.dataset.vendor:'';
+    if(vendor){
+      CARD_FILTERS[vendor]='';
+      const input=card.querySelector('[data-search-vendor]');
+      if(input) input.value='';
+      applySingleCardFilter(vendor, '');
+    }
+  }
+  row.classList.add('focused');
+  row.scrollIntoView({behavior:'smooth',block:'center'});
+  const input=row.querySelector('[data-q]');
+  if(input)setTimeout(()=>input.focus({preventScroll:true}),120);
+  setTimeout(()=>row.classList.remove('focused'),1200);
+}
 function sendWa(vendor,phone){
   const card=[...document.querySelectorAll('.vcard')].find(c=>c.dataset.vendor===vendor);if(!card)return;
   const lines=[];
@@ -319,7 +439,7 @@ function sendWa(vendor,phone){
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 </script>
 <div class="ovl" id="ovl">
-  <div class="obar"><input id="osearch" placeholder="Search item to add…" inputmode="search"><button class="ox" id="oclose">Done</button></div>
+  <div class="obar"><input id="osearch" placeholder="Search item, vendor, or code…" inputmode="search"><button class="ox" id="oclose">Done</button></div>
   <div class="results" id="oresults"></div>
 </div>
 <nav class="snav">

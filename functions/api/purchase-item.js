@@ -173,9 +173,14 @@ export async function onRequest(context) {
       ['HE_MUTTON','Mutton','HE','Mutton Irshad Bhai','919880656387','🐐','vendor','kg',1,0,'','kg',0,'',0,1,140],
       ['HE_MUTTON_BRAIN','Mutton brain','HE','Mutton Irshad Bhai','919880656387','🧠','vendor','pcs',1,0,'','pcs',0,'',0,1,141],
       ['HE_EGG','Egg','HE','','','🥚','ration','crate',1,0,'','crate',0,'Ashrafiya',0,0,142],
+      // HE chicken — keep all 7 cuts on the live board and in the settings edit loop.
       ['HE_BONELESS','Boneless chicken','HE','M.N. Broilers','919845237700','🍗','vendor','kg',1,0,'','kg',0,'',0,1,143],
       ['HE_SHAWARMA','Shawarma chicken','HE','M.N. Broilers','919845237700','🍗','vendor','kg',1,0,'','kg',0,'',0,1,144],
-      ['HE_TANDOORI','Tandoori chicken','HE','M.N. Broilers','919845237700','🍗','vendor','birds',1,0,'','birds',0,'',0,1,145],
+      ['HE_KEBAB','Kebab chicken','HE','M.N. Broilers','919845237700','🍗','vendor','birds',1,0,'','birds',0,'',0,1,145],
+      ['HE_TANDOORI','Tandoori chicken','HE','M.N. Broilers','919845237700','🍗','vendor','birds',1,0,'','birds',0,'',0,1,146],
+      ['HE_GRILL','Grill chicken','HE','M.N. Broilers','919845237700','🍗','vendor','birds',1,0,'','birds',0,'',0,1,147],
+      ['HE_TANGDI','Tangdi (drumstick)','HE','M.N. Broilers','919845237700','🍗','vendor','pc',1,0,'','pc',0,'',0,1,148],
+      ['HE_LOLLIPOP','Lollipop / wings','HE','M.N. Broilers','919845237700','🍗','vendor','pc',1,0,'','pc',0,'',0,1,149],
       // HE other
       ['HE_CHARCOAL','Charcoal','HE','Charcoal Mudassir','918050547191','🪵','vendor','bag',1,0,'','bag',0,'',0,1,150],
       ['HE_SILVER_POUCH','Silver pouch (8×10)','HE','Shree Ram Deepak','919620515684','🥡','vendor','packet',1,0,'','packet',0,'',0,1,151],
@@ -196,6 +201,41 @@ export async function onRequest(context) {
     // Match rules: most items = cheapest. These have a LOCKED exact SKU (Nihaf, 2026-06-01).
     stmts.push(DB.prepare(`UPDATE purchase_items SET match_rule='locked', locked_query='Amul unsalted butter 500g' WHERE code IN ('BUTTER','HE_BUTTER')`));
     stmts.push(DB.prepare(`UPDATE purchase_items SET match_rule='locked', locked_query='Nestle Milkmaid 5kg' WHERE code='MILKMAID'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET
+      name='Boneless chicken', brand='HE', vendor='M.N. Broilers', vendor_phone='919845237700', emoji='🍗',
+      channel='vendor', order_unit='kg', pack_qty=1, pack_rate=0, pack_label='', receive_unit='kg',
+      last_dept_price=0, last_dept_store='', last_qcomm_price=0, receivable=1, sort=143, active=1
+      WHERE code='HE_BONELESS'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET
+      name='Shawarma chicken', brand='HE', vendor='M.N. Broilers', vendor_phone='919845237700', emoji='🍗',
+      channel='vendor', order_unit='kg', pack_qty=1, pack_rate=0, pack_label='', receive_unit='kg',
+      last_dept_price=0, last_dept_store='', last_qcomm_price=0, receivable=1, sort=144, active=1
+      WHERE code='HE_SHAWARMA'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET
+      name='Kebab chicken', brand='HE', vendor='M.N. Broilers', vendor_phone='919845237700', emoji='🍗',
+      channel='vendor', order_unit='birds', pack_qty=1, pack_rate=0, pack_label='', receive_unit='birds',
+      last_dept_price=0, last_dept_store='', last_qcomm_price=0, receivable=1, sort=145, active=1
+      WHERE code='HE_KEBAB'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET
+      name='Tandoori chicken', brand='HE', vendor='M.N. Broilers', vendor_phone='919845237700', emoji='🍗',
+      channel='vendor', order_unit='birds', pack_qty=1, pack_rate=0, pack_label='', receive_unit='birds',
+      last_dept_price=0, last_dept_store='', last_qcomm_price=0, receivable=1, sort=146, active=1
+      WHERE code='HE_TANDOORI'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET
+      name='Grill chicken', brand='HE', vendor='M.N. Broilers', vendor_phone='919845237700', emoji='🍗',
+      channel='vendor', order_unit='birds', pack_qty=1, pack_rate=0, pack_label='', receive_unit='birds',
+      last_dept_price=0, last_dept_store='', last_qcomm_price=0, receivable=1, sort=147, active=1
+      WHERE code='HE_GRILL'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET
+      name='Tangdi (drumstick)', brand='HE', vendor='M.N. Broilers', vendor_phone='919845237700', emoji='🍗',
+      channel='vendor', order_unit='pc', pack_qty=1, pack_rate=0, pack_label='', receive_unit='pc',
+      last_dept_price=0, last_dept_store='', last_qcomm_price=0, receivable=1, sort=148, active=1
+      WHERE code='HE_TANGDI'`));
+    stmts.push(DB.prepare(`UPDATE purchase_items SET
+      name='Lollipop / wings', brand='HE', vendor='M.N. Broilers', vendor_phone='919845237700', emoji='🍗',
+      channel='vendor', order_unit='pc', pack_qty=1, pack_rate=0, pack_label='', receive_unit='pc',
+      last_dept_price=0, last_dept_store='', last_qcomm_price=0, receivable=1, sort=149, active=1
+      WHERE code='HE_LOLLIPOP'`));
     await DB.batch(stmts);
 
     // ── DEMAND seed: tomorrow's PO (2026-06-01), both brands. qty_text keeps the PO's own wording. ──
@@ -220,8 +260,11 @@ export async function onRequest(context) {
       ['HE','HE_CARROT','2','kg',''],['HE','HE_CABBAGE','4','kg',''],
       ['HE','HE_PANEER','1','kg',''],['HE','HE_BUTTER','500','gm',''],
       ['HE','HE_MUTTON','3','kg',''],['HE','HE_MUTTON_BRAIN','20','pc',''],
-      ['HE','HE_EGG','3','crate',''],['HE','HE_BONELESS','10','kg',''],
-      ['HE','HE_SHAWARMA','7','kg',''],['HE','HE_TANDOORI','3','birds',''],
+      ['HE','HE_EGG','3','crate',''],
+      ['HE','HE_BONELESS','10','kg',''],['HE','HE_SHAWARMA','7','kg',''],
+      ['HE','HE_KEBAB','—','birds',''],['HE','HE_TANDOORI','3','birds',''],
+      ['HE','HE_GRILL','—','birds',''],['HE','HE_TANGDI','—','pc',''],
+      ['HE','HE_LOLLIPOP','—','pc',''],
       ['HE','HE_CHARCOAL','—','bag',''],['HE','HE_SILVER_POUCH','—','packet',''],
       ['HE','HE_CARRY_68','—','packet',''],['HE','HE_CARRY_810','—','packet',''],
       ['HE','HE_WATER_1L','2','case',''],['HE','HE_WATER_500','1','case',''],
