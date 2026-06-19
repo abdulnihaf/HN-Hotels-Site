@@ -151,8 +151,41 @@ function lineForQueue(order, line, lineIdx) {
     received_by: clean(line?.received_by, 80),
     daily_rate_paise: Math.round(+line?.daily_rate_paise || 0),
     cost_paise: Math.round(+line?.cost_paise || 0),
+    effective_price_paise: Math.round(+line?.effective_price_paise || +line?.price_paise || 0),
     movement_key: `sauda_purchase:${order.id}:${lineIdx}:receipt`,
   };
+}
+function applyLedgerToQueueLine(queueLine, ledger) {
+  if (!queueLine || !ledger) return queueLine;
+  if (!queueLine.yielded_kg && ledger.purchased_kg != null) queueLine.yielded_kg = clean(ledger.purchased_kg, 32);
+  if (!queueLine.delivered_kg && ledger.delivered_kg != null) queueLine.delivered_kg = clean(ledger.delivered_kg, 32);
+  if (!queueLine.daily_rate_paise && ledger.daily_rate_paise) queueLine.daily_rate_paise = Math.round(+ledger.daily_rate_paise || 0);
+  if (!queueLine.cost_paise && ledger.cost_paise) queueLine.cost_paise = Math.round(+ledger.cost_paise || 0);
+  if (!queueLine.effective_price_paise && ledger.price_per_kg_paise) queueLine.effective_price_paise = Math.round(+ledger.price_per_kg_paise || 0);
+  queueLine.ledger_synced = true;
+  return queueLine;
+}
+function applyLedgerToSaudaLine(line, ledger) {
+  if (!line || !ledger) return;
+  const dailyRate = Math.round(+ledger.daily_rate_paise || 0);
+  const cost = Math.round(+ledger.cost_paise || 0);
+  const effective = Math.round(+ledger.price_per_kg_paise || 0);
+  if (dailyRate > 0) line.daily_rate_paise = dailyRate;
+  if (cost > 0) line.cost_paise = cost;
+  if (effective > 0) {
+    line.price_paise = effective;
+    line.effective_price_paise = effective;
+  }
+}
+function itemAmountPaise(line) {
+  const cost = Math.round(+line?.cost_paise || 0);
+  if (cost > 0) return cost;
+  const price = Math.round(+line?.price_paise || +line?.effective_price_paise || 0);
+  const qty = qtyNum(line?.bill_qty || line?.qty || line?.ordered_qty);
+  return price > 0 && qty > 0 ? Math.round(price * qty) : 0;
+}
+function purchaseTotalPaise(items) {
+  return (items || []).reduce((sum, line) => sum + itemAmountPaise(line), 0);
 }
 async function ensureSaudaBridgeTables(DB) {
   await DB.prepare(
@@ -219,6 +252,95 @@ async function ensureSaudaBridgeTables(DB) {
   ).run();
   await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_anbar_movements_day ON anbar_inventory_movements(brand, event_at, item_code)`).run();
   await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_anbar_movements_sauda ON anbar_inventory_movements(sauda_purchase_id, sauda_line_idx)`).run();
+}
+async function ensureChickenLedgerCompat(DB) {
+  await DB.prepare(
+    `CREATE TABLE IF NOT EXISTS chicken_daily_ledger (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      business_date TEXT NOT NULL,
+      brand TEXT NOT NULL DEFAULT 'HE',
+      cut TEXT NOT NULL,
+      purchased_kg REAL,
+      delivered_kg REAL,
+      daily_rate_paise INTEGER,
+      price_per_kg_paise INTEGER,
+      cost_paise INTEGER,
+      recipe_consumed_g INTEGER DEFAULT 0,
+      variance_pct REAL,
+      updated_at TEXT
+    )`
+  ).run();
+  for (const sql of [
+    "ALTER TABLE chicken_daily_ledger ADD COLUMN delivered_kg REAL",
+    "ALTER TABLE chicken_daily_ledger ADD COLUMN daily_rate_paise INTEGER",
+    "ALTER TABLE chicken_daily_ledger ADD COLUMN price_per_kg_paise INTEGER",
+    "ALTER TABLE chicken_daily_ledger ADD COLUMN cost_paise INTEGER",
+    "ALTER TABLE chicken_daily_ledger ADD COLUMN recipe_consumed_g INTEGER DEFAULT 0",
+    "ALTER TABLE chicken_daily_ledger ADD COLUMN variance_pct REAL",
+    "ALTER TABLE chicken_daily_ledger ADD COLUMN updated_at TEXT",
+  ]) {
+    try { await DB.prepare(sql).run(); } catch (e) {}
+  }
+  try { await DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_chicken_daily_ledger_unique ON chicken_daily_ledger(business_date, brand, cut)`).run(); } catch (e) {}
+}
+async function chickenLedgerByCut(DB, brand, date) {
+  await ensureChickenLedgerCompat(DB);
+  const rows = (await DB.prepare(
+    `SELECT business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
+            price_per_kg_paise, cost_paise, recipe_consumed_g, variance_pct
+       FROM chicken_daily_ledger
+      WHERE brand=? AND business_date=?`
+  ).bind(brand, date).all()).results || [];
+  const out = new Map();
+  for (const row of rows) out.set(row.cut, row);
+  return out;
+}
+async function upsertChickenLedgerReceipt(DB, { date, brand, cut, yieldedKg, deliveredKg }) {
+  await ensureChickenLedgerCompat(DB);
+  const existing = await DB.prepare(
+    `SELECT id, daily_rate_paise, recipe_consumed_g
+       FROM chicken_daily_ledger
+      WHERE brand=? AND business_date=? AND cut=?`
+  ).bind(brand, date, cut).first();
+  const dailyRate = Math.round(+existing?.daily_rate_paise || 0);
+  const recipeG = Math.round(+existing?.recipe_consumed_g || 0);
+  const costPaise = dailyRate > 0 ? Math.round(deliveredKg * dailyRate) : null;
+  const effectivePricePaise = costPaise && yieldedKg > 0 ? Math.round(costPaise / yieldedKg) : null;
+  let variancePct = null;
+  if (recipeG > 0 && yieldedKg > 0) {
+    variancePct = Math.round(((yieldedKg * 1000 - recipeG) / recipeG) * 100 * 100) / 100;
+  }
+  if (existing) {
+    await DB.prepare(
+      `UPDATE chicken_daily_ledger
+          SET purchased_kg=?,
+              delivered_kg=?,
+              price_per_kg_paise=CASE WHEN ? IS NOT NULL THEN ? ELSE price_per_kg_paise END,
+              cost_paise=CASE WHEN ? IS NOT NULL THEN ? ELSE cost_paise END,
+              variance_pct=CASE WHEN ? IS NOT NULL THEN ? ELSE variance_pct END,
+              updated_at=datetime('now')
+        WHERE id=?`
+    ).bind(
+      yieldedKg, deliveredKg,
+      effectivePricePaise, effectivePricePaise,
+      costPaise, costPaise,
+      variancePct, variancePct,
+      existing.id
+    ).run();
+  } else {
+    await DB.prepare(
+      `INSERT INTO chicken_daily_ledger
+        (business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
+         price_per_kg_paise, cost_paise, variance_pct, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, datetime('now'))`
+    ).bind(date, brand, cut, yieldedKg, deliveredKg, effectivePricePaise, costPaise, variancePct).run();
+  }
+  return await DB.prepare(
+    `SELECT business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
+            price_per_kg_paise, cost_paise, recipe_consumed_g, variance_pct
+       FROM chicken_daily_ledger
+      WHERE brand=? AND business_date=? AND cut=?`
+  ).bind(brand, date, cut).first();
 }
 function applySaudaReceipt(line, update, now, person) {
   let changed = 0;
@@ -317,6 +439,7 @@ export async function onRequest(context) {
       const date = (url.searchParams.get('date') || url.searchParams.get('for_date') || todayIST()).slice(0, 10);
       const brand = (url.searchParams.get('brand') || 'HE').toUpperCase() === 'NCH' ? 'NCH' : 'HE';
       const kind = (url.searchParams.get('kind') || 'chicken').toLowerCase();
+      const ledger = kind === 'chicken' ? await chickenLedgerByCut(DB, brand, date) : new Map();
       const rows = (await DB.prepare(
         `SELECT id, brand, vendor_name, for_date, status, pay_timing, paid_at, ordered_at, ordered_by, items_json
            FROM sauda_purchase
@@ -331,6 +454,7 @@ export async function onRequest(context) {
         const items = parseItems(row.items_json);
         const qLines = items.map((line, idx) => lineForQueue(row, line, idx))
           .filter((line) => kind !== 'chicken' || line.chicken);
+        for (const line of qLines) applyLedgerToQueueLine(line, ledger.get(line.cut));
         if (!qLines.length) continue;
         qLines.sort((a, b) => CHICKEN_CUT_ORDER.indexOf(a.cut) - CHICKEN_CUT_ORDER.indexOf(b.cut));
         orders.push({ ...row, items_json: undefined, lines: qLines });
@@ -381,7 +505,18 @@ export async function onRequest(context) {
           const yieldedKg = qtyNum(line.yielded_kg || line.received_qty);
           const deliveredKg = qtyNum(line.delivered_kg || line.bill_qty || line.live_qty);
           const eventAt = clean(line.received_at, 32) || now;
-          const qLine = lineForQueue(row, line, u.line_idx);
+          let ledger = null;
+          if (cut && yieldedKg > 0 && deliveredKg > 0) {
+            ledger = await upsertChickenLedgerReceipt(DB, {
+              date: (row.for_date || todayIST()).slice(0, 10),
+              brand: row.brand || 'HE',
+              cut,
+              yieldedKg,
+              deliveredKg,
+            });
+            applyLedgerToSaudaLine(line, ledger);
+          }
+          const qLine = applyLedgerToQueueLine(lineForQueue(row, line, u.line_idx), ledger);
           receivedLines.push(qLine);
           if (cut && yieldedKg > 0) {
             const movementKey = `sauda_purchase:${id}:${u.line_idx}:receipt`;
@@ -432,9 +567,11 @@ export async function onRequest(context) {
             movements.push({ movement_key: null, item_code: clean(line.sku || line.item_code, 80), qty: yieldedKg || 0, uom: 'kg', cut: cut || '' });
           }
         }
+        const expected = purchaseTotalPaise(items);
         await DB.prepare(
           `UPDATE sauda_purchase
               SET items_json=?,
+                  expected_amount_paise=CASE WHEN ? > 0 THEN ? ELSE expected_amount_paise END,
                   status=CASE WHEN status='ORDERED' THEN 'RECEIVED' ELSE status END,
                   received_at=?,
                   received_by=?,
@@ -442,7 +579,7 @@ export async function onRequest(context) {
                   received_items_json=?,
                   updated_at=?
             WHERE id=?`
-        ).bind(JSON.stringify(items), now, person, station, JSON.stringify(receivedLines), now, id).run();
+        ).bind(JSON.stringify(items), expected, expected, now, person, station, JSON.stringify(receivedLines), now, id).run();
         saved.push({ id, vendor_name: row.vendor_name || '', for_date: row.for_date || '', received_lines: receivedLines.length });
       }
       return json({ success: true, changed, orders: saved, movements, at: now, by: person, station });
