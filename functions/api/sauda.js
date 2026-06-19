@@ -113,7 +113,10 @@ export async function onRequest(context) {
     }
     if (action === 'vendor-event' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
-      return withCors(json(await vendorEvent(db, body, auth)), request);
+      return withCors(json(await vendorEvent(db, body, auth, env)), request);
+    }
+    if (action === 'vendor-media' && request.method === 'GET') {
+      return withCors(await vendorMedia(env, db, url, auth), request);
     }
     // settings: the item + vendor master (Slice 1 — creates + seeds tables on first read)
     if (action === 'settings' && request.method === 'GET') {
@@ -771,7 +774,7 @@ const MN_BROILERS_CHICKEN = [
     item_code: 'HE_SHAWARMA',
     label: 'Shawarma chicken',
     unit: 'kg',
-    aliases: ['shawarma chicken', 'shawarama chicken', 'chicken shawarma', 'shawarma'],
+    aliases: ['shawarma chicken', 'shawarama chicken', 'chicken shawarma', 'shawarma', 'shawarma chicken boneless', 'boneless shawarma chicken', 'shawarma boneless chicken'],
   },
   {
     item_code: 'HE_KEBAB',
@@ -822,6 +825,13 @@ const LOCAL_VENDOR_ITEMS = [
     aliases: ['tea powder', 'liberty premium', 'liberty premium 5kg', 'afeefa tea', 'afifa tea'],
   },
 ];
+const AFEEFA_BANK = {
+  account_name: 'AFEEFA IMPEX AGENCIES',
+  account_number: '50200116872951',
+  ifsc: 'HDFC0011941',
+  bank: 'HDFC Bank',
+  branch: 'PERIAMET VEPERY HIGH ROAD BRANCH',
+};
 
 async function upsertChickenItems(db, now) {
   const stmts = [];
@@ -924,8 +934,10 @@ async function seedSettings(db) {
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   const stmts = [];
   for (const [k, v] of Object.entries(VENDORS)) {
-    stmts.push(db.prepare(`INSERT OR IGNORE INTO sauda_vendor (vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(k, v.name, v.brand || 'both', v.fulfilment, v.pay, VENDOR_PHONES[k] || '', JSON.stringify(v.vpa ? [v.vpa] : []), JSON.stringify(v.aliases || []), v.cat || '', v.vpa ? 0 : 1, 'seed', now));
+    const bankSeed = k === 'afeefa' ? AFEEFA_BANK : {};
+    const flagged = (v.vpa || validBankDetails(bankSeed)) ? 0 : 1;
+    stmts.push(db.prepare(`INSERT OR IGNORE INTO sauda_vendor (vendor_key,name,brand,fulfilment,pay,phone,vpa_json,bank_json,aliases_json,cat,flagged,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(k, v.name, v.brand || 'both', v.fulfilment, v.pay, VENDOR_PHONES[k] || '', JSON.stringify(v.vpa ? [v.vpa] : []), JSON.stringify(bankSeed), JSON.stringify(v.aliases || []), v.cat || '', flagged, 'seed', now));
   }
   for (const c of HP_CATALOG) {
     stmts.push(db.prepare(`INSERT OR IGNORE INTO sauda_item (item_code,label,unit,pack_label,pack_qty,price_paise,price_mode,default_vendor,cmp_query,cmp_must,cmp_not,cmp_band,flagged,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
@@ -938,6 +950,11 @@ async function seedSettings(db) {
   for (const [vendorKey, partnerId] of Object.entries(VENDOR_ODOO_PARTNERS)) {
     await db.prepare(`UPDATE sauda_vendor SET odoo_partner_id=COALESCE(odoo_partner_id, ?) WHERE vendor_key=?`)
       .bind(partnerId, vendorKey).run().catch(() => {});
+  }
+  const afeefaRow = await db.prepare(`SELECT bank_json, flagged FROM sauda_vendor WHERE vendor_key='afeefa'`).first().catch(() => null);
+  if (!validBankDetails(afeefaRow && afeefaRow.bank_json) || (afeefaRow && afeefaRow.flagged)) {
+    await db.prepare(`UPDATE sauda_vendor SET bank_json=?, flagged=0, updated_by=?, updated_at=? WHERE vendor_key='afeefa'`)
+      .bind(JSON.stringify(AFEEFA_BANK), 'seed', now).run().catch(() => {});
   }
   await upsertChickenItems(db, now);
   await upsertLocalVendorItems(db, now);
@@ -1242,6 +1259,9 @@ async function ensureVendorEventTable(db) {
       ref TEXT DEFAULT '',
       note TEXT DEFAULT '',
       source TEXT DEFAULT 'manual',
+      bank_event_id INTEGER DEFAULT NULL,
+      bank_ref TEXT DEFAULT '',
+      reconciled_at TEXT DEFAULT '',
       active INTEGER DEFAULT 1,
       event_key TEXT UNIQUE,
       created_by TEXT DEFAULT '',
@@ -1250,9 +1270,97 @@ async function ensureVendorEventTable(db) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_sauda_vendor_event_vendor_date ON sauda_vendor_event(vendor_key,event_date)`),
   ]);
+  try { await db.prepare(`ALTER TABLE sauda_vendor_event ADD COLUMN bank_event_id INTEGER DEFAULT NULL`).run(); } catch (e) {}
+  try { await db.prepare(`ALTER TABLE sauda_vendor_event ADD COLUMN bank_ref TEXT DEFAULT ''`).run(); } catch (e) {}
+  try { await db.prepare(`ALTER TABLE sauda_vendor_event ADD COLUMN reconciled_at TEXT DEFAULT ''`).run(); } catch (e) {}
 }
-async function vendorEvent(db, body, auth) {
+async function ensureVendorAttachmentTable(db) {
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS sauda_vendor_attachment (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor_event_id INTEGER NOT NULL,
+      vendor_key TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'invoice',
+      r2_key TEXT NOT NULL,
+      filename TEXT DEFAULT '',
+      mimetype TEXT DEFAULT '',
+      file_size_kb INTEGER DEFAULT 0,
+      created_by TEXT DEFAULT '',
+      created_at TEXT DEFAULT ''
+    )`),
+    db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sauda_vendor_attachment_event_kind ON sauda_vendor_attachment(vendor_event_id, kind)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_sauda_vendor_attachment_vendor ON sauda_vendor_attachment(vendor_key, created_at DESC)`),
+  ]);
+}
+function parseAttachmentPayload(raw) {
+  const att = raw && (raw.attachment || raw.file || raw.media);
+  if (!att) return null;
+  const rawData = String(att.data_url || att.dataUrl || att.data_b64 || att.base64 || '').trim();
+  if (!rawData) return null;
+  const m = /^data:([^;]+);base64,(.+)$/i.exec(rawData);
+  const mime = String(att.mimetype || att.mimeType || (m && m[1]) || '').trim() || 'application/octet-stream';
+  const base64 = m ? m[2] : rawData.replace(/^.*base64,/, '');
+  return {
+    name: String(att.name || att.filename || att.file_name || 'invoice').trim() || 'invoice',
+    mimetype: mime,
+    base64,
+  };
+}
+function attachmentExt(name, mime) {
+  const n = String(name || '').toLowerCase();
+  const fromName = n.includes('.') ? n.split('.').pop() : '';
+  if (fromName && fromName.length <= 5) return fromName;
+  const m = String(mime || '').toLowerCase();
+  if (m.includes('pdf')) return 'pdf';
+  if (m.includes('png')) return 'png';
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
+  if (m.includes('webp')) return 'webp';
+  return 'bin';
+}
+function safeFilePart(s, max) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, max || 80) || 'invoice';
+}
+async function storeVendorAttachment(db, env, vendorKey, eventId, attachment, eventDate, by) {
+  if (!env?.EVIDENCE || !attachment || !attachment.base64 || !eventId) return null;
+  const bytes = Uint8Array.from(atob(attachment.base64), (c) => c.charCodeAt(0));
+  const sizeKb = Math.max(1, Math.round(bytes.length / 1024));
+  const fileName = String(attachment.name || 'invoice').trim() || 'invoice';
+  const ext = attachmentExt(fileName, attachment.mimetype);
+  const r2Key = [
+    'sauda',
+    safeFilePart(vendorKey, 40),
+    String(eventDate || todayIST()).slice(0, 10),
+    `${Date.now()}-${safeFilePart(fileName, 40)}.${ext}`,
+  ].join('/');
+  await env.EVIDENCE.put(r2Key, bytes, {
+    httpMetadata: {
+      contentType: attachment.mimetype || 'application/octet-stream',
+      contentDisposition: `inline; filename="${fileName.replace(/"/g, '')}"`,
+    },
+  });
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  await db.prepare(
+    `INSERT INTO sauda_vendor_attachment (vendor_event_id,vendor_key,kind,r2_key,filename,mimetype,file_size_kb,created_by,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(vendor_event_id, kind) DO UPDATE SET
+       vendor_key=excluded.vendor_key,
+       r2_key=excluded.r2_key,
+       filename=excluded.filename,
+       mimetype=excluded.mimetype,
+       file_size_kb=excluded.file_size_kb,
+       created_by=excluded.created_by,
+       created_at=excluded.created_at`
+  ).bind(eventId, vendorKey, 'invoice', r2Key, fileName, attachment.mimetype || 'application/octet-stream', sizeKb, by || '', now).run();
+  return { r2_key: r2Key, filename: fileName, mimetype: attachment.mimetype || 'application/octet-stream', file_size_kb: sizeKb };
+}
+async function vendorEvent(db, body, auth, env) {
   await ensureVendorEventTable(db);
+  await ensureVendorAttachmentTable(db);
   const vdir = await getVendorDirectory(db);
   const rows = Array.isArray(body && body.events) ? body.events : [body || {}];
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
@@ -1269,7 +1377,7 @@ async function vendorEvent(db, body, auth) {
     const note = String((raw && raw.note) || '').trim().slice(0, 500);
     const source = String((raw && raw.source) || (body && body.source) || 'manual').trim().slice(0, 40);
     const key = String((raw && raw.event_key) || ledgerEventKey(v.key, eventDate, type, amount, ref, note));
-    const res = await db.prepare(
+    await db.prepare(
       `INSERT INTO sauda_vendor_event (vendor_key,event_type,event_date,amount_paise,ref,note,source,active,event_key,created_by,created_at,updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(event_key) DO UPDATE SET
@@ -1280,7 +1388,33 @@ async function vendorEvent(db, body, auth) {
          active=excluded.active,
          updated_at=excluded.updated_at`
     ).bind(v.key, type, eventDate, amount, ref, note, source, raw && raw.active === false ? 0 : 1, key, by, now, now).run();
-    out.push({ id: res?.meta?.last_row_id || null, vendorKey: v.key, vendor: v.name, event_type: type, event_date: eventDate, amount_paise: amount, ref, note });
+    const row = await db.prepare(`SELECT id, bank_event_id, bank_ref, reconciled_at FROM sauda_vendor_event WHERE event_key=?`).bind(key).first();
+    const attInfo = parseAttachmentPayload(raw);
+    let attachment = null;
+    if (attInfo) attachment = await storeVendorAttachment(db, env || {}, v.key, row && row.id, attInfo, eventDate, by);
+    let reconciled = row && row.reconciled_at ? { bank_ref: row.bank_ref || '', txn_at: '' } : null;
+    if (!reconciled && amount < 0 && hasPaymentRail(v)) {
+      const m = await findVendorDebit(db, v, Math.abs(amount), eventDate);
+      if (m && row && row.id) {
+        await db.prepare(`UPDATE sauda_vendor_event SET bank_event_id=?, bank_ref=?, reconciled_at=?, updated_at=? WHERE id=?`)
+          .bind(m.bank_event_id, m.bank_ref, now, now, row.id).run();
+        reconciled = { bank_ref: m.bank_ref, txn_at: m.txn_at };
+      }
+    }
+    out.push({
+      id: row?.id || null,
+      vendorKey: v.key,
+      vendor: v.name,
+      event_type: type,
+      event_date: eventDate,
+      amount_paise: amount,
+      ref,
+      note,
+      bank_ref: reconciled ? reconciled.bank_ref : (row?.bank_ref || ''),
+      reconciled: !!(reconciled || row?.reconciled_at),
+      attachment_count: attachment ? 1 : 0,
+      attachment,
+    });
   }
   return { ok: true, count: out.length, events: out };
 }
@@ -1310,6 +1444,7 @@ async function vendorLedger(db, days) {
   const since = `date('now','-${days} days')`;
   await autoSettle(db);   // live: settle anything the bank now confirms (orders + direct pays)
   await ensureVendorEventTable(db);
+  await ensureVendorAttachmentTable(db);
   const vdir = await getVendorDirectory(db);
   let rows = [];
   try {
@@ -1333,15 +1468,33 @@ async function vendorLedger(db, days) {
   let eventRows = [];
   try {
     eventRows = ((await db.prepare(
-      `SELECT id, vendor_key, event_type, event_date, amount_paise, ref, note, source, created_at
+      `SELECT id, vendor_key, event_type, event_date, amount_paise, ref, note, source, bank_event_id, bank_ref, reconciled_at, created_at
          FROM sauda_vendor_event
         WHERE active=1
         ORDER BY event_date DESC, id DESC`
     ).all()).results) || [];
   } catch (e) { eventRows = []; }
+  let attRows = [];
+  try {
+    attRows = ((await db.prepare(
+      `SELECT id, vendor_event_id, kind, filename, mimetype, file_size_kb, created_at
+         FROM sauda_vendor_attachment
+        ORDER BY created_at DESC, id DESC`
+    ).all()).results) || [];
+  } catch (e) { attRows = []; }
+  const attByEvent = new Map();
+  for (const a of attRows) {
+    if (!attByEvent.has(a.vendor_event_id)) attByEvent.set(a.vendor_event_id, []);
+    attByEvent.get(a.vendor_event_id).push({
+      id: a.id, kind: a.kind || 'invoice', filename: a.filename || '',
+      mimetype: a.mimetype || '', file_size_kb: a.file_size_kb || 0, created_at: a.created_at || '',
+    });
+  }
   const byEvent = new Map();
   for (const e of eventRows) {
     const vk = resolveVendor(vdir, e.vendor_key).key;
+    e.attachments = attByEvent.get(e.id) || [];
+    e.attachment_count = e.attachments.length;
     if (!byEvent.has(vk)) byEvent.set(vk, []);
     byEvent.get(vk).push(e);
   }
@@ -1356,12 +1509,15 @@ async function vendorLedger(db, days) {
       else billed += signed;
       outstanding += signed;
       const status = String(e.event_type || 'event').toUpperCase();
+      const hasAtt = Number(e.attachment_count || 0) > 0;
       trail.push({
         id: 'event-' + e.id, event: true, for_date: e.event_date, status,
         amount_paise: Math.abs(signed), signed_amount_paise: signed, items: 0,
         ordered_at: e.event_date || e.created_at || '', pay_requested_at: '',
-        paid_at: signed < 0 ? (e.event_date || '') : '', method: e.event_type || '',
-        reconciled: false, bank_ref: e.ref || '', note: e.note || '', source: e.source || '',
+        paid_at: signed < 0 ? (e.reconciled_at || e.event_date || '') : '', method: e.event_type || '',
+        reconciled: !!e.reconciled_at, ref: e.ref || '', bank_ref: e.bank_ref || '', note: e.note || '', source: e.source || '',
+        attachment_count: hasAtt ? e.attachment_count : 0,
+        attachments: e.attachments || [],
       });
     }
     for (const r of list) {
@@ -1370,12 +1526,22 @@ async function vendorLedger(db, days) {
       billed += amt;
       if (isPaid) { paid += amt; if (r.paid_at && r.paid_at > lastPaidAt) lastPaidAt = r.paid_at; }
       else outstanding += amt;
-      let itemCount = 0; try { itemCount = JSON.parse(r.items_json || '[]').length; } catch (e) {}
+      let items = [];
+      try { items = JSON.parse(r.items_json || '[]'); } catch (e) {}
+      const itemCount = Array.isArray(items) ? items.length : 0;
       trail.push({
         id: r.id, for_date: r.for_date, status: r.status, amount_paise: amt, items: itemCount,
         ordered_at: r.ordered_at || '', pay_requested_at: r.pay_requested_at || '',
         paid_at: r.paid_at || '', method: r.pay_method || '',
         reconciled: !!r.reconciled_at, bank_ref: r.bank_ref || '',
+        lines: (Array.isArray(items) ? items : []).map((i) => ({
+          item: i.item || i.name || '',
+          qty: i.qty == null ? '' : String(i.qty),
+          unit: i.unit || '',
+          price_paise: Math.max(0, Math.round(+i.price_paise || 0)),
+          direct: !!i.direct,
+          ref: i.ref || i.invoice_ref || '',
+        })),
       });
     }
     trail.sort((a, b) => String(b.paid_at || b.pay_requested_at || b.ordered_at || b.for_date || '').localeCompare(String(a.paid_at || a.pay_requested_at || a.ordered_at || a.for_date || '')));
@@ -1398,6 +1564,26 @@ async function vendorLedger(db, days) {
     (b.order_count - a.order_count) ||
     a.vendor_name.localeCompare(b.vendor_name));
   return { ok: true, days, vendors };
+}
+async function vendorMedia(env, db, url, auth) {
+  await ensureVendorAttachmentTable(db);
+  const id = Math.round(+url.searchParams.get('id') || 0);
+  if (!id) return json({ ok: false, error: 'id required' }, 400);
+  const row = await db.prepare(
+    `SELECT id, vendor_key, kind, r2_key, filename, mimetype, file_size_kb, created_at
+       FROM sauda_vendor_attachment WHERE id=?`
+  ).bind(id).first();
+  if (!row) return json({ ok: false, error: 'not found' }, 404);
+  if (!env?.EVIDENCE) return json({ ok: false, error: 'storage not configured' }, 500);
+  const obj = await env.EVIDENCE.get(row.r2_key);
+  if (!obj) return json({ ok: false, error: 'file missing' }, 404);
+  return new Response(await obj.arrayBuffer(), {
+    status: 200,
+    headers: {
+      'Content-Type': row.mimetype || obj.httpMetadata?.contentType || 'application/octet-stream',
+      'Content-Disposition': `inline; filename="${String(row.filename || 'invoice').replace(/"/g, '')}"`,
+    },
+  });
 }
 
 // ── Owner "to pay": ONE consolidated payment per vendor ──
@@ -1637,6 +1823,27 @@ async function autoSettle(db) {
               bank_event_id=?, bank_ref=?, reconciled_at=?, updated_at=? WHERE id=?`
     ).bind(now, (v.payRail === 'bank' ? 'bank_transfer' : 'upi'), m.bank_event_id, m.bank_ref, now, now, r.id).run();
     settled.push({ id: r.id, vendor: v.name, amount_paise: amt, bank_ref: m.bank_ref });
+  }
+  let eventRows = [];
+  try {
+    eventRows = ((await db.prepare(
+      `SELECT id, vendor_key, event_type, event_date, amount_paise, bank_event_id, bank_ref, reconciled_at
+         FROM sauda_vendor_event
+        WHERE active=1 AND (event_type='payment' OR event_type='credit') AND reconciled_at IS NULL
+          AND event_date >= date('now','-7 days')
+        ORDER BY id DESC LIMIT 200`).all()).results) || [];
+  } catch (e) { eventRows = []; }
+  for (const e of eventRows) {
+    const v = resolveVendor(vdir, e.vendor_key);
+    const amt = Math.abs(e.amount_paise || 0);
+    if (!hasPaymentRail(v) || !amt) continue;
+    const m = await findVendorDebit(db, v, amt, String(e.event_date || '').slice(0, 10) || '2000-01-01');
+    if (!m) continue;
+    await db.prepare(
+      `UPDATE sauda_vendor_event
+          SET bank_event_id=?, bank_ref=?, reconciled_at=?, updated_at=?
+        WHERE id=?`
+    ).bind(m.bank_event_id, m.bank_ref, now, now, e.id).run();
   }
   return { ok: true, settled, count: settled.length };
 }
