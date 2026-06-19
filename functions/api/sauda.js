@@ -484,6 +484,8 @@ function catalogNameKey(label) {
     .trim()
     .toLowerCase()
     .replace(/\bkabab\b/g, 'kebab')
+    .replace(/\bshawarama\b/g, 'shawarma')
+    .replace(/\bshawarma\s+chicken\s*\(?\s*boneless\s*\)?/g, 'shawarma chicken')
     .replace(/\broasted?\s+chicken\b/g, 'grill chicken')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
