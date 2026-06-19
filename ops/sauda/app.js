@@ -1009,12 +1009,21 @@
     var q=SET.q;
     var ce=document.getElementById('setChips'); if(ce) ce.classList.add('hide');
     var inc=SET.vendors.filter(function(v){return vendorMissing(v).length;});
+    var itemCount={}, itemIssues={};
+    SET.items.forEach(function(i){
+      if(!i.default_vendor) return;
+      itemCount[i.default_vendor]=(itemCount[i.default_vendor]||0)+1;
+      if(i.flagged||itemMissing(i).length) itemIssues[i.default_vendor]=(itemIssues[i.default_vendor]||0)+1;
+    });
     var rows=SET.vendors.filter(function(v){ if(SET.chip==='attn' && !vendorMissing(v).length) return false; return !q || (v.name+' '+(v.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
     function opts(arr,sel,lab){ return arr.map(function(x){return '<option value="'+esc(x)+'"'+(x===sel?' selected':'')+'>'+esc(lab?lab(x):x)+'</option>';}).join(''); }
     list.innerHTML='<div class="setcount">'+rows.length+' vendors · <b style="color:var(--amber)">'+inc.length+' to fill</b> · phone + UPI mandatory</div>'+
       '<button class="setadd" onclick="openAddVendor()">+ add vendor</button>'+rows.map(function(v){
       var vpa=(v.vpas&&v.vpas[0])||''; var miss=vendorMissing(v); var nc=miss.length?' need':'';
-      return '<div class="srow col'+nc+'" data-vrow="'+esc(v.vendor_key)+'"><div class="top"><div class="sl"><b>'+esc(v.name)+'</b><small>'+(miss.length?'<span style="color:var(--amber)">⚠ add '+miss.join(' / ')+'</span>':esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI')+'</small></div></div>'+
+      var cnt=itemCount[v.vendor_key]||0, iss=itemIssues[v.vendor_key]||0;
+      var meta=(miss.length?'<span style="color:var(--amber)">⚠ add '+miss.join(' / ')+'</span>':esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI')+
+        ' · '+cnt+' item'+(cnt===1?'':'s')+(iss?' · <span style="color:var(--amber)">'+iss+' item issue'+(iss===1?'':'s')+'</span>':'');
+      return '<div class="srow col'+nc+'" data-vrow="'+esc(v.vendor_key)+'"><div class="top"><div class="sl"><b>'+esc(v.name)+'</b><small>'+meta+'</small></div></div>'+
         '<div class="vendor-edit">'+
           '<input data-vph="'+esc(v.vendor_key)+'" inputmode="tel" value="'+esc(v.phone||'')+'" placeholder="phone required">'+
           '<input data-vpa="'+esc(v.vendor_key)+'" value="'+esc(vpa)+'" placeholder="UPI ID required">'+
@@ -1022,10 +1031,11 @@
           '<select data-vbrand="'+esc(v.vendor_key)+'">'+opts(SET_BRANDS,v.brand||'both')+'</select>'+
           '<select data-vf="'+esc(v.vendor_key)+'">'+opts(SET_FUL,v.fulfilment||'deliver')+'</select>'+
           '<select data-vpy="'+esc(v.vendor_key)+'">'+opts(SET_PAY,v.pay||'per',function(p){return p.replace('khata_','khata ');})+'</select>'+
-          '<button class="vsave" data-vsave="'+esc(v.vendor_key)+'">Save vendor</button>'+
+          '<div class="vendor-actions"><button class="vitemadd" data-vadditem="'+esc(v.vendor_key)+'">+ item for vendor</button><button class="vsave" data-vsave="'+esc(v.vendor_key)+'">Save vendor</button></div>'+
         '</div></div>';
     }).join('');
     list.querySelectorAll('[data-vsave]').forEach(function(b){ b.addEventListener('click',function(){ saveVendorFromRow(b.dataset.vsave); }); });
+    list.querySelectorAll('[data-vadditem]').forEach(function(b){ b.addEventListener('click',function(){ openAddItem(b.dataset.vadditem); }); });
   }
   function saveItem(code,fields,rerender){
     var it=SET.items.find(function(x){return x.item_code===code;}); if(it) for(var k in fields) it[k]=fields[k];
@@ -1108,34 +1118,82 @@
   document.getElementById('setSearch').addEventListener('input', function(){ SET.q=(this.value||'').trim().toLowerCase(); renderSettings(); });
   document.getElementById('setNeed').addEventListener('click', function(){ SET.chip=(SET.chip==='attn'?'all':'attn'); this.classList.toggle('on',SET.chip==='attn'); renderSettings(); });
   document.getElementById('setPdf').addEventListener('click', exportSettingsPDF);
-  // Clean, read-only PDF of the master (grouped by vendor, with status) → opens a print
-  // view the manager can Save-as-PDF. A "different form" from the editing grid.
+  // Clean, read-only A4 audit of the master. The manager prints/saves this,
+  // marks missing rates/units/vendors by hand, then updates the same Settings grid.
   function exportSettingsPDF(){
     if(!SET.items.length){ toast('Load settings first','err'); return; }
-    function vn(k){ if(!k) return '◇ No vendor'; var v=SET.vendors.find(function(x){return x.vendor_key===k;}); return v?v.name:k; }
-    function statusOf(i){ if(i.flagged) return 'CONFIRM'; if(i.price_mode==='live') return 'live (daily)'; if(i.price_paise>0) return 'set'; return 'NO PRICE'; }
-    function priceOf(i){ if(i.price_mode==='live') return 'today’s rate'; if(i.price_paise>0) return '₹'+(i.price_paise/100)+(i.form==='defined'&&i.pack_label?' / '+i.pack_label:(i.unit?' / '+i.unit:'')); return '—'; }
+    function vendorFor(k){ return SET.vendors.find(function(x){return x.vendor_key===k;}) || null; }
+    function vendorName(k){ if(!k) return 'UNASSIGNED'; var v=vendorFor(k); return v?v.name:k; }
+    function firstVpa(v){ return (v&&v.vpas&&v.vpas[0]) ? v.vpas[0] : ''; }
+    function payLabel(p){ return String(p||'per').replace('khata_','khata '); }
+    function statusOf(i){ var m=itemMissing(i); if(i.flagged) m.unshift('confirm'); if(i.price_mode==='live') m=m.filter(function(x){return x!=='price';}); return m.length?m.join(', '):(i.price_mode==='live'?'daily rate':'ready'); }
+    function priceOf(i){
+      if(i.price_mode==='live') return 'daily rate';
+      if(i.price_paise>0) return 'Rs '+(Math.round(i.price_paise)/100).toLocaleString('en-IN')+(i.form==='defined'&&i.pack_label?' / '+i.pack_label:(i.unit?' / '+i.unit:''));
+      return '';
+    }
+    function billBasis(i){
+      if(i.price_mode==='live') return 'enter today rate x qty';
+      if(i.form==='defined'&&i.pack_label) return 'qty packs x rate';
+      if(i.unit) return 'qty '+i.unit+' x rate';
+      return 'qty x rate';
+    }
     var by={}; SET.items.forEach(function(i){ var k=i.default_vendor||''; (by[k]=by[k]||[]).push(i); });
-    var keys=Object.keys(by).sort(function(a,b){ if(!a) return 1; if(!b) return -1; return by[b].length-by[a].length; });
-    var done=SET.items.filter(function(i){return !i.flagged && (i.price_paise>0||i.price_mode==='live');}).length;
+    SET.vendors.forEach(function(v){ if(!by[v.vendor_key]) by[v.vendor_key]=[]; });
+    var keys=Object.keys(by).sort(function(a,b){
+      if(!a) return -1; if(!b) return 1;
+      var va=vendorName(a).toLowerCase(), vb=vendorName(b).toLowerCase();
+      return va<vb?-1:(va>vb?1:0);
+    });
+    var vendorBad=SET.vendors.filter(function(v){return vendorMissing(v).length;});
+    var itemBad=SET.items.filter(function(i){return i.flagged||itemMissing(i).length;});
+    var noVendor=SET.items.filter(function(i){return !i.default_vendor;}).length;
+    var noUnit=SET.items.filter(function(i){return !i.unit;}).length;
+    var noPrice=SET.items.filter(function(i){return i.price_mode!=='live'&&!(i.price_paise>0);}).length;
+    var live=SET.items.filter(function(i){return i.price_mode==='live';}).length;
+    var ready=SET.items.length-itemBad.length;
+    var today=new Date().toLocaleString('en-IN');
+    var fixRows='';
+    vendorBad.forEach(function(v){
+      fixRows+='<tr class="bad"><td>Vendor</td><td>'+esc(v.name)+'</td><td colspan="4">'+esc(vendorMissing(v).join(', '))+'</td><td></td></tr>';
+    });
+    itemBad.slice(0,80).forEach(function(i){
+      fixRows+='<tr class="bad"><td>Item</td><td>'+esc(i.label)+'</td><td>'+esc(vendorName(i.default_vendor||''))+'</td><td>'+esc(i.unit||'')+'</td><td>'+esc(priceOf(i))+'</td><td>'+esc(statusOf(i))+'</td><td></td></tr>';
+    });
+    if(itemBad.length>80) fixRows+='<tr class="bad"><td colspan="7">'+(itemBad.length-80)+' more item issue(s) shown in vendor sections below.</td></tr>';
     var body='';
     keys.forEach(function(k){
-      body+='<h2>'+esc(vn(k))+' <span class="n">'+by[k].length+'</span></h2><table><tr><th>Item</th><th>Type</th><th>Price</th><th>Status</th></tr>';
+      var v=vendorFor(k), vm=v?vendorMissing(v):['vendor'];
+      var vmeta=v
+        ? '<b>Phone:</b> '+esc(v.phone||'MISSING')+' &nbsp; <b>UPI:</b> '+esc(firstVpa(v)||'MISSING')+' &nbsp; <b>Supplies:</b> '+esc(v.cat||'')+' &nbsp; <b>Pay:</b> '+esc(payLabel(v.pay))+' &nbsp; <b>Fulfilment:</b> '+esc(v.fulfilment||'')
+        : 'Items below do not have a vendor mapped yet.';
+      body+='<section><h2>'+esc(vendorName(k))+' <span class="n">'+by[k].length+' item'+(by[k].length===1?'':'s')+'</span></h2>'+
+        '<div class="vmeta '+((v&&vm.length)||!v?'warn':'')+'">'+vmeta+'</div>'+
+        '<table><tr><th>Item</th><th>Unit / pack</th><th>Saved rate</th><th>Bill basis</th><th>Status / missing</th><th>Today qty</th><th>Bill Rs / correction</th></tr>';
       by[k].sort(function(a,b){return a.label.localeCompare(b.label);}).forEach(function(i){
-        var cls=i.flagged?' class="c"':((i.price_paise>0||i.price_mode==='live')?'':' class="x"');
-        body+='<tr'+cls+'><td>'+esc(i.label)+'</td><td>'+(i.form==='defined'?('SKU'+(i.brand?' · '+esc(i.brand):'')):'loose')+'</td><td>'+esc(priceOf(i))+'</td><td>'+statusOf(i)+'</td></tr>';
+        var miss=itemMissing(i), bad=i.flagged||miss.length;
+        var cls=bad?' class="bad"':(i.price_mode==='live'?' class="live"':'');
+        var pack=i.form==='defined' ? [('SKU'), i.brand, i.pack_label].filter(Boolean).join(' · ') : 'loose';
+        var up=[i.unit||'NO UNIT', pack].filter(Boolean).join(' / ');
+        body+='<tr'+cls+'><td>'+esc(i.label)+'</td><td>'+esc(up)+'</td><td>'+esc(priceOf(i)||'NO PRICE')+'</td><td>'+esc(billBasis(i))+'</td><td>'+esc(statusOf(i))+'</td><td></td><td></td></tr>';
       });
-      body+='</table>';
+      body+='</table></section>';
     });
     var html='<!doctype html><html><head><meta charset="utf-8"><title>Sauda · Vendor Price List</title>'+
       '<style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;margin:22px;color:#1a1a1a}'+
-      'h1{font-size:19px;margin:0 0 2px}.sub{color:#777;font-size:12px;margin-bottom:14px}'+
-      'h2{font-size:14px;margin:16px 0 5px;color:#581810;border-bottom:2px solid #581810;padding-bottom:3px}'+
-      'h2 .n{color:#aaa;font-weight:400}table{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:6px}'+
-      'th{text-align:left;background:#f3efe8;padding:4px 7px;border-bottom:1px solid #ccc}'+
-      'td{padding:4px 7px;border-bottom:1px solid #eee}tr.c td{background:#fff6e2}tr.x td{color:#b00;font-style:italic}'+
-      '@media print{h2{break-after:avoid}}</style></head><body>'+
-      '<h1>Sauda — Local Vendor Price List</h1><div class="sub">'+SET.items.length+' items · '+done+' priced · generated '+new Date().toLocaleString('en-IN')+'</div>'+
+      '@page{size:A4 landscape;margin:9mm}h1{font-size:20px;margin:0 0 3px}.sub{color:#666;font-size:11.5px;margin-bottom:10px}'+
+      '.printbar{position:sticky;top:0;background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px;margin-bottom:10px;display:flex;gap:8px;align-items:center}.printbar button{padding:7px 12px;border:0;border-radius:7px;background:#581810;color:#fff;font-weight:700}.printbar span{font-size:12px;color:#555}'+
+      '.summary{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:8px 0 10px}.box{border:1px solid #ddd;border-radius:6px;padding:6px}.box b{display:block;font-size:16px}.box span{font-size:10.5px;color:#666;text-transform:uppercase;letter-spacing:.03em}'+
+      'h2{font-size:13.5px;margin:13px 0 4px;color:#581810;border-bottom:2px solid #581810;padding-bottom:3px;break-after:avoid}h2 .n{color:#999;font-weight:400}'+
+      '.vmeta{font-size:10.5px;color:#444;margin:0 0 5px}.vmeta.warn{color:#b00020;font-weight:600}section{break-inside:avoid}'+
+      'table{width:100%;border-collapse:collapse;font-size:10.2px;margin-bottom:7px}th{text-align:left;background:#f3efe8;padding:4px 5px;border:1px solid #d7d1c7}td{padding:4px 5px;border:1px solid #e3e3e3;vertical-align:top}'+
+      'tr.bad td{background:#fff1dd;color:#7a2200;font-weight:600}tr.live td{background:#eef6ff}.fix h2{color:#7a2200;border-color:#7a2200}.blank{height:18px}'+
+      '@media print{body{margin:0}.printbar{display:none}h2{break-after:avoid}section{break-inside:avoid}.summary{break-after:avoid}}</style></head><body>'+
+      '<div class="printbar"><button onclick="window.print()">Print / Save PDF</button><span>A4 landscape · use this to fill missing unit, rate, vendor, and today bill amount.</span></div>'+
+      '<h1>Sauda — Vendor Item Price Audit</h1><div class="sub">Generated '+esc(today)+' · payment must be built from item quantity x item rate, not a loose number.</div>'+
+      '<div class="summary"><div class="box"><b>'+SET.vendors.length+'</b><span>vendors</span></div><div class="box"><b>'+vendorBad.length+'</b><span>vendor gaps</span></div><div class="box"><b>'+SET.items.length+'</b><span>items</span></div><div class="box"><b>'+ready+'</b><span>ready</span></div><div class="box"><b>'+noVendor+'</b><span>no vendor</span></div><div class="box"><b>'+noUnit+'</b><span>no unit</span></div><div class="box"><b>'+noPrice+'</b><span>no price</span></div></div>'+
+      '<section class="fix"><h2>Fix Before Payment <span class="n">'+(vendorBad.length+itemBad.length)+' issue'+((vendorBad.length+itemBad.length)===1?'':'s')+' · '+live+' daily-rate item'+(live===1?'':'s')+'</span></h2>'+
+      '<table><tr><th>Type</th><th>Name</th><th>Vendor</th><th>Unit</th><th>Rate</th><th>Missing / status</th><th>Correction</th></tr>'+(fixRows||'<tr><td colspan="7">No master-data gaps found.</td></tr>')+'</table></section>'+
       body+'</body></html>';
     var w=window.open('','_blank');
     if(!w){ toast('Allow pop-ups to export the PDF','err'); return; }
