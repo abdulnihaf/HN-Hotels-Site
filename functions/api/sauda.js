@@ -147,7 +147,7 @@ export async function onRequest(context) {
     }
     if (action === 'purchase-prices' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
-      return withCors(json(await purchasePrices(db, body, auth)), request);
+      return withCors(json(await purchasePrices(db, body, auth, env)), request);
     }
     if (action === 'mark-paid' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
@@ -593,13 +593,14 @@ function purchaseTotal(items) {
 }
 function ledgerEventType(value) {
   const t = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
-  return ['opening', 'bill', 'payment', 'credit', 'debit', 'adjustment'].includes(t) ? t : 'adjustment';
+  return ['opening', 'bill', 'payment', 'credit', 'debit', 'adjustment', 'receipt'].includes(t) ? t : 'adjustment';
 }
 function ledgerEventAmount(e) {
   const src = e || {};
   let amt = Math.round(+src.signed_amount_paise || +src.amount_paise || 0);
   if (!amt && src.amount_rupees != null) amt = Math.round(+src.amount_rupees * 100);
   const type = ledgerEventType(src.event_type || src.type);
+  if (type === 'receipt') return 0;
   if (['payment', 'credit'].includes(type)) return -Math.abs(amt);
   if (['opening', 'bill', 'debit'].includes(type)) return Math.abs(amt);
   return amt;
@@ -1372,7 +1373,7 @@ async function vendorEvent(db, body, auth, env) {
     const eventDate = String((raw && (raw.event_date || raw.date)) || todayIST()).slice(0, 10);
     const type = ledgerEventType(raw && (raw.event_type || raw.type));
     const amount = ledgerEventAmount({ ...(raw || {}), event_type: type });
-    if (!amount) return { ok: false, error: 'amount required', vendor: v.name };
+    if (!amount && type !== 'receipt') return { ok: false, error: 'amount required', vendor: v.name };
     const ref = String((raw && (raw.ref || raw.invoice_ref || raw.invoice_no)) || '').trim().slice(0, 120);
     const note = String((raw && raw.note) || '').trim().slice(0, 500);
     const source = String((raw && raw.source) || (body && body.source) || 'manual').trim().slice(0, 40);
@@ -1649,10 +1650,34 @@ async function requestPay(db, body) {
   return { ok: true, ids, amount_paise: amt };
 }
 
+async function recordReceiptEvent(db, env, vendorKey, eventDate, orderIds, amountPaise, ref, attachment, by) {
+  await ensureVendorEventTable(db);
+  await ensureVendorAttachmentTable(db);
+  const date = String(eventDate || todayIST()).slice(0, 10);
+  const ids = Array.isArray(orderIds) ? orderIds.map((x) => Math.round(+x || 0)).filter(Boolean).sort((a, b) => a - b) : [];
+  const cleanRef = String(ref || '').trim().slice(0, 120);
+  const note = `Receipt/rates saved for order${ids.length === 1 ? '' : 's'} ${ids.join(', ')}${amountPaise ? `; bill Rs ${(amountPaise / 100).toLocaleString('en-IN')}` : ''}`;
+  const key = ['receipt', vendorKey, date, ids.join(','), norm(cleanRef)].join('|').slice(0, 420);
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  await db.prepare(
+    `INSERT INTO sauda_vendor_event (vendor_key,event_type,event_date,amount_paise,ref,note,source,active,event_key,created_by,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(event_key) DO UPDATE SET
+       ref=excluded.ref,
+       note=excluded.note,
+       active=excluded.active,
+       updated_at=excluded.updated_at`
+  ).bind(vendorKey, 'receipt', date, 0, cleanRef, note, 'purchase_prices_ui', 1, key, by || '', now, now).run();
+  const row = await db.prepare(`SELECT id FROM sauda_vendor_event WHERE event_key=?`).bind(key).first();
+  const attInfo = parseAttachmentPayload({ attachment });
+  if (attInfo && row && row.id) await storeVendorAttachment(db, env || {}, vendorKey, row.id, attInfo, date, by || '');
+  return { id: row?.id || null, event_date: date, ref: cleanRef, attachment_count: attInfo ? 1 : 0 };
+}
+
 // Live-priced vendors (chicken, mutton, vegetables) can receive the rate later
 // in the day. The bill amount must then be recomputed from the saved order lines,
 // not typed as an unrelated total.
-async function purchasePrices(db, body, auth) {
+async function purchasePrices(db, body, auth, env) {
   const updates = Array.isArray(body && body.lines) ? body.lines : [];
   if (!updates.length) return { ok: false, error: 'no rate lines' };
   const byId = new Map();
@@ -1673,9 +1698,10 @@ async function purchasePrices(db, body, auth) {
   let changed = 0;
   let total = 0;
   const orders = [];
+  const vdir = await getVendorDirectory(db);
   for (const [id, lines] of byId.entries()) {
     const row = await db.prepare(
-      `SELECT id, items_json, status, paid_at FROM sauda_purchase
+      `SELECT id, vendor_name, for_date, items_json, status, paid_at FROM sauda_purchase
         WHERE id=? AND (pay_timing IS NULL OR pay_timing != 'online')`
     ).bind(id).first();
     if (!row) continue;
@@ -1698,9 +1724,16 @@ async function purchasePrices(db, body, auth) {
     );
     if (row.status === 'REQUESTED') await stmt.bind(JSON.stringify(items), expected, now, expected, id).run();
     else await stmt.bind(JSON.stringify(items), expected, now, id).run();
-    orders.push({ id, expected_amount_paise: expected, items: items.length });
+    orders.push({ id, vendor_name: row.vendor_name || '', vendorKey: resolveVendor(vdir, row.vendor_name).key, for_date: row.for_date || '', expected_amount_paise: expected, items: items.length });
   }
-  return { ok: true, changed, total_paise: total, orders, updated_by: (auth && auth.u) || '' };
+  let receipt = null;
+  const ref = String((body && (body.receipt_ref || body.ref || body.invoice_ref)) || '').trim();
+  const attachment = body && (body.attachment || body.file || body.media);
+  if (orders.length && (ref || attachment)) {
+    const first = orders[0];
+    receipt = await recordReceiptEvent(db, env || {}, first.vendorKey, (body && body.receipt_date) || first.for_date || todayIST(), orders.map((o) => o.id), total, ref, attachment, (auth && auth.u) || '');
+  }
+  return { ok: true, changed, total_paise: total, orders, receipt, updated_by: (auth && auth.u) || '' };
 }
 
 // ── Bank-feed match: find the debit that proves this vendor was paid ──

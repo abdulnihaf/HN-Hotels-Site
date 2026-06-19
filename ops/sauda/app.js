@@ -75,6 +75,7 @@
     window.addEventListener('pagehide', saveWork);
     document.addEventListener('visibilitychange', function(){ if(document.hidden) saveWork(); }); }
   function fmtDate(){ var d=new Date(Date.now()+330*60000); return d.toUTCString().slice(0,11); }
+  function ymdIST(offsetDays){ var d=new Date(Date.now()+330*60000+(offsetDays||0)*86400000); return d.toISOString().slice(0,10); }
 
   function loadCatalog(){
     api('catalog').then(function(res){
@@ -336,6 +337,16 @@
   }
   function paymentRail(v){ return v&&v.vpa ? 'upi' : (validBankObj(bankObj(v)) ? 'bank' : 'manual'); }
   function payMethodForRail(rail){ return rail==='bank' ? 'bank_transfer' : (rail==='upi' ? 'upi' : 'manual_bank'); }
+  function businessDateLabel(fd, noun){
+    var L=fmtDayLabel(fd), base=L.t&&L.t!=='—'?L.t:(fd||'Dated');
+    return base + (noun ? (' '+noun) : '') + (L.sub ? ' · '+L.sub : '');
+  }
+  function orderNeedsRate(t){
+    if(!t || t.event) return false;
+    var st=String(t.status||'').toUpperCase();
+    if(st==='PAID'||st==='CANCELLED') return false;
+    return (t.lines||[]).some(function(i){ return !i.direct && qtyNum(i.qty)>0 && !(+i.price_paise>0); });
+  }
 
   function loadPay(){
     var list=document.getElementById('payList'), empty=document.getElementById('payEmpty');
@@ -351,16 +362,19 @@
         var amt=o.pay_amount_paise?String(o.pay_amount_paise/100):'';
         var rateItems=items.filter(function(i){ return i && i.order_id && i.line_idx!=null && !i.direct && qtyNum(i.qty)>0; });
         var needsRate=rateItems.some(function(i){ return !(+i.price_paise>0); });
+        var dayLine = o.for_date ? '<div class="flowhint"><b>'+esc(businessDateLabel(o.for_date,'purchase'))+'</b></div>' : '';
         var rateBox='';
         if(rateItems.length){
-          rateBox='<div class="ratebox" data-ratebox><div class="ratehead"><b>Live rates</b><span>'+esc(o.vendor_name)+'</span></div>'+
+          rateBox='<div class="ratebox" data-ratebox><div class="ratehead"><b>Receipt rates</b><span>'+esc(o.vendor_name)+'</span></div>'+
+            '<div class="ratehint">Enter the rates from the vendor receipt. Sauda totals the bill from qty x rate.</div>'+
             rateItems.map(function(i){
               var q=qtyNum(i.qty), p=+i.price_paise||0, line=Math.round(q*p);
               return '<div class="raterow"><div class="ri"><b>'+esc(i.item||'')+'</b><small>'+esc(String(i.qty||''))+(i.unit?' '+esc(i.unit):'')+(line?' · ₹'+rupees(line):'')+'</small></div>'+
                 '<span class="rs">₹</span><input inputmode="decimal" data-rate data-order="'+esc(i.order_id)+'" data-idx="'+esc(i.line_idx)+'" value="'+(p>0?esc(String(p/100)):'')+'" placeholder="rate">'+
                 '<span class="pu">'+(i.unit?('/ '+esc(i.unit)):'')+'</span></div>';
             }).join('')+
-            '<button class="save-rates" data-save-rates>Save live rates</button></div>';
+            '<div class="receiptrow"><input data-receipt-ref placeholder="receipt / bill no. optional"><input data-receipt-file type="file" accept="application/pdf,image/*,.pdf"></div>'+
+            '<button class="save-rates" data-save-rates>Save receipt rates</button></div>';
         }
         var ids=(o.ids||[]).join(',');
         var multi=(o.order_count>1)?'<span class="tag p">'+items.length+' items · '+o.order_count+' orders</span>':'<span class="tag p">'+items.length+' item'+(items.length>1?'s':'')+'</span>';
@@ -373,7 +387,7 @@
         var payClass=o.vpa?'upi':(rail==='bank'?'upi bank':'upi dis');
         html+='<div class="basket"><div class="bh"><span class="bn">'+esc(o.vendor_name)+'</span>'+
           '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span>'+multi+'</div>'+
-          '<div class="pb" data-needs-rate="'+(needsRate?'1':'0')+'">'+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+rateBox+
+          '<div class="pb" data-needs-rate="'+(needsRate?'1':'0')+'">'+dayLine+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+rateBox+
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
           '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt '+(rateItems.length?'readonly':'')+' value="'+esc(amt)+'" placeholder="'+(rateItems.length?'auto after rates':'one payment for all items')+'"></div>'+
           '<div class="pay-acts">'+
@@ -390,9 +404,23 @@
           if(missing){ toast('Enter every live rate first','err'); return; }
           if(busy) return; busy=true; b.disabled=true; b.textContent='Saving...';
           var lines=inputs.map(function(inp){ return { id:+inp.dataset.order, line_idx:+inp.dataset.idx, price_paise:Math.round(num(inp.value)*100) }; });
-          api('purchase-prices',{method:'POST',body:{lines:lines}})
-            .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Live rates saved · bill updated','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'rate save failed','err'); b.disabled=false; b.textContent='Save live rates'; } })
-            .catch(function(){ busy=false; b.disabled=false; b.textContent='Save live rates'; toast('No connection','err'); });
+          var body={lines:lines};
+          var refEl=pb.querySelector('[data-receipt-ref]');
+          var fileEl=pb.querySelector('[data-receipt-file]');
+          var ref=(refEl&&refEl.value||'').trim();
+          if(ref) body.receipt_ref=ref;
+          function sendRates(){
+            api('purchase-prices',{method:'POST',body:body})
+              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Receipt rates saved · bill updated','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'rate save failed','err'); b.disabled=false; b.textContent='Save receipt rates'; } })
+              .catch(function(){ busy=false; b.disabled=false; b.textContent='Save receipt rates'; toast('No connection','err'); });
+          }
+          var file=fileEl&&fileEl.files&&fileEl.files[0];
+          if(file){
+            readFileAsDataUrl(file).then(function(dataUrl){
+              body.attachment={name:file.name,mimetype:file.type||'application/octet-stream',data_url:dataUrl};
+              sendRates();
+            }).catch(function(){ busy=false; b.disabled=false; b.textContent='Save receipt rates'; toast('Could not read receipt','err'); });
+          } else sendRates();
         });
       });
       list.querySelectorAll('button[data-pay]').forEach(function(b){
@@ -519,9 +547,12 @@
     if(PAYOUT_LIVE){ openDirectPayout(vk, name, vpa, bank); return; }
     var railLine=vpa?esc(vpa):(validBankObj(bank)?esc(bankSummary(bank)):'No UPI/bank saved · manual record only');
     var host=document.getElementById('sheetHost');
+    var today=ymdIST(0), yesterday=ymdIST(-1);
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Invoice + payment</h2>'+
-      '<div class="skuhint">Upload the invoice PDF/photo, enter only the amount, and Sauda saves the vendor bill and the payment trail together. No invoice number or date entry.</div>'+
+      '<div class="skuhint">Use this for a vendor bill that is not already sitting in To pay. Pick the purchase date so yesterday’s Mountain Dew or any late-entered bill stays under the right business day.</div>'+
       '<div class="fld" style="margin-top:11px"><label>Invoice PDF / photo</label><input id="dpFile" type="file" accept="application/pdf,image/*,.pdf"></div>'+
+      '<div class="fld"><label>Purchase date</label><input id="dpDate" type="date" value="'+esc(today)+'"></div>'+
+      '<div class="quickdates"><button data-dpdate="'+esc(today)+'">Today</button><button data-dpdate="'+esc(yesterday)+'">Yesterday</button></div>'+
       '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" id="dpAmt" placeholder="invoice amount"></div>'+
       '<div class="fld" style="margin-top:11px"><label>Reference / note</label><input id="dpRef" placeholder="optional"></div>'+
       '<label class="skuhint" style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="dpPaid" type="checkbox" checked><span>Payment already done</span></label>'+
@@ -529,6 +560,7 @@
       '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Save invoice + payment</button>'+
       '</div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
+    host.querySelectorAll('[data-dpdate]').forEach(function(b){ b.addEventListener('click',function(){ var el=document.getElementById('dpDate'); if(el) el.value=b.dataset.dpdate; }); });
     var amtEl=document.getElementById('dpAmt'); if(amtEl) amtEl.focus();
     document.getElementById('dpGo').addEventListener('click',function(){
       var rs=num(document.getElementById('dpAmt').value);
@@ -536,6 +568,7 @@
       if(busy) return; busy=true;
       var btn=document.getElementById('dpGo'); btn.disabled=true; btn.textContent='Saving...';
       var ref=(document.getElementById('dpRef').value||'').trim();
+      var eventDate=(document.getElementById('dpDate')&&document.getElementById('dpDate').value||today).slice(0,10);
       var note=ref ? ('Invoice '+ref) : '';
       var paid = !!(document.getElementById('dpPaid') && document.getElementById('dpPaid').checked);
       var file = document.getElementById('dpFile') && document.getElementById('dpFile').files && document.getElementById('dpFile').files[0];
@@ -553,7 +586,7 @@
         }).catch(function(){ busy=false; btn.disabled=false; btn.textContent='Save invoice + payment'; toast('No connection','err'); });
       }
       function buildEvents(){
-        var events=[{vendorKey:vk, event_type:'bill', amount_paise:Math.round(rs*100), ref:ref, note:note, source:'manual_ui'}];
+        var events=[{vendorKey:vk, event_type:'bill', event_date:eventDate, amount_paise:Math.round(rs*100), ref:ref, note:note, source:'manual_ui'}];
         if(file){
           readFileAsDataUrl(file).then(function(dataUrl){
             events[0].attachment = { name:file.name, mimetype:file.type||'application/octet-stream', data_url:dataUrl };
@@ -1036,17 +1069,33 @@
   // ── Vendor diary — per-vendor records: paid / outstanding / full trail ──
   function fmtTs(s){ if(!s) return ''; try{ return String(s).slice(0,16).replace('T',' '); }catch(e){ return s; } }
   var VDIARY={q:'',filter:'all'};
-  function lineBrief(lines){
+  function lineBrief(lines, pendingRate){
     if(!Array.isArray(lines)||!lines.length) return '';
     return lines.slice(0,5).map(function(i){
       var q=[i.qty||'', i.unit||''].filter(Boolean).join(' ');
-      var p=+i.price_paise>0 ? (' · ₹'+rupees(i.price_paise)+(i.unit?'/'+i.unit:'')) : '';
+      var p=+i.price_paise>0 ? (' · ₹'+rupees(i.price_paise)+(i.unit?'/'+i.unit:'')) : (pendingRate&&!i.direct?' · rate pending':'');
       return [i.item||i.name||'', q].filter(Boolean).join(' ') + p;
     }).filter(Boolean).join(' · ') + (lines.length>5 ? ' · +' +(lines.length-5)+' more' : '');
   }
+  function diaryStage(t, signed){
+    var st=String(t&&t.status||'').toUpperCase();
+    var date=t&&t.for_date||'';
+    if(t&&t.event){
+      if(st==='OPENING') return {badge:'OPEN', tone:'amber', title:'Opening balance', noun:'balance'};
+      if(st==='BILL') return {badge:'BILL', tone:'amber', title:businessDateLabel(date,'bill'), noun:'bill'};
+      if(st==='PAYMENT') return {badge:'PAID', tone:'ok', title:businessDateLabel(date,'payment'), noun:'payment'};
+      if(st==='RECEIPT') return {badge:'RCPT', tone:'amber', title:businessDateLabel(date,'receipt'), noun:'receipt'};
+      return {badge:st||'EVENT', tone:signed<0?'ok':'dim', title:businessDateLabel(date,'entry'), noun:'entry'};
+    }
+    if(orderNeedsRate(t)) return {badge:'RCPT DUE', tone:'amber', title:businessDateLabel(date,'purchase')+' · receipt/rate pending', noun:'purchase'};
+    if(st==='ORDERED') return {badge:'BILL READY', tone:(+t.amount_paise>0?'amber':'dim'), title:businessDateLabel(date,'purchase')+' · bill ready', noun:'purchase'};
+    if(st==='REQUESTED') return {badge:'TO PAY', tone:'amber', title:businessDateLabel(date,'purchase')+' · payment pending', noun:'purchase'};
+    if(st==='PAID') return {badge:'PAID', tone:'ok', title:businessDateLabel(date,'purchase')+' · paid', noun:'purchase'};
+    return {badge:st||'ORDER', tone:'dim', title:businessDateLabel(date,'purchase'), noun:'purchase'};
+  }
   function vendorHay(v){
     var trail=(v.trail||[]).map(function(t){
-      return [t.status,t.for_date,t.ref,t.bank_ref,t.note,lineBrief(t.lines),(t.attachments||[]).map(function(a){return a.filename;}).join(' ')].join(' ');
+      return [t.status,t.for_date,t.ref,t.bank_ref,t.note,diaryStage(t,+t.signed_amount_paise||0).title,lineBrief(t.lines,orderNeedsRate(t)),(t.attachments||[]).map(function(a){return a.filename;}).join(' ')].join(' ');
     }).join(' ');
     return [v.vendorKey,v.vendor_name,v.cat,v.vpa,v.bankLabel,v.bank&&v.bank.account_name,v.bank&&v.bank.account_number,v.bank&&v.bank.ifsc,trail].join(' ').toLowerCase();
   }
@@ -1097,11 +1146,13 @@
       if(!rows.length){ list.innerHTML='<div class="empty">No matching vendor trail.</div>'; return; }
       list.innerHTML=rows.map(function(v,vi){
         var rail=v.payRail || paymentRail(v), bank=bankObj(v), bankText=bankSummary(bank);
+        var pendingRates=(v.trail||[]).filter(orderNeedsRate).length;
         var trail=(v.trail||[]).map(function(t){
           var signed = (typeof t.signed_amount_paise==='number') ? t.signed_amount_paise : (+t.amount_paise||0);
           var amtText = (signed<0?'-':'')+'₹'+rupees(Math.abs(signed));
           var isEvent = !!t.event;
-          var itemLine = isEvent ? '' : lineBrief(t.lines);
+          var stage=diaryStage(t, signed);
+          var itemLine = isEvent ? '' : lineBrief(t.lines, orderNeedsRate(t));
           var atts = Array.isArray(t.attachments) ? t.attachments : [];
           var attHtml = atts.length ? '<span class="attrow">'+atts.map(function(a){
             return '<button class="attbtn" data-att="'+esc(a.id)+'">'+esc(a.kind||'invoice')+(a.filename?' · '+esc(a.filename):'')+'</button>';
@@ -1112,30 +1163,29 @@
           var when = isEvent
             ? ((t.method||'ledger')+' · '+(t.for_date||'')+(t.reconciled?' · ✓ bank':'' )).replace(/\s+·\s+$/,'')
             : (t.paid_at?('paid '+fmtTs(t.paid_at)+(t.method?' · '+esc(t.method):'')+(t.reconciled?' · ✓ bank':'')) : (t.pay_requested_at?('asked '+fmtTs(t.pay_requested_at)) : ('placed '+fmtTs(t.ordered_at))));
-          var stcls = (signed<0 || t.status==='PAID')?'ok':(t.status==='REQUESTED'||t.status==='BILL'||t.status==='OPENING'?'amber':'dim');
-          return '<div class="tr"><span class="ts '+stcls+'">'+esc(t.status||'')+'</span>'+
-            '<span class="ti">'+esc(t.for_date||'')+' · '+esc(detail||'ledger')+'</span>'+
+          return '<div class="tr"><span class="ts '+stage.tone+'">'+esc(stage.badge)+'</span>'+
+            '<span class="ti"><b>'+esc(stage.title)+'</b>'+(detail?'<small>'+esc(detail)+'</small>':'')+'</span>'+
             '<span class="ta '+(signed<0?'neg':'')+'">'+esc(amtText)+'</span>'+
             '<span class="tw">'+esc(when)+'</span>'+attHtml+'</div>';
         }).join('');
         var right = v.outstanding_paise>0 ? '<span class="due">₹'+rupees(v.outstanding_paise)+' due</span>'
                   : (v.entry_count>0 ? '<span class="clr">clear</span>' : '');
         var meta = v.entry_count>0
-          ? '<span>'+v.order_count+' order'+(v.order_count!==1?'s':'')+'</span><span>billed ₹'+rupees(v.billed_paise||0)+'</span><span>paid ₹'+rupees(v.paid_paise)+'</span>'+(v.last_paid_at?'<span>last '+esc(fmtTs(v.last_paid_at))+'</span>':'')
+          ? '<span>'+v.order_count+' order'+(v.order_count!==1?'s':'')+'</span>'+(pendingRates?'<span style="color:var(--amber)">receipt/rate pending '+pendingRates+'</span>':'')+'<span>billed ₹'+rupees(v.billed_paise||0)+'</span><span>paid ₹'+rupees(v.paid_paise)+'</span>'+(v.last_paid_at?'<span>last '+esc(fmtTs(v.last_paid_at))+'</span>':'')
           : '<span>'+esc(v.cat||'no orders in 30 days')+'</span>';
         var railText=v.vpa?esc(v.vpa):(bankText?esc(bankText):'manual only'+(v.cat?' · '+esc(v.cat):''));
-        var buttonText='Save invoice + payment';
+        var buttonText=pendingRates?'Enter receipt / rates':'Save invoice + payment';
         return '<div class="ven"><div class="vhd" data-vi="'+vi+'">'+
           '<div class="vleft"><span class="bn">'+esc(v.vendor_name)+'</span>'+
             '<span class="tag f">'+esc(v.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(v.payLabel||'')+'</span></div>'+
           '<div class="vright">'+right+'</div></div>'+
           '<div class="vpay"><span class="vid">'+railText+'</span>'+
-            '<button class="paynow'+(v.vpa?'':' manual')+'" data-vk="'+esc(v.vendorKey)+'" data-vn="'+esc(v.vendor_name)+'" data-vpa="'+esc(v.vpa||'')+'" data-bank="'+esc(JSON.stringify(bank||{}))+'">'+buttonText+'</button></div>'+
+            '<button class="paynow'+(pendingRates?' receipt':'')+(v.vpa?'':' manual')+'" data-act="'+(pendingRates?'rates':'invoice')+'" data-vk="'+esc(v.vendorKey)+'" data-vn="'+esc(v.vendor_name)+'" data-vpa="'+esc(v.vpa||'')+'" data-bank="'+esc(JSON.stringify(bank||{}))+'">'+buttonText+'</button></div>'+
           '<div class="vmeta">'+meta+'</div>'+
           '<div class="vtrail hide" id="vt'+vi+'">'+(trail||'<div style="padding:8px;color:var(--mute)">No orders in the last 30 days.</div>')+'</div></div>';
       }).join('');
       list.querySelectorAll('.vhd[data-vi]').forEach(function(h){ h.addEventListener('click',function(){ var el=document.getElementById('vt'+h.dataset.vi); if(el) el.classList.toggle('hide'); }); });
-      list.querySelectorAll('.paynow').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openDirectPay(b.dataset.vk, b.dataset.vn, b.dataset.vpa, parseJsonAttr(b.dataset.bank)); }); });
+      list.querySelectorAll('.paynow').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); if(b.dataset.act==='rates'){ setMode('pay'); toast('Open the vendor card in To pay and enter receipt rates','info'); return; } openDirectPay(b.dataset.vk, b.dataset.vn, b.dataset.vpa, parseJsonAttr(b.dataset.bank)); }); });
       list.querySelectorAll('[data-att]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openVendorMedia(b.dataset.att); }); });
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
