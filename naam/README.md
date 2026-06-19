@@ -1,4 +1,4 @@
-# Naam — view-only marketing surface
+# Naam — marketing decision surface
 
 > **Naam** — how the world comes to know I exist.
 > A mobile-first PWA for iPhone 17 Pro that gives glance-and-act visibility over
@@ -14,11 +14,16 @@ It kills the heavy ritual. Today, to act on Meta/Google you make Claude pull
 exhaustive context first — and because that's heavy, small marketing moves get
 delayed. Naam puts the **trigger data** in front of you: each lane's glance
 metric + the *one pending next-action*. You see *what needs you* at a glance,
-then go **execute in Claude on the laptop**.
+then make the first decision from the phone.
 
-**View-only. No execution happens in Naam.** Every "next action" routes you to
-the Claude lane where the work actually gets done. Naam never writes a campaign,
-template, price, or creative — and never writes Codex's marketing memory.
+**Phone-safe execution only.** Naam writes a **durable decision record** — the
+marketing-decision coordinate (customer-state bucket · proof · hook · CTA ·
+decision · post-launch result/learning) — to `/api/naam-actions` (D1
+`naam_decisions`), mirrored to localStorage so it works offline and survives a
+phone wipe. It does **not** launch, pause, or edit campaigns; those spend-changing
+steps still happen in the controlled execution lane. Proof is shown honestly —
+unverified food proof is marked, never given a fake ✓. Naam never writes a
+campaign, template, price, creative, or Codex's marketing memory.
 
 ## Structure
 
@@ -36,11 +41,10 @@ naam/
 ```
 
 ### Four tabs
-- **Today** — the action home. Live pulse (month target + counter-UPI today) +
-  "Needs you": every lane with a pending action, sorted money-at-risk first.
-- **Lanes** — all 12+ lanes grouped, full cockpit data surfaced inline so you
-  don't need Claude just to *see* it, plus a link out to the live cockpit.
+- **Naam** — the action home: today's move, live pulse, live stages,
+  "Needs you", and the lane ledger.
 - **Creative** — manifest-driven library, brand/lane/status filters, lazy thumbs.
+- **Queue** — local phone-safe decisions waiting for controlled execution.
 - **You** — default brand, data freshness, per-lane health, PWA install.
 
 Brand **HE / NCH** is a persistent switch; lanes with no NCH surface simply

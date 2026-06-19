@@ -10,11 +10,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Naam">
 <link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,500;1,600&display=swap" rel="stylesheet">
 <style>
-/* ═══ NAAM v2 — "how the name travels" · view-only · iPhone-first ═══ */
+/* ═══ NAAM v2 — "how the name travels" · iPhone-first ═══ */
 :root{
   --bg:#000; --e1:#121218; --e2:#1a1a22; --e3:#23232d;
   --line:rgba(255,255,255,.08); --line-soft:rgba(255,255,255,.05);
@@ -74,6 +75,54 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .bl{font-size:10px;color:var(--dim);margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
 .doctrine{font-size:10.5px;color:var(--mute);margin-top:12px;line-height:1.45;font-style:italic}
 
+/* today move */
+.move{background:linear-gradient(165deg,#16120f,var(--e1) 58%,#11151c);border:1px solid var(--naam-bd);border-radius:18px;padding:16px;margin-top:10px}
+.mv-top{display:flex;align-items:flex-start;gap:10px}
+.mv-kicker{font-size:9.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--naam)}
+.mv-title{font-size:21px;font-weight:900;line-height:1.16;margin-top:5px;letter-spacing:0}
+.mv-chip{flex:0 0 auto;border:1px solid var(--gold-bd);background:var(--gold-soft);color:var(--gold);border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+.mv-why{font-size:12.5px;color:var(--dim);line-height:1.55;margin-top:10px}
+.mv-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:13px;border:1px solid var(--line-soft);border-radius:13px;overflow:hidden}
+.mv-stat{padding:11px 8px;text-align:center;background:rgba(255,255,255,.025)}
+.mv-stat+.mv-stat{border-left:1px solid var(--line-soft)}
+.mv-stat b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.mv-stat span{display:block;font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.proof{margin-top:13px;border-top:1px solid var(--line-soft);padding-top:11px}
+.proof-row{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.45;color:var(--text);padding:5px 0}
+.proof-dot{width:18px;height:18px;border-radius:50%;background:var(--green-soft);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;flex:0 0 auto}
+.mv-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.act-btn{min-height:46px;border-radius:13px;border:1px solid var(--naam-bd);background:var(--naam);color:#130806;font-weight:900;font-size:12px;cursor:pointer}
+.act-btn.ghost{background:var(--e2);color:var(--text);border-color:var(--line)}
+.act-btn.warn{color:var(--amber);border-color:rgba(251,191,36,.35)}
+.act-btn:active{transform:scale(.98)}
+.act-btn:disabled{opacity:.45;cursor:not-allowed}
+.mv-safe{font-size:10.5px;color:var(--mute);line-height:1.45;margin-top:10px}
+.queued-pill{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:7px 10px;border-radius:999px;border:1px solid var(--green);background:var(--green-soft);color:var(--green);font-size:11px;font-weight:900}
+/* honest proof states: green ✓ = verified · amber ○ = a guard you perform · red ✗ = proof missing */
+.proof-dot.todo{background:var(--amber-soft);color:var(--amber)}
+.proof-dot.blocked{background:var(--red-soft);color:var(--red)}
+.proof-hd{display:flex;align-items:center;gap:8px;font-size:9.5px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.proof-verdict{margin-top:4px;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:8px;display:inline-block}
+.pv-ok{background:var(--green-soft);color:var(--green)} .pv-no{background:var(--red-soft);color:var(--red)}
+.mv-override{display:block;width:100%;text-align:center;margin-top:9px;background:none;border:none;color:var(--mute);font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer}
+.sync-badge{font-size:9px;font-weight:900;letter-spacing:.04em;padding:2px 6px;border-radius:6px;background:var(--amber-soft);color:var(--amber);margin-left:6px}
+.proof-badge{font-size:9px;font-weight:900;letter-spacing:.04em;padding:2px 6px;border-radius:6px;margin-left:6px}
+.pb-ok{background:var(--green-soft);color:var(--green)} .pb-no{background:var(--red-soft);color:var(--red)}
+/* result / learning form on a queued decision */
+.res-toggle{margin-top:12px;width:100%;min-height:38px;border-radius:10px;border:1px dashed var(--line);background:transparent;color:var(--blue);font-size:11.5px;font-weight:850;cursor:pointer}
+.res-form{margin-top:12px;border-top:1px solid var(--line-soft);padding-top:12px;display:none}
+.res-form.open{display:block}
+.res-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.res-in{background:var(--e2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;color:var(--text);font-size:13px;width:100%}
+.res-in::placeholder{color:var(--mute)}
+.res-lab{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 4px}
+.res-pos{display:flex;gap:8px;margin-top:8px}
+.res-pos .qi-btn{flex:1;min-height:40px}
+.res-pos .qi-btn.sel{border-color:var(--naam-bd);background:var(--naam-soft);color:var(--naam)}
+.res-show{margin-top:11px;background:var(--e2);border:1px solid var(--line-soft);border-radius:11px;padding:11px}
+.res-show .rk{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+.res-show .rv{font-size:13px;font-weight:800;margin-top:1px}
+
 /* stage cards */
 .stage{background:var(--e1);border:1px solid var(--line);border-radius:16px;padding:15px;margin-top:10px}
 .st-head{display:flex;align-items:center;gap:10px}
@@ -113,6 +162,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .l-name{font-size:13.5px;font-weight:700;flex:1}
 .l-sub{font-size:10.5px;color:var(--dim);margin-top:2px}
 .l-arrow{color:var(--naam);font-size:17px}
+
+/* execution queue */
+.queue-item{background:var(--e1);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:10px}
+.qi-top{display:flex;align-items:flex-start;gap:10px}
+.qi-status{width:9px;height:9px;border-radius:50%;background:var(--amber);margin-top:5px;flex:0 0 auto}
+.qi-status.done{background:var(--green)}
+.qi-title{font-size:14px;font-weight:850;line-height:1.35}
+.qi-meta{font-size:10.5px;color:var(--dim);margin-top:4px}
+.qi-actions{display:flex;gap:8px;margin-top:12px}
+.qi-btn{min-height:38px;border-radius:10px;border:1px solid var(--line);background:var(--e2);color:var(--text);font-size:11px;font-weight:850;padding:0 12px;cursor:pointer}
+.qi-btn.done{border-color:rgba(55,211,153,.35);color:var(--green)}
+.qi-btn.clear{color:var(--red)}
+.empty{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--mute);padding:22px 4px;line-height:1.45}
+.toast{position:fixed;left:18px;right:18px;bottom:calc(88px + var(--safe-bot));z-index:80;background:#17171d;border:1px solid var(--naam-bd);border-radius:14px;padding:12px 14px;color:var(--text);font-size:12.5px;font-weight:700;box-shadow:0 14px 40px rgba(0,0,0,.45);display:none}
+.toast.show{display:block}
 
 /* detail sheet */
 .sheet{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;flex-direction:column}
@@ -174,6 +238,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div class="asof" id="asof"></div>
     </div>
 
+    <div class="sect"><h2>Today’s move <span class="q">what should I do now?</span></h2>
+      <div id="todayMove" class="move"><div class="mv-title skeleton">building the move…</div></div>
+    </div>
+
     <div class="sect"><h2>The week in one breath <span class="q">what did the name cost?</span></h2>
       <div class="breath" id="breath"><div class="b-amount skeleton">₹—</div></div>
     </div>
@@ -201,6 +269,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   <div class="scroll"><div class="cgrid" id="crGrid"></div></div>
 </div>
 
+<!-- QUEUE -->
+<div id="s-queue" class="screen">
+  <div class="masthead">
+    <div class="mh-name" style="font-size:34px">Queue</div>
+    <div class="asof" id="queueCount"></div>
+  </div>
+  <div class="scroll" style="padding:8px 20px calc(96px + var(--safe-bot))">
+    <div class="stage">
+      <div class="st-name">Execution boundary</div>
+      <div class="l-sub" style="margin-top:8px;line-height:1.6">Each decision is saved to the chamber — it survives this phone and shows on every device. Naam still does <b>not</b> launch, pause, or edit ads from the phone. Spend-changing execution happens in the controlled lane after the move is checked; fill the result here to close the loop.</div>
+    </div>
+    <div id="queueList"></div>
+  </div>
+</div>
+
 <!-- YOU -->
 <div id="s-you" class="screen">
   <div class="masthead"><div class="mh-name" style="font-size:34px">You</div></div>
@@ -222,24 +305,28 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 <div class="tabbar">
   <div class="tb on" data-s="home" onclick="go('home')"><span class="ti">◈</span>Naam</div>
   <div class="tb" data-s="creative" onclick="go('creative')"><span class="ti">▣</span>Creative</div>
+  <div class="tb" data-s="queue" onclick="go('queue')"><span class="ti">◇</span>Queue</div>
   <div class="tb" data-s="you" onclick="go('you')"><span class="ti">◉</span>You</div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script>
-/* ═══ NAAM v2 — view-only. Live: meta-ads + google-ads-live + gbp-cockpit.
+/* ═══ NAAM v2. Live: meta-ads + google-ads-live + gbp-cockpit.
    Snapshot spine: data/naam-data.json (brand keys normalized — the v1 break
    was 'HE' vs 'he'). Doctrine: NO conversions, ever. ═══ */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const PINS=['0305','1918'];
-const LS={pin:'naamPin',brand:'naamBrand'};
+const LS={pin:'naamPin',pinVal:'naamPinVal',brand:'naamBrand',decisions:'naamDecisions'};
 const HOST='https://hnhotels.in';
+const API=HOST+'/api/naam-actions';
 const POSITIONING={he:'“Same HKP Road Hamza food memory. New Express face.”',nch:'“Irani chai & haleem — Shivajinagar’s evening ritual.”'};
-const S={brand:(localStorage.getItem(LS.brand)||'he').toLowerCase(),data:null,creative:null,live:{},entry:'',cLane:'all',cStatus:'deployed'};
+const S={brand:(localStorage.getItem(LS.brand)||'he').toLowerCase(),data:null,creative:null,live:{},entry:'',cLane:'all',cStatus:'deployed',pin:localStorage.getItem('naamPinVal')||'',decisions:null,resOpen:{}};
 
 /* ── gate ── */
 function key(k){if(S.entry.length>=4)return;S.entry+=k;dots();if(S.entry.length===4){
-  if(PINS.includes(S.entry)){localStorage.setItem(LS.pin,'1');unlock();}
+  if(PINS.includes(S.entry)){S.pin=S.entry;localStorage.setItem(LS.pin,'1');localStorage.setItem(LS.pinVal,S.entry);unlock();}
   else{$('#gErr').textContent='Not the word';navigator.vibrate&&navigator.vibrate(80);S.entry='';dots();}
 }}
 function delKey(){S.entry=S.entry.slice(0,-1);dots();$('#gErr').textContent='';}
@@ -251,10 +338,11 @@ function go(s){document.querySelectorAll('.screen').forEach(x=>x.classList.remov
   $('#s-'+s).classList.add('active');
   document.querySelectorAll('.tb').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
   if(s==='creative')renderCreative();
+  if(s==='queue')loadDecisions();
   if(s==='you')renderYou();
 }
 function toggleBrand(){setBrand(S.brand==='he'?'nch':'he');}
-function setBrand(b){S.brand=b;localStorage.setItem(LS.brand,b);renderHome();}
+function setBrand(b){S.brand=b;localStorage.setItem(LS.brand,b);S.decisions=null;renderHome();loadDecisions();}
 
 /* ── data ── */
 function normBrands(lane){const out={};for(const[k,v]of Object.entries(lane.brands||{}))out[k.toLowerCase()]=v;lane.brands=out;return lane;}
@@ -275,9 +363,187 @@ async function boot(){
   ]);
   S.live=live;
   renderHome();
+  loadDecisions();
 }
 function tone(ctr){return ctr>=3?'t-good':ctr>=1.5?'t-warn':ctr>0?'t-bad':'t-off';}
 function inr(n){return '₹'+Math.round(n).toLocaleString('en-IN');}
+/* ── durable decisions: /api/naam-actions is the source of truth; localStorage is the offline mirror ── */
+function decCache(){try{return JSON.parse(localStorage.getItem(LS.decisions)||'[]');}catch{return[];}}
+function saveCache(items){localStorage.setItem(LS.decisions,JSON.stringify(items.slice(0,60)));}
+function brandDecs(){return decCache().filter(d=>d.brand===S.brand.toUpperCase()).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));}
+async function loadDecisions(){
+  try{
+    const r=await fetch(API+'?action=list&brand='+S.brand.toUpperCase(),{cache:'no-store'});
+    const d=await r.json();
+    if(d&&d.ok){
+      const server=d.decisions||[];
+      const ids=new Set(server.map(x=>x.id)), moves=new Set(server.map(x=>x.move_id+'|'+x.brand));
+      const unsynced=decCache().filter(x=>x._synced===false&&!ids.has(x.id)&&!moves.has(x.move_id+'|'+x.brand));
+      const merged=[...server.map(x=>({...x,_synced:true})),...unsynced];
+      saveCache(merged);S.decisions=merged;
+    }
+  }catch{ S.decisions=decCache(); }
+  renderQueue();renderTodayMove();
+}
+/* proof states: 'ok' machine-verified · 'todo' a guard YOU perform · 'blocked' proof missing (never a fake ✓) */
+function moveProof(){
+  const t=S.data&&S.data.today_move&&S.data.today_move[S.brand];   // future: snapshot carries a QA-verified reel
+  if(t&&t.proof&&t.proof.verified)return t.proof;
+  if(S.brand!=='he')return {verified:false,reel:null,items:[
+    {state:'todo',text:'No NCH Meta spend move is suggested from stale notes.'},
+    {state:'todo',text:'HE Meta loop becomes the reusable template first.'},
+    {state:'blocked',text:'NCH opens only once creative, objective and readback are equally clear.'},
+  ]};
+  return {verified:false,reel:null,items:[
+    {state:'todo',text:'Source must be the QISSA food-conviction reel — not generic offer copy.'},
+    {state:'todo',text:'Destination = Get Directions / maps intent; WABA stays retention only.'},
+    {state:'blocked',text:'Real food proof is NOT machine-verified — QISSA QA is not wired to Naam yet. Confirm by eye before any spend: tandoori, tikka, kabab, biryani — never stock-like imagery.'},
+    {state:'todo',text:'Tomorrow’s readback judges hands, CTR, CPC and POS-spike; conversions stay ignored.'},
+  ]};
+}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2600);}
+function fmtTime(iso){try{return new Date(iso).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
+function dayKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+
+/* ── today's move ── */
+function todayMove(){
+  const m=S.live.meta&&S.live.meta.ok?S.live.meta:null;
+  const g=S.live.gads&&S.live.gads.ok?S.live.gads:null;
+  const gen=S.data&&S.data.generated_at?new Date(S.data.generated_at):null;
+  const stale=gen?Math.round((Date.now()-gen.getTime())/86400000):null;
+  const proof=moveProof();
+  if(S.brand!=='he'){
+    return {
+      id:'nch-hold-until-he-meta-loop-'+dayKey(),
+      lane:'Meta Ads', customer_state:'hold', chip:'Hold',
+      title:'Keep NCH parked until the HE Meta loop closes',
+      hook:'—', cta:'—',
+      why:'The first execution loop belongs to HE — live Meta spend and creative proof already exist there. NCH should not open until the same proof structure is ready.',
+      stats:[['—','spend'],['—','hands'],['queued','state']],
+      proof,
+      primary:'Open HE', secondary:'Log hold',
+      safe:'This keeps NCH out of the phone execution flow for now. No ad is touched.'
+    };
+  }
+  const spend=m?m.totals.spend:0, clicks=m?m.totals.clicks:0, impressions=m?m.totals.impressions:0;
+  const ctr=impressions?((clicks/impressions)*100):0;
+  const cpc=clicks?spend/clicks:0;
+  const googleQuiet=g?((g.totals.clicks||0)===0&&Number(g.totals.spend||0)===0):true;
+  return {
+    id:'he-meta-qissa-food-conviction-'+dayKey(),
+    lane:'Meta Ads', customer_state:'food_conviction', chip:'Priority 1',
+    title:'Approve the next HE Meta food-conviction move',
+    hook:'QISSA food-conviction (tandoori / tikka / kabab / biryani)', cta:'Get Directions',
+    why:(m?`Meta is the only live paid channel with real motion this week: ${inr(spend)} spent, ${clicks.toLocaleString('en-IN')} hands, ${ctr.toFixed(2)}% CTR. `:'Meta live feed is not loaded — treat as proof-only. ')+(googleQuiet?'Google is quiet, so the first execution intelligence belongs here.':'Google has activity, but Meta stays the first execution lane.'),
+    stats:[[inr(spend),'7d spend'],[clicks.toLocaleString('en-IN'),'hands'],[ctr?ctr.toFixed(2)+'%':'—','CTR']],
+    proof,
+    primary:'Approve move', secondary:'Hold',
+    safe:`This records the decision only — it does not launch or edit a Meta campaign from the phone. CPC now reads ${cpc?inr(cpc):'—'}.${stale&&stale>2?' Lane notes are stale; only live Meta numbers are trusted today.':''}`
+  };
+}
+function decFor(move){return brandDecs().find(x=>x.move_id===move.id);}
+function proofDot(state){return state==='ok'?'<span class="proof-dot">✓</span>':state==='blocked'?'<span class="proof-dot blocked">✗</span>':'<span class="proof-dot todo">○</span>';}
+function renderTodayMove(){
+  const el=$('#todayMove');if(!el)return;
+  const mv=todayMove();const d=decFor(mv);const verified=!!(mv.proof&&mv.proof.verified);
+  const verdict=verified?'<span class="proof-verdict pv-ok">food proof verified</span>':'<span class="proof-verdict pv-no">food proof NOT verified — confirm by eye</span>';
+  let actions;
+  if(d){
+    actions=`<div class="queued-pill">✓ ${esc(d.decision==='approve'?'Approved':'Held')}${d.proof_verified?'':' · unverified proof'} · ${fmtTime(d.created_at)}${d._synced===false?'<span class="sync-badge">SYNCING</span>':''}</div>`;
+  }else if(S.brand!=='he'){
+    actions=`<div class="mv-actions"><button class="act-btn" onclick="setBrand('he')">${esc(mv.primary)}</button><button class="act-btn ghost warn" onclick="recordMove('hold',false)">${esc(mv.secondary)}</button></div>`;
+  }else if(verified){
+    actions=`<div class="mv-actions"><button class="act-btn" onclick="recordMove('approve',true)">${esc(mv.primary)}</button><button class="act-btn ghost warn" onclick="recordMove('hold',true)">${esc(mv.secondary)}</button></div>`;
+  }else{
+    actions=`<div class="mv-actions"><button class="act-btn" onclick="recordMove('hold',false)">Hold — proof not verified</button><button class="act-btn ghost" onclick="go('creative')">See creatives</button></div>
+      <button class="mv-override" onclick="approveUnverified()">Record approve without verified proof</button>`;
+  }
+  el.innerHTML=`<div class="mv-top"><div style="flex:1"><div class="mv-kicker">${esc(mv.lane)} · today</div><div class="mv-title">${esc(mv.title)}</div></div><div class="mv-chip">${esc(mv.chip)}</div></div>
+    <div class="mv-why">${esc(mv.why)}</div>
+    <div class="mv-stats">${mv.stats.map(s=>`<div class="mv-stat"><b>${esc(s[0])}</b><span>${esc(s[1])}</span></div>`).join('')}</div>
+    <div class="proof"><div class="proof-hd">Proof ${verdict}</div>${mv.proof.items.map(p=>`<div class="proof-row">${proofDot(p.state)}<span>${esc(p.text)}</span></div>`).join('')}</div>
+    ${actions}
+    <div class="mv-safe">${esc(mv.safe)}</div>`;
+}
+async function recordMove(decision,proofVerified){
+  const mv=todayMove();const brand=S.brand.toUpperCase();
+  const optimistic={id:'local_'+Date.now(),move_id:mv.id,brand,lane:mv.lane,customer_state:mv.customer_state,title:mv.title,hook:mv.hook,cta:mv.cta,decision,proof_verified:!!proofVerified,proof:mv.proof,status:'queued',created_at:new Date().toISOString(),_synced:false};
+  saveCache([optimistic,...decCache().filter(x=>!(x.move_id===mv.id&&x.brand===brand))]);
+  S.decisions=decCache();renderTodayMove();renderQueue();
+  try{
+    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'request',pin:S.pin,move_id:mv.id,brand,lane:mv.lane,customer_state:mv.customer_state,title:mv.title,hook:mv.hook,cta:mv.cta,decision,proof_verified:!!proofVerified,proof:mv.proof})});
+    const j=await r.json();
+    if(j&&j.ok&&j.decision){
+      saveCache([{...j.decision,_synced:true},...decCache().filter(x=>!(x.move_id===mv.id&&x.brand===brand))]);
+      S.decisions=decCache();renderTodayMove();renderQueue();go('queue');
+      toast((decision==='approve'?'Approved':'Held')+' · saved to the chamber. No ad was changed.');
+    }else{toast('Saved on phone — server: '+((j&&j.error)||'error'));go('queue');}
+  }catch{toast('Saved on phone — will sync when online.');go('queue');}
+}
+function approveUnverified(){
+  if(confirm('Food proof is NOT machine-verified. Record an APPROVE anyway? This only stores your decision — it does not launch or spend.'))recordMove('approve',false);
+}
+function markChecked(id){submitResult(id,true);}
+async function submitResult(id,checkOnly){
+  const dec=decCache().find(x=>x.id===id);
+  if(dec&&dec._synced===false){toast('That decision is still syncing — try again in a moment.');return;}
+  const body={action:checkOnly?'check':'result',pin:S.pin,id};
+  if(!checkOnly){
+    const v=s=>{const el=$('#'+s+'_'+id);return el&&el.value?el.value:null;};
+    body.result={hands:v('res_hands'),ctr:v('res_ctr'),cpc:v('res_cpc'),pos_spike:(S.resOpen[id]&&S.resOpen[id].pos)||null};
+    body.learning_note=v('res_note');
+  }
+  try{
+    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(j&&j.ok&&j.decision){
+      saveCache([{...j.decision,_synced:true},...decCache().filter(x=>x.id!==id)]);
+      S.decisions=decCache();delete S.resOpen[id];renderQueue();renderTodayMove();
+      toast(checkOnly?'Marked checked.':'Result + learning saved.');
+    }else toast('Server: '+((j&&j.error)||'error'));
+  }catch{toast('Offline — connect to save the result.');}
+}
+function toggleRes(id){S.resOpen[id]=S.resOpen[id]?null:{pos:null};renderQueue();}
+function setPos(id,v){if(!S.resOpen[id])S.resOpen[id]={};S.resOpen[id].pos=v;renderQueue();}
+function renderQueue(){
+  const list=S.decisions!=null?S.decisions.filter(d=>d.brand===S.brand.toUpperCase()):brandDecs();
+  const count=$('#queueCount');if(count)count.textContent=list.length?`${list.length} decision${list.length===1?'':'s'} · ${S.brand.toUpperCase()} · saved to the chamber`:'No decisions yet';
+  const el=$('#queueList');if(!el)return;
+  el.innerHTML=list.length?list.map(x=>{
+    const checked=x.status==='checked';
+    const pb=x.proof_verified?'<span class="proof-badge pb-ok">proof ✓</span>':'<span class="proof-badge pb-no">proof ✗</span>';
+    const sy=x._synced===false?'<span class="sync-badge">SYNCING</span>':'';
+    const open=!!S.resOpen[x.id];const res=x.result;
+    return `<div class="queue-item">
+      <div class="qi-top"><div class="qi-status ${checked?'done':''}"></div><div style="flex:1">
+        <div class="qi-title">${esc(x.title||x.move_id)}</div>
+        <div class="qi-meta">${esc(x.brand)} · ${esc(x.lane)} · ${esc(x.decision==='approve'?'approved':'held')} ${pb}${sy} · ${fmtTime(x.created_at)}</div>
+      </div></div>
+      ${res?`<div class="res-show"><div class="res-grid">
+          ${res.hands?`<div><div class="rk">hands</div><div class="rv">${esc(res.hands)}</div></div>`:''}
+          ${res.ctr?`<div><div class="rk">CTR</div><div class="rv">${esc(res.ctr)}%</div></div>`:''}
+          ${res.cpc?`<div><div class="rk">CPC</div><div class="rv">₹${esc(res.cpc)}</div></div>`:''}
+          ${res.pos_spike?`<div><div class="rk">POS spike</div><div class="rv">${esc(res.pos_spike)}</div></div>`:''}
+        </div>${x.learning_note?`<div class="rk" style="margin-top:9px">learning</div><div class="l-sub" style="margin-top:2px;line-height:1.5">${esc(x.learning_note)}</div>`:''}</div>`:''}
+      ${checked?'':`<button class="res-toggle" onclick="toggleRes('${esc(x.id)}')">${open?'Close result':'＋ Result &amp; learning'}</button>`}
+      ${open?`<div class="res-form open">
+        <div class="res-grid">
+          <div><div class="res-lab">hands</div><input class="res-in" id="res_hands_${esc(x.id)}" inputmode="numeric" placeholder="e.g. 1686"></div>
+          <div><div class="res-lab">CTR %</div><input class="res-in" id="res_ctr_${esc(x.id)}" inputmode="decimal" placeholder="e.g. 4.91"></div>
+          <div><div class="res-lab">CPC ₹</div><input class="res-in" id="res_cpc_${esc(x.id)}" inputmode="decimal" placeholder="e.g. 1.18"></div>
+        </div>
+        <div class="res-lab">POS spike that day?</div>
+        <div class="res-pos">
+          <button class="qi-btn ${S.resOpen[x.id]&&S.resOpen[x.id].pos==='yes'?'sel':''}" onclick="setPos('${esc(x.id)}','yes')">Yes</button>
+          <button class="qi-btn ${S.resOpen[x.id]&&S.resOpen[x.id].pos==='no'?'sel':''}" onclick="setPos('${esc(x.id)}','no')">No</button>
+          <button class="qi-btn ${S.resOpen[x.id]&&S.resOpen[x.id].pos==='unclear'?'sel':''}" onclick="setPos('${esc(x.id)}','unclear')">Unclear</button>
+        </div>
+        <div class="res-lab">what the name learned</div>
+        <input class="res-in" id="res_note_${esc(x.id)}" placeholder="one line — what worked / what to change">
+        <div class="qi-actions"><button class="qi-btn done" onclick="submitResult('${esc(x.id)}',false)">Save result</button><button class="qi-btn" onclick="markChecked('${esc(x.id)}')">Just mark checked</button></div>
+      </div>`:''}
+    </div>`;}).join(''):'<div class="empty">Nothing decided yet. The next move starts on the Naam tab.</div>';
+}
 
 /* ── home ── */
 function renderHome(){
@@ -289,6 +555,7 @@ function renderHome(){
   const m=S.live.meta&&S.live.meta.ok?S.live.meta:null;
   const g=S.live.gads&&S.live.gads.ok?S.live.gads:null;
   const gbp=S.live.gbp&&S.live.gbp.ok?S.live.gbp:null;
+  renderTodayMove();
   if(m||g){
     const spend=(m?m.totals.spend:0)+(g?g.totals.spend:0);
     const eyes=(m?m.totals.impressions:0)+(g?g.totals.impressions:0);
