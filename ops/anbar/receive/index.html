@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Anbar Receive</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root {
+    --bg:#000; --panel:#111118; --panel2:#191923; --line:rgba(255,255,255,.1);
+    --text:#f7f7fa; --muted:#9b9ba6; --dim:#696972;
+    --gold:#d7a64d; --gold2:rgba(215,166,77,.18); --goldbd:rgba(215,166,77,.42);
+    --green:#35d399; --green2:rgba(53,211,153,.14);
+    --red:#ff5c5c; --blue:#7aa7ff;
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html, body { width:100%; min-height:100%; overflow-x:hidden; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; }
+  body { font-size:15px; }
+  button, input, textarea { font:inherit; }
+  .app { min-height:100dvh; display:flex; flex-direction:column; }
+  .top { padding:calc(16px + var(--safe-top)) 18px 12px; border-bottom:1px solid var(--line); background:rgba(0,0,0,.92); position:sticky; top:0; z-index:5; }
+  .title-row { display:flex; align-items:center; gap:10px; min-width:0; }
+  .title { font-size:24px; line-height:1.05; font-weight:850; letter-spacing:0; flex:1; min-width:0; }
+  .sub { margin-top:5px; color:var(--muted); font-size:13px; line-height:1.35; }
+  .chip { display:inline-flex; align-items:center; justify-content:center; min-height:30px; padding:6px 10px; border-radius:9px; border:1px solid var(--goldbd); background:var(--gold2); color:var(--gold); font-weight:800; font-size:12px; white-space:nowrap; }
+  .controls { display:grid; grid-template-columns:1fr auto; gap:10px; margin-top:14px; align-items:center; }
+  .date, .select { min-height:48px; border:1px solid var(--line); background:var(--panel2); color:var(--text); border-radius:12px; padding:0 12px; outline:none; min-width:0; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; min-height:48px; }
+  .seg button { min-width:58px; padding:0 14px; border:0; background:var(--panel2); color:var(--muted); font-weight:800; }
+  .seg button.active { background:var(--gold); color:#171006; }
+  .content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 14px calc(98px + var(--safe-bot)); }
+  .card { border:1px solid var(--line); background:var(--panel); border-radius:12px; margin:10px 0; overflow:hidden; }
+  .order-head { padding:14px; border-bottom:1px solid var(--line); background:linear-gradient(180deg, rgba(255,255,255,.035), transparent); }
+  .order-title { display:flex; align-items:center; gap:8px; min-width:0; }
+  .vendor { font-size:18px; font-weight:850; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .meta { color:var(--muted); font-size:12px; line-height:1.35; margin-top:4px; }
+  .line { padding:14px; border-top:1px solid rgba(255,255,255,.055); }
+  .line:first-child { border-top:0; }
+  .line-name { font-weight:850; font-size:16px; line-height:1.2; display:flex; justify-content:space-between; gap:10px; min-width:0; }
+  .line-name span:first-child { min-width:0; overflow-wrap:anywhere; }
+  .received { color:var(--green); font-size:12px; font-weight:800; white-space:nowrap; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .field { min-width:0; }
+  label { display:block; color:var(--muted); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; margin:0 0 6px 2px; }
+  input, textarea { width:100%; min-width:0; border:1px solid var(--line); background:var(--panel2); color:var(--text); border-radius:11px; outline:none; }
+  input { height:48px; padding:0 12px; font-size:18px; font-weight:750; }
+  textarea { min-height:50px; padding:12px; resize:vertical; font-size:14px; line-height:1.35; }
+  input:focus, textarea:focus { border-color:var(--gold); box-shadow:0 0 0 2px rgba(215,166,77,.12); }
+  .note { margin-top:10px; }
+  .empty { color:var(--muted); text-align:center; padding:52px 18px; line-height:1.45; }
+  .empty strong { display:block; color:var(--text); font-size:18px; margin-bottom:6px; }
+  .bottom { position:fixed; left:0; right:0; bottom:0; padding:12px 14px calc(12px + var(--safe-bot)); background:linear-gradient(180deg, transparent, #000 18%); z-index:10; }
+  .save { width:100%; min-height:58px; border:0; border-radius:14px; background:var(--gold); color:#171006; font-weight:900; font-size:17px; }
+  .save:disabled { opacity:.45; }
+  .gate { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; }
+  .gate h1 { font-size:48px; line-height:1; margin-bottom:8px; }
+  .pin { display:flex; gap:10px; margin:26px 0 18px; }
+  .dot { width:13px; height:13px; border-radius:50%; border:1.5px solid var(--goldbd); }
+  .dot.on { background:var(--gold); border-color:var(--gold); }
+  .pad { display:grid; grid-template-columns:repeat(3, 70px); gap:10px; }
+  .key { width:70px; height:64px; border-radius:18px; border:1px solid var(--line); background:var(--panel2); color:var(--text); font-size:22px; font-weight:800; }
+  .key:active, .save:active { transform:scale(.98); }
+  .error { color:var(--red); min-height:18px; font-size:13px; margin-top:14px; }
+  .toast { position:fixed; left:14px; right:14px; bottom:calc(82px + var(--safe-bot)); z-index:20; padding:12px 14px; border-radius:12px; border:1px solid rgba(53,211,153,.35); background:#082018; color:var(--green); font-weight:800; opacity:0; pointer-events:none; transition:.2s opacity; text-align:center; }
+  .toast.show { opacity:1; }
+  .hidden { display:none !important; }
+  @media (max-width:360px) {
+    .grid { grid-template-columns:1fr; }
+    .controls { grid-template-columns:1fr; }
+    .seg button { flex:1; }
+  }
+</style>
+</head>
+<body>
+<div id="gate" class="gate">
+  <h1>Anbar</h1>
+  <div class="sub" style="text-align:center">Receive purchase orders into inventory</div>
+  <div class="pin">
+    <div class="dot" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div><div class="dot" id="d3"></div>
+  </div>
+  <div class="pad">
+    <button class="key" data-k="1">1</button><button class="key" data-k="2">2</button><button class="key" data-k="3">3</button>
+    <button class="key" data-k="4">4</button><button class="key" data-k="5">5</button><button class="key" data-k="6">6</button>
+    <button class="key" data-k="7">7</button><button class="key" data-k="8">8</button><button class="key" data-k="9">9</button>
+    <button class="key" data-k="clear">CLR</button><button class="key" data-k="0">0</button><button class="key" data-k="del">DEL</button>
+  </div>
+  <div id="pinErr" class="error"></div>
+</div>
+
+<div id="app" class="app hidden">
+  <div class="top">
+    <div class="title-row">
+      <div class="title">Receive inventory</div>
+      <div class="chip" id="personChip">Anbar</div>
+    </div>
+    <div class="sub">Sauda order lines come here. Record what actually arrived; cost stays in Sauda after the live rate is entered.</div>
+    <div class="controls">
+      <input class="date" id="date" type="date">
+      <div class="seg">
+        <button id="brandHE" class="active" type="button">HE</button>
+        <button id="brandNCH" type="button">NCH</button>
+      </div>
+    </div>
+  </div>
+  <div class="content" id="content"></div>
+  <div class="bottom">
+    <button class="save" id="saveBtn" type="button">Save receiving</button>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const API = '/api/anbar';
+const S = {
+  pin: localStorage.getItem('anbar_pin') || '',
+  person: localStorage.getItem('anbar_person') || '',
+  entry: '',
+  brand: localStorage.getItem('anbar_receive_brand') || 'HE',
+  lines: [],
+};
+
+function $(id) { return document.getElementById(id); }
+function todayIST() {
+  const d = new Date(Date.now() + 5.5 * 3600 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toast(msg, bad) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.color = bad ? 'var(--red)' : 'var(--green)';
+  t.style.borderColor = bad ? 'rgba(255,92,92,.35)' : 'rgba(53,211,153,.35)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+function showApp() {
+  $('gate').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('personChip').textContent = S.person || 'Anbar';
+  loadQueue();
+}
+function drawDots() {
+  for (let i = 0; i < 4; i++) $('d' + i).classList.toggle('on', i < S.entry.length);
+}
+async function verify() {
+  const r = await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(S.entry)}`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) {
+    $('pinErr').textContent = r.error || 'Wrong PIN';
+    S.entry = '';
+    drawDots();
+    return;
+  }
+  S.pin = S.entry;
+  S.person = r.person || '';
+  localStorage.setItem('anbar_pin', S.pin);
+  localStorage.setItem('anbar_person', S.person);
+  S.entry = '';
+  showApp();
+}
+function setBrand(brand) {
+  S.brand = brand;
+  localStorage.setItem('anbar_receive_brand', brand);
+  $('brandHE').classList.toggle('active', brand === 'HE');
+  $('brandNCH').classList.toggle('active', brand === 'NCH');
+  loadQueue();
+}
+function lineInputId(line, field) {
+  return `${field}-${line.order_id}-${line.line_idx}`;
+}
+function render() {
+  if (!S.lines.length) {
+    $('content').innerHTML = `<div class="empty"><strong>No chicken orders to receive</strong>For ${esc(S.brand)} on ${esc($('date').value)}. Place the order in Sauda first, then it appears here.</div>`;
+    return;
+  }
+  const grouped = new Map();
+  for (const line of S.lines) {
+    const key = `${line.order_id}|${line.vendor_name}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(line);
+  }
+  const html = [...grouped.entries()].map(([key, lines]) => {
+    const first = lines[0];
+    const body = lines.map(line => {
+      const pieceUnit = /bird|pc|piece/i.test(line.unit || '');
+      const received = line.yielded_kg || line.delivered_kg || line.received_pieces;
+      return `<div class="line" data-order="${line.order_id}" data-line="${line.line_idx}">
+        <div class="line-name">
+          <span>${esc(line.cut_label || line.item)}</span>
+          ${received ? '<span class="received">received</span>' : ''}
+        </div>
+        <div class="meta">ordered ${esc(line.qty || '0')} ${esc(line.unit || '')} · Sauda order #${line.order_id}</div>
+        <div class="grid">
+          <div class="field">
+            <label for="${lineInputId(line, 'yielded')}">Usable kg received</label>
+            <input id="${lineInputId(line, 'yielded')}" type="number" inputmode="decimal" step="0.01" value="${esc(line.yielded_kg)}" placeholder="0.00">
+          </div>
+          <div class="field">
+            <label for="${lineInputId(line, 'delivered')}">Live/raw kg used</label>
+            <input id="${lineInputId(line, 'delivered')}" type="number" inputmode="decimal" step="0.01" value="${esc(line.delivered_kg)}" placeholder="0.00">
+          </div>
+          <div class="field">
+            <label for="${lineInputId(line, 'pieces')}">${pieceUnit ? 'Pieces received' : 'Pieces if applicable'}</label>
+            <input id="${lineInputId(line, 'pieces')}" type="number" inputmode="numeric" step="1" value="${esc(line.received_pieces)}" placeholder="${pieceUnit ? esc(line.qty || '') : 'optional'}">
+          </div>
+          <div class="field">
+            <label>Inventory event</label>
+            <input value="${line.received_at ? esc(line.received_at) : 'will timestamp on save'}" readonly>
+          </div>
+        </div>
+        <div class="note">
+          <label for="${lineInputId(line, 'note')}">Receiving note</label>
+          <textarea id="${lineInputId(line, 'note')}" placeholder="Example: tandoori 6pc first, 4pc later">${esc(line.received_note)}</textarea>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="card">
+      <div class="order-head">
+        <div class="order-title">
+          <div class="vendor">${esc(first.vendor_name || 'Vendor')}</div>
+          <span class="chip">${esc(first.status || 'ORDER')}</span>
+        </div>
+        <div class="meta">${lines.length} receiving line${lines.length === 1 ? '' : 's'} · ${esc(first.for_date || '')}</div>
+      </div>
+      ${body}
+    </div>`;
+  }).join('');
+  $('content').innerHTML = html;
+}
+async function loadQueue() {
+  $('content').innerHTML = '<div class="empty"><strong>Loading orders</strong>Reading Sauda purchase lines...</div>';
+  const date = $('date').value || todayIST();
+  const r = await fetch(`${API}?action=sauda-receive-queue&brand=${S.brand}&date=${date}&kind=chicken`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) {
+    $('content').innerHTML = `<div class="empty"><strong>Could not load</strong>${esc(r.error || 'Try again')}</div>`;
+    return;
+  }
+  S.lines = r.lines || [];
+  render();
+}
+function collectLines() {
+  const out = [];
+  for (const line of S.lines) {
+    const yielded = $(lineInputId(line, 'yielded'))?.value.trim() || '';
+    const delivered = $(lineInputId(line, 'delivered'))?.value.trim() || '';
+    const pieces = $(lineInputId(line, 'pieces'))?.value.trim() || '';
+    const note = $(lineInputId(line, 'note'))?.value.trim() || '';
+    if (!yielded && !delivered && !pieces && !note) continue;
+    out.push({
+      order_id: line.order_id,
+      line_idx: line.line_idx,
+      yielded_kg: yielded,
+      delivered_kg: delivered,
+      received_pieces: pieces,
+      received_note: note,
+    });
+  }
+  return out;
+}
+async function save() {
+  const lines = collectLines();
+  if (!lines.length) {
+    toast('Enter at least one received line', true);
+    return;
+  }
+  $('saveBtn').disabled = true;
+  try {
+    const r = await fetch(`${API}?action=sauda-receive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: S.pin, brand: S.brand, station: `${S.brand}-KITCHEN`, lines }),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Save failed');
+    toast(`Saved ${r.movements?.length || 0} inventory movement${(r.movements?.length || 0) === 1 ? '' : 's'}`);
+    await loadQueue();
+  } catch (e) {
+    toast(e.message || 'Save failed', true);
+  } finally {
+    $('saveBtn').disabled = false;
+  }
+}
+
+document.querySelectorAll('.key').forEach(btn => btn.addEventListener('click', () => {
+  const k = btn.dataset.k;
+  $('pinErr').textContent = '';
+  if (k === 'clear') S.entry = '';
+  else if (k === 'del') S.entry = S.entry.slice(0, -1);
+  else if (S.entry.length < 4) S.entry += k;
+  drawDots();
+  if (S.entry.length === 4) verify();
+}));
+$('brandHE').addEventListener('click', () => setBrand('HE'));
+$('brandNCH').addEventListener('click', () => setBrand('NCH'));
+$('date').addEventListener('change', loadQueue);
+$('saveBtn').addEventListener('click', save);
+$('date').value = todayIST();
+setBrand(S.brand === 'NCH' ? 'NCH' : 'HE');
+if (S.pin && S.person) showApp();
+</script>
+</body>
+</html>
