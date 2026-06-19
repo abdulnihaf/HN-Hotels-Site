@@ -14,8 +14,7 @@
   var pin = '', busy = false;
 
   var S = { token: null, user: '', role: '', cat: null, brand: 'both', order: [] /* lines */, seq: 0,
-            placeDate: defaultPurchaseDateIST(), hist: { date: defaultPurchaseDateIST(), q: '', brand: 'all', open: {} },
-            pay: { q: '', brand: 'all', filter: 'all', open: {} },
+            placeDate: defaultPurchaseDateIST(), hist: { date: defaultPurchaseDateIST() },
             hp: { feed: [], win: null, fresh: '', stale: false, picked: {} /* item_key -> 'opened'|'added' */, chosen: {} /* item_key -> picked SKU override */, collapsed: { dearer: true, nomatch: true }, tick: null },
             cmp: { items: [], sources: {}, pick: {} /* item_key -> chosen source */ },
             buy: { qty: {} /* item_key -> qty */, when: defaultNeedWhen() /* today | tomorrow — decides feasible sources */ } };
@@ -67,12 +66,10 @@
 
   // ── persist in-progress work so a Safari/iOS reload never loses it ──
   function saveWork(){ try{ localStorage.setItem('sauda_work', JSON.stringify({
-    order:S.order, seq:S.seq, placeDate:S.placeDate, histDate:S.hist.date, histQ:S.hist.q, histBrand:S.hist.brand, histOpen:S.hist.open, payQ:S.pay.q, payBrand:S.pay.brand, payFilter:S.pay.filter, payOpen:S.pay.open, hpPicked:S.hp.picked, hpChosen:S.hp.chosen, cmpPick:S.cmp.pick, buyQty:S.buy.qty, buyWhen:S.buy.when })); }catch(e){} }
+    order:S.order, seq:S.seq, placeDate:S.placeDate, histDate:S.hist.date, hpPicked:S.hp.picked, hpChosen:S.hp.chosen, cmpPick:S.cmp.pick, buyQty:S.buy.qty, buyWhen:S.buy.when })); }catch(e){} }
   function restoreWork(){ try{ var w=JSON.parse(localStorage.getItem('sauda_work')||'null'); if(!w) return;
     if(Array.isArray(w.order)) S.order=w.order; if(w.seq) S.seq=w.seq;
     if(w.placeDate) S.placeDate=w.placeDate; if(w.histDate) S.hist.date=w.histDate;
-    if(typeof w.histQ==='string') S.hist.q=w.histQ; if(w.histBrand) S.hist.brand=w.histBrand; if(w.histOpen&&typeof w.histOpen==='object') S.hist.open=w.histOpen;
-    if(typeof w.payQ==='string') S.pay.q=w.payQ; if(w.payBrand) S.pay.brand=w.payBrand; if(w.payFilter) S.pay.filter=w.payFilter; if(w.payOpen&&typeof w.payOpen==='object') S.pay.open=w.payOpen;
     if(w.hpPicked && typeof w.hpPicked==='object') S.hp.picked=w.hpPicked; if(w.hpChosen && typeof w.hpChosen==='object') S.hp.chosen=w.hpChosen;
     if(w.cmpPick) S.cmp.pick=w.cmpPick; if(w.buyQty) S.buy.qty=w.buyQty; if(w.buyWhen) S.buy.when=w.buyWhen; }catch(e){} }
   var _persist;
@@ -335,8 +332,6 @@
     var buyBar=document.getElementById('buyBar'), placeBar=document.getElementById('placeBar'), cmpBar=document.getElementById('cmpBar');
     var h1=document.querySelector('.top h1');
     document.querySelectorAll('#modeSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.m===m); });
-    var activeMode=document.querySelector('#modeSeg button[data-m="'+m+'"]');
-    if(activeMode && activeMode.scrollIntoView) requestAnimationFrame(function(){ activeMode.scrollIntoView({block:'nearest', inline:'center'}); });
     [buy,place,pay,hp,cmp,hist,vend,vset].forEach(function(v){ if(v) v.classList.add('hide'); });
     [buyBar,placeBar,cmpBar].forEach(function(b){ if(b) b.classList.add('hide'); });
     if(m==='pay'){ pay.classList.remove('hide'); if(h1) h1.textContent="To pay"; loadPay(); }
@@ -394,54 +389,6 @@
     var yielded=lineYieldedKg(i), cost=lineAmount(i);
     return yielded>0 && cost>0 ? Math.round(cost/yielded) : 0;
   }
-  function lineDisplayQty(i){
-    return [i&&i.qty!=null?i.qty:'', i&&i.unit?i.unit:''].filter(Boolean).join(' ') || '—';
-  }
-  function chickenDerivationRows(items){
-    return (items||[]).filter(chickenLine).map(function(i){
-      var yielded=lineYieldedKg(i), delivered=lineDeliveredKg(i), daily=lineDailyRatePaise(i), cost=lineAmount(i), eff=lineEffectivePaise(i);
-      return {
-        item:i.item||i.name||'Chicken',
-        ordered:lineDisplayQty(i),
-        yielded:yielded,
-        delivered:delivered,
-        daily:daily,
-        cost:cost,
-        eff:eff,
-        pieces:i.received_pieces||'',
-        note:i.received_note||'',
-        received:yielded>0 && delivered>0
-      };
-    });
-  }
-  function chickenDerivationCard(items, opts){
-    opts=opts||{};
-    var rows=chickenDerivationRows(items);
-    if(!rows.length) return '';
-    var total=rows.reduce(function(s,r){ return s+(+r.cost||0); },0);
-    var dayRate=rows.reduce(function(v,r){ return v || r.daily; },0);
-    var ready=rows.every(function(r){ return r.received && r.daily>0 && r.cost>0; });
-    var title=opts.title||'MN chicken cost';
-    var source=opts.source||'Anbar receive';
-    var paper=opts.paper||'Delivery paper not attached';
-    return '<div class="chcost '+(ready?'ready':'pending')+'">'+
-      '<div class="chcost-top"><div><b>'+esc(title)+'</b><span>'+esc(source)+' · '+(ready?'received':'waiting for receive')+'</span></div><strong>₹'+rupees(total)+'</strong></div>'+
-      '<div class="chcost-tags">'+
-        '<span>'+esc(ready?'Anbar received':'Receive pending')+'</span>'+
-        '<span>'+esc(dayRate>0?('Live rate ₹'+rupees(dayRate)+'/kg'):'Live rate pending')+'</span>'+
-        '<span class="paper">'+esc(paper)+'</span>'+
-      '</div>'+
-      rows.map(function(r){
-        var formula=(r.delivered>0&&r.daily>0) ? (r.delivered+' live kg × ₹'+rupees(r.daily)+' = ₹'+rupees(r.cost)) : 'live kg × daily rate pending';
-        var usable=r.yielded>0 ? (r.yielded+' yielded kg'+(r.pieces?' · '+esc(r.pieces)+' pc':'')) : 'yielded kg pending';
-        var eff=r.eff>0 ? ('effective ₹'+rupees(r.eff)+'/kg usable') : 'effective rate pending';
-        return '<div class="chcost-row"><div class="chcost-name"><b>'+esc(r.item)+'</b><small>ordered '+esc(r.ordered)+'</small></div>'+
-          '<div class="chcost-math"><span>'+esc(usable)+'</span><span>'+esc(formula)+'</span><span>'+esc(eff)+'</span></div>'+
-          (r.note?'<div class="chcost-note">'+esc(r.note)+'</div>':'')+'</div>';
-      }).join('')+
-      '<div class="chcost-foot">This bill adds to the MN diary until the vendor payment is recorded.</div>'+
-    '</div>';
-  }
   function receiptSummary(i){
     var bits=[];
     if(i.received_pieces) bits.push('received '+i.received_pieces+' pc');
@@ -486,116 +433,32 @@
     return (t.lines||[]).some(lineNeedsBill);
   }
 
-  var PAY_CACHE=[];
-  function normBrand(b){ b=String(b||'').toUpperCase(); return b==='HE'||b==='NCH'?b:'both'; }
-  function brandText(b){ b=normBrand(b); return b==='HE'?'Hamza Express':(b==='NCH'?'Nawabi Chai House':'Both'); }
-  function brandChip(b){ b=normBrand(b); return b==='HE'?'HE':(b==='NCH'?'NCH':'Both'); }
-  function orderBrand(o, items){
-    var direct=normBrand(o&&o.brand);
-    if(direct!=='both') return direct;
-    var seen={};
-    (items||[]).forEach(function(i){ var b=normBrand(i&&i.brand); if(b!=='both') seen[b]=1; });
-    var keys=Object.keys(seen);
-    return keys.length===1 ? keys[0] : 'both';
-  }
-  function brandPass(b, wanted){ return !wanted || wanted==='all' || normBrand(b)===wanted; }
-  function summaryLines(items, n){
-    items=items||[];
-    var bits=items.slice(0,n||2).map(function(i){
-      return [i.item||i.name||'', [i.qty||'', i.unit||''].filter(Boolean).join(' ')].filter(Boolean).join(' ');
-    }).filter(Boolean);
-    if(items.length>(n||2)) bits.push('+'+(items.length-(n||2))+' more');
-    return bits.join(' · ');
-  }
-  function moneyText(p){ return +p>0 ? ('₹'+rupees(p)) : '₹—'; }
-  function syncChipGroup(rootId, attr, value){
-    var root=document.getElementById(rootId); if(!root) return;
-    root.querySelectorAll('button['+attr+']').forEach(function(b){ b.classList.toggle('on', b.getAttribute(attr)===value); });
-  }
-  function payStatus(o, needsRate, rail){
-    if(needsRate) return 'needs-rate';
-    if(o&&o.pay==='khata_roll') return 'khata';
-    if(rail==='manual') return 'manual';
-    return 'ready';
-  }
-  function payStatusLabel(k){
-    return k==='needs-rate'?'Needs bill / rates':(k==='khata'?'Khata settlement':(k==='manual'?'Manual rail':'Ready to pay'));
-  }
-  function paySearchText(o, items, brand, rail, status){
-    return [o.vendor_name,o.cat,o.fulfilmentLabel,o.payLabel,o.vpa,brandText(brand),rail,status,moneyText(o.pay_amount_paise),
-      (items||[]).map(function(i){ return [i.item,i.name,i.sku,i.qty,i.unit,receiptSummary(i)].join(' '); }).join(' ')].join(' ').toLowerCase();
-  }
   function loadPay(){
     var list=document.getElementById('payList'), empty=document.getElementById('payEmpty');
     list.innerHTML='<div class="empty">Loading…</div>'; empty.classList.add('hide');
-    api('open').then(function(res){
-      PAY_CACHE=(res.j&&res.j.orders)||[];
-      renderPay();
-      api('auto-settle').then(function(r){
-        if(r&&r.j&&(+r.j.count>0 || (r.j.settled&&r.j.settled.length))){
-          api('open').then(function(fresh){ PAY_CACHE=(fresh.j&&fresh.j.orders)||[]; renderPay(); });
-        }
-      }).catch(function(){});
-    }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
-  }
-  function renderPay(){
-    var list=document.getElementById('payList'), empty=document.getElementById('payEmpty'), head=document.getElementById('payHead');
-    if(!list||!empty) return;
-    if(head) head.innerHTML='';
-    var paySearch=document.getElementById('paySearch');
-    if(paySearch && paySearch.value!==S.pay.q) paySearch.value=S.pay.q||'';
-    syncChipGroup('payBrandChips','data-paybrand',S.pay.brand||'all');
-    syncChipGroup('payStatusChips','data-payfilter',S.pay.filter||'all');
-    if(!PAY_CACHE.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
-    empty.classList.add('hide');
-    var q=(S.pay.q||'').trim().toLowerCase();
-    var cards=PAY_CACHE.map(function(o,idx){
-      var items=[]; try{ items=JSON.parse(o.items_json||'[]'); }catch(e){}
-      var rail=o.payRail || paymentRail(o), bank=bankObj(o), bankText=bankSummary(bank);
-      var rateItems=items.filter(function(i){ return i && i.order_id && i.line_idx!=null && !i.direct && qtyNum(i.qty)>0; });
-      var needsRate=rateItems.some(lineNeedsBill);
-      var brand=orderBrand(o,items), status=payStatus(o,needsRate,rail);
-      return {o:o, idx:idx, items:items, rail:rail, bank:bank, bankText:bankText, rateItems:rateItems, needsRate:needsRate, brand:brand, status:status};
-    }).filter(function(m){
-      if(!brandPass(m.brand,S.pay.brand||'all')) return false;
-      if(S.pay.filter && S.pay.filter!=='all' && m.status!==S.pay.filter) return false;
-      return !q || paySearchText(m.o,m.items,m.brand,m.rail,m.status).indexOf(q)>=0;
-    });
-    var total=cards.reduce(function(s,m){ return s+(+m.o.pay_amount_paise||0); },0);
-    var rateCount=cards.filter(function(m){ return m.needsRate; }).length;
-    if(head) head.innerHTML='<span class="ttl">'+cards.length+' payable card'+(cards.length===1?'':'s')+(q?' · filtered':'')+'</span>'+
-      '<span class="fresh">'+moneyText(total)+(rateCount?' · '+rateCount+' need bill':'')+'</span>';
-    if(!cards.length){ list.innerHTML='<div class="empty small">No payable card matches this filter.</div>'; return; }
-    var by={ 'needs-rate':[], ready:[], khata:[], manual:[] };
-    cards.forEach(function(m){ (by[m.status]||by.ready).push(m); });
-    var groupMeta=[
-      {key:'needs-rate', cls:'need', title:'Needs bill / rates'},
-      {key:'ready', cls:'ready', title:'Ready to pay'},
-      {key:'khata', cls:'khata', title:'Khata / rolling bill'},
-      {key:'manual', cls:'', title:'Manual rail'}
-    ];
+    api('auto-settle').then(function(){ return api('open'); }).then(function(res){
+      var orders=(res.j&&res.j.orders)||[];
+      if(!orders.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
       var html='';
-    groupMeta.forEach(function(g){
-      var rows=by[g.key]||[]; if(!rows.length) return;
-      var gtot=rows.reduce(function(s,m){ return s+(+m.o.pay_amount_paise||0); },0);
-      html+='<div class="op-group '+g.cls+'">'+esc(g.title)+' <span>'+rows.length+'</span><b>'+moneyText(gtot)+'</b></div>';
-      rows.forEach(function(m){
-        var o=m.o, items=m.items, rail=m.rail, bank=m.bank, bankText=m.bankText, rateItems=m.rateItems, needsRate=m.needsRate;
+      orders.forEach(function(o){
+        var items=[]; try{ items=JSON.parse(o.items_json||'[]'); }catch(e){}
+        var rail=o.payRail || paymentRail(o), bank=bankObj(o), bankText=bankSummary(bank);
         var itemsTxt=items.map(function(i){
           var base=esc(i.item)+(i.qty?(' '+esc(i.qty)+(i.unit?' '+esc(i.unit):'')):'');
           var rec=receiptSummary(i);
           return base+(rec?' <span class="recmini">'+esc(rec)+'</span>':'');
         }).join(' · ');
         var amt=o.pay_amount_paise?String(o.pay_amount_paise/100):'';
+        var rateItems=items.filter(function(i){ return i && i.order_id && i.line_idx!=null && !i.direct && qtyNum(i.qty)>0; });
+        var needsRate=rateItems.some(lineNeedsBill);
         var isChickenReceipt=/broiler|m\.?\s*n/i.test(String(o.vendor_name||'')) || rateItems.some(chickenLine);
         var dayLine = o.for_date ? '<div class="flowhint"><b>'+esc(businessDateLabel(o.for_date,'purchase'))+'</b></div>' : '';
-        var chickenCost=isChickenReceipt ? chickenDerivationCard(rateItems.length?rateItems:items,{title:'MN Broilers bill',source:'Sauda order → Anbar receive'}) : '';
         var rateBox='';
         if(rateItems.length){
           if(isChickenReceipt){
             var dayRate=rateItems.reduce(function(v,i){ return v || lineDailyRatePaise(i); },0);
             rateBox='<div class="ratebox chickenbox" data-ratebox data-chicken-box><div class="ratehead"><b>Receive chicken</b><span>'+esc(o.vendor_name)+'</span></div>'+
-              chickenCost+
+              '<div class="ratehint">Same MN chicken engine: yielded kg is usable meat received; delivered kg is the live/raw kg MN billed; one daily rate creates cost and effective usable ₹/kg.</div>'+
               '<div class="dayrate"><span>MN daily rate</span><b>₹</b><input inputmode="decimal" data-day-rate value="'+(dayRate>0?esc(String(dayRate/100)):'')+'" placeholder="rate"><em>/ kg</em></div>'+
               rateItems.map(function(i){
                 var line=lineAmount(i), eff=lineEffectivePaise(i), pcs=pieceUnit(i.unit);
@@ -634,12 +497,9 @@
         var bankAttr=esc(JSON.stringify(bank||{}));
         var payLabel=o.vpa?'Pay':(rail==='bank'?'Bank details':'No rail saved');
         var payClass=o.vpa?'upi':(rail==='bank'?'upi bank':'upi dis');
-        var key=(ids||('pay-'+m.idx+'-'+String(o.vendor_name||'').replace(/\W+/g,'-')));
-        var open=!!S.pay.open[key] || cards.length===1 || !!q;
-        var mini='<span class="mini"><span class="'+(needsRate?'warn':'ok')+'">'+esc(payStatusLabel(m.status))+'</span> · '+esc(brandText(m.brand))+(o.for_date?' · '+esc(businessDateLabel(o.for_date,'')):'')+(summaryLines(items,2)?' · '+esc(summaryLines(items,2)):'')+'</span>';
-        html+='<div class="basket paycard'+(open?' open':'')+'" data-paykey="'+esc(key)+'"><div class="bh"><span class="chev">›</span><span class="bn">'+esc(o.vendor_name)+'</span><span class="payamt">'+moneyText(o.pay_amount_paise)+'</span>'+
-          '<span class="cardtags"><span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span><span class="tag p">'+esc(brandChip(m.brand))+'</span>'+multi+'</span>'+mini+'</div>'+
-          '<div class="pb" data-needs-rate="'+(needsRate?'1':'0')+'">'+dayLine+vendorNote+manualHint+(isChickenReceipt&&!rateItems.length?chickenCost:'')+'<div class="its">'+(itemsTxt||'—')+'</div>'+rateBox+
+        html+='<div class="basket"><div class="bh"><span class="bn">'+esc(o.vendor_name)+'</span>'+
+          '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span>'+multi+'</div>'+
+          '<div class="pb" data-needs-rate="'+(needsRate?'1':'0')+'">'+dayLine+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+rateBox+
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
           '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt '+(rateItems.length?'readonly':'')+' value="'+esc(amt)+'" placeholder="'+(rateItems.length?'auto after rates':'one payment for all items')+'"></div>'+
           '<div class="pay-acts">'+
@@ -647,18 +507,7 @@
             '<button class="done" data-ids="'+ids+'" data-rail="'+esc(rail)+'">'+(o.vpa?'Mark paid':'Record paid')+'</button>'+
           '</div></div></div>';
       });
-    });
       list.innerHTML=html;
-      list.querySelectorAll('.paycard .bh').forEach(function(h){
-        h.addEventListener('click', function(e){
-          if(e.target.closest('button,a,input,label')) return;
-          var card=h.closest('.paycard'), key=card&&card.dataset.paykey;
-          if(!card||!key) return;
-          card.classList.toggle('open');
-          S.pay.open[key]=card.classList.contains('open');
-          saveWork();
-        });
-      });
       function idsOf(el){ return (el.closest('.pb').querySelector('button[data-ids]').dataset.ids||'').split(',').map(Number).filter(Boolean); }
       function chickenLinesFromBox(box, withBill){
         var dailyRate=Math.round(num(box&&box.querySelector('[data-day-rate]')&&box.querySelector('[data-day-rate]').value)*100);
@@ -737,15 +586,10 @@
           api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:method}})
              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(r.j.reconciled?'✓ Bank-confirmed paid':'Marked paid · bank not seen yet','ok'); loadPay(); } else toast('Failed','err'); })
              .catch(function(){ busy=false; toast('No connection','err'); });
-          });
+        });
       });
+    }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
-  var paySearchEl=document.getElementById('paySearch');
-  if(paySearchEl) paySearchEl.addEventListener('input', function(){ S.pay.q=(this.value||'').trim().toLowerCase(); saveWork(); renderPay(); });
-  var payBrandChips=document.getElementById('payBrandChips');
-  if(payBrandChips) payBrandChips.addEventListener('click', function(e){ var b=e.target.closest('button[data-paybrand]'); if(!b) return; S.pay.brand=b.dataset.paybrand; saveWork(); renderPay(); });
-  var payStatusChips=document.getElementById('payStatusChips');
-  if(payStatusChips) payStatusChips.addEventListener('click', function(e){ var b=e.target.closest('button[data-payfilter]'); if(!b) return; S.pay.filter=b.dataset.payfilter; saveWork(); renderPay(); });
 
   // ── Pay sheet: open the chosen UPI app with the amount filled, + always-on
   //    fallbacks. PhonePe is the default; the generic upi:// is LAST (that's the
@@ -1350,35 +1194,20 @@
       (it.flag?'<small style="color:var(--amber)">⚠ '+esc(it.flag)+'</small>':'')+
       (it.sku&&it.sku!==it.item?'<small>'+esc(it.sku)+'</small>':'')+'</div><span class="hq">'+esc(q)+'</span></div>';
   }
-  var HIST_CACHE={po:[],placed:[],summary:{},for_date:''};
-  function histBrand(o, items){
-    if(o&&o.brand) return normBrand(o.brand);
-    return orderBrand(o||{}, items||[]);
-  }
-  function histSearchText(row){
-    var o=row.o, items=row.items||[];
-    return [row.type,o.brand,o.sender,o.vendor_name,o.status,o.fulfilmentLabel,o.payLabel,row.brand,brandText(row.brand),moneyText(o.expected_amount_paise),
-      items.map(function(i){ return [i.item,i.name,i.raw,i.sku,i.qty,i.unit,i.flag,receiptSummary(i)].join(' '); }).join(' ')].join(' ').toLowerCase();
-  }
-  function renderPoCard(o,rowKey,open){
+  function renderPoCard(o){
     var items=o.items||[];
-    var brand=histBrand(o,items);
-    return '<div class="hist-card'+(open?' open':'')+'" data-hkey="'+esc(rowKey)+'"><div class="hhd"><span class="chev">›</span><b>'+esc(brandText(brand))+'</b>'+
-      '<span class="cardtags">'+(o.sender?'<small>'+esc(o.sender)+'</small>':'')+
-      '<small>'+items.length+' item'+(items.length===1?'':'s')+'</small></span><span class="mini">'+esc(summaryLines(items,3)||'Purchase input')+'</span></div>'+
-      '<div class="hbody">'+items.map(orderLineText).join('')+'</div></div>';
+    return '<div class="hist-card"><div class="hhd"><b>'+esc(o.brand||'')+'</b>'+
+      (o.sender?'<small>'+esc(o.sender)+'</small>':'')+
+      '<small style="margin-left:auto">'+items.length+' item'+(items.length===1?'':'s')+'</small></div>'+
+      items.map(orderLineText).join('')+'</div>';
   }
-  function renderPlacedCard(o,rowKey,open){
+  function renderPlacedCard(o){
     var items=o.items||[], amt=+o.expected_amount_paise||0;
-    var brand=histBrand(o,items);
     var note=/ashrafiya/i.test(o.vendor_name||'') ? '<div class="hist-note">Ashrafiya is one combined HE+NCH khata. This vendor can contain both brands, but settlement is one payment.</div>' : '';
-    var isChicken=/broiler|m\.?\s*n/i.test(String(o.vendor_name||'')) || items.some(chickenLine);
-    var chicken=isChicken ? chickenDerivationCard(items,{title:'MN Broilers bill',source:'Sauda order → Anbar receive'}) : '';
-    return '<div class="hist-card'+(open?' open':'')+'" data-hkey="'+esc(rowKey)+'"><div class="hhd"><span class="chev">›</span><b>'+esc(o.vendor_name||'')+'</b>'+(amt?'<span class="hamt">₹'+rupees(amt)+'</span>':'')+
-      '<span class="cardtags"><span class="tag f">'+esc(o.fulfilmentLabel||o.fulfilment||'')+'</span><span class="tag p">'+esc(o.payLabel||o.pay_timing||'')+'</span>'+
-      '<span class="tag p">'+esc(brandChip(brand))+'</span><small>'+esc(o.status||'')+'</small></span>'+
-      '<span class="mini">'+esc(summaryLines(items,3)||'Vendor order')+'</span></div>'+
-      '<div class="hbody">'+note+chicken+items.map(orderLineText).join('')+'</div></div>';
+    return '<div class="hist-card"><div class="hhd"><b>'+esc(o.vendor_name||'')+'</b>'+
+      '<span class="tag f">'+esc(o.fulfilmentLabel||o.fulfilment||'')+'</span><span class="tag p">'+esc(o.payLabel||o.pay_timing||'')+'</span>'+
+      '<small>'+esc(o.status||'')+'</small>'+(amt?'<span class="hamt">₹'+rupees(amt)+'</span>':'')+'</div>'+
+      note+items.map(orderLineText).join('')+'</div>';
   }
   function loadHistory(){
     var list=document.getElementById('histList'), empty=document.getElementById('histEmpty'), head=document.getElementById('histHead');
@@ -1387,62 +1216,20 @@
     list.innerHTML='<div class="empty">Loading…</div>'; empty.classList.add('hide'); head.innerHTML='';
     api('purchase-day&for_date='+encodeURIComponent(fd)).then(function(res){
       if(!res.ok||!res.j||!res.j.ok){ list.innerHTML=''; toast('Load failed','err'); return; }
-      HIST_CACHE={po:res.j.po_orders||[], placed:res.j.placed_orders||[], summary:res.j.summary||{}, for_date:res.j.for_date||fd};
-      renderHistory();
-    }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
-  }
-  function renderHistory(){
-    var list=document.getElementById('histList'), empty=document.getElementById('histEmpty'), head=document.getElementById('histHead');
-    if(!list||!empty) return;
-    syncHistoryDate();
-    var histSearch=document.getElementById('histSearch');
-    if(histSearch && histSearch.value!==S.hist.q) histSearch.value=S.hist.q||'';
-    syncChipGroup('histBrandChips','data-hbrand',S.hist.brand||'all');
-    var po=HIST_CACHE.po||[], placed=HIST_CACHE.placed||[], s=HIST_CACHE.summary||{}, fd=HIST_CACHE.for_date||S.hist.date||defaultPurchaseDateIST();
-    var L=fmtDayLabel(fd);
-    var rows=[];
-    po.forEach(function(o,i){ var items=o.items||[]; rows.push({type:'po', key:'po-'+i, o:o, items:items, brand:histBrand(o,items)}); });
-    placed.forEach(function(o,i){ var items=o.items||[]; rows.push({type:'placed', key:'placed-'+i, o:o, items:items, brand:histBrand(o,items)}); });
-    var q=(S.hist.q||'').trim().toLowerCase();
-    var filtered=rows.filter(function(r){ return brandPass(r.brand,S.hist.brand||'all') && (!q || histSearchText(r).indexOf(q)>=0); });
-    if(head) head.innerHTML='<span class="ttl">'+esc(L.t)+(L.sub?' · '+esc(L.sub):'')+'</span>'+
-      '<span class="fresh">'+filtered.length+' card'+(filtered.length===1?'':'s')+' · '+(s.po_items||0)+' input item'+((s.po_items||0)===1?'':'s')+' · '+(s.placed_orders||0)+' vendor order'+((s.placed_orders||0)===1?'':'s')+'</span>';
-    if(!po.length && !placed.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
-    empty.classList.add('hide');
-    if(!filtered.length){ list.innerHTML='<div class="empty small">No order matches this search/filter for '+esc(L.t)+'.</div>'; return; }
+      var po=res.j.po_orders||[], placed=res.j.placed_orders||[], s=res.j.summary||{};
+      var L=fmtDayLabel(res.j.for_date||fd);
+      head.innerHTML='<span class="ttl">'+esc(L.t)+(L.sub?' · '+esc(L.sub):'')+'</span>'+
+        '<span class="fresh">'+(s.po_items||0)+' input item'+((s.po_items||0)===1?'':'s')+' · '+(s.placed_orders||0)+' vendor order'+((s.placed_orders||0)===1?'':'s')+'</span>';
+      if(!po.length && !placed.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
       var html='<div class="hist-summary">'+
         '<div class="hist-box"><b>'+esc(String(s.po_items||0))+'</b><span>items entered</span></div>'+
         '<div class="hist-box"><b>'+esc(String(s.placed_orders||0))+'</b><span>vendor orders placed</span></div>'+
         '<div class="hist-box"><b>₹'+rupees(s.expected_amount_paise||0)+'</b><span>placed bill basis</span></div>'+
         '</div>';
-    var byType={po:[],placed:[]};
-    filtered.forEach(function(r){ byType[r.type].push(r); });
-    function addBrandGroups(title, rowsForType){
-      if(!rowsForType.length) return;
-      html+='<div class="hist-section">'+title+'</div>';
-      ['HE','NCH','both'].forEach(function(b){
-        var group=rowsForType.filter(function(r){ return r.brand===b; });
-        if(!group.length) return;
-        html+='<div class="op-group">'+esc(brandText(b))+' <span>'+group.length+'</span></div>';
-        group.forEach(function(r){
-          var open=!!S.hist.open[r.key] || filtered.length===1 || !!q;
-          html+= r.type==='po' ? renderPoCard(r.o,r.key,open) : renderPlacedCard(r.o,r.key,open);
-        });
-      });
-    }
-    addBrandGroups('Purchase inputs', byType.po);
-    addBrandGroups('Vendor orders placed', byType.placed);
-    list.innerHTML=html;
-    list.querySelectorAll('.hist-card .hhd').forEach(function(h){
-      h.addEventListener('click', function(e){
-        if(e.target.closest('button,a,input,label')) return;
-        var card=h.closest('.hist-card'), key=card&&card.dataset.hkey;
-        if(!card||!key) return;
-        card.classList.toggle('open');
-        S.hist.open[key]=card.classList.contains('open');
-        saveWork();
-      });
-    });
+      if(po.length) html+='<div class="hist-section">Purchase inputs</div>'+po.map(renderPoCard).join('');
+      if(placed.length) html+='<div class="hist-section">Vendor orders placed</div>'+placed.map(renderPlacedCard).join('');
+      list.innerHTML=html;
+    }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
   var histDateInput=document.getElementById('histDate');
   if(histDateInput) histDateInput.addEventListener('change', function(){ setHistoryDate(this.value); });
@@ -1456,10 +1243,6 @@
     var b=e.target.closest('button[data-hquick]'); if(!b) return;
     setHistoryDate(b.dataset.hquick==='tomorrow'?ymdIST(1):ymdIST(0));
   });
-  var histSearchEl=document.getElementById('histSearch');
-  if(histSearchEl) histSearchEl.addEventListener('input', function(){ S.hist.q=(this.value||'').trim().toLowerCase(); saveWork(); renderHistory(); });
-  var histBrandChips=document.getElementById('histBrandChips');
-  if(histBrandChips) histBrandChips.addEventListener('click', function(e){ var b=e.target.closest('button[data-hbrand]'); if(!b) return; S.hist.brand=b.dataset.hbrand; saveWork(); renderHistory(); });
 
   // ── Vendor diary — per-vendor records: paid / outstanding / full trail ──
   function fmtTs(s){ if(!s) return ''; try{ return String(s).slice(0,16).replace('T',' '); }catch(e){ return s; } }
@@ -1468,14 +1251,6 @@
     if(!Array.isArray(lines)||!lines.length) return '';
     return lines.slice(0,5).map(function(i){
       var q=[i.qty||'', i.unit||''].filter(Boolean).join(' ');
-      if(chickenLine(i)){
-        var yielded=lineYieldedKg(i), delivered=lineDeliveredKg(i), daily=lineDailyRatePaise(i), cost=lineAmount(i), eff=lineEffectivePaise(i);
-        var formula=(delivered>0&&daily>0)?(' · '+delivered+' live kg x ₹'+rupees(daily)+' = ₹'+rupees(cost)):'';
-        var usable=yielded>0?(' · yielded '+yielded+' kg'):'';
-        var effective=eff>0?(' · effective ₹'+rupees(eff)+'/kg'):'';
-        var pcs=i.received_pieces?(' · '+i.received_pieces+' pc'):'';
-        return [i.item||i.name||'', q].filter(Boolean).join(' ') + pcs + usable + formula + effective + (i.received_note?' · '+i.received_note:'');
-      }
       var r=receiptSummary(i);
       var p=+i.price_paise>0 ? (' · bill ₹'+rupees(lineAmount(i))) : (pendingRate&&!i.direct?' · receipt/bill pending':'');
       return [i.item||i.name||'', q].filter(Boolean).join(' ') + (r?' · '+r:'') + p;
@@ -1902,7 +1677,7 @@
   // ── misc ──
   function lock(){ try{ sessionStorage.removeItem(SKEY); }catch(e){} if(S.hp&&S.hp.tick) clearInterval(S.hp.tick);
     try{ localStorage.removeItem('sauda_work'); }catch(e){}
-    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,placeDate:defaultPurchaseDateIST(),hist:{date:defaultPurchaseDateIST(),q:'',brand:'all',open:{}},pay:{q:'',brand:'all',filter:'all',open:{}},hp:{feed:[],win:null,fresh:'',stale:false,picked:{},chosen:{},collapsed:{dearer:true,nomatch:true},tick:null},cmp:{items:[],sources:{},pick:{}},buy:{qty:{},when:'today'}};
+    S={token:null,user:'',role:'',cat:null,brand:'both',order:[],seq:0,hp:{feed:[],win:null,fresh:'',stale:false,picked:{},chosen:{},collapsed:{dearer:true,nomatch:true},tick:null},cmp:{items:[],sources:{},pick:{}},buy:{qty:{},when:'today'}};
     pin=''; renderDots(); app.classList.add('hide'); gate.classList.remove('hide'); }
   document.getElementById('lock').addEventListener('click', lock);
   function toast(msg,kind){ var h=document.getElementById('toastHost'); h.innerHTML='<div class="toast '+(kind||'info')+'">'+esc(msg)+'</div>'; setTimeout(function(){h.innerHTML='';},2200); }

@@ -128,26 +128,102 @@
 
     .ov{position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(5px);z-index:70;display:flex;align-items:flex-end;justify-content:center}
     @media(min-width:560px){.ov{align-items:center}}
-    .sheet{background:var(--e1);border-radius:18px 18px 0 0;width:100%;max-width:480px;padding:18px 18px calc(18px + var(--safe-bot));border:1px solid var(--line)}
+    .sheet{background:var(--e1);border-radius:18px 18px 0 0;width:100%;max-width:480px;max-height:calc(100dvh - var(--safe-top) - 14px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 18px calc(18px + var(--safe-bot));border:1px solid var(--line)}
     @media(min-width:560px){.sheet{border-radius:18px}}
     .sheet h2{font-size:19px;font-weight:800;margin-bottom:12px}
     .fld{margin-bottom:11px}
     .fld label{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
-    .fld input,.fld select{width:100%;background:var(--e2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:15px;padding:11px 12px}
+    .fld input,.fld select{width:100%;min-height:44px;background:var(--e2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:16px;padding:11px 12px}
 
     /* ── to-pay view ── */
     .pb{padding:10px 12px;border-top:1px solid var(--line-soft)}
     .pb .its{font-size:12.5px;color:var(--dim);margin-bottom:9px;line-height:1.5}
+    .pb .its .recmini{display:block;color:var(--gold);font-size:11.5px;margin-top:1px}
     .pay-row{display:flex;align-items:center;gap:9px}
     .pay-row .rupee{font-size:15px;color:var(--dim)}
     .pay-row input{width:96px;background:var(--e2);border:1px solid var(--line);border-radius:9px;color:var(--text);font-size:16px;padding:9px 10px;font-variant-numeric:tabular-nums}
+    .pay-row input[readonly]{background:var(--e1);color:var(--gold)}
+    .ratebox{border:1px solid var(--line);border-radius:12px;background:var(--e2);padding:10px;margin:10px 0}
+    .ratehead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .ratehead b{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--gold)}
+    .ratehead span{font-size:11px;color:var(--dim);margin-left:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ratehint{font-size:11.5px;line-height:1.4;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-bd);border-radius:9px;padding:7px 9px;margin-bottom:8px}
+    .raterow{display:grid;grid-template-columns:minmax(0,1fr) auto 92px auto;gap:7px;align-items:center;padding:8px 0;border-top:1px solid var(--line-soft)}
+    .raterow:first-of-type{border-top:0}
+    .raterow .ri{min-width:0}
+    .raterow .ri b{display:block;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .raterow .ri small{display:block;margin-top:2px;font-size:10.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .raterow .rs,.raterow .pu{font-size:11px;color:var(--dim)}
+    .raterow input{width:100%;min-height:40px;background:var(--e1);border:1px solid var(--line);border-radius:8px;color:var(--text);text-align:center;font-size:15px;font-variant-numeric:tabular-nums}
+    .receiptrow{display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px}
+    .receiptrow input{width:100%;min-height:40px;background:var(--e1);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:13px;padding:8px 10px}
+    .chickenbox{background:rgba(212,162,76,.06);border-color:var(--gold-bd)}
+    .chcost{border:1px solid var(--gold-bd);border-radius:12px;background:rgba(212,162,76,.07);padding:10px;margin:8px 0 10px}
+    .chcost.ready{border-color:rgba(55,211,153,.38);background:linear-gradient(180deg,rgba(55,211,153,.08),rgba(212,162,76,.05))}
+    .chcost-top{display:flex;align-items:flex-start;gap:10px}
+    .chcost-top div{flex:1;min-width:0}
+    .chcost-top b{display:block;font-size:13px;font-weight:850;color:var(--text)}
+    .chcost-top span{display:block;margin-top:2px;font-size:10.5px;color:var(--dim)}
+    .chcost-top strong{font-size:18px;color:var(--gold);font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .chcost-tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
+    .chcost-tags span{font-size:10px;font-weight:800;color:var(--green);background:var(--green-soft);border:1px solid rgba(55,211,153,.28);border-radius:8px;padding:2px 7px}
+    .chcost-tags .paper{color:var(--amber);background:var(--amber-soft);border-color:var(--amber-bd)}
+    .chcost-row{padding:9px 0;border-top:1px solid var(--line-soft)}
+    .chcost-name{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+    .chcost-name b{font-size:13px;font-weight:800}
+    .chcost-name small{font-size:10.5px;color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+    .chcost-math{display:grid;gap:3px;margin-top:6px}
+    .chcost-math span{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;line-height:1.3}
+    .chcost-math span:nth-child(2){color:var(--gold)}
+    .chcost-note{margin-top:7px;padding:7px 8px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--line-soft);font-size:11.2px;line-height:1.35;color:var(--amber)}
+    .chcost-foot{border-top:1px solid var(--line-soft);padding-top:8px;margin-top:3px;font-size:10.8px;line-height:1.35;color:var(--mute)}
+    .dayrate{display:grid;grid-template-columns:1fr auto minmax(88px,120px) auto;gap:7px;align-items:center;background:rgba(212,162,76,.08);border:1px solid var(--gold-bd);border-radius:10px;padding:9px 10px;margin-bottom:8px}
+    .dayrate span{font-size:10px;font-weight:850;color:var(--gold);text-transform:uppercase;letter-spacing:.04em}
+    .dayrate b,.dayrate em{font-size:12px;color:var(--dim);font-style:normal}
+    .dayrate input{width:100%;min-height:38px;background:var(--e1);border:1px solid var(--line);border-radius:8px;color:var(--text);text-align:right;font-size:16px;padding:7px 8px;font-variant-numeric:tabular-nums}
+    .chrow{padding:10px 0;border-top:1px solid var(--line-soft)}
+    .chrow:first-of-type{border-top:0}
+    .chname b{display:block;font-size:13.5px;font-weight:750}
+    .chname small{display:block;margin-top:2px;font-size:11px;color:var(--mute)}
+    .chgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+    .chgrid label span{display:block;font-size:9.5px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+    .chgrid input,.chnote{width:100%;min-height:40px;background:var(--e1);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:15px;padding:8px 9px;font-variant-numeric:tabular-nums}
+    .chnote{margin-top:8px;font-size:12.5px;font-variant-numeric:normal}
+    .save-receipt{width:100%;min-height:42px;margin-top:9px;border-radius:10px;background:var(--e2);color:var(--gold);border:1px solid var(--gold-bd);font-weight:800}
+    .save-rates{width:100%;min-height:42px;margin-top:9px;border-radius:10px;background:var(--gold);color:#1a1206;font-weight:800}
+    @media(max-width:390px){.raterow{grid-template-columns:1fr auto 82px auto}.chgrid{grid-template-columns:1fr}.dayrate{grid-template-columns:1fr auto 86px auto}}
     .pay-acts{display:flex;gap:8px;margin-top:10px}
     .pay-acts a,.pay-acts button{flex:1;text-align:center;padding:11px;border-radius:10px;font-weight:700;font-size:13.5px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
     .pay-acts .upi{background:var(--green);color:#04130c}
+    .pay-acts .upi.bank{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-bd)}
     .pay-acts .upi.dis{background:var(--e3);color:var(--mute);pointer-events:none}
     .pay-acts .done{background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd)}
     .pay-acts .done:active{transform:scale(.97)}
+    .flowhint{font-size:12px;line-height:1.4;color:var(--dim);padding:8px 10px;margin-bottom:8px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--line-soft)}
+    .flowhint b{color:var(--gold)}
     .pday{padding:14px 18px 4px;font:800 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+    .op-search{padding-top:10px;padding-bottom:3px}
+    .opchips{padding:3px 16px 6px}
+    .opchips.compact{padding-top:0}
+    .op-group{display:flex;align-items:center;gap:8px;margin:13px 2px 8px;color:var(--dim);font-size:10.8px;font-weight:850;text-transform:uppercase;letter-spacing:.065em}
+    .op-group b{color:var(--text);font-size:12px;text-transform:none;letter-spacing:0;margin-left:auto;font-variant-numeric:tabular-nums}
+    .op-group.need{color:var(--amber)}
+    .op-group.ready{color:var(--green)}
+    .op-group.khata{color:var(--gold)}
+    .paycard{background:var(--e1)}
+    .paycard .bh{cursor:pointer;min-height:52px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 8px;align-items:center;flex-wrap:nowrap}
+    .cardtags{grid-column:2/4;display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+    .paycard .bh:active,.hist-card .hhd:active{background:var(--e2)}
+    .paycard .bh .bn,.hist-card .hhd b{flex:1;min-width:0}
+    .paycard .bh .bn,.hist-card .hhd b{grid-column:2;grid-row:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px;line-height:1.2}
+    .payamt{grid-column:3;grid-row:1;margin-left:0;color:var(--gold);font-size:13px;font-weight:850;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .chev{grid-column:1;grid-row:1;color:var(--mute);font-size:17px;line-height:1;transition:transform .16s var(--ease)}
+    .paycard.open .chev,.hist-card.open .chev{transform:rotate(90deg);color:var(--gold)}
+    .paycard:not(.open) .pb{display:none}
+    .mini{grid-column:2/4;min-width:0;font-size:11px;color:var(--mute);font-weight:500;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mini .warn{color:var(--amber);font-weight:750}
+    .mini .ok{color:var(--green);font-weight:750}
+    .empty.small{padding:24px 18px}
 
     /* ── Hyperpure (tomorrow's planned basket) ── */
     .hp-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 16px 2px}
@@ -167,6 +243,33 @@
     .hpitem .nm .uu{font-size:10.5px;color:var(--mute);font-variant-numeric:tabular-nums}
     .hpitem .right{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex-shrink:0}
     .hpitem .pr{font-size:14.5px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1}
+    .hpitem .hp-open{font-size:11.5px;font-weight:800;color:var(--gold);background:var(--gold-soft);border:1px solid var(--gold-bd);padding:0 11px;border-radius:9px;white-space:nowrap;text-decoration:none;line-height:1;min-height:32px;display:flex;align-items:center}
+    .hpitem .hp-open:active{transform:scale(.94)}
+    .hp-howto{font-size:12px;color:var(--dim);line-height:1.45;background:var(--gold-soft);border:1px solid var(--gold-bd);border-radius:11px;padding:10px 12px;margin-bottom:11px}
+    .hp-howto b{color:var(--gold)}
+    /* strip: added-count chip + stale banner */
+    .hp-cnt{font-size:11px;font-weight:700;color:var(--green);margin-left:8px}
+    .hp-stale{flex-basis:100%;margin-top:6px;font-size:11.5px;line-height:1.4;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-bd);border-radius:9px;padding:7px 10px}
+    /* group headers — sort by buying decision */
+    .hpgrp{display:flex;align-items:center;gap:7px;width:100%;text-align:left;font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:14px 2px 8px;padding:0}
+    .hpgrp:first-child{margin-top:2px}
+    .hpgrp em{font-style:normal;font-weight:700;color:var(--mute);background:var(--e3);border-radius:20px;padding:1px 8px;font-size:11px}
+    .hpgrp .chev{margin-left:auto;color:var(--mute);font-size:12px}
+    .hpgrp.g-ok{color:var(--green)} .hpgrp.g-warn{color:var(--amber)} .hpgrp.g-mut{color:var(--dim)}
+    /* row: matched SKU name (transparency) + honest verdict line + unit price */
+    .hpitem .nm .mt{display:block;font-size:11px;color:var(--mute);line-height:1.3;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .hpitem .nm .vd{display:inline-block;font-size:11.5px;font-weight:700;line-height:1.35;margin-top:3px}
+    .hpitem .nm .vd.ok{color:var(--green)} .hpitem .nm .vd.warn{color:var(--amber)} .hpitem .nm .vd.mut{color:var(--mute);font-weight:600}
+    .hpitem .nm .meta .uu.big{font-size:13px;font-weight:800;color:var(--text)}
+    .hpitem .nm .meta .pk2{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+    /* checklist controls */
+    .hpitem .hp-open.op{background:transparent;color:var(--mute);border-color:var(--line)}
+    .hpitem .hp-open.done{color:var(--green);background:var(--green-soft);border:1px solid rgba(55,211,153,.4)}
+    .hpitem .hp-tick{font-size:11px;font-weight:700;color:var(--mute);background:var(--e2);border:1px solid var(--line);border-radius:9px;min-height:28px;padding:0 10px;white-space:nowrap}
+    .hpitem .hp-tick.on{color:var(--green);border-color:rgba(55,211,153,.4);background:var(--green-soft)}
+    .hpitem .hp-tick:active{transform:scale(.94)}
+    .hpitem.added{opacity:.62}
+    .hpitem.added .nm .vd{display:none}
     .hpitem.in{border-color:var(--gold-bd);background:rgba(212,162,76,.07)}
     .step{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex-shrink:0}
     .step button{width:34px;height:34px;display:grid;place-items:center;font-size:19px;color:var(--gold);background:var(--e2)}
@@ -217,7 +320,7 @@
     .vnew input{flex:1;background:var(--e2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:14px;padding:10px 12px}
     .vnew button{flex-shrink:0;padding:0 16px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700}
     /* scrollable mode tabs */
-    .seg.scrollx{max-width:calc(100vw - 32px);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .seg.scrollx{display:flex;width:calc(100vw - 32px);max-width:calc(100vw - 32px);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain}
     .seg.scrollx::-webkit-scrollbar{display:none}
     .seg.scrollx button{white-space:nowrap;flex:0 0 auto}
     /* Compare view */
@@ -300,14 +403,15 @@
     .line{flex-direction:column;align-items:stretch;gap:7px}
     .line .lhead{display:flex;align-items:center;gap:8px}
     .line .lhead .ln{flex:1;font-size:14px}
-    .line .lf{display:flex;gap:8px}
-    .line .lf .ff{flex:1;display:flex;align-items:center;gap:6px}
+    .line .lf{display:grid;grid-template-columns:1fr;gap:8px}
+    .line .lf .ff{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:7px}
     .line .lf .ff label{font-size:10px;color:var(--mute);min-width:30px}
-    .line .lf .ff input{flex:1;min-width:0;text-align:center;background:var(--e2);border:1px solid var(--line);border-radius:8px;padding:8px 4px;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+    .line .lf .ff input{width:100%;min-width:0;text-align:center;background:var(--e2);border:1px solid var(--line);border-radius:8px;padding:9px 6px;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
     .line .lf .ff .u{font-size:11px;color:var(--dim)}
+    @media(min-width:560px){.line .lf{grid-template-columns:1fr 1fr}}
     .bsub{padding:8px 12px;text-align:right;font-size:12px;color:var(--dim);border-top:1px solid var(--line-soft)}
     .bsub b{color:var(--text);font-variant-numeric:tabular-nums}
-    /* Vendors — per-vendor records ledger */
+    /* Vendor diary — per-vendor records ledger */
     .ven{margin-bottom:10px;border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;border-left:3px solid var(--sauda);background:var(--e1)}
     .ven .vhd{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer}
     .ven .vleft{flex:1;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
@@ -318,10 +422,46 @@
     .ven .vpay{display:flex;align-items:center;gap:8px;padding:0 12px 9px}
     .ven .vpay .vid{flex:1;font-size:11.5px;color:var(--mute);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .ven .vpay .paynow{flex-shrink:0;padding:7px 15px;border-radius:9px;background:var(--green);color:#04130c;font-weight:700;font-size:12.5px}
+    .ven .vpay .paynow.manual{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-bd)}
+    .ven .vpay .paynow.receipt{background:var(--gold);color:#1a1206;border:1px solid var(--gold)}
     .ven .vpay .paynow:active{transform:scale(.97)}
+    .quickdates{display:flex;gap:8px;margin:-4px 0 11px}
+    .quickdates button{flex:1;min-height:38px;border-radius:9px;background:var(--e2);border:1px solid var(--line);color:var(--gold);font-size:12.5px;font-weight:800}
+    .datebar{display:grid;grid-template-columns:1fr minmax(132px,1.35fr) 1fr;gap:8px;margin:10px 16px 8px;align-items:center}
+    .datebar button,.datebar input{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--e2);color:var(--text);font-size:13px;font-weight:800;text-align:center;padding:0 10px}
+    .datebar button{color:var(--gold);background:var(--gold-soft);border-color:var(--gold-bd)}
+    .datebar input{font-variant-numeric:tabular-nums;color:var(--text)}
+    .diary-datebar{margin-bottom:4px}
+    .diary-quick{margin:0 16px 4px}
+    .hist-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 12px}
+    .hist-box{border:1px solid var(--line-soft);border-radius:11px;background:var(--e1);padding:9px 10px}
+    .hist-box b{display:block;font-size:16px;font-weight:850;font-variant-numeric:tabular-nums}
+    .hist-box span{display:block;margin-top:2px;font-size:10.5px;color:var(--dim);line-height:1.25}
+    .hist-section{margin:12px 0 8px;font:850 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+    .hist-card{margin-bottom:10px;border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;border-left:3px solid var(--sauda);background:var(--e1)}
+    .hist-card .hhd{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 8px;padding:10px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line-soft);cursor:pointer}
+    .hist-card .hhd b{font-size:14px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .hist-card .hhd small{font-size:11px;color:var(--dim);white-space:nowrap}
+    .hist-card .hamt{grid-column:3;grid-row:1;margin-left:0;color:var(--gold);font-weight:850;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .hist-card .hline{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-top:1px solid var(--line-soft)}
+    .hist-card .hline:first-of-type{border-top:0}
+    .hist-card .hline .hi{flex:1;min-width:0}
+    .hist-card .hline .hi b{font-size:13.5px;font-weight:650}
+    .hist-card .hline .hi small{display:block;margin-top:2px;font-size:10.5px;color:var(--mute);line-height:1.35}
+    .hist-card .hline .hq{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+    .hist-note{font-size:11.5px;line-height:1.4;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-bd);border-radius:10px;padding:8px 10px;margin:0 0 10px}
+    .hist-card:not(.open) .hbody{display:none}
+    .hist-card .hbody{border-top:1px solid var(--line-soft)}
+    @media(max-width:390px){.hist-summary{grid-template-columns:1fr}.datebar{grid-template-columns:72px 1fr 72px}}
     /* Settings grid */
     #viewSettings .search{display:flex;align-items:center;gap:8px}
     #viewSettings .search .box{flex:1}
+    .fchips{display:flex;gap:7px;overflow-x:auto;padding:4px 16px 8px;-webkit-overflow-scrolling:touch}
+    .fchips::-webkit-scrollbar{display:none}
+    .fchip{flex:none;white-space:nowrap;font-size:12px;font-weight:600;padding:6px 12px;border-radius:15px;background:var(--e2);color:var(--dim);border:1px solid var(--line)}
+    .fchip.on{background:var(--gold-soft);color:var(--gold);border-color:var(--gold-bd)}
+    .fchip.am{color:var(--amber);border-color:var(--amber-bd)}
+    .fchip.am.on{background:var(--amber-soft);color:var(--amber)}
     .needtog{flex-shrink:0;font-size:11px;color:var(--gold);background:var(--gold-soft);border:1px solid var(--gold-bd);border-radius:9px;padding:9px 11px;white-space:nowrap}
     .needtog.on{background:var(--gold);color:#1a1206}
     .setcount{padding:2px 4px 8px;font-size:11.5px;color:var(--dim)}
@@ -346,6 +486,17 @@
     .srow .formt.sku{background:var(--gold-soft);color:var(--gold);border-color:var(--gold-bd)}
     .srow .brin,.srow .pkin{flex:1;min-width:74px;background:var(--e2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px}
     .srow .loosehint{font-size:10.5px;color:var(--mute)}
+    .setadd{width:100%;margin:0 0 10px;padding:12px;border-radius:11px;background:var(--gold-soft);color:var(--gold);border:1px dashed var(--gold-bd);font-weight:800;font-size:13.5px}
+    .setadd:active{transform:scale(.985)}
+    .vendor-edit{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+    .vendor-edit input,.vendor-edit select{width:100%;max-width:none;min-height:44px;background:var(--e2);border:1px solid var(--line);border-radius:9px;color:var(--text);font-size:15px;padding:10px 11px}
+    .vendor-edit .wide{grid-column:1/-1}
+    .vendor-edit .vendor-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .vendor-edit .vendor-actions button{min-height:44px;padding:10px;border-radius:9px;font-size:14px;font-weight:800}
+    .vendor-edit .vitemadd{background:var(--e2);border:1px solid var(--gold-bd);color:var(--gold)}
+    .vendor-edit .vendor-actions .vsave{grid-column:auto}
+    .vendor-edit .vsave{grid-column:1/-1;min-height:44px;padding:10px;border-radius:9px;background:var(--gold);color:#1a1206;font-size:14px;font-weight:800}
+    @media(max-width:520px){.vendor-edit{grid-template-columns:1fr}.vendor-edit .vendor-actions{grid-template-columns:1fr}}
     .ven .vtrail{border-top:1px solid var(--line-soft);padding:4px 12px 8px}
     .ven .tr{display:grid;grid-template-columns:auto 1fr auto;gap:3px 9px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-soft)}
     .ven .tr:last-child{border-bottom:none}
@@ -353,9 +504,15 @@
     .ven .tr .ts.ok{background:var(--green-soft);color:var(--green)}
     .ven .tr .ts.amber{background:var(--amber-soft);color:var(--amber)}
     .ven .tr .ts.dim{background:rgba(255,255,255,.06);color:var(--dim)}
-    .ven .tr .ti{font-size:12px;color:var(--text)}
+    .ven .tr .ti{font-size:12px;color:var(--text);min-width:0;word-break:break-word}
+    .ven .tr .ti b{display:block;font-size:12.2px;font-weight:800;line-height:1.25}
+    .ven .tr .ti small{display:block;margin-top:2px;font-size:10.8px;color:var(--dim);line-height:1.35}
     .ven .tr .ta{font-size:12.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;text-align:right}
+    .ven .tr .ta.neg{color:var(--green)}
     .ven .tr .tw{grid-column:2/4;font-size:10.5px;color:var(--mute)}
+    .ven .tr .attrow{grid-column:2/4;display:flex;gap:6px;flex-wrap:wrap}
+    .ven .tr .attbtn{min-height:30px;padding:0 10px;border-radius:8px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-size:11px;font-weight:800}
+    .ven .tr .attbtn:active{transform:scale(.96)}
     /* Pay sheet — choose UPI app + always-on fallbacks */
     .paybig{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin:2px 0 8px}
     .payapp{display:block;text-align:center;padding:13px;border-radius:11px;background:var(--e2);border:1px solid var(--line);color:var(--text);font-weight:700;font-size:14px;text-decoration:none;margin-bottom:9px}
@@ -366,6 +523,11 @@
     .cpyrow{display:flex;gap:8px;margin-bottom:8px}
     .cpyrow .cpy{flex:1;padding:10px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700;font-size:12.5px}
     .vpa-line{font-size:12px;color:var(--mute);text-align:center;font-variant-numeric:tabular-nums}
+    .bankbox{border:1px solid var(--line);border-radius:12px;background:var(--e2);padding:10px 11px;margin:10px 0 10px}
+    .bankline{display:grid;grid-template-columns:82px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid var(--line-soft);font-size:12.5px;line-height:1.35}
+    .bankline:last-child{border-bottom:0}
+    .bankline b{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+    .bankline span{font-variant-numeric:tabular-nums;word-break:break-word}
   </style>
 </head>
 <body>
@@ -405,11 +567,11 @@
     <div class="seg scrollx" id="modeSeg">
       <button data-m="buy" class="on">Buy list</button>
       <button data-m="place">Place</button>
+      <button data-m="orders">Orders</button>
       <button data-m="pay">To pay</button>
-      <button data-m="vendors">Vendors</button>
+      <button data-m="vendors">Diary</button>
       <button data-m="hp">Hyperpure</button>
       <button data-m="cmp">Compare</button>
-      <button data-m="saved">Saved</button>
     </div>
   </div>
 
@@ -435,6 +597,11 @@
 
   <!-- PLACE VIEW -->
   <div id="viewPlace">
+    <div class="datebar" id="placeDateBar">
+      <button data-pquick="today">Today</button>
+      <input id="placeDate" type="date" aria-label="Purchase date">
+      <button data-pquick="tomorrow">Tomorrow</button>
+    </div>
     <div class="seg" id="brandSeg" style="margin:0 16px 2px">
       <button data-b="both" class="on">Both</button>
       <button data-b="HE">HE</button>
@@ -456,6 +623,26 @@
 
   <!-- TO-PAY VIEW -->
   <div id="viewPay" class="hide">
+    <div class="search op-search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="paySearch" type="text" placeholder="Search vendor, item, amount…" autocomplete="off">
+      </div>
+    </div>
+    <div class="fchips opchips" id="payBrandChips">
+      <button class="fchip on" data-paybrand="all">All</button>
+      <button class="fchip" data-paybrand="HE">HE</button>
+      <button class="fchip" data-paybrand="NCH">NCH</button>
+      <button class="fchip" data-paybrand="both">Both</button>
+    </div>
+    <div class="fchips opchips compact" id="payStatusChips">
+      <button class="fchip on" data-payfilter="all">All</button>
+      <button class="fchip" data-payfilter="ready">Ready</button>
+      <button class="fchip am" data-payfilter="needs-rate">Needs bill</button>
+      <button class="fchip" data-payfilter="khata">Khata</button>
+      <button class="fchip" data-payfilter="manual">Manual rail</button>
+    </div>
+    <div class="cmp-h" id="payHead"></div>
     <main class="pane" id="payPane">
       <div class="empty" id="payEmpty">Nothing waiting for payment.</div>
       <div id="payList"></div>
@@ -472,6 +659,7 @@
       </div>
     </div>
     <main class="pane" id="hpPane">
+      <div class="hp-howto">Each item shows Hyperpure’s price next to <b>your usual price</b>. Tap <b>Open ↗</b> to jump to it on Hyperpure and add it there, then tap <b>✓</b> to tick it off. Place &amp; pay in Hyperpure.</div>
       <div class="empty" id="hpEmpty">No mandi prices yet.<br>The scout refreshes Hyperpure prices each night.</div>
       <div id="hpFeed"></div>
     </main>
@@ -486,13 +674,6 @@
     <button class="btn primary" id="placeBtn" disabled>Place order</button>
   </div>
 
-  <div class="bottom hide" id="hpBar" style="flex-direction:column;gap:10px">
-    <div class="mov" style="width:100%">
-      <div class="track"><div class="fill" id="movFill"></div></div>
-      <div class="lbl"><span id="movLeft">₹0</span><span id="movRight">of ₹1,500 minimum</span></div>
-    </div>
-    <button class="btn primary" id="hpPlaceBtn" disabled style="width:100%">Add items to start</button>
-  </div>
 
   <!-- COMPARE VIEW (cheapest across platforms, per product) -->
   <div id="viewCompare" class="hide">
@@ -504,19 +685,48 @@
   </div>
   <div class="bottom hide" id="cmpBar"><div class="psum" id="cmpSummary"></div></div>
 
-  <!-- SAVED VIEW — the purchase-order trail (decoded + confirmed orders) -->
+  <!-- ORDERS VIEW — dated purchase diary: PO inputs + placed vendor orders -->
   <div id="viewHistory" class="hide">
+    <div class="datebar diary-datebar" id="histDateBar">
+      <button data-hshift="-1">‹</button>
+      <input id="histDate" type="date" aria-label="Purchase diary date">
+      <button data-hshift="1">›</button>
+    </div>
+    <div class="quickdates diary-quick">
+      <button data-hquick="today">Today</button>
+      <button data-hquick="tomorrow">Tomorrow</button>
+    </div>
+    <div class="search op-search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="histSearch" type="text" placeholder="Search vendor, item, outlet…" autocomplete="off">
+      </div>
+    </div>
+    <div class="fchips opchips" id="histBrandChips">
+      <button class="fchip on" data-hbrand="all">All</button>
+      <button class="fchip" data-hbrand="HE">HE</button>
+      <button class="fchip" data-hbrand="NCH">NCH</button>
+      <button class="fchip" data-hbrand="both">Both</button>
+    </div>
     <div class="cmp-h" id="histHead"></div>
     <main class="pane" id="histPane">
-      <div class="empty" id="histEmpty">No saved orders yet.<br>On the Buy list, paste a WhatsApp order to create one.</div>
+      <div class="empty" id="histEmpty">No purchase orders for this date yet.<br>Use Buy list or Place to create one.</div>
       <div id="histList"></div>
     </main>
   </div>
 
-  <!-- VENDORS VIEW — per-vendor records: paid / outstanding / full trail -->
+  <!-- DIARY VIEW — per-vendor records: paid / outstanding / full trail -->
   <div id="viewVendors" class="hide">
+    <div class="cmp-h" id="venHead"></div>
+    <div class="search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="venSearch" type="text" placeholder="Search vendor, item, invoice… (Afeefa, T-431)" autocomplete="off">
+      </div>
+    </div>
+    <div class="fchips" id="venChips"></div>
     <main class="pane" id="venPane">
-      <div class="empty" id="venEmpty">No vendor records yet.<br>Place an order with prices and they’ll appear here.</div>
+      <div class="empty" id="venEmpty">No vendor diary yet.<br>Place an order or save an invoice/payment and it will appear here.</div>
       <div id="venList"></div>
     </main>
   </div>
@@ -528,7 +738,9 @@
       <div class="box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
         <input id="setSearch" type="text" placeholder="Filter items / vendors…" autocomplete="off"></div>
       <button id="setNeed" class="needtog">to fill</button>
+      <button id="setPdf" class="needtog">A4 PDF</button>
     </div>
+    <div class="fchips hide" id="setChips"></div>
     <main class="pane" id="setPane"><div class="empty" id="setEmpty">Loading…</div><div id="setList"></div></main>
   </div>
 </div>
@@ -536,6 +748,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=24"></script>
+<script src="/ops/sauda/app-v57.js"></script>
 </body>
 </html>

@@ -44,6 +44,10 @@ export async function onRequest(context) {
     }
 
     const MAP = {
+      '/': '/ops/anbar/',
+      '/index.html': '/ops/anbar/',
+      '/receive': '/ops/anbar/receive/',
+      '/receive/': '/ops/anbar/receive/',
       '/manifest.json': '/ops/anbar/manifest.json',
       '/icon-192.png': '/ops/anbar/icon-192.png',
       '/icon-512.png': '/ops/anbar/icon-512.png',

@@ -394,54 +394,6 @@
     var yielded=lineYieldedKg(i), cost=lineAmount(i);
     return yielded>0 && cost>0 ? Math.round(cost/yielded) : 0;
   }
-  function lineDisplayQty(i){
-    return [i&&i.qty!=null?i.qty:'', i&&i.unit?i.unit:''].filter(Boolean).join(' ') || '—';
-  }
-  function chickenDerivationRows(items){
-    return (items||[]).filter(chickenLine).map(function(i){
-      var yielded=lineYieldedKg(i), delivered=lineDeliveredKg(i), daily=lineDailyRatePaise(i), cost=lineAmount(i), eff=lineEffectivePaise(i);
-      return {
-        item:i.item||i.name||'Chicken',
-        ordered:lineDisplayQty(i),
-        yielded:yielded,
-        delivered:delivered,
-        daily:daily,
-        cost:cost,
-        eff:eff,
-        pieces:i.received_pieces||'',
-        note:i.received_note||'',
-        received:yielded>0 && delivered>0
-      };
-    });
-  }
-  function chickenDerivationCard(items, opts){
-    opts=opts||{};
-    var rows=chickenDerivationRows(items);
-    if(!rows.length) return '';
-    var total=rows.reduce(function(s,r){ return s+(+r.cost||0); },0);
-    var dayRate=rows.reduce(function(v,r){ return v || r.daily; },0);
-    var ready=rows.every(function(r){ return r.received && r.daily>0 && r.cost>0; });
-    var title=opts.title||'MN chicken cost';
-    var source=opts.source||'Anbar receive';
-    var paper=opts.paper||'Delivery paper not attached';
-    return '<div class="chcost '+(ready?'ready':'pending')+'">'+
-      '<div class="chcost-top"><div><b>'+esc(title)+'</b><span>'+esc(source)+' · '+(ready?'received':'waiting for receive')+'</span></div><strong>₹'+rupees(total)+'</strong></div>'+
-      '<div class="chcost-tags">'+
-        '<span>'+esc(ready?'Anbar received':'Receive pending')+'</span>'+
-        '<span>'+esc(dayRate>0?('Live rate ₹'+rupees(dayRate)+'/kg'):'Live rate pending')+'</span>'+
-        '<span class="paper">'+esc(paper)+'</span>'+
-      '</div>'+
-      rows.map(function(r){
-        var formula=(r.delivered>0&&r.daily>0) ? (r.delivered+' live kg × ₹'+rupees(r.daily)+' = ₹'+rupees(r.cost)) : 'live kg × daily rate pending';
-        var usable=r.yielded>0 ? (r.yielded+' yielded kg'+(r.pieces?' · '+esc(r.pieces)+' pc':'')) : 'yielded kg pending';
-        var eff=r.eff>0 ? ('effective ₹'+rupees(r.eff)+'/kg usable') : 'effective rate pending';
-        return '<div class="chcost-row"><div class="chcost-name"><b>'+esc(r.item)+'</b><small>ordered '+esc(r.ordered)+'</small></div>'+
-          '<div class="chcost-math"><span>'+esc(usable)+'</span><span>'+esc(formula)+'</span><span>'+esc(eff)+'</span></div>'+
-          (r.note?'<div class="chcost-note">'+esc(r.note)+'</div>':'')+'</div>';
-      }).join('')+
-      '<div class="chcost-foot">This bill adds to the MN diary until the vendor payment is recorded.</div>'+
-    '</div>';
-  }
   function receiptSummary(i){
     var bits=[];
     if(i.received_pieces) bits.push('received '+i.received_pieces+' pc');
@@ -589,13 +541,12 @@
         var amt=o.pay_amount_paise?String(o.pay_amount_paise/100):'';
         var isChickenReceipt=/broiler|m\.?\s*n/i.test(String(o.vendor_name||'')) || rateItems.some(chickenLine);
         var dayLine = o.for_date ? '<div class="flowhint"><b>'+esc(businessDateLabel(o.for_date,'purchase'))+'</b></div>' : '';
-        var chickenCost=isChickenReceipt ? chickenDerivationCard(rateItems.length?rateItems:items,{title:'MN Broilers bill',source:'Sauda order → Anbar receive'}) : '';
         var rateBox='';
         if(rateItems.length){
           if(isChickenReceipt){
             var dayRate=rateItems.reduce(function(v,i){ return v || lineDailyRatePaise(i); },0);
             rateBox='<div class="ratebox chickenbox" data-ratebox data-chicken-box><div class="ratehead"><b>Receive chicken</b><span>'+esc(o.vendor_name)+'</span></div>'+
-              chickenCost+
+              '<div class="ratehint">Same MN chicken engine: yielded kg is usable meat received; delivered kg is the live/raw kg MN billed; one daily rate creates cost and effective usable ₹/kg.</div>'+
               '<div class="dayrate"><span>MN daily rate</span><b>₹</b><input inputmode="decimal" data-day-rate value="'+(dayRate>0?esc(String(dayRate/100)):'')+'" placeholder="rate"><em>/ kg</em></div>'+
               rateItems.map(function(i){
                 var line=lineAmount(i), eff=lineEffectivePaise(i), pcs=pieceUnit(i.unit);
@@ -639,7 +590,7 @@
         var mini='<span class="mini"><span class="'+(needsRate?'warn':'ok')+'">'+esc(payStatusLabel(m.status))+'</span> · '+esc(brandText(m.brand))+(o.for_date?' · '+esc(businessDateLabel(o.for_date,'')):'')+(summaryLines(items,2)?' · '+esc(summaryLines(items,2)):'')+'</span>';
         html+='<div class="basket paycard'+(open?' open':'')+'" data-paykey="'+esc(key)+'"><div class="bh"><span class="chev">›</span><span class="bn">'+esc(o.vendor_name)+'</span><span class="payamt">'+moneyText(o.pay_amount_paise)+'</span>'+
           '<span class="cardtags"><span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span><span class="tag p">'+esc(brandChip(m.brand))+'</span>'+multi+'</span>'+mini+'</div>'+
-          '<div class="pb" data-needs-rate="'+(needsRate?'1':'0')+'">'+dayLine+vendorNote+manualHint+(isChickenReceipt&&!rateItems.length?chickenCost:'')+'<div class="its">'+(itemsTxt||'—')+'</div>'+rateBox+
+          '<div class="pb" data-needs-rate="'+(needsRate?'1':'0')+'">'+dayLine+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+rateBox+
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
           '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt '+(rateItems.length?'readonly':'')+' value="'+esc(amt)+'" placeholder="'+(rateItems.length?'auto after rates':'one payment for all items')+'"></div>'+
           '<div class="pay-acts">'+
@@ -1358,7 +1309,7 @@
   function histSearchText(row){
     var o=row.o, items=row.items||[];
     return [row.type,o.brand,o.sender,o.vendor_name,o.status,o.fulfilmentLabel,o.payLabel,row.brand,brandText(row.brand),moneyText(o.expected_amount_paise),
-      items.map(function(i){ return [i.item,i.name,i.raw,i.sku,i.qty,i.unit,i.flag,receiptSummary(i)].join(' '); }).join(' ')].join(' ').toLowerCase();
+      items.map(function(i){ return [i.item,i.name,i.raw,i.sku,i.qty,i.unit,i.flag].join(' '); }).join(' ')].join(' ').toLowerCase();
   }
   function renderPoCard(o,rowKey,open){
     var items=o.items||[];
@@ -1372,13 +1323,11 @@
     var items=o.items||[], amt=+o.expected_amount_paise||0;
     var brand=histBrand(o,items);
     var note=/ashrafiya/i.test(o.vendor_name||'') ? '<div class="hist-note">Ashrafiya is one combined HE+NCH khata. This vendor can contain both brands, but settlement is one payment.</div>' : '';
-    var isChicken=/broiler|m\.?\s*n/i.test(String(o.vendor_name||'')) || items.some(chickenLine);
-    var chicken=isChicken ? chickenDerivationCard(items,{title:'MN Broilers bill',source:'Sauda order → Anbar receive'}) : '';
     return '<div class="hist-card'+(open?' open':'')+'" data-hkey="'+esc(rowKey)+'"><div class="hhd"><span class="chev">›</span><b>'+esc(o.vendor_name||'')+'</b>'+(amt?'<span class="hamt">₹'+rupees(amt)+'</span>':'')+
       '<span class="cardtags"><span class="tag f">'+esc(o.fulfilmentLabel||o.fulfilment||'')+'</span><span class="tag p">'+esc(o.payLabel||o.pay_timing||'')+'</span>'+
       '<span class="tag p">'+esc(brandChip(brand))+'</span><small>'+esc(o.status||'')+'</small></span>'+
       '<span class="mini">'+esc(summaryLines(items,3)||'Vendor order')+'</span></div>'+
-      '<div class="hbody">'+note+chicken+items.map(orderLineText).join('')+'</div></div>';
+      '<div class="hbody">'+note+items.map(orderLineText).join('')+'</div></div>';
   }
   function loadHistory(){
     var list=document.getElementById('histList'), empty=document.getElementById('histEmpty'), head=document.getElementById('histHead');
@@ -1468,14 +1417,6 @@
     if(!Array.isArray(lines)||!lines.length) return '';
     return lines.slice(0,5).map(function(i){
       var q=[i.qty||'', i.unit||''].filter(Boolean).join(' ');
-      if(chickenLine(i)){
-        var yielded=lineYieldedKg(i), delivered=lineDeliveredKg(i), daily=lineDailyRatePaise(i), cost=lineAmount(i), eff=lineEffectivePaise(i);
-        var formula=(delivered>0&&daily>0)?(' · '+delivered+' live kg x ₹'+rupees(daily)+' = ₹'+rupees(cost)):'';
-        var usable=yielded>0?(' · yielded '+yielded+' kg'):'';
-        var effective=eff>0?(' · effective ₹'+rupees(eff)+'/kg'):'';
-        var pcs=i.received_pieces?(' · '+i.received_pieces+' pc'):'';
-        return [i.item||i.name||'', q].filter(Boolean).join(' ') + pcs + usable + formula + effective + (i.received_note?' · '+i.received_note:'');
-      }
       var r=receiptSummary(i);
       var p=+i.price_paise>0 ? (' · bill ₹'+rupees(lineAmount(i))) : (pendingRate&&!i.direct?' · receipt/bill pending':'');
       return [i.item||i.name||'', q].filter(Boolean).join(' ') + (r?' · '+r:'') + p;
