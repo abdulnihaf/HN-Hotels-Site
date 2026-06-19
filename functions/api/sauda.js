@@ -593,13 +593,22 @@ function orderLineSignature(lines) {
     .sort((a, b) => (a.sku + a.item).localeCompare(b.sku + b.item)));
 }
 function lineBillingQty(l) {
+  if (l && l.delivered_kg != null && String(l.delivered_kg).trim() !== '') return qtyNum(l.delivered_kg);
   if (l && l.bill_qty != null && String(l.bill_qty).trim() !== '') return qtyNum(l.bill_qty);
   if (l && l.billing_qty != null && String(l.billing_qty).trim() !== '') return qtyNum(l.billing_qty);
   if (l && l.live_qty != null && String(l.live_qty).trim() !== '') return qtyNum(l.live_qty);
   return qtyNum(l && l.qty);
 }
+function lineCostPaise(l) {
+  const saved = Math.max(0, Math.round(+(l && l.cost_paise) || 0));
+  if (saved > 0) return saved;
+  const deliveredKg = qtyNum(l && (l.delivered_kg ?? l.bill_qty ?? l.live_qty));
+  const dailyRate = Math.max(0, Math.round(+(l && l.daily_rate_paise) || 0));
+  if (deliveredKg > 0 && dailyRate > 0) return Math.round(deliveredKg * dailyRate);
+  return Math.round(lineBillingQty(l) * (Math.max(0, Math.round(+(l && l.price_paise) || 0))));
+}
 function purchaseTotal(items) {
-  return (Array.isArray(items) ? items : []).reduce((s, l) => s + Math.round(lineBillingQty(l) * (Math.max(0, Math.round(+l.price_paise || 0)))), 0);
+  return (Array.isArray(items) ? items : []).reduce((s, l) => s + lineCostPaise(l), 0);
 }
 function ledgerEventType(value) {
   const t = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
@@ -1689,18 +1698,44 @@ function cleanLineField(v, max = 80) {
 }
 function applyReceiptFields(item, u, now, by) {
   let changed = 0;
+  if (Object.prototype.hasOwnProperty.call(u, 'yielded_kg')) {
+    const value = cleanLineField(u.yielded_kg, 32);
+    if (value) {
+      item.yielded_kg = value;
+      delete item.received_qty;
+      changed++;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(u, 'delivered_kg')) {
+    const value = cleanLineField(u.delivered_kg, 32);
+    if (value) {
+      item.delivered_kg = value;
+      delete item.bill_qty;
+      delete item.live_qty;
+      changed++;
+    }
+  }
   if (Object.prototype.hasOwnProperty.call(u, 'received_qty')) {
-    item.received_qty = cleanLineField(u.received_qty, 32);
-    item.received_unit = cleanLineField(u.received_unit || item.received_unit || 'kg', 16);
-    changed++;
+    const value = cleanLineField(u.received_qty, 32);
+    if (value) {
+      item.received_qty = value;
+      item.received_unit = cleanLineField(u.received_unit || item.received_unit || 'kg', 16);
+      changed++;
+    }
   }
   if (Object.prototype.hasOwnProperty.call(u, 'received_pieces')) {
-    item.received_pieces = cleanLineField(u.received_pieces, 32);
-    changed++;
+    const value = cleanLineField(u.received_pieces, 32);
+    if (value) {
+      item.received_pieces = value;
+      changed++;
+    }
   }
   if (Object.prototype.hasOwnProperty.call(u, 'received_note')) {
-    item.received_note = cleanLineField(u.received_note, 160);
-    changed++;
+    const value = cleanLineField(u.received_note, 160);
+    if (value) {
+      item.received_note = value;
+      changed++;
+    }
   }
   if (changed) {
     item.received_at = now;
@@ -1764,6 +1799,9 @@ async function purchasePrices(db, body, auth, env) {
       ...u,
       line_idx: idx,
       price_paise: Math.max(0, Math.round(+u.price_paise || 0)),
+      daily_rate_paise: Math.max(0, Math.round(+u.daily_rate_paise || 0)),
+      yielded_kg: u.yielded_kg == null ? null : cleanLineField(u.yielded_kg, 32),
+      delivered_kg: u.delivered_kg == null ? null : cleanLineField(u.delivered_kg, 32),
       qty: u.qty == null ? null : String(u.qty).trim(),
       bill_qty: u.bill_qty == null ? null : cleanLineField(u.bill_qty, 32),
       bill_unit: u.bill_unit == null ? null : cleanLineField(u.bill_unit, 16),
@@ -1788,10 +1826,23 @@ async function purchasePrices(db, body, auth, env) {
     for (const u of lines) {
       if (!items[u.line_idx]) continue;
       applyReceiptFields(items[u.line_idx], u, now, (auth && auth.u) || '');
-      items[u.line_idx].price_paise = u.price_paise;
       if (u.qty !== null && u.qty !== '') items[u.line_idx].qty = u.qty;
       if (u.bill_qty !== null && u.bill_qty !== '') items[u.line_idx].bill_qty = u.bill_qty;
       if (u.bill_unit !== null && u.bill_unit !== '') items[u.line_idx].bill_unit = u.bill_unit;
+      if (u.yielded_kg !== null && u.yielded_kg !== '') items[u.line_idx].yielded_kg = u.yielded_kg;
+      if (u.delivered_kg !== null && u.delivered_kg !== '') items[u.line_idx].delivered_kg = u.delivered_kg;
+      if (u.daily_rate_paise > 0) items[u.line_idx].daily_rate_paise = u.daily_rate_paise;
+      if (items[u.line_idx].delivered_kg && items[u.line_idx].daily_rate_paise) {
+        const cost = Math.round(qtyNum(items[u.line_idx].delivered_kg) * Math.round(+items[u.line_idx].daily_rate_paise || 0));
+        items[u.line_idx].cost_paise = cost;
+        const yieldedKg = qtyNum(items[u.line_idx].yielded_kg || items[u.line_idx].received_qty);
+        if (yieldedKg > 0) {
+          items[u.line_idx].price_paise = Math.round(cost / yieldedKg);
+          items[u.line_idx].effective_price_paise = items[u.line_idx].price_paise;
+        }
+      } else {
+        items[u.line_idx].price_paise = u.price_paise;
+      }
       changed += 1;
     }
     const expected = purchaseTotal(items);

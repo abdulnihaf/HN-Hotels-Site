@@ -319,7 +319,20 @@
     return /chicken|broiler|shawarma|kebab|kabab|tandoor|tandoori|tangdi|lollipop|wings/.test(hay);
   }
   function pieceUnit(unit){ return /bird|pc|pcs|piece|pieces/i.test(String(unit||'')); }
+  function lineYieldedKg(i){
+    return qtyNum(i && (i.yielded_kg!=null ? i.yielded_kg : i.received_qty));
+  }
+  function lineDeliveredKg(i){
+    return qtyNum(i && (i.delivered_kg!=null ? i.delivered_kg : (i.bill_qty!=null ? i.bill_qty : i.live_qty)));
+  }
+  function lineDailyRatePaise(i){
+    var explicit=+(i&&i.daily_rate_paise)||0;
+    if(explicit>0) return explicit;
+    if(i && (i.bill_qty || i.live_qty) && +i.price_paise>0) return +i.price_paise; // v51 compatibility
+    return 0;
+  }
   function lineBillingQty(i){
+    if(i&&i.delivered_kg!=null&&String(i.delivered_kg).trim()!=='') return qtyNum(i.delivered_kg);
     if(i&&i.bill_qty!=null&&String(i.bill_qty).trim()!=='') return qtyNum(i.bill_qty);
     if(i&&i.billing_qty!=null&&String(i.billing_qty).trim()!=='') return qtyNum(i.billing_qty);
     if(i&&i.live_qty!=null&&String(i.live_qty).trim()!=='') return qtyNum(i.live_qty);
@@ -327,16 +340,28 @@
   }
   function lineNeedsBill(i){
     if(!i || i.direct || qtyNum(i.qty)<=0) return false;
-    if(chickenLine(i)) return !(+i.price_paise>0) || lineBillingQty(i)<=0;
+    if(chickenLine(i)) return lineYieldedKg(i)<=0 || lineDeliveredKg(i)<=0 || lineDailyRatePaise(i)<=0;
     return !(+i.price_paise>0);
   }
-  function lineAmount(i){ return Math.round(lineBillingQty(i) * Math.max(0,+i.price_paise||0)); }
+  function lineAmount(i){
+    if(+i.cost_paise>0) return +i.cost_paise;
+    var delivered=lineDeliveredKg(i), daily=lineDailyRatePaise(i);
+    if(delivered>0 && daily>0) return Math.round(delivered*daily);
+    return Math.round(lineBillingQty(i) * Math.max(0,+i.price_paise||0));
+  }
+  function lineEffectivePaise(i){
+    if(+i.effective_price_paise>0) return +i.effective_price_paise;
+    if(+i.price_paise>0 && chickenLine(i)) return +i.price_paise;
+    var yielded=lineYieldedKg(i), cost=lineAmount(i);
+    return yielded>0 && cost>0 ? Math.round(cost/yielded) : 0;
+  }
   function receiptSummary(i){
     var bits=[];
     if(i.received_pieces) bits.push('received '+i.received_pieces+' pc');
-    if(i.received_qty) bits.push('output '+i.received_qty+' '+(i.received_unit||'kg'));
-    if(i.bill_qty) bits.push('live '+i.bill_qty+' '+(i.bill_unit||'kg'));
-    if(+i.price_paise>0) bits.push('rate ₹'+rupees(i.price_paise)+'/'+(i.bill_unit||'kg'));
+    if(lineYieldedKg(i)>0) bits.push('yielded '+lineYieldedKg(i)+' kg');
+    if(lineDeliveredKg(i)>0) bits.push('delivered '+lineDeliveredKg(i)+' kg');
+    if(lineDailyRatePaise(i)>0) bits.push('daily ₹'+rupees(lineDailyRatePaise(i))+'/kg');
+    if(lineEffectivePaise(i)>0) bits.push('effective ₹'+rupees(lineEffectivePaise(i))+'/kg');
     if(i.received_note) bits.push(i.received_note);
     return bits.join(' · ');
   }
@@ -397,24 +422,25 @@
         var rateBox='';
         if(rateItems.length){
           if(isChickenReceipt){
+            var dayRate=rateItems.reduce(function(v,i){ return v || lineDailyRatePaise(i); },0);
             rateBox='<div class="ratebox chickenbox" data-ratebox data-chicken-box><div class="ratehead"><b>Receive chicken</b><span>'+esc(o.vendor_name)+'</span></div>'+
-              '<div class="ratehint">Daily trail: keep ordered qty as-is. Enter what arrived as output weight, then live kg + today’s live rate to create the payable bill.</div>'+
+              '<div class="ratehint">Same MN chicken engine: yielded kg is usable meat received; delivered kg is the live/raw kg MN billed; one daily rate creates cost and effective usable ₹/kg.</div>'+
+              '<div class="dayrate"><span>MN daily rate</span><b>₹</b><input inputmode="decimal" data-day-rate value="'+(dayRate>0?esc(String(dayRate/100)):'')+'" placeholder="rate"><em>/ kg</em></div>'+
               rateItems.map(function(i){
-                var p=+i.price_paise||0, line=lineAmount(i), pcs=pieceUnit(i.unit);
+                var line=lineAmount(i), eff=lineEffectivePaise(i), pcs=pieceUnit(i.unit);
                 return '<div class="chrow" data-chicken-line data-order="'+esc(i.order_id)+'" data-idx="'+esc(i.line_idx)+'">'+
-                  '<div class="chname"><b>'+esc(i.item||'')+'</b><small>ordered '+esc(String(i.qty||''))+(i.unit?' '+esc(i.unit):'')+(line?' · bill ₹'+rupees(line):'')+'</small></div>'+
+                  '<div class="chname"><b>'+esc(i.item||'')+'</b><small>ordered '+esc(String(i.qty||''))+(i.unit?' '+esc(i.unit):'')+(line?' · cost ₹'+rupees(line):'')+(eff?' · effective ₹'+rupees(eff)+'/kg':'')+'</small></div>'+
                   '<div class="chgrid">'+
                     (pcs?'<label><span>pcs received</span><input inputmode="decimal" data-rec-pieces value="'+esc(i.received_pieces||'')+'" placeholder="10"></label>':'')+
-                    '<label><span>output kg</span><input inputmode="decimal" data-rec-qty value="'+esc(i.received_qty||'')+'" placeholder="7.0"></label>'+
-                    '<label><span>live kg</span><input inputmode="decimal" data-bill-qty value="'+esc(i.bill_qty||i.live_qty||'')+'" placeholder="16.1"></label>'+
-                    '<label><span>₹ / kg</span><input inputmode="decimal" data-rate value="'+(p>0?esc(String(p/100)):'')+'" placeholder="rate"></label>'+
+                    '<label><span>yielded kg</span><input inputmode="decimal" data-yielded-kg value="'+esc(i.yielded_kg||i.received_qty||'')+'" placeholder="7.0"></label>'+
+                    '<label><span>delivered kg</span><input inputmode="decimal" data-delivered-kg value="'+esc(i.delivered_kg||i.bill_qty||i.live_qty||'')+'" placeholder="16.1"></label>'+
                   '</div>'+
-                  '<input class="chnote" data-rec-note value="'+esc(i.received_note||'')+'" placeholder="split / note, e.g. 6pc 6.30 + 4pc 3.80">'+
+                  '<input class="chnote" data-rec-note value="'+esc(i.received_note||'')+'" placeholder="split / note, e.g. tandoor 6pc 6.30 + 4pc 3.80">'+
                 '</div>';
               }).join('')+
               '<div class="receiptrow"><input data-receipt-ref placeholder="receipt / bill no. optional"><input data-receipt-file type="file" accept="application/pdf,image/*,.pdf"></div>'+
-              '<button class="save-receipt" data-save-receipt>Save received weights</button>'+
-              '<button class="save-rates" data-save-rates>Save live kg + rate</button></div>';
+              '<button class="save-receipt" data-save-receipt>Save yielded/delivered kg</button>'+
+              '<button class="save-rates" data-save-rates>Save MN daily rate + bill</button></div>';
           } else {
             rateBox='<div class="ratebox" data-ratebox><div class="ratehead"><b>Receipt rates</b><span>'+esc(o.vendor_name)+'</span></div>'+
               '<div class="ratehint">Enter the rates from the vendor receipt. Sauda totals the bill from qty x rate.</div>'+
@@ -450,15 +476,13 @@
       list.innerHTML=html;
       function idsOf(el){ return (el.closest('.pb').querySelector('button[data-ids]').dataset.ids||'').split(',').map(Number).filter(Boolean); }
       function chickenLinesFromBox(box, withBill){
+        var dailyRate=Math.round(num(box&&box.querySelector('[data-day-rate]')&&box.querySelector('[data-day-rate]').value)*100);
         return [].slice.call(box.querySelectorAll('[data-chicken-line]')).map(function(row){
-          var recQty=row.querySelector('[data-rec-qty]'), recPieces=row.querySelector('[data-rec-pieces]'), recNote=row.querySelector('[data-rec-note]');
-          var billQty=row.querySelector('[data-bill-qty]'), rate=row.querySelector('[data-rate]');
-          var line={ id:+row.dataset.order, line_idx:+row.dataset.idx, received_qty:recQty?recQty.value.trim():'', received_unit:'kg', received_note:recNote?recNote.value.trim():'' };
+          var yielded=row.querySelector('[data-yielded-kg]'), delivered=row.querySelector('[data-delivered-kg]'), recPieces=row.querySelector('[data-rec-pieces]'), recNote=row.querySelector('[data-rec-note]');
+          var line={ id:+row.dataset.order, line_idx:+row.dataset.idx, yielded_kg:yielded?yielded.value.trim():'', delivered_kg:delivered?delivered.value.trim():'', received_note:recNote?recNote.value.trim():'' };
           if(recPieces) line.received_pieces=recPieces.value.trim();
           if(withBill){
-            line.bill_qty=billQty?billQty.value.trim():'';
-            line.bill_unit='kg';
-            line.price_paise=Math.round(num(rate&&rate.value)*100);
+            line.daily_rate_paise=dailyRate;
           }
           return line;
         });
@@ -467,12 +491,12 @@
         b.addEventListener('click', function(){
           var box=b.closest('[data-chicken-box]');
           var lines=chickenLinesFromBox(box, false);
-          var hasAny=lines.some(function(l){ return l.received_qty || l.received_pieces || l.received_note; });
-          if(!hasAny){ toast('Enter received weight first','err'); return; }
+          var hasAny=lines.some(function(l){ return l.yielded_kg || l.delivered_kg || l.received_pieces || l.received_note; });
+          if(!hasAny){ toast('Enter yielded/delivered kg first','err'); return; }
           if(busy) return; busy=true; b.disabled=true; b.textContent='Saving...';
           api('purchase-receipt',{method:'POST',body:{lines:lines}})
-            .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Received weights saved','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'receipt save failed','err'); b.disabled=false; b.textContent='Save received weights'; } })
-            .catch(function(){ busy=false; b.disabled=false; b.textContent='Save received weights'; toast('No connection','err'); });
+            .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Chicken kg saved','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'receipt save failed','err'); b.disabled=false; b.textContent='Save yielded/delivered kg'; } })
+            .catch(function(){ busy=false; b.disabled=false; b.textContent='Save yielded/delivered kg'; toast('No connection','err'); });
         });
       });
       list.querySelectorAll('[data-save-rates]').forEach(function(b){
@@ -481,11 +505,11 @@
           var inputs=[].slice.call(pb.querySelectorAll('input[data-rate]'));
           var missing=chickenBox
             ? [].slice.call(chickenBox.querySelectorAll('[data-chicken-line]')).some(function(row){
-                var bill=row.querySelector('[data-bill-qty]'), rate=row.querySelector('[data-rate]');
-                return num(bill&&bill.value)<=0 || num(rate&&rate.value)<=0;
+                var yielded=row.querySelector('[data-yielded-kg]'), delivered=row.querySelector('[data-delivered-kg]'), rate=chickenBox.querySelector('[data-day-rate]');
+                return num(yielded&&yielded.value)<=0 || num(delivered&&delivered.value)<=0 || num(rate&&rate.value)<=0;
               })
             : inputs.some(function(inp){ return num(inp.value)<=0; });
-          if(missing){ toast(chickenBox?'Enter every live kg and rate first':'Enter every live rate first','err'); return; }
+          if(missing){ toast(chickenBox?'Enter yielded kg, delivered kg and daily rate first':'Enter every live rate first','err'); return; }
           if(busy) return; busy=true; b.disabled=true; b.textContent='Saving...';
           var lines=chickenBox
             ? chickenLinesFromBox(chickenBox, true)
@@ -497,15 +521,15 @@
           if(ref) body.receipt_ref=ref;
           function sendRates(){
             api('purchase-prices',{method:'POST',body:body})
-              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(chickenBox?'Live bill saved · amount updated':'Receipt rates saved · bill updated','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'rate save failed','err'); b.disabled=false; b.textContent=chickenBox?'Save live kg + rate':'Save receipt rates'; } })
-              .catch(function(){ busy=false; b.disabled=false; b.textContent=chickenBox?'Save live kg + rate':'Save receipt rates'; toast('No connection','err'); });
+              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(chickenBox?'MN bill saved · amount updated':'Receipt rates saved · bill updated','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'rate save failed','err'); b.disabled=false; b.textContent=chickenBox?'Save MN daily rate + bill':'Save receipt rates'; } })
+              .catch(function(){ busy=false; b.disabled=false; b.textContent=chickenBox?'Save MN daily rate + bill':'Save receipt rates'; toast('No connection','err'); });
           }
           var file=fileEl&&fileEl.files&&fileEl.files[0];
           if(file){
             readFileAsDataUrl(file).then(function(dataUrl){
               body.attachment={name:file.name,mimetype:file.type||'application/octet-stream',data_url:dataUrl};
               sendRates();
-            }).catch(function(){ busy=false; b.disabled=false; b.textContent=chickenBox?'Save live kg + rate':'Save receipt rates'; toast('Could not read receipt','err'); });
+            }).catch(function(){ busy=false; b.disabled=false; b.textContent=chickenBox?'Save MN daily rate + bill':'Save receipt rates'; toast('Could not read receipt','err'); });
           } else sendRates();
         });
       });
@@ -513,7 +537,7 @@
         b.addEventListener('click', function(){
           if(!b.dataset.pay && b.dataset.rail!=='bank') return;
           var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
-          if(pb.dataset.needsRate==='1'){ toast('Save live kg and rate first','err'); return; }
+          if(pb.dataset.needsRate==='1'){ toast('Save yielded kg, delivered kg and daily rate first','err'); return; }
           if(rs<=0){ toast('Enter the amount first','err'); return; }
           if(b.dataset.pay) openPaySheet(b.dataset.pay, b.dataset.vn, rs, idsOf(b));
           else openManualPaySheet(b.dataset.vn, rs, idsOf(b), 'Transfer to the saved bank account, then record it here.', parseJsonAttr(b.dataset.bank));
@@ -523,7 +547,7 @@
         b.addEventListener('click', function(){
           var ids=idsOf(b); var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
           var payBtn=pb.querySelector('button[data-pay]'); var method=payMethodForRail((payBtn&&payBtn.dataset.rail)||b.dataset.rail||'manual');
-          if(pb.dataset.needsRate==='1'){ toast('Save live kg and rate first','err'); return; }
+          if(pb.dataset.needsRate==='1'){ toast('Save yielded kg, delivered kg and daily rate first','err'); return; }
           if(busy||!ids.length) return; busy=true;
           api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:method}})
              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(r.j.reconciled?'✓ Bank-confirmed paid':'Marked paid · bank not seen yet','ok'); loadPay(); } else toast('Failed','err'); })
