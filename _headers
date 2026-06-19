@@ -2,3 +2,6 @@
 # without users having to clear cache / re-add to home screen.
 /ops/darbar/*
   Cache-Control: no-cache, must-revalidate
+
+/ops/anbar/*
+  Cache-Control: no-cache, must-revalidate
