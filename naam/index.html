@@ -449,7 +449,7 @@ function renderTodayMove(){
   const verdict=verified?'<span class="proof-verdict pv-ok">food proof verified</span>':'<span class="proof-verdict pv-no">food proof NOT verified — confirm by eye</span>';
   let actions;
   if(d){
-    actions=`<div class="queued-pill">✓ ${esc(d.decision==='approve'?'Approved':'Held')}${d.proof_verified?'':' · unverified proof'} · ${fmtTime(d.created_at)}${d._synced===false?'<span class="sync-badge">SYNCING</span>':''}</div>`;
+    actions=`<div class="queued-pill">✓ ${esc(d.decision==='approve'?'Approved':'Held')}${d.proof_verified?'':' · unverified proof'} · ${fmtTime(d.decided_at||d.created_at)}${d._synced===false?'<span class="sync-badge">SYNCING</span>':''}</div>`;
   }else if(S.brand!=='he'){
     actions=`<div class="mv-actions"><button class="act-btn" onclick="setBrand('he')">${esc(mv.primary)}</button><button class="act-btn ghost warn" onclick="recordMove('hold',false)">${esc(mv.secondary)}</button></div>`;
   }else if(verified){
@@ -467,7 +467,7 @@ function renderTodayMove(){
 }
 async function recordMove(decision,proofVerified){
   const mv=todayMove();const brand=S.brand.toUpperCase();
-  const optimistic={id:'local_'+Date.now(),move_id:mv.id,brand,lane:mv.lane,customer_state:mv.customer_state,title:mv.title,hook:mv.hook,cta:mv.cta,decision,proof_verified:!!proofVerified,proof:mv.proof,status:'queued',created_at:new Date().toISOString(),_synced:false};
+  const optimistic={id:'local_'+Date.now(),move_id:mv.id,brand,lane:mv.lane,customer_state:mv.customer_state,title:mv.title,hook:mv.hook,cta:mv.cta,decision,proof_verified:!!proofVerified,proof:mv.proof,status:'queued',decided_at:new Date().toISOString(),created_at:new Date().toISOString(),_synced:false};
   saveCache([optimistic,...decCache().filter(x=>!(x.move_id===mv.id&&x.brand===brand))]);
   S.decisions=decCache();renderTodayMove();renderQueue();
   try{
@@ -517,7 +517,7 @@ function renderQueue(){
     return `<div class="queue-item">
       <div class="qi-top"><div class="qi-status ${checked?'done':''}"></div><div style="flex:1">
         <div class="qi-title">${esc(x.title||x.move_id)}</div>
-        <div class="qi-meta">${esc(x.brand)} · ${esc(x.lane)} · ${esc(x.decision==='approve'?'approved':'held')} ${pb}${sy} · ${fmtTime(x.created_at)}</div>
+        <div class="qi-meta">${esc(x.brand)} · ${esc(x.lane)} · ${esc(x.decision==='approve'?'approved':'held')} ${pb}${sy} · ${fmtTime(x.decided_at||x.created_at)}</div>
       </div></div>
       ${res?`<div class="res-show"><div class="res-grid">
           ${res.hands?`<div><div class="rk">hands</div><div class="rv">${esc(res.hands)}</div></div>`:''}
