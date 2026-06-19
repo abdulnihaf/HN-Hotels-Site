@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Anbar · Kitchen Board — HN Hotels</title>
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+<style>
+  /* Anbar Kitchen Board — read-only ambient TV (Darbar/Takht court language, TV-scaled) */
+  :root{
+    --bg:#0a0a0d; --panel:#13131a; --panel2:#1b1b24; --border:rgba(255,255,255,.10);
+    --text:#f7f7fa; --muted:#9a9aa3; --dim:#5c5c66;
+    --gold:#d4a24c; --gold-dim:rgba(212,162,76,.16); --gold-bd:rgba(212,162,76,.42);
+    --green:#37d399; --green-dim:rgba(55,211,153,.12);
+    --red:#ff5c5c; --red-dim:rgba(255,92,92,.13);
+    --amber:#fbbf24; --amber-dim:rgba(251,191,36,.13);
+    --blue:#5e9eff; --blue-dim:rgba(94,158,255,.13);
+    --anbar:#6ea076; --anbar-bd:rgba(110,160,118,.40);
+    --serif:'Cormorant Garamond',Georgia,serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;}
+  body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
+  /* type scales with viewport so it reads from across a kitchen */
+  .hdr{display:flex;align-items:center;gap:1.4vw;padding:2.2vh 2.4vw 1.6vh;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .tile{width:6vh;height:6vh;min-width:44px;min-height:44px;border-radius:12px;background:var(--panel);border:1px solid var(--anbar-bd);display:flex;align-items:center;justify-content:center;color:var(--gold);font-family:var(--serif);font-size:2.6vh;}
+  .h-tit{font-family:var(--serif);font-weight:700;font-size:3.6vh;line-height:1;}
+  .h-sub{font-size:1.7vh;color:var(--gold);font-style:italic;font-family:var(--serif);margin-top:.4vh;}
+  .h-right{margin-left:auto;text-align:right;}
+  .clock{font-size:3.2vh;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  .asof{font-size:1.5vh;color:var(--muted);margin-top:.3vh;}
+  .dot{display:inline-block;width:1.1vh;height:1.1vh;border-radius:50%;background:var(--green);margin-right:.6vw;box-shadow:0 0 8px var(--green);vertical-align:middle;}
+  .dot.off{background:var(--red);box-shadow:0 0 8px var(--red);}
+  .dot.stale{background:var(--amber);box-shadow:0 0 8px var(--amber);}
+
+  /* attention ribbon — always visible, the actionable signal */
+  .attn{display:flex;flex-wrap:wrap;gap:.8vw;padding:1.2vh 2.4vw;flex-shrink:0;align-items:center;}
+  .attn-lab{font-size:1.5vh;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-right:.4vw;}
+  .chip{display:inline-flex;align-items:center;gap:.5vw;padding:.8vh 1.1vw;border-radius:999px;font-size:1.9vh;font-weight:800;border:1px solid var(--border);}
+  .chip .e{font-size:2.1vh;}
+  .chip.out{color:var(--red);background:var(--red-dim);border-color:rgba(255,92,92,.4);}
+  .chip.low{color:var(--amber);background:var(--amber-dim);border-color:rgba(251,191,36,.38);}
+  .chip.recount{color:var(--amber);background:var(--amber-dim);border-color:rgba(251,191,36,.3);}
+  .chip.uncounted{color:var(--muted);background:rgba(255,255,255,.05);}
+
+  /* stage = the rotating section */
+  .stage{flex:1;min-height:0;display:flex;flex-direction:column;padding:1.4vh 2.4vw 0;}
+  .sect{display:flex;align-items:baseline;gap:1vw;margin-bottom:1.4vh;}
+  .sect-name{font-family:var(--serif);font-weight:700;font-size:3.2vh;color:var(--text);}
+  .sect-tag{font-size:1.5vh;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:.4vh .9vw;border-radius:8px;}
+  .tag-he{color:#ffd9b0;background:rgba(194,112,58,.22);}
+  .tag-nch{color:#cfe9d6;background:rgba(110,160,118,.2);}
+  .sect-note{font-size:1.6vh;color:var(--muted);margin-left:auto;font-style:italic;font-family:var(--serif);}
+
+  .grid{flex:1;min-height:0;display:grid;gap:1.4vh 1.4vw;grid-template-columns:repeat(auto-fill,minmax(20vw,1fr));align-content:start;overflow:hidden;}
+  .cell{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:1.8vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;}
+  .cell::before{content:'';position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--dim);}
+  .cell.ok::before{background:var(--green);} .cell.low::before{background:var(--amber);}
+  .cell.out::before{background:var(--red);} .cell.recount::before{background:var(--amber);}
+  .cell.received::before{background:var(--blue);} .cell.uncounted::before{background:var(--dim);}
+  .c-top{display:flex;align-items:center;gap:.8vw;}
+  .c-ico{font-size:3.2vh;line-height:1;}
+  .c-name{font-size:2.2vh;font-weight:800;line-height:1.1;}
+  .c-num{font-size:7vh;font-weight:800;line-height:.95;font-variant-numeric:tabular-nums;margin:.6vh 0;}
+  .c-num.ok{color:var(--green);} .c-num.low{color:var(--amber);} .c-num.out{color:var(--red);}
+  .c-num.recount{color:var(--amber);} .c-num.received{color:var(--blue);} .c-num.uncounted{color:var(--dim);}
+  .c-num small{font-size:2.2vh;font-weight:700;color:var(--muted);margin-left:.4vw;}
+  .c-foot{font-size:1.6vh;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.3;}
+  .c-state{font-size:1.5vh;font-weight:900;text-transform:uppercase;letter-spacing:.05em;}
+  .c-state.recount,.c-state.low{color:var(--amber);} .c-state.out{color:var(--red);}
+  .c-state.uncounted{color:var(--dim);} .c-state.received{color:var(--blue);}
+
+  .foot{display:flex;align-items:center;justify-content:center;gap:1vw;padding:1.4vh 0 1.8vh;flex-shrink:0;}
+  .pg{width:1.2vh;height:1.2vh;border-radius:50%;background:var(--dim);transition:all .3s;}
+  .pg.on{background:var(--gold);width:3vh;border-radius:999px;}
+  .blank{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:var(--serif);font-style:italic;font-size:3vh;}
+  .fade{animation:fade .5s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+</style>
+</head>
+<body>
+  <div class="hdr">
+    <div class="tile">انبار</div>
+    <div>
+      <div class="h-tit">Anbar · Kitchen</div>
+      <div class="h-sub" id="brandLine">Live stock — every sale deducts, every receive adds</div>
+    </div>
+    <div class="h-right">
+      <div class="clock" id="clock">—</div>
+      <div class="asof"><span class="dot" id="liveDot"></span><span id="asof">connecting…</span></div>
+    </div>
+  </div>
+  <div class="attn" id="attn" style="display:none"></div>
+  <div class="stage" id="stage"><div class="blank">Loading kitchen board…</div></div>
+  <div class="foot" id="foot"></div>
+
+<script>
+(function(){
+  var API='/api/anbar?action=board';
+  var Q=new URLSearchParams(location.search);
+  var BRAND=(Q.get('brand')||'').toUpperCase();            // optional scope: HE | NCH (default both)
+  var REFRESH_MS=45000;                                     // re-pull data (1 Odoo read each)
+  var ROTATE_MS=12000;                                      // slideshow cadence per section
+  var ICONS={'NCH-OB':'🍪','NCH-WTR':'💧','NCH-KH':'🌴','NCH-BUN':'🍞','NCH-CC':'🍗','NCH-PS':'🥟','HN-RM-200':'🥛','HN-RM-202':'🍃','HN-RM-201':'🥛'};
+  var CUT_ICON={boneless:'🍗',shawarma:'🌯',kebab:'🔥',tandoori:'🍗',grill:'🔥',tangdi:'🍖',lollipop:'🍗'};
+  var STATE_WORD={ok:'',low:'Running low',out:'Out — recount',recount:'Recount due',uncounted:'Count needed',received:'Received today'};
+
+  var data=null, sections=[], page=0, lastGood=0, rotTimer=null;
+  function el(id){return document.getElementById(id);}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+  function num(v){ if(v==null) return '—'; var n=Math.round(Number(v)*100)/100; return (n%1===0)?String(n):n.toFixed(2); }
+
+  function tick(){
+    var d=new Date();
+    el('clock').textContent=d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});
+  }
+  setInterval(tick,1000); tick();
+
+  function cell(o){
+    // o: {icon,name,numText,unit,state,foot}
+    var st=o.state||'uncounted';
+    var word=STATE_WORD[st]||'';
+    return '<div class="cell '+st+'">'+
+      '<div class="c-top"><span class="c-ico">'+(o.icon||'📦')+'</span><span class="c-name">'+esc(o.name)+'</span></div>'+
+      '<div class="c-num '+st+'">'+o.numText+(o.unit?'<small>'+esc(o.unit)+'</small>':'')+'</div>'+
+      '<div class="c-foot">'+(word?'<span class="c-state '+st+'">'+word+'</span>':'')+(word&&o.foot?' · ':'')+(o.foot||'')+'</div>'+
+    '</div>';
+  }
+
+  function nchCells(items,lane){
+    return items.filter(function(it){ return it[lane] && (lane==='counter' || (it.locs&&it.locs.indexOf('store')>=0)); })
+      .map(function(it){
+        var L=it[lane], st=L.state||'uncounted';
+        var numText, foot;
+        if(L.last_count==null){ numText='—'; foot='no opening count yet'; }
+        else {
+          numText=num(L.expected);
+          if(lane==='counter') foot='counted '+num(L.last_count)+' · −'+num(L.sold||0)+' sold'+(L.received?' · +'+num(L.received)+' recv':'')+(L.odoo_ok===false?' · ⚠ POS offline':'');
+          else foot='counted '+num(L.last_count)+(L.received?' · +'+num(L.received)+' recv':'')+(L.issued_out?' · −'+num(L.issued_out)+' out':'');
+        }
+        return cell({icon:ICONS[it.code]||'📦',name:it.name,numText:numText,unit:st==='uncounted'?'':it.uom,state:st,foot:foot});
+      });
+  }
+  function chickenCells(cuts){
+    return cuts.map(function(c){
+      var st=c.state||'uncounted';
+      var numText=c.on_hand_kg==null?'—':num(c.on_hand_kg);
+      var foot=c.counted?'closing count':( c.received_kg!=null?('received today'+(c.delivered_kg!=null?' · '+num(c.delivered_kg)+' kg live in':'')):'awaiting receive')+(c.rate_paise?' · ₹'+Math.round(c.rate_paise/100)+'/kg':'');
+      return cell({icon:CUT_ICON[c.cut]||'🍗',name:c.label,numText:numText,unit:st==='uncounted'?'':'kg',state:st,foot:foot});
+    });
+  }
+
+  function buildSections(d){
+    var secs=[];
+    var wantHE=!BRAND||BRAND==='HE', wantNCH=!BRAND||BRAND==='NCH';
+    if(wantHE && d.he_chicken && d.he_chicken.length){
+      secs.push({name:'Hamza Express · Chicken',tag:'HE',cls:'tag-he',note:'received today by cut — live deduction joins with recipes',cells:chickenCells(d.he_chicken)});
+    }
+    if(wantNCH && d.nch){
+      var counter=nchCells(d.nch,'counter');
+      var store=nchCells(d.nch,'store');
+      if(counter.length) secs.push({name:'Nawabi Chai House · Counter',tag:'NCH',cls:'tag-nch',note:'deducts on every till sale',cells:counter});
+      if(store.length) secs.push({name:'Nawabi Chai House · Store',tag:'NCH',cls:'tag-nch',note:'raw materials — count + received − issued',cells:store});
+    }
+    return secs;
+  }
+
+  function attention(d){
+    var bad=[];
+    function push(icon,name,st){ if(st==='out'||st==='low'||st==='recount'||st==='uncounted') bad.push({icon:icon,name:name,st:st}); }
+    var wantHE=!BRAND||BRAND==='HE', wantNCH=!BRAND||BRAND==='NCH';
+    if(wantNCH && d.nch) d.nch.forEach(function(it){
+      if(it.counter) push(ICONS[it.code]||'📦',it.name,it.counter.state);
+      else if(it.store) push(ICONS[it.code]||'📦',it.name,it.store.state);
+    });
+    if(wantHE && d.he_chicken) d.he_chicken.forEach(function(c){ push(CUT_ICON[c.cut]||'🍗',c.label,c.state); });
+    // out first, then low, then recount, then uncounted
+    var order={out:0,low:1,recount:2,uncounted:3};
+    bad.sort(function(a,b){return order[a.st]-order[b.st];});
+    return bad;
+  }
+
+  function renderAttn(d){
+    var bad=attention(d), box=el('attn');
+    if(!bad.length){ box.style.display='none'; box.innerHTML=''; return; }
+    box.style.display='flex';
+    box.innerHTML='<span class="attn-lab">Needs attention</span>'+bad.slice(0,10).map(function(b){
+      var w=b.st==='out'?'out':b.st==='low'?'low':b.st==='recount'?'recount':'count';
+      return '<span class="chip '+b.st+'"><span class="e">'+b.icon+'</span>'+esc(b.name)+' · '+w+'</span>';
+    }).join('');
+  }
+
+  function renderStage(animate){
+    var stage=el('stage'), foot=el('foot');
+    if(!sections.length){ stage.innerHTML='<div class="blank">Nothing tracked yet — set an opening count in Anbar to light up the board.</div>'; foot.innerHTML=''; return; }
+    if(page>=sections.length) page=0;
+    var s=sections[page];
+    stage.innerHTML='<div class="sect"><span class="sect-name">'+esc(s.name)+'</span><span class="sect-tag '+s.cls+'">'+s.tag+'</span><span class="sect-note">'+esc(s.note)+'</span></div>'+
+      '<div class="grid'+(animate?' fade':'')+'">'+s.cells.join('')+'</div>';
+    foot.innerHTML=sections.map(function(_,i){return '<span class="pg'+(i===page?' on':'')+'"></span>';}).join('');
+  }
+  function rotate(){ if(sections.length>1){ page=(page+1)%sections.length; renderStage(true); } }
+
+  function setDot(kind){ // live | stale | off
+    var dot=el('liveDot'); dot.className='dot'+(kind==='off'?' off':kind==='stale'?' stale':'');
+  }
+
+  function mockData(){
+    var now=new Date().toISOString();
+    return {success:true,as_of:now,today:now.slice(0,10),odoo_ok:true,
+      nch:[
+        {code:'NCH-WTR',name:'Water Bottle',uom:'bottle',locs:['counter'],counter:{last_count:176,counted_today:true,received:48,issued_in:0,sold:96,waste:0,expected:128,odoo_ok:true,state:'ok'}},
+        {code:'NCH-OB',name:'Osmania Biscuit',uom:'piece',locs:['counter','store'],counter:{last_count:480,counted_today:true,received:0,issued_in:0,sold:438,waste:0,expected:42,odoo_ok:true,state:'low'},store:{last_count:7680,counted_today:false,received:0,issued_out:480,expected:7200,state:'recount'}},
+        {code:'NCH-BUN',name:'Bun (all types)',uom:'bun',locs:['counter'],counter:{last_count:120,counted_today:true,received:60,issued_in:0,sold:175,waste:0,expected:5,odoo_ok:true,state:'low'}},
+        {code:'NCH-CC',name:'Chicken Cutlet',uom:'piece',locs:['counter'],counter:{last_count:30,counted_today:true,received:0,issued_in:0,sold:33,waste:0,expected:-3,odoo_ok:true,state:'out'}},
+        {code:'NCH-PS',name:'Pyaaz Samosa',uom:'piece',locs:['counter'],counter:{last_count:40,counted_today:true,received:0,issued_in:0,sold:12,waste:0,expected:28,odoo_ok:true,state:'ok'}},
+        {code:'NCH-KH',name:'Khajoor',uom:'piece',locs:['counter'],counter:{last_count:null,state:'uncounted'}},
+        {code:'HN-RM-200',name:'Buffalo Milk',uom:'L',locs:['store'],store:{last_count:40,counted_today:true,received:100,issued_out:60,expected:80,state:'ok'}},
+        {code:'HN-RM-202',name:'Tea Powder',uom:'kg',locs:['store'],store:{last_count:5,counted_today:true,received:0,issued_out:1.2,expected:3.8,state:'ok'}},
+      ],
+      he_chicken:[
+        {cut:'shawarma',label:'Shawarma Chicken',received_kg:7,delivered_kg:16.1,on_hand_kg:7,counted:false,rate_paise:13500,state:'received'},
+        {cut:'boneless',label:'Boneless Chicken',received_kg:5,delivered_kg:11.2,on_hand_kg:5,counted:false,rate_paise:13500,state:'received'},
+        {cut:'tandoori',label:'Tandoori Cut Chicken',received_kg:null,delivered_kg:null,on_hand_kg:null,counted:false,rate_paise:null,state:'uncounted'},
+      ]};
+    }
+
+  async function load(){
+    try{
+      var j;
+      if(Q.get('mock')){ j=mockData(); }
+      else { var r=await fetch(API,{cache:'no-store'}); j=await r.json(); }
+      if(!j||!j.success) throw new Error('bad payload');
+      data=j; lastGood=Date.now();
+      sections=buildSections(j);
+      if(page>=sections.length) page=0;
+      renderAttn(j); renderStage();
+      var t=new Date(j.as_of||Date.now()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});
+      el('asof').textContent='as of '+t;
+      setDot(j.odoo_ok===false?'stale':'live');
+      el('brandLine').textContent = BRAND==='HE' ? 'Hamza Express kitchen — live stock'
+        : BRAND==='NCH' ? 'Nawabi Chai House — live stock'
+        : 'Live stock — every sale deducts, every receive adds';
+    }catch(e){
+      // keep last good data on screen; just flag the connection
+      if(Date.now()-lastGood>REFRESH_MS*2){ setDot('off'); el('asof').textContent='reconnecting…'; }
+      else setDot('stale');
+    }
+  }
+
+  load();
+  setInterval(load,REFRESH_MS);
+  rotTimer=setInterval(rotate,ROTATE_MS);
+})();
+</script>
+</body>
+</html>
