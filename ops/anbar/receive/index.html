@@ -32,7 +32,7 @@
   .seg { display:flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; min-height:48px; }
   .seg button { min-width:58px; padding:0 14px; border:0; background:var(--panel2); color:var(--muted); font-weight:800; }
   .seg button.active { background:var(--gold); color:#171006; }
-  .content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 14px calc(98px + var(--safe-bot)); }
+  .content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 14px 14px; }
   .card { border:1px solid var(--line); background:var(--panel); border-radius:12px; margin:10px 0; overflow:hidden; }
   .order-head { padding:14px; border-bottom:1px solid var(--line); background:linear-gradient(180deg, rgba(255,255,255,.035), transparent); }
   .order-title { display:flex; align-items:center; gap:8px; min-width:0; }
@@ -54,7 +54,7 @@
   .note { margin-top:10px; }
   .empty { color:var(--muted); text-align:center; padding:52px 18px; line-height:1.45; }
   .empty strong { display:block; color:var(--text); font-size:18px; margin-bottom:6px; }
-  .bottom { position:fixed; left:0; right:0; bottom:0; padding:12px 14px calc(12px + var(--safe-bot)); background:linear-gradient(180deg, transparent, #000 18%); z-index:10; }
+  .bottom { flex-shrink:0; padding:12px 14px calc(12px + var(--safe-bot)); background:#000; border-top:1px solid var(--line); z-index:10; }
   .save { width:100%; min-height:58px; border:0; border-radius:14px; background:var(--gold); color:#171006; font-weight:900; font-size:17px; }
   .save:disabled { opacity:.45; }
   .gate { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; }
