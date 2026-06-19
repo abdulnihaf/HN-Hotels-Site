@@ -44,6 +44,361 @@ const ITEMS = [
   { code: 'HN-RM-201', name: 'Skimmed Milk Powder', uom: 'kg', locs: ['store'], pos: [] },
 ];
 
+const CHICKEN_CUTS = ['boneless', 'shawarma', 'kebab', 'tandoori', 'grill', 'tangdi', 'lollipop'];
+const CHICKEN_LABELS = {
+  boneless: 'Boneless Chicken',
+  shawarma: 'Shawarma Chicken',
+  kebab: 'Kebab Chicken',
+  tandoori: 'Tandoori Cut Chicken',
+  grill: 'Grill Chicken',
+  tangdi: 'Tangdi Chicken',
+  lollipop: 'Chicken Lollipop',
+};
+const MN_BROILERS_RE = /\b(m\.?\s*n\.?\s*broilers|mn\s*broilers|m\.?\s*n\.?\s*chicken|mn\s*chicken)\b/i;
+
+const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+const toNum = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+function parseJsonArray(s) {
+  try {
+    const v = JSON.parse(s || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function chickenCutForLine(line) {
+  const explicit = norm(line.cut || line.chicken_cut || line.kind || '');
+  if (CHICKEN_CUTS.includes(explicit)) return explicit;
+  const n = norm([line.item_key, line.sku, line.item, line.name, line.label, line.matched].filter(Boolean).join(' '));
+  if (!n) return null;
+  if (/\bboneless\b/.test(n)) return 'boneless';
+  if (/\b(shawarma|shawarama)\b/.test(n)) return 'shawarma';
+  if (/\b(kebab|kabab)\b/.test(n)) return 'kebab';
+  if (/\b(tandoori|biryani\s*cut)\b/.test(n)) return 'tandoori';
+  if (/\bgrill\b/.test(n)) return 'grill';
+  if (/\b(tangdi|drumstick|kalmi)\b/.test(n)) return 'tangdi';
+  if (/\b(lollipop|wings?)\b/.test(n)) return 'lollipop';
+  return null;
+}
+
+function movementKeyFor(purchaseId, lineIdx) {
+  return `sauda_purchase:${purchaseId}:${lineIdx}:receipt`;
+}
+
+async function ensureAnbarSchema(DB) {
+  await DB.prepare(
+    `CREATE TABLE IF NOT EXISTS rm_outlet_receipts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      brand TEXT NOT NULL,
+      loc TEXT,
+      item_code TEXT,
+      item_name TEXT,
+      qty REAL,
+      uom TEXT,
+      received_at TEXT,
+      received_by TEXT,
+      source TEXT,
+      notes TEXT,
+      movement_key TEXT
+    )`
+  ).run();
+  const alters = [
+    `ALTER TABLE rm_outlet_receipts ADD COLUMN movement_key TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN received_at TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN received_by TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN received_station TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN received_items_json TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN receive_note TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN has_goods INTEGER DEFAULT 0`,
+  ];
+  for (const sql of alters) {
+    try { await DB.prepare(sql).run(); } catch (_) {}
+  }
+  await DB.prepare(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_rm_outlet_receipts_movement_key
+     ON rm_outlet_receipts(movement_key)`
+  ).run();
+}
+
+async function chickenLedgerEntry(DB, brand, date, cut) {
+  const row = await DB.prepare(
+    `SELECT * FROM chicken_daily_ledger WHERE brand=? AND business_date=? AND cut=?`
+  ).bind(brand, date, cut).first().catch(() => null);
+  const rateRow = row?.daily_rate_paise
+    ? row
+    : await DB.prepare(
+        `SELECT daily_rate_paise FROM chicken_daily_ledger
+         WHERE brand=? AND business_date=? AND daily_rate_paise IS NOT NULL AND daily_rate_paise > 0
+         ORDER BY updated_at DESC, id DESC LIMIT 1`
+      ).bind(brand, date).first().catch(() => null);
+  const deliveredKg = toNum(row?.delivered_kg);
+  const yieldedKg = toNum(row?.purchased_kg);
+  const dailyRatePaise = toNum(row?.daily_rate_paise || rateRow?.daily_rate_paise);
+  const costPaise = deliveredKg && dailyRatePaise ? Math.round(deliveredKg * dailyRatePaise) : toNum(row?.cost_paise);
+  const effectivePaise = yieldedKg && costPaise ? Math.round(costPaise / yieldedKg) : toNum(row?.price_per_kg_paise);
+  return {
+    row: row || null,
+    delivered_kg: deliveredKg,
+    yielded_kg: yieldedKg,
+    purchased_kg: yieldedKg,
+    daily_rate_paise: dailyRatePaise,
+    cost_paise: costPaise,
+    effective_usable_price_paise: effectivePaise,
+    ready: deliveredKg > 0 && yieldedKg > 0 && dailyRatePaise > 0,
+    source: row ? 'chicken_daily_ledger' : null,
+  };
+}
+
+async function alignChickenLedger(DB, { brand, date, cut, deliveredKg, yieldedKg, dailyRatePaise, pin }) {
+  const existing = await DB.prepare(
+    `SELECT id, recipe_consumed_g FROM chicken_daily_ledger WHERE brand=? AND business_date=? AND cut=?`
+  ).bind(brand, date, cut).first();
+  const costPaise = Math.round(deliveredKg * dailyRatePaise);
+  const effectivePricePaise = Math.round(costPaise / yieldedKg);
+  const recipeG = existing?.recipe_consumed_g || 0;
+  const variancePct = recipeG > 0
+    ? Math.round(((yieldedKg * 1000 - recipeG) / recipeG) * 100 * 100) / 100
+    : null;
+
+  if (existing) {
+    await DB.prepare(
+      `UPDATE chicken_daily_ledger
+       SET purchased_kg=?, delivered_kg=?, daily_rate_paise=?,
+           price_per_kg_paise=?, cost_paise=?, variance_pct=?,
+           price_entered_by_pin=COALESCE(price_entered_by_pin, ?),
+           price_entered_at=COALESCE(price_entered_at, datetime('now')),
+           updated_at=datetime('now')
+       WHERE id=?`
+    ).bind(yieldedKg, deliveredKg, dailyRatePaise, effectivePricePaise, costPaise, variancePct, pin || '', existing.id).run();
+  } else {
+    await DB.prepare(
+      `INSERT INTO chicken_daily_ledger
+        (business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
+         price_per_kg_paise, cost_paise, variance_pct, price_entered_by_pin, price_entered_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    ).bind(date, brand, cut, yieldedKg, deliveredKg, dailyRatePaise, effectivePricePaise, costPaise, variancePct, pin || '').run();
+  }
+
+  return { cost_paise: costPaise, effective_usable_price_paise: effectivePricePaise, variance_pct: variancePct };
+}
+
+async function saudaChickenQueue(DB, url) {
+  await ensureAnbarSchema(DB);
+  const brand = (url.searchParams.get('brand') || 'HE').toUpperCase();
+  const kind = (url.searchParams.get('kind') || '').toLowerCase();
+  const date = url.searchParams.get('date') || istToday();
+  if (brand !== 'HE' || kind !== 'chicken') return json({ success: true, brand, date, kind, lines: [] });
+  if (!isYmd(date)) return json({ success: false, error: 'date invalid' }, 400);
+
+  const rows = (await DB.prepare(
+    `SELECT id, brand, vendor_name, for_date, status, items_json, ordered_at
+     FROM sauda_purchase
+     WHERE brand=? AND for_date=? AND COALESCE(status,'') != 'CANCELLED'
+     ORDER BY id DESC`
+  ).bind(brand, date).all()).results || [];
+
+  const lines = [];
+  for (const po of rows) {
+    if (!MN_BROILERS_RE.test(po.vendor_name || '')) continue;
+    const items = parseJsonArray(po.items_json);
+    for (let idx = 0; idx < items.length; idx++) {
+      const line = items[idx] || {};
+      const cut = chickenCutForLine(line);
+      if (!cut) continue;
+      const movementKey = movementKeyFor(po.id, idx);
+      const movement = await DB.prepare(
+        `SELECT id, received_at, received_by, qty FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+      ).bind(movementKey).first();
+      const ledger = await chickenLedgerEntry(DB, brand, date, cut);
+      const receipt = line.receipt || {};
+      const saved = !!movement || receipt.status === 'inventory_saved';
+      lines.push({
+        purchase_id: po.id,
+        line_idx: idx,
+        movement_key: movementKey,
+        order_status: po.status,
+        vendor_name: po.vendor_name,
+        for_date: po.for_date,
+        cut,
+        cut_label: CHICKEN_LABELS[cut],
+        item: line.item || line.sku || line.name || CHICKEN_LABELS[cut],
+        ordered_qty: line.qty ?? line.count ?? '',
+        ordered_unit: line.unit || '',
+        prefilled: ledger.ready && !saved,
+        inventory_saved: saved,
+        saved_at: movement?.received_at || receipt.received_at || null,
+        saved_by: movement?.received_by || receipt.received_by || '',
+        status: saved ? 'inventory_saved' : ledger.ready ? 'prefilled' : 'waiting_chicken_entry',
+        chicken_entry: ledger.source ? {
+          source: ledger.source,
+          delivered_kg: ledger.delivered_kg,
+          yielded_kg: ledger.yielded_kg,
+          purchased_kg: ledger.purchased_kg,
+          daily_rate_paise: ledger.daily_rate_paise,
+        } : null,
+      });
+    }
+  }
+
+  return json({ success: true, brand, date, kind, lines });
+}
+
+async function saveSaudaChickenReceive(DB, body) {
+  await ensureAnbarSchema(DB);
+  const brand = (body.brand || 'HE').toUpperCase();
+  const kind = String(body.kind || 'chicken').toLowerCase();
+  if (brand !== 'HE' || kind !== 'chicken') return json({ success: false, error: 'unsupported receive kind' }, 400);
+
+  const person = PINS[body.pin];
+  if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+  const purchaseId = Number(body.purchase_id || body.id || 0);
+  const lineIdx = Number(body.line_idx);
+  if (!purchaseId || !Number.isInteger(lineIdx) || lineIdx < 0) {
+    return json({ success: false, error: 'purchase_id + line_idx required' }, 400);
+  }
+
+  const po = await DB.prepare(
+    `SELECT id, brand, vendor_name, for_date, status, items_json
+     FROM sauda_purchase WHERE id=?`
+  ).bind(purchaseId).first();
+  if (!po) return json({ success: false, error: 'Sauda order not found' }, 404);
+  if ((po.brand || '').toUpperCase() !== brand) return json({ success: false, error: 'brand mismatch' }, 400);
+  if (!MN_BROILERS_RE.test(po.vendor_name || '')) return json({ success: false, error: 'not an MN Broilers order' }, 400);
+
+  const items = parseJsonArray(po.items_json);
+  const line = items[lineIdx];
+  if (!line) return json({ success: false, error: 'Sauda line not found' }, 404);
+  const cut = chickenCutForLine(line);
+  if (!cut) return json({ success: false, error: 'chicken cut missing on Sauda line' }, 400);
+
+  const movementKey = movementKeyFor(purchaseId, lineIdx);
+  let receipt = await DB.prepare(
+    `SELECT id, received_at, received_by, qty FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+  ).bind(movementKey).first();
+  const receiptExisted = !!receipt;
+
+  const ledger = await chickenLedgerEntry(DB, brand, po.for_date, cut);
+  if (!ledger.ready) {
+    return json({ success: false, error: 'Chicken Entry missing live kg / usable kg / rate for this cut' }, 409);
+  }
+
+  const deliveredKg = round2(ledger.delivered_kg);
+  const yieldedKg = round2(ledger.yielded_kg);
+  const dailyRatePaise = Math.round(ledger.daily_rate_paise);
+  const aligned = await alignChickenLedger(DB, { brand, date: po.for_date, cut, deliveredKg, yieldedKg, dailyRatePaise, pin: body.pin });
+
+  const itemCode = `HE-CHICKEN-${cut.toUpperCase()}`;
+  const itemName = CHICKEN_LABELS[cut];
+  const note = `Sauda #${purchaseId} line ${lineIdx + 1} · MN Broilers · ${cut} · live ${deliveredKg} kg · usable ${yieldedKg} kg`;
+  if (!receipt) {
+    const now = new Date().toISOString();
+    await DB.prepare(
+      `INSERT OR IGNORE INTO rm_outlet_receipts
+        (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes, movement_key)
+       VALUES (?, 'kitchen', ?, ?, ?, 'kg', ?, ?, 'sauda', ?, ?)`
+    ).bind(brand, itemCode, itemName, yieldedKg, now, person, note, movementKey).run();
+    receipt = await DB.prepare(
+      `SELECT id, received_at, received_by, qty FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+    ).bind(movementKey).first();
+  }
+
+  const receiptAt = receipt?.received_at || new Date().toISOString();
+  const receiptPayload = {
+    status: 'inventory_saved',
+    kind: 'chicken',
+    movement_key: movementKey,
+    anbar_receipt_id: receipt?.id || null,
+    received_at: receiptAt,
+    received_by: receipt?.received_by || person,
+    received_qty: yieldedKg,
+    received_unit: 'kg',
+    delivered_kg: deliveredKg,
+    yielded_kg: yieldedKg,
+    purchased_kg: yieldedKg,
+    daily_rate_paise: dailyRatePaise,
+    cost_paise: aligned.cost_paise,
+    effective_usable_price_paise: aligned.effective_usable_price_paise,
+  };
+  items[lineIdx] = {
+    ...line,
+    receipt_status: 'inventory_saved',
+    received_at: receiptPayload.received_at,
+    received_by: receiptPayload.received_by,
+    received_qty: receiptPayload.received_qty,
+    received_unit: receiptPayload.received_unit,
+    anbar_movement_key: movementKey,
+    anbar_receipt_id: receiptPayload.anbar_receipt_id,
+    receipt: receiptPayload,
+  };
+
+  const chickenLineIndexes = items
+    .map((it, idx) => chickenCutForLine(it) ? idx : -1)
+    .filter(idx => idx >= 0);
+  const allChickenReceived = chickenLineIndexes.length > 0 && chickenLineIndexes.every(idx => {
+    const it = items[idx] || {};
+    return it.receipt_status === 'inventory_saved' || it.receipt?.status === 'inventory_saved' || it.anbar_movement_key;
+  });
+  const receivedItems = chickenLineIndexes.map(idx => {
+    const it = items[idx] || {};
+    return {
+      line_idx: idx,
+      item: it.item || it.sku || CHICKEN_LABELS[chickenCutForLine(it)],
+      cut: chickenCutForLine(it),
+      receipt: it.receipt || null,
+    };
+  });
+
+  await DB.prepare(
+    `UPDATE sauda_purchase
+     SET items_json=?,
+         received_items_json=?,
+         receive_note=?,
+         has_goods=1,
+         received_at=COALESCE(received_at, ?),
+         received_by=COALESCE(received_by, ?),
+         received_station=COALESCE(received_station, 'HE-K'),
+         status=CASE WHEN ?=1 AND status IN ('ORDERED','QUEUED') THEN 'RECEIVED' ELSE status END,
+         updated_at=datetime('now')
+     WHERE id=?`
+  ).bind(
+    JSON.stringify(items),
+    JSON.stringify(receivedItems),
+    `Anbar HE chicken receipt · latest movement ${movementKey}`,
+    receiptAt,
+    receiptPayload.received_by,
+    allChickenReceived ? 1 : 0,
+    purchaseId
+  ).run();
+
+  return json({
+    success: true,
+    inventory_saved: true,
+    idempotent: receiptExisted,
+    purchase_id: purchaseId,
+    line_idx: lineIdx,
+    movement_key: movementKey,
+    anbar_receipt_id: receipt?.id || null,
+    at: receiptAt,
+    by: receiptPayload.received_by,
+    cut,
+    cut_label: itemName,
+    delivered_kg: deliveredKg,
+    yielded_kg: yieldedKg,
+    cost_paise: aligned.cost_paise,
+    effective_usable_price_paise: aligned.effective_usable_price_paise,
+    order_fully_received: allChickenReceived,
+  });
+}
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -101,6 +456,15 @@ export async function onRequest(context) {
   const ODOO_KEY = context.env.ODOO_NCH_POS_KEY;
 
   try {
+    if (action === 'sauda-receive-queue') {
+      return await saudaChickenQueue(DB, url);
+    }
+
+    if (action === 'sauda-receive' && context.request.method === 'POST') {
+      const body = await context.request.json();
+      return await saveSaudaChickenReceive(DB, body);
+    }
+
     if (action === 'verify-pin') {
       const person = PINS[url.searchParams.get('pin')];
       return person ? json({ success: true, person }) : json({ success: false, error: 'Wrong PIN' });
