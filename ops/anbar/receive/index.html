@@ -32,6 +32,7 @@
   .seg { display:flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; min-height:48px; }
   .seg button { min-width:58px; padding:0 14px; border:0; background:var(--panel2); color:var(--muted); font-weight:800; }
   .seg button.active { background:var(--gold); color:#171006; }
+  .kindline { margin-top:10px; color:var(--gold); font-size:12px; font-weight:850; line-height:1.35; }
   .content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 14px 14px; }
   .card { border:1px solid var(--line); background:var(--panel); border-radius:12px; margin:10px 0; overflow:hidden; }
   .order-head { padding:14px; border-bottom:1px solid var(--line); background:linear-gradient(180deg, rgba(255,255,255,.035), transparent); }
@@ -122,8 +123,10 @@ const S = {
   pin: localStorage.getItem('anbar_pin') || '',
   person: localStorage.getItem('anbar_person') || '',
   entry: '',
-  brand: localStorage.getItem('anbar_receive_brand') || 'HE',
+  brand: new URLSearchParams(location.search).get('brand') || localStorage.getItem('anbar_receive_brand') || 'HE',
+  kind: new URLSearchParams(location.search).get('kind') || '',
   lines: [],
+  dayRatePaise: 0,
 };
 
 function $(id) { return document.getElementById(id); }
@@ -168,56 +171,97 @@ async function verify() {
 }
 function setBrand(brand) {
   S.brand = brand;
+  S.kind = brand === 'HE' ? 'chicken' : 'all';
   localStorage.setItem('anbar_receive_brand', brand);
   $('brandHE').classList.toggle('active', brand === 'HE');
   $('brandNCH').classList.toggle('active', brand === 'NCH');
   loadQueue();
 }
 function lineInputId(line, field) {
-  return `${field}-${line.order_id}-${line.line_idx}`;
+  return `${field}-${purchaseId(line)}-${line.line_idx}`;
+}
+function purchaseId(line) {
+  return line.purchase_id || line.order_id || line.id || '';
+}
+function activeKind() {
+  if (S.kind) return S.kind;
+  return S.brand === 'HE' ? 'chicken' : 'all';
+}
+function isChickenLine(line) {
+  return S.brand === 'HE' || line.cut || line.cut_label;
+}
+function lineOrderedText(line) {
+  const q = line.ordered_qty ?? line.qty ?? '0';
+  const u = line.ordered_unit ?? line.unit ?? '';
+  return `${q} ${u}`.trim();
+}
+function lineStatus(line) {
+  if (line.inventory_saved || line.status === 'inventory_saved') return '<span class="status-chip saved">inventory saved</span>';
+  if (line.partial || line.status === 'partial') return '<span class="status-chip prefilled">partial</span>';
+  return '';
 }
 function render() {
   if (!S.lines.length) {
-    $('content').innerHTML = `<div class="empty"><strong>No chicken orders to receive</strong>For ${esc(S.brand)} on ${esc($('date').value)}. Place the order in Sauda first, then it appears here.</div>`;
+    const name = S.brand === 'HE' ? 'chicken orders' : 'receiving lines';
+    $('content').innerHTML = `<div class="empty"><strong>No ${name} to receive</strong>For ${esc(S.brand)} on ${esc($('date').value)}. Place the order in Sauda first, then it appears here.</div>`;
     return;
   }
   const grouped = new Map();
   for (const line of S.lines) {
-    const key = `${line.order_id}|${line.vendor_name}`;
+    const key = `${purchaseId(line)}|${line.vendor_name}`;
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push(line);
   }
   const html = [...grouped.entries()].map(([key, lines]) => {
     const first = lines[0];
     const body = lines.map(line => {
-      const pieceUnit = /bird|pc|piece/i.test(line.unit || '');
-      const savedReceipt = !!line.received_at;
-      const prefilled = !savedReceipt && line.ledger_synced && (line.yielded_kg || line.delivered_kg);
-      const badge = savedReceipt ? '<span class="status-chip saved">inventory saved</span>' : prefilled ? '<span class="status-chip prefilled">prefilled</span>' : '';
-      return `<div class="line" data-order="${line.order_id}" data-line="${line.line_idx}">
+      const chicken = isChickenLine(line);
+      const pieceUnit = /bird|pc|piece/i.test(line.ordered_unit || line.unit || '');
+      const badge = lineStatus(line);
+      const dayRate = line.chicken_entry?.daily_rate_paise || S.dayRatePaise || '';
+      const milk = line.kind === 'milk';
+      return `<div class="line" data-order="${esc(purchaseId(line))}" data-line="${esc(line.line_idx)}">
         <div class="line-name">
-          <span>${esc(line.cut_label || line.item)}</span>
+          <span>${esc(line.cut_label || line.item_name || line.item)}</span>
           ${badge}
         </div>
-        <div class="meta">ordered ${esc(line.qty || '0')} ${esc(line.unit || '')} · Sauda order #${line.order_id}</div>
-        <div class="grid">
-          <div class="field">
-            <label for="${lineInputId(line, 'yielded')}">Usable kg received</label>
-            <input id="${lineInputId(line, 'yielded')}" type="number" inputmode="decimal" step="0.01" value="${esc(line.yielded_kg)}" placeholder="0.00">
-          </div>
-          <div class="field">
-            <label for="${lineInputId(line, 'delivered')}">Live/raw kg used</label>
-            <input id="${lineInputId(line, 'delivered')}" type="number" inputmode="decimal" step="0.01" value="${esc(line.delivered_kg)}" placeholder="0.00">
-          </div>
-          <div class="field">
-            <label for="${lineInputId(line, 'pieces')}">${pieceUnit ? 'Pieces received' : 'Pieces if applicable'}</label>
-            <input id="${lineInputId(line, 'pieces')}" type="number" inputmode="numeric" step="1" value="${esc(line.received_pieces)}" placeholder="${pieceUnit ? esc(line.qty || '') : 'optional'}">
-          </div>
-          <div class="field">
-            <label>Inventory event</label>
-            <div class="eventbox">${line.received_at ? esc(line.received_at) : 'On save'}</div>
-          </div>
-        </div>
+        <div class="meta">ordered ${esc(lineOrderedText(line))} · Sauda order #${esc(purchaseId(line))}</div>
+        ${chicken ? `<div class="kindline">Chicken receive creates the Sauda bill: yielded kg + live kg + daily live rate.</div>
+          <div class="grid">
+            <div class="field">
+              <label for="${lineInputId(line, 'yielded')}">Usable kg received</label>
+              <input id="${lineInputId(line, 'yielded')}" type="number" inputmode="decimal" step="0.01" value="${esc(line.yielded_kg || line.received_qty || '')}" placeholder="0.00">
+            </div>
+            <div class="field">
+              <label for="${lineInputId(line, 'delivered')}">Live/raw kg used</label>
+              <input id="${lineInputId(line, 'delivered')}" type="number" inputmode="decimal" step="0.01" value="${esc(line.delivered_kg || '')}" placeholder="0.00">
+            </div>
+            <div class="field">
+              <label for="${lineInputId(line, 'pieces')}">${pieceUnit ? 'Pieces received' : 'Pieces if applicable'}</label>
+              <input id="${lineInputId(line, 'pieces')}" type="number" inputmode="numeric" step="1" value="${esc(line.received_pieces || '')}" placeholder="${pieceUnit ? esc(line.ordered_qty || line.qty || '') : 'optional'}">
+            </div>
+            <div class="field">
+              <label for="${lineInputId(line, 'rate')}">Daily live rate ₹/kg</label>
+              <input id="${lineInputId(line, 'rate')}" type="number" inputmode="decimal" step="0.01" value="${dayRate ? esc(String(dayRate / 100)) : ''}" placeholder="135">
+            </div>
+            <div class="field">
+              <label>Inventory event</label>
+              <div class="eventbox">${line.saved_at || line.received_at ? esc(line.saved_at || line.received_at) : 'On save'}</div>
+            </div>
+          </div>` : `<div class="grid">
+            ${milk ? `<div class="field">
+              <label for="${lineInputId(line, 'slot')}">Milk slot</label>
+              <select class="select" id="${lineInputId(line, 'slot')}"><option value="AM">Morning</option><option value="PM">Evening</option><option value="ADHOC">Ad hoc</option></select>
+            </div>` : ''}
+            <div class="field">
+              <label for="${lineInputId(line, 'qty')}">Received ${esc(line.uom || line.ordered_unit || 'qty')}</label>
+              <input id="${lineInputId(line, 'qty')}" type="number" inputmode="decimal" step="0.01" value="${esc(line.received_qty || '')}" placeholder="${esc(line.ordered_qty || line.qty || '0')}">
+            </div>
+            <div class="field">
+              <label>Inventory event</label>
+              <div class="eventbox">${line.saved_at || line.received_at ? esc(line.saved_at || line.received_at) : 'On save'}</div>
+            </div>
+          </div>`}
         <div class="note">
           <label for="${lineInputId(line, 'note')}">Receiving note</label>
           <textarea id="${lineInputId(line, 'note')}" placeholder="Example: tandoori 6pc first, 4pc later">${esc(line.received_note)}</textarea>
@@ -240,30 +284,33 @@ function render() {
 async function loadQueue() {
   $('content').innerHTML = '<div class="empty"><strong>Loading orders</strong>Reading Sauda purchase lines...</div>';
   const date = $('date').value || todayIST();
-  const r = await fetch(`${API}?action=sauda-receive-queue&brand=${S.brand}&date=${date}&kind=chicken`).then(x => x.json()).catch(() => ({}));
+  const kind = activeKind();
+  const r = await fetch(`${API}?action=sauda-receive-queue&brand=${S.brand}&date=${date}&kind=${encodeURIComponent(kind)}`).then(x => x.json()).catch(() => ({}));
   if (!r.success) {
     $('content').innerHTML = `<div class="empty"><strong>Could not load</strong>${esc(r.error || 'Try again')}</div>`;
     return;
   }
   S.lines = r.lines || [];
+  S.dayRatePaise = r.daily_rate_paise || 0;
   render();
 }
 function collectLines() {
   const out = [];
   for (const line of S.lines) {
-    const yielded = $(lineInputId(line, 'yielded'))?.value.trim() || '';
-    const delivered = $(lineInputId(line, 'delivered'))?.value.trim() || '';
-    const pieces = $(lineInputId(line, 'pieces'))?.value.trim() || '';
     const note = $(lineInputId(line, 'note'))?.value.trim() || '';
-    if (!yielded && !delivered && !pieces && !note) continue;
-    out.push({
-      order_id: line.order_id,
-      line_idx: line.line_idx,
-      yielded_kg: yielded,
-      delivered_kg: delivered,
-      received_pieces: pieces,
-      received_note: note,
-    });
+    if (isChickenLine(line)) {
+      const yielded = $(lineInputId(line, 'yielded'))?.value.trim() || '';
+      const delivered = $(lineInputId(line, 'delivered'))?.value.trim() || '';
+      const pieces = $(lineInputId(line, 'pieces'))?.value.trim() || '';
+      const rate = $(lineInputId(line, 'rate'))?.value.trim() || '';
+      if (!yielded && !delivered && !pieces && !rate && !note) continue;
+      out.push({ purchase_id: purchaseId(line), line_idx: line.line_idx, kind: 'chicken', receipt_part_no: line.next_part_no, yielded_kg: yielded, delivered_kg: delivered, received_pieces: pieces, daily_rate: rate, received_note: note });
+    } else {
+      const qty = $(lineInputId(line, 'qty'))?.value.trim() || '';
+      const slot = $(lineInputId(line, 'slot'))?.value || '';
+      if (!qty && !note) continue;
+      out.push({ purchase_id: purchaseId(line), line_idx: line.line_idx, kind: line.kind || activeKind(), receipt_part_no: line.next_part_no, received_qty: qty, slot, received_note: note });
+    }
   }
   return out;
 }
@@ -275,13 +322,17 @@ async function save() {
   }
   $('saveBtn').disabled = true;
   try {
-    const r = await fetch(`${API}?action=sauda-receive`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: S.pin, brand: S.brand, station: `${S.brand}-KITCHEN`, lines }),
-    }).then(x => x.json());
-    if (!r.success) throw new Error(r.error || 'Save failed');
-    toast(`Saved ${r.movements?.length || 0} inventory movement${(r.movements?.length || 0) === 1 ? '' : 's'}`);
+    let saved = 0;
+    for (const line of lines) {
+      const r = await fetch(`${API}?action=sauda-receive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...line, pin: S.pin, brand: S.brand, station: `${S.brand}-KITCHEN` }),
+      }).then(x => x.json());
+      if (!r.success) throw new Error(r.error || 'Save failed');
+      saved += 1;
+    }
+    toast(`Saved ${saved} receiving line${saved === 1 ? '' : 's'}`);
     await loadQueue();
   } catch (e) {
     toast(e.message || 'Save failed', true);
@@ -303,7 +354,7 @@ $('brandHE').addEventListener('click', () => setBrand('HE'));
 $('brandNCH').addEventListener('click', () => setBrand('NCH'));
 $('date').addEventListener('change', loadQueue);
 $('saveBtn').addEventListener('click', save);
-$('date').value = todayIST();
+$('date').value = new URLSearchParams(location.search).get('date') || todayIST();
 setBrand(S.brand === 'NCH' ? 'NCH' : 'HE');
 if (S.pin && S.person) showApp();
 </script>

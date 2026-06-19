@@ -220,14 +220,34 @@ function receiveTextForLine(line) {
   return norm([line.item_key, line.sku, line.item, line.name, line.label, line.matched].filter(Boolean).join(' '));
 }
 
+function genericReceiveDefForLine(line) {
+  const name = String(line.item || line.name || line.sku || line.item_key || line.label || '').trim();
+  if (!name) return null;
+  const rawCode = String(line.item_code || line.sku || line.item_key || name).trim();
+  const code = `SAUDA-${rawCode.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'ITEM'}`;
+  return {
+    kind: 'generic',
+    aliases: [],
+    code,
+    name,
+    uom: line.unit || line.uom || line.ordered_unit || 'unit',
+    loc: 'store',
+    vendorRe: /.*/,
+    lineRe: /.*/,
+  };
+}
+
 function nchReceiveDefForLine(line, vendorName, requestedKind = 'all') {
   const k = receiveKindParam(requestedKind);
   const text = receiveTextForLine(line);
-  return NCH_RECEIVE_DEFS.find(d => {
+  const specific = NCH_RECEIVE_DEFS.find(d => {
     if (k !== 'all' && d.kind !== k) return false;
     if (d.kind === 'milk' && /\b(powder|milkmaid|condensed|skimmed|smp)\b/.test(text)) return false;
     return d.lineRe.test(text) || (!text && d.vendorRe.test(vendorName || ''));
-  }) || null;
+  });
+  if (specific) return specific;
+  if (k === 'all' || k === 'generic') return genericReceiveDefForLine(line);
+  return null;
 }
 
 function brandKey(v) {
