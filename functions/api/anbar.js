@@ -45,6 +45,7 @@ const ITEMS = [
 ];
 
 const CHICKEN_CUTS = ['boneless', 'shawarma', 'kebab', 'tandoori', 'grill', 'tangdi', 'lollipop'];
+const KG_ORDERED_CHICKEN_CUTS = ['boneless', 'shawarma'];
 const CHICKEN_LABELS = {
   boneless: 'Boneless Chicken',
   shawarma: 'Shawarma Chicken',
@@ -90,8 +91,91 @@ function chickenCutForLine(line) {
   return null;
 }
 
-function movementKeyFor(purchaseId, lineIdx) {
+function legacyMovementKeyFor(purchaseId, lineIdx) {
   return `sauda_purchase:${purchaseId}:${lineIdx}:receipt`;
+}
+
+function movementKeyFor(purchaseId, lineIdx, partNo = 1) {
+  return `sauda_purchase:${purchaseId}:${lineIdx}:receipt:${partNo}`;
+}
+
+function movementPrefixFor(purchaseId, lineIdx) {
+  return `sauda_purchase:${purchaseId}:${lineIdx}:receipt`;
+}
+
+function lineOrderMode(line, cut) {
+  const unit = norm(line.unit || line.uom || line.ordered_unit || '');
+  if (unit === 'kg' || unit === 'kgs' || unit === 'kilogram' || unit === 'kilograms') return 'kg';
+  return KG_ORDERED_CHICKEN_CUTS.includes(cut) ? 'kg' : 'pieces';
+}
+
+function orderedAmount(line) {
+  return toNum(line.qty ?? line.count ?? line.ordered_qty ?? line.ordered_count) || 0;
+}
+
+function parseReceiptPartNo(key) {
+  const m = String(key || '').match(/:receipt:(\d+)$/);
+  return m ? Number(m[1]) : 1;
+}
+
+function dailyRatePaiseFrom(body, fallback) {
+  const paise = toNum(body.daily_rate_paise);
+  if (paise > 0) return Math.round(paise);
+  const rupees = toNum(body.daily_rate);
+  if (rupees > 0) return Math.round(rupees * 100);
+  return fallback > 0 ? Math.round(fallback) : null;
+}
+
+function normaliseReceiptPart(part) {
+  if (!part || typeof part !== 'object') return null;
+  const yieldedKg = toNum(part.yielded_kg ?? part.purchased_kg ?? part.received_qty);
+  const deliveredKg = toNum(part.delivered_kg);
+  const partNo = Number(part.part_no || parseReceiptPartNo(part.movement_key) || 1);
+  if (!(yieldedKg > 0) || !(deliveredKg > 0)) return null;
+  return {
+    part_no: partNo,
+    movement_key: part.movement_key || '',
+    anbar_receipt_id: part.anbar_receipt_id || null,
+    received_at: part.received_at || '',
+    received_by: part.received_by || '',
+    received_pieces: toNum(part.received_pieces),
+    yielded_kg: round2(yieldedKg),
+    purchased_kg: round2(yieldedKg),
+    delivered_kg: round2(deliveredKg),
+    daily_rate_paise: toNum(part.daily_rate_paise),
+    cost_paise: toNum(part.cost_paise),
+    effective_usable_price_paise: toNum(part.effective_usable_price_paise),
+  };
+}
+
+function receiptPartsFromLine(line) {
+  const parts = Array.isArray(line.receipt_parts) ? line.receipt_parts : [];
+  const out = parts.map(normaliseReceiptPart).filter(Boolean);
+  const legacy = normaliseReceiptPart(line.receipt);
+  if (legacy && !out.some(p => p.movement_key && p.movement_key === legacy.movement_key)) out.push(legacy);
+  return out.sort((a, b) => (a.part_no || 0) - (b.part_no || 0));
+}
+
+function summariseReceiptParts(parts, ordered, mode) {
+  const receivedPieces = round2(parts.reduce((sum, p) => sum + (toNum(p.received_pieces) || 0), 0));
+  const yieldedKg = round2(parts.reduce((sum, p) => sum + (toNum(p.yielded_kg) || 0), 0));
+  const deliveredKg = round2(parts.reduce((sum, p) => sum + (toNum(p.delivered_kg) || 0), 0));
+  const complete = mode === 'pieces'
+    ? ordered > 0 && receivedPieces >= ordered
+    : ordered > 0 ? yieldedKg + 0.001 >= ordered : yieldedKg > 0;
+  const partial = parts.length > 0 && !complete;
+  return {
+    part_count: parts.length,
+    received_pieces: receivedPieces,
+    yielded_kg: yieldedKg,
+    purchased_kg: yieldedKg,
+    delivered_kg: deliveredKg,
+    remaining_pieces: mode === 'pieces' && ordered > 0 ? Math.max(0, round2(ordered - receivedPieces)) : null,
+    remaining_kg: mode === 'kg' && ordered > 0 ? Math.max(0, round2(ordered - yieldedKg)) : null,
+    complete,
+    partial,
+    next_part_no: (parts.reduce((m, p) => Math.max(m, Number(p.part_no || 0)), 0) || 0) + 1,
+  };
 }
 
 async function ensureAnbarSchema(DB) {
@@ -207,6 +291,7 @@ async function saudaChickenQueue(DB, url) {
   ).bind(brand, date).all()).results || [];
 
   const lines = [];
+  let dayRatePaise = null;
   for (const po of rows) {
     if (!MN_BROILERS_RE.test(po.vendor_name || '')) continue;
     const items = parseJsonArray(po.items_json);
@@ -214,17 +299,34 @@ async function saudaChickenQueue(DB, url) {
       const line = items[idx] || {};
       const cut = chickenCutForLine(line);
       if (!cut) continue;
-      const movementKey = movementKeyFor(po.id, idx);
-      const movement = await DB.prepare(
-        `SELECT id, received_at, received_by, qty FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
-      ).bind(movementKey).first();
+      const prefix = movementPrefixFor(po.id, idx);
+      const movementRows = (await DB.prepare(
+        `SELECT id, received_at, received_by, qty, movement_key
+         FROM rm_outlet_receipts
+         WHERE movement_key=? OR movement_key LIKE ?
+         ORDER BY movement_key`
+      ).bind(legacyMovementKeyFor(po.id, idx), `${prefix}:%`).all()).results || [];
       const ledger = await chickenLedgerEntry(DB, brand, date, cut);
-      const receipt = line.receipt || {};
-      const saved = !!movement || receipt.status === 'inventory_saved';
+      if (!dayRatePaise && ledger.daily_rate_paise > 0) dayRatePaise = ledger.daily_rate_paise;
+      const mode = lineOrderMode(line, cut);
+      const ordered = orderedAmount(line);
+      const parts = receiptPartsFromLine(line);
+      const summary = summariseReceiptParts(parts, ordered, mode);
+      const legacySaved = movementRows.length > 0 && parts.length === 0;
+      const saved = summary.complete || legacySaved;
+      const partial = summary.partial;
+      const prefillYielded = ledger.yielded_kg > 0 ? Math.max(0, round2(ledger.yielded_kg - summary.yielded_kg)) : null;
+      const prefillDelivered = ledger.delivered_kg > 0 ? Math.max(0, round2(ledger.delivered_kg - summary.delivered_kg)) : null;
+      const hasPrefill = !saved && prefillYielded > 0 && prefillDelivered > 0 && ledger.daily_rate_paise > 0;
+      const status = saved ? 'inventory_saved' : partial ? 'partial' : hasPrefill ? 'prefilled' : 'ordered';
+      const latestPart = parts[parts.length - 1] || null;
+      const latestMovement = movementRows[movementRows.length - 1] || null;
       lines.push({
         purchase_id: po.id,
         line_idx: idx,
-        movement_key: movementKey,
+        movement_key: movementKeyFor(po.id, idx, summary.next_part_no),
+        movement_key_prefix: prefix,
+        next_part_no: summary.next_part_no,
         order_status: po.status,
         vendor_name: po.vendor_name,
         for_date: po.for_date,
@@ -233,23 +335,31 @@ async function saudaChickenQueue(DB, url) {
         item: line.item || line.sku || line.name || CHICKEN_LABELS[cut],
         ordered_qty: line.qty ?? line.count ?? '',
         ordered_unit: line.unit || '',
-        prefilled: ledger.ready && !saved,
+        ordered_mode: mode,
+        ordered_amount: ordered,
+        ordered_pieces: mode === 'pieces' ? ordered : null,
+        prefilled: hasPrefill,
+        partial,
         inventory_saved: saved,
-        saved_at: movement?.received_at || receipt.received_at || null,
-        saved_by: movement?.received_by || receipt.received_by || '',
-        status: saved ? 'inventory_saved' : ledger.ready ? 'prefilled' : 'waiting_chicken_entry',
-        chicken_entry: ledger.source ? {
+        saved_at: latestMovement?.received_at || latestPart?.received_at || null,
+        saved_by: latestMovement?.received_by || latestPart?.received_by || '',
+        status,
+        receipt_parts: parts,
+        receipt_summary: summary,
+        chicken_entry: (ledger.source || ledger.daily_rate_paise) ? {
           source: ledger.source,
           delivered_kg: ledger.delivered_kg,
           yielded_kg: ledger.yielded_kg,
           purchased_kg: ledger.purchased_kg,
           daily_rate_paise: ledger.daily_rate_paise,
+          remaining_prefill_delivered_kg: prefillDelivered,
+          remaining_prefill_yielded_kg: prefillYielded,
         } : null,
       });
     }
   }
 
-  return json({ success: true, brand, date, kind, lines });
+  return json({ success: true, brand, date, kind, vendor: 'M.N. Broilers', daily_rate_paise: dayRatePaise, lines });
 }
 
 async function saveSaudaChickenReceive(DB, body) {
@@ -280,27 +390,52 @@ async function saveSaudaChickenReceive(DB, body) {
   const cut = chickenCutForLine(line);
   if (!cut) return json({ success: false, error: 'chicken cut missing on Sauda line' }, 400);
 
-  const movementKey = movementKeyFor(purchaseId, lineIdx);
+  const mode = lineOrderMode(line, cut);
+  const ordered = orderedAmount(line);
+  const partsBefore = receiptPartsFromLine(line);
+  const summaryBefore = summariseReceiptParts(partsBefore, ordered, mode);
+  const requestedPartNo = Number(body.receipt_part_no || body.part_no || summaryBefore.next_part_no);
+  if (!Number.isInteger(requestedPartNo) || requestedPartNo < 1) {
+    return json({ success: false, error: 'receipt part invalid' }, 400);
+  }
+  const movementKey = movementKeyFor(purchaseId, lineIdx, requestedPartNo);
   let receipt = await DB.prepare(
     `SELECT id, received_at, received_by, qty FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
   ).bind(movementKey).first();
   const receiptExisted = !!receipt;
 
   const ledger = await chickenLedgerEntry(DB, brand, po.for_date, cut);
-  if (!ledger.ready) {
-    return json({ success: false, error: 'Chicken Entry missing live kg / usable kg / rate for this cut' }, 409);
+  const dailyRatePaise = dailyRatePaiseFrom(body, ledger.daily_rate_paise);
+  if (!(dailyRatePaise > 0)) {
+    return json({ success: false, error: 'Today live rate required' }, 409);
   }
 
-  const deliveredKg = round2(ledger.delivered_kg);
-  const yieldedKg = round2(ledger.yielded_kg);
-  const dailyRatePaise = Math.round(ledger.daily_rate_paise);
-  const aligned = await alignChickenLedger(DB, { brand, date: po.for_date, cut, deliveredKg, yieldedKg, dailyRatePaise, pin: body.pin });
+  const deliveredKg = round2(toNum(body.delivered_kg));
+  const yieldedKg = round2(toNum(body.yielded_kg ?? body.purchased_kg ?? body.received_qty));
+  if (!(deliveredKg > 0) || !(yieldedKg > 0)) {
+    return json({ success: false, error: 'usable kg and live kg required' }, 400);
+  }
+
+  let receivedPieces = null;
+  if (mode === 'pieces') {
+    receivedPieces = toNum(body.received_pieces ?? body.pieces);
+    if (!(receivedPieces > 0) || Math.round(receivedPieces) !== receivedPieces) {
+      return json({ success: false, error: 'received pieces required' }, 400);
+    }
+    const partsExcludingThis = partsBefore.filter(p => Number(p.part_no) !== requestedPartNo);
+    const baseSummary = summariseReceiptParts(partsExcludingThis, ordered, mode);
+    if (ordered > 0 && receivedPieces > (baseSummary.remaining_pieces + 0.001)) {
+      return json({ success: false, error: `only ${baseSummary.remaining_pieces} pieces pending` }, 400);
+    }
+  }
 
   const itemCode = `HE-CHICKEN-${cut.toUpperCase()}`;
   const itemName = CHICKEN_LABELS[cut];
-  const note = `Sauda #${purchaseId} line ${lineIdx + 1} · MN Broilers · ${cut} · live ${deliveredKg} kg · usable ${yieldedKg} kg`;
+  const partCostPaise = Math.round(deliveredKg * dailyRatePaise);
+  const partEffectivePaise = Math.round(partCostPaise / yieldedKg);
+  const now = new Date().toISOString();
+  const note = `Sauda #${purchaseId} line ${lineIdx + 1} · MN Broilers · ${cut} · part ${requestedPartNo}${receivedPieces ? ` · ${receivedPieces} pieces` : ''} · live ${deliveredKg} kg · usable ${yieldedKg} kg`;
   if (!receipt) {
-    const now = new Date().toISOString();
     await DB.prepare(
       `INSERT OR IGNORE INTO rm_outlet_receipts
         (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes, movement_key)
@@ -312,31 +447,69 @@ async function saveSaudaChickenReceive(DB, body) {
   }
 
   const receiptAt = receipt?.received_at || new Date().toISOString();
-  const receiptPayload = {
-    status: 'inventory_saved',
+  const currentPart = {
     kind: 'chicken',
+    part_no: requestedPartNo,
     movement_key: movementKey,
     anbar_receipt_id: receipt?.id || null,
     received_at: receiptAt,
     received_by: receipt?.received_by || person,
-    received_qty: yieldedKg,
-    received_unit: 'kg',
+    received_pieces: receivedPieces,
     delivered_kg: deliveredKg,
     yielded_kg: yieldedKg,
     purchased_kg: yieldedKg,
+    daily_rate_paise: dailyRatePaise,
+    cost_paise: partCostPaise,
+    effective_usable_price_paise: partEffectivePaise,
+  };
+  const partsByNo = new Map(partsBefore.map(p => [Number(p.part_no), p]));
+  partsByNo.set(requestedPartNo, { ...partsByNo.get(requestedPartNo), ...currentPart });
+  const receiptParts = Array.from(partsByNo.values()).sort((a, b) => (a.part_no || 0) - (b.part_no || 0));
+  const summary = summariseReceiptParts(receiptParts, ordered, mode);
+  const aligned = await alignChickenLedger(DB, {
+    brand,
+    date: po.for_date,
+    cut,
+    deliveredKg: summary.delivered_kg,
+    yieldedKg: summary.yielded_kg,
+    dailyRatePaise,
+    pin: body.pin,
+  });
+
+  const lineComplete = summary.complete;
+  const receiptPayload = {
+    status: lineComplete ? 'inventory_saved' : 'partial',
+    kind: 'chicken',
+    movement_key: movementKey,
+    movement_keys: receiptParts.map(p => p.movement_key).filter(Boolean),
+    latest_part_no: requestedPartNo,
+    part_count: receiptParts.length,
+    received_at: receiptAt,
+    received_by: currentPart.received_by,
+    received_pieces: mode === 'pieces' ? summary.received_pieces : null,
+    ordered_pieces: mode === 'pieces' ? ordered : null,
+    pending_pieces: summary.remaining_pieces,
+    received_qty: summary.yielded_kg,
+    received_unit: 'kg',
+    delivered_kg: summary.delivered_kg,
+    yielded_kg: summary.yielded_kg,
+    purchased_kg: summary.yielded_kg,
     daily_rate_paise: dailyRatePaise,
     cost_paise: aligned.cost_paise,
     effective_usable_price_paise: aligned.effective_usable_price_paise,
   };
   items[lineIdx] = {
     ...line,
-    receipt_status: 'inventory_saved',
+    receipt_status: receiptPayload.status,
     received_at: receiptPayload.received_at,
     received_by: receiptPayload.received_by,
+    received_pieces: receiptPayload.received_pieces,
     received_qty: receiptPayload.received_qty,
     received_unit: receiptPayload.received_unit,
     anbar_movement_key: movementKey,
-    anbar_receipt_id: receiptPayload.anbar_receipt_id,
+    anbar_movement_keys: receiptPayload.movement_keys,
+    anbar_receipt_id: currentPart.anbar_receipt_id,
+    receipt_parts: receiptParts,
     receipt: receiptPayload,
   };
 
@@ -345,7 +518,10 @@ async function saveSaudaChickenReceive(DB, body) {
     .filter(idx => idx >= 0);
   const allChickenReceived = chickenLineIndexes.length > 0 && chickenLineIndexes.every(idx => {
     const it = items[idx] || {};
-    return it.receipt_status === 'inventory_saved' || it.receipt?.status === 'inventory_saved' || it.anbar_movement_key;
+    const itCut = chickenCutForLine(it);
+    const itMode = lineOrderMode(it, itCut);
+    const itSummary = summariseReceiptParts(receiptPartsFromLine(it), orderedAmount(it), itMode);
+    return it.receipt_status === 'inventory_saved' || it.receipt?.status === 'inventory_saved' || itSummary.complete;
   });
   const receivedItems = chickenLineIndexes.map(idx => {
     const it = items[idx] || {};
@@ -381,20 +557,25 @@ async function saveSaudaChickenReceive(DB, body) {
 
   return json({
     success: true,
-    inventory_saved: true,
+    inventory_saved: lineComplete,
+    partial: !lineComplete,
     idempotent: receiptExisted,
     purchase_id: purchaseId,
     line_idx: lineIdx,
+    receipt_part_no: requestedPartNo,
     movement_key: movementKey,
-    anbar_receipt_id: receipt?.id || null,
+    anbar_receipt_id: currentPart.anbar_receipt_id,
     at: receiptAt,
-    by: receiptPayload.received_by,
+    by: currentPart.received_by,
     cut,
     cut_label: itemName,
-    delivered_kg: deliveredKg,
-    yielded_kg: yieldedKg,
+    received_pieces: receiptPayload.received_pieces,
+    pending_pieces: receiptPayload.pending_pieces,
+    delivered_kg: summary.delivered_kg,
+    yielded_kg: summary.yielded_kg,
     cost_paise: aligned.cost_paise,
     effective_usable_price_paise: aligned.effective_usable_price_paise,
+    status: receiptPayload.status,
     order_fully_received: allChickenReceived,
   });
 }
