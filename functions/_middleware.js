@@ -37,9 +37,6 @@ export async function onRequest(context) {
   const anbarCanonical = canonicalAnbarPath(url);
   if (anbarCanonical) return Response.redirect(anbarCanonical.toString(), 302);
 
-  const anbarEntry = anbarEntrypointTarget(url);
-  if (anbarEntry) return rewriteTo(request, anbarEntry);
-
   // ── anbar.hnhotels.in — the storehouse chamber (inventory). App at /ops/anbar/ ──
   if (host === 'anbar.hnhotels.in') {
     if (url.pathname === '/' || url.pathname === '' || url.pathname === '/index.html') {
@@ -171,33 +168,6 @@ function canonicalAnbarPath(url) {
     target.search = url.search;
     return target;
   }
-  return null;
-}
-
-function anbarEntrypointTarget(url) {
-  const p = url.pathname;
-  const entrypoints = {
-    '/ops/anbar/he/': 'he',
-    '/ops/anbar/nch/': 'nch',
-    '/ops/anbar/choose/': 'choose',
-  };
-
-  for (const [base, brand] of Object.entries(entrypoints)) {
-    if (p === base || p === base + 'index.html') {
-      const target = new URL('/ops/anbar/index.html', url);
-      target.search = url.search;
-      return target;
-    }
-    if (p === base + 'manifest.json') {
-      const file = brand === 'he' ? '/ops/anbar/manifest-he.json'
-        : brand === 'nch' ? '/ops/anbar/manifest-nch.json'
-          : '/ops/anbar/manifest.json';
-      return new URL(file, url);
-    }
-    if (p === base + 'icon-192.png') return new URL('/ops/anbar/icon-192.png', url);
-    if (p === base + 'icon-512.png') return new URL('/ops/anbar/icon-512.png', url);
-  }
-
   return null;
 }
 
