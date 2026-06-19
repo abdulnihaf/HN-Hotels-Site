@@ -1375,6 +1375,102 @@ export async function onRequest(context) {
       return json({ success: true, items: out, odoo_ok: odooOk });
     }
 
+    // ── KITCHEN TV BOARD (read-only, no PIN) — the ambient shared-kitchen screen ──
+    // Same conservation engine as `live` but: (1) BOTH brands in one payload, (2) ONE
+    // Odoo read (not the per-item re-query) so a TV polling every minute can't hammer the
+    // POS or slow the staff app, (3) server-computed `state` so the TV is dumb. Purely
+    // additive — does not touch the staff `live` path.
+    if (action === 'board') {
+      const today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+      const nch = [];
+
+      // NCH conservation: last count + received − issued/sold − waste = on-hand.
+      const counts = (await DB.prepare(
+        `SELECT item_code, outlet, qty, counted_at FROM rm_outlet_counts c
+         WHERE id IN (SELECT MAX(id) FROM rm_outlet_counts WHERE brand='NCH' GROUP BY item_code, outlet)`
+      ).all()).results || [];
+      const lastCount = {};
+      for (const c of counts) lastCount[`${c.item_code}|${c.outlet}`] = c;
+      const anchors = counts.map(c => c.counted_at).sort();
+      const since = anchors[0] || new Date(Date.now() - 86400000).toISOString();
+
+      let sold = {};
+      let odooOk = true;
+      try { sold = ODOO_KEY ? await soldSince(ODOO_KEY, since) : {}; }
+      catch (e) { odooOk = false; }
+
+      const laneState = (lane) => {
+        if (!lane || lane.last_count == null) return 'uncounted';
+        const exp = lane.expected;
+        if (exp == null) return 'uncounted';
+        if (exp <= 0) return 'out';
+        if (!lane.counted_today) return 'recount';
+        if (lane.last_count > 0 && exp <= lane.last_count * 0.15) return 'low';
+        return 'ok';
+      };
+
+      for (const item of ITEMS) {
+        const out = { code: item.code, name: item.name, uom: item.uom, locs: item.locs, made_in_house: !!item.made_in_house };
+        const cc = lastCount[`${item.code}|NCH-COUNTER`], sc = lastCount[`${item.code}|NCH-STORE`];
+
+        const sums = async (table, timecol, where, anchor) =>
+          (await DB.prepare(`SELECT COALESCE(SUM(qty),0) t FROM ${table} WHERE brand='NCH' AND item_code=? AND ${where} AND ${timecol} > ?`)
+            .bind(item.code, anchor || '1970').first())?.t || 0;
+
+        if (cc) {
+          const rec = await sums('rm_outlet_receipts', 'received_at', "loc='counter'", cc.counted_at);
+          const iss = await sums('rm_outlet_issues', 'issued_at', "outlet='NCH-COUNTER'", cc.counted_at);
+          const waste = await sums('rm_outlet_issues', 'issued_at', "outlet='NCH-WASTE'", cc.counted_at);
+          const soldQty = sold[item.code] || 0;
+          out.counter = {
+            last_count: cc.qty, counted_at: cc.counted_at, counted_today: String(cc.counted_at || '').slice(0, 10) === today,
+            received: rec, issued_in: iss, sold: soldQty, waste,
+            expected: Math.round((cc.qty + rec + iss - waste - soldQty) * 100) / 100, odoo_ok: odooOk,
+          };
+          out.counter.state = laneState(out.counter);
+        } else out.counter = { last_count: null, state: 'uncounted' };
+
+        if (item.locs.includes('store')) {
+          if (sc) {
+            const rec = await sums('rm_outlet_receipts', 'received_at', "loc='store'", sc.counted_at);
+            const iss = await sums('rm_outlet_issues', 'issued_at', "outlet='NCH-COUNTER'", sc.counted_at);
+            out.store = {
+              last_count: sc.qty, counted_at: sc.counted_at, counted_today: String(sc.counted_at || '').slice(0, 10) === today,
+              received: rec, issued_out: iss, expected: Math.round((sc.qty + rec - iss) * 100) / 100,
+            };
+            out.store.state = laneState(out.store);
+          } else out.store = { last_count: null, state: 'uncounted' };
+        }
+        nch.push(out);
+      }
+
+      // HE chicken: today's receive ledger per cut. Consumption isn't recipe-wired yet,
+      // so on-hand = closing count if taken, else what was received today (labelled honestly).
+      let heChicken = [];
+      try {
+        const rows = (await DB.prepare(
+          `SELECT cut, purchased_kg, delivered_kg, daily_rate_paise, recipe_consumed_g, closing_kg
+             FROM chicken_daily_ledger WHERE brand='HE' AND business_date=?`
+        ).bind(today).all()).results || [];
+        heChicken = rows.map(r => {
+          const received = r.purchased_kg != null ? Math.round(r.purchased_kg * 100) / 100 : null;
+          const onHand = r.closing_kg != null ? Math.round(r.closing_kg * 100) / 100 : received;
+          return {
+            cut: r.cut,
+            label: CHICKEN_LABELS[r.cut] || r.cut,
+            received_kg: received,
+            delivered_kg: r.delivered_kg != null ? Math.round(r.delivered_kg * 100) / 100 : null,
+            on_hand_kg: onHand,
+            counted: r.closing_kg != null,
+            rate_paise: r.daily_rate_paise || null,
+            state: onHand == null ? 'uncounted' : (onHand <= 0 ? 'out' : (r.closing_kg != null ? 'ok' : 'received')),
+          };
+        });
+      } catch (e) { /* HE ledger optional */ }
+
+      return json({ success: true, as_of: new Date().toISOString(), today, odoo_ok: odooOk, nch, he_chicken: heChicken });
+    }
+
     // ── RECORD COUNT (counter or store) — returns variance against expected ──
     if (action === 'record-count' && context.request.method === 'POST') {
       const body = await context.request.json();
