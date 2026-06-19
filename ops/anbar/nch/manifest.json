@@ -1,0 +1,15 @@
+{
+  "name": "Anbar · Nawabi Chai House",
+  "short_name": "NCH Anbar",
+  "description": "Nawabi Chai House live inventory board for counter and store movements.",
+  "start_url": "/ops/anbar/nch/",
+  "scope": "/ops/anbar/nch/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/ops/anbar/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/ops/anbar/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
