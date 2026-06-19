@@ -34,7 +34,7 @@ export const VENDORS = {
   deepak:     { name: 'Deepak Packaging',       cat: 'Bags, containers, pouches, tissue',  fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: 'paytmqr6pdq3f@ptys',
                 aliases: ['deepak packaging store', 'deepak packaging', 'rupnath'] },
   nazeer:     { name: 'Nazeer Nadeem',          cat: 'Water, cold drinks',                 fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: 'q101761866@ybl',
-                aliases: ['nazeer nadeem', 'nazeer'] },
+                aliases: ['nazeer nadeem', 'nazeer', 'nadeem', 'nadeem water', 'nadeem cold drinks', 'nadeem water and cold drinks'] },
   mnbroilers: { name: 'M.N. Broilers',          cat: 'Chicken',                            fulfilment: 'deliver',  pay: 'per',            brand: 'HE',   vpa: '',
                 aliases: ['m.n. broilers (syed ahmedulla)', 'm.n. broilers', 'mn broilers', 'mn chicken'] },
   prabhu:     { name: 'Prabhu (Buffalo Milk)',  cat: 'Milk (morning/evening)',             fulfilment: 'standing', pay: 'khata_periodic', brand: 'NCH',  vpa: 'prabhurathi13@oksbi',

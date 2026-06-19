@@ -752,7 +752,7 @@ async function notifyOnPlace(env, created, forDate) {
 // existing HP_CATALOG + VENDORS + decode dictionary. Additive; nothing reads
 // these yet (the consumers get wired in later slices). One source, not four.
 // ═══════════════════════════════════════════════════════════════════════════
-const VENDOR_PHONES = { prabhu:'9886806395', ganga:'7019547835', nisarcha:'8971457998', samosa:'9746581122', osmania:'9482965179', gas:'8553568718', jayjay:'9976688833' };
+const VENDOR_PHONES = { prabhu:'9886806395', ganga:'7019547835', nisarcha:'8971457998', samosa:'9746581122', osmania:'9482965179', gas:'8553568718', jayjay:'9976688833', nazeer:'9900323484' };
 const VENDOR_ODOO_PARTNERS = { afeefa: 11 };
 // obvious default vendor per item (editable in Settings; '' = decide later)
 const DEFAULT_VENDOR = {
@@ -778,8 +778,8 @@ const ITEM_ALIASES = {
   kasuri_methi:['kasoori methi'], colour_red:['red food colour','red colour','red color'], colour_orange:['orange food colour','orange colour'],
   msg:['ajinomoto','tasting salt','tasting powder','china salt','testing salt'], soya_sauce:['soy sauce'],
   cornflour:['corn flour','corn starch'], moong_dal:['mung dal','moong','mung'], masoor_dal:['masur dal','masrul','masoor'],
-  rice:['staff rice','sona masoori','sona masoori rice'], water_bisleri_500:['bisleri 500ml','bisleri 500 ml','bislari water'],
-  water_aquaking_500:['aqua king','aquaking'], water_bisleri_1l:['bisleri 1l','bisleri 1 litre','bisleri 1 liter'],
+  rice:['staff rice','sona masoori','sona masoori rice'], water_bisleri_500:['bisleri 500ml','bisleri 500 ml','bisleri 500','bislari water'],
+  water_aquaking_500:['aqua king','aquaking','aqua king 500ml','aqua king 500 ml','aquaking 500ml','aquaking 500 ml'], water_bisleri_1l:['bisleri 1l','bisleri 1 litre','bisleri 1 liter'],
   coke:['cock','coca cola','coca-cola'], thumsup:['thums up','thampsup','thumbs up'], egg:['eggs','anda'],
 };
 
@@ -829,6 +829,36 @@ const MN_BROILERS_CHICKEN = [
 ];
 
 const LOCAL_VENDOR_ITEMS = [
+  {
+    item_code: 'water_bisleri_500',
+    label: 'Bisleri water 500ml',
+    unit: 'case',
+    pack_label: '24 x 500 ml bottles',
+    pack_qty: 24,
+    price_paise: 18000,
+    price_mode: 'fixed',
+    form: 'defined',
+    brand: 'both',
+    default_vendor: 'nazeer',
+    category: 'Water & Cold Drinks',
+    note: 'Nadeem purchase unit: 1 case = 24 bottles of 500 ml water.',
+    aliases: ['bisleri 500ml', 'bisleri 500 ml', 'bisleri 500', 'bisleri half litre', 'bisleri case'],
+  },
+  {
+    item_code: 'water_aquaking_500',
+    label: 'Aqua King water 500ml',
+    unit: 'case',
+    pack_label: '24 x 500 ml bottles',
+    pack_qty: 24,
+    price_paise: 14000,
+    price_mode: 'fixed',
+    form: 'defined',
+    brand: 'both',
+    default_vendor: 'nazeer',
+    category: 'Water & Cold Drinks',
+    note: 'Nadeem purchase unit: 1 case = 24 bottles of 500 ml water.',
+    aliases: ['aqua king', 'aquaking', 'aqua king 500ml', 'aqua king 500 ml', 'aquaking 500ml', 'aquaking 500 ml', 'aqua king case'],
+  },
   {
     item_code: 'NCH_TEA_POWDER',
     label: 'Tea Powder - Liberty Premium',
@@ -898,10 +928,26 @@ async function upsertLocalVendorItems(db, now) {
   const stmts = [];
   for (const item of LOCAL_VENDOR_ITEMS) {
     stmts.push(db.prepare(`
-      INSERT OR IGNORE INTO sauda_item (
+      INSERT INTO sauda_item (
         item_code, label, unit, pack_label, pack_qty, price_paise, price_mode,
         form, brand, default_vendor, category, note, flagged, active, updated_by, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 'seed', ?)
+      ON CONFLICT(item_code) DO UPDATE SET
+        label=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.label='' THEN excluded.label ELSE sauda_item.label END,
+        unit=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.unit='' THEN excluded.unit ELSE sauda_item.unit END,
+        pack_label=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.pack_label='' THEN excluded.pack_label ELSE sauda_item.pack_label END,
+        pack_qty=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.pack_qty IS NULL OR sauda_item.pack_qty=0 THEN excluded.pack_qty ELSE sauda_item.pack_qty END,
+        price_paise=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.price_paise IS NULL OR sauda_item.price_paise=0 THEN excluded.price_paise ELSE sauda_item.price_paise END,
+        price_mode=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.price_mode='' THEN excluded.price_mode ELSE sauda_item.price_mode END,
+        form=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.form='' THEN excluded.form ELSE sauda_item.form END,
+        brand=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.brand='' THEN excluded.brand ELSE sauda_item.brand END,
+        default_vendor=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.default_vendor='' THEN excluded.default_vendor ELSE sauda_item.default_vendor END,
+        category=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.category='' THEN excluded.category ELSE sauda_item.category END,
+        note=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.note='' THEN excluded.note ELSE sauda_item.note END,
+        flagged=0,
+        active=1,
+        updated_by=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.updated_by='' THEN excluded.updated_by ELSE sauda_item.updated_by END,
+        updated_at=CASE WHEN sauda_item.updated_by='seed' OR sauda_item.updated_at='' THEN excluded.updated_at ELSE sauda_item.updated_at END
     `).bind(
       item.item_code, item.label, item.unit, item.pack_label || '', item.pack_qty || 1,
       item.price_paise || 0, item.price_mode || 'fixed', item.form || 'loose',
@@ -970,6 +1016,15 @@ async function seedSettings(db) {
   for (const [vendorKey, partnerId] of Object.entries(VENDOR_ODOO_PARTNERS)) {
     await db.prepare(`UPDATE sauda_vendor SET odoo_partner_id=COALESCE(odoo_partner_id, ?) WHERE vendor_key=?`)
       .bind(partnerId, vendorKey).run().catch(() => {});
+  }
+  for (const [vendorKey, phone] of Object.entries(VENDOR_PHONES)) {
+    await db.prepare(`
+      UPDATE sauda_vendor
+      SET phone=COALESCE(NULLIF(phone, ''), ?),
+          updated_by=CASE WHEN phone IS NULL OR phone='' THEN ? ELSE updated_by END,
+          updated_at=CASE WHEN phone IS NULL OR phone='' THEN ? ELSE updated_at END
+      WHERE vendor_key=?
+    `).bind(phone, 'seed', now, vendorKey).run().catch(() => {});
   }
   const afeefaRow = await db.prepare(`SELECT bank_json, flagged FROM sauda_vendor WHERE vendor_key='afeefa'`).first().catch(() => null);
   if (!validBankDetails(afeefaRow && afeefaRow.bank_json) || (afeefaRow && afeefaRow.flagged)) {
