@@ -314,6 +314,32 @@
   function rupees(p){ return (Math.round(+p||0)/100).toLocaleString('en-IN'); }
   function num(v){ return parseFloat(String(v==null?'':v).replace(/,/g,''))||0; }  // strips thousands-commas; "5,500" -> 5500 (not 5)
   function qtyNum(v){ var m=String(v==null?'':v).match(/-?[\d.]+/); return m ? (parseFloat(m[0])||0) : 0; }
+  function chickenLine(i){
+    var hay=[i&&i.item,i&&i.sku,i&&i.unit].join(' ').toLowerCase();
+    return /chicken|broiler|shawarma|kebab|kabab|tandoor|tandoori|tangdi|lollipop|wings/.test(hay);
+  }
+  function pieceUnit(unit){ return /bird|pc|pcs|piece|pieces/i.test(String(unit||'')); }
+  function lineBillingQty(i){
+    if(i&&i.bill_qty!=null&&String(i.bill_qty).trim()!=='') return qtyNum(i.bill_qty);
+    if(i&&i.billing_qty!=null&&String(i.billing_qty).trim()!=='') return qtyNum(i.billing_qty);
+    if(i&&i.live_qty!=null&&String(i.live_qty).trim()!=='') return qtyNum(i.live_qty);
+    return qtyNum(i&&i.qty);
+  }
+  function lineNeedsBill(i){
+    if(!i || i.direct || qtyNum(i.qty)<=0) return false;
+    if(chickenLine(i)) return !(+i.price_paise>0) || lineBillingQty(i)<=0;
+    return !(+i.price_paise>0);
+  }
+  function lineAmount(i){ return Math.round(lineBillingQty(i) * Math.max(0,+i.price_paise||0)); }
+  function receiptSummary(i){
+    var bits=[];
+    if(i.received_pieces) bits.push('received '+i.received_pieces+' pc');
+    if(i.received_qty) bits.push('output '+i.received_qty+' '+(i.received_unit||'kg'));
+    if(i.bill_qty) bits.push('live '+i.bill_qty+' '+(i.bill_unit||'kg'));
+    if(+i.price_paise>0) bits.push('rate ₹'+rupees(i.price_paise)+'/'+(i.bill_unit||'kg'));
+    if(i.received_note) bits.push(i.received_note);
+    return bits.join(' · ');
+  }
   function upiHref(vpa,vn,rs){ return vpa ? ('upi://pay?pa='+encodeURIComponent(vpa)+'&pn='+encodeURIComponent(vn)+(rs>0?'&am='+rs:'')+'&cu=INR&tn='+encodeURIComponent('Sauda')) : '#'; }
   function parseJsonAttr(s){ try{ var o=JSON.parse(s||'{}'); return o&&typeof o==='object'?o:{}; }catch(e){ return {}; } }
   function readFileAsDataUrl(file){
@@ -345,7 +371,7 @@
     if(!t || t.event) return false;
     var st=String(t.status||'').toUpperCase();
     if(st==='PAID'||st==='CANCELLED') return false;
-    return (t.lines||[]).some(function(i){ return !i.direct && qtyNum(i.qty)>0 && !(+i.price_paise>0); });
+    return (t.lines||[]).some(lineNeedsBill);
   }
 
   function loadPay(){
@@ -358,23 +384,49 @@
       orders.forEach(function(o){
         var items=[]; try{ items=JSON.parse(o.items_json||'[]'); }catch(e){}
         var rail=o.payRail || paymentRail(o), bank=bankObj(o), bankText=bankSummary(bank);
-        var itemsTxt=items.map(function(i){ return esc(i.item)+(i.qty?(' '+esc(i.qty)+(i.unit?' '+esc(i.unit):'')):''); }).join(' · ');
+        var itemsTxt=items.map(function(i){
+          var base=esc(i.item)+(i.qty?(' '+esc(i.qty)+(i.unit?' '+esc(i.unit):'')):'');
+          var rec=receiptSummary(i);
+          return base+(rec?' <span class="recmini">'+esc(rec)+'</span>':'');
+        }).join(' · ');
         var amt=o.pay_amount_paise?String(o.pay_amount_paise/100):'';
         var rateItems=items.filter(function(i){ return i && i.order_id && i.line_idx!=null && !i.direct && qtyNum(i.qty)>0; });
-        var needsRate=rateItems.some(function(i){ return !(+i.price_paise>0); });
+        var needsRate=rateItems.some(lineNeedsBill);
+        var isChickenReceipt=/broiler|m\.?\s*n/i.test(String(o.vendor_name||'')) || rateItems.some(chickenLine);
         var dayLine = o.for_date ? '<div class="flowhint"><b>'+esc(businessDateLabel(o.for_date,'purchase'))+'</b></div>' : '';
         var rateBox='';
         if(rateItems.length){
-          rateBox='<div class="ratebox" data-ratebox><div class="ratehead"><b>Receipt rates</b><span>'+esc(o.vendor_name)+'</span></div>'+
-            '<div class="ratehint">Enter the rates from the vendor receipt. Sauda totals the bill from qty x rate.</div>'+
-            rateItems.map(function(i){
-              var q=qtyNum(i.qty), p=+i.price_paise||0, line=Math.round(q*p);
-              return '<div class="raterow"><div class="ri"><b>'+esc(i.item||'')+'</b><small>'+esc(String(i.qty||''))+(i.unit?' '+esc(i.unit):'')+(line?' · ₹'+rupees(line):'')+'</small></div>'+
-                '<span class="rs">₹</span><input inputmode="decimal" data-rate data-order="'+esc(i.order_id)+'" data-idx="'+esc(i.line_idx)+'" value="'+(p>0?esc(String(p/100)):'')+'" placeholder="rate">'+
-                '<span class="pu">'+(i.unit?('/ '+esc(i.unit)):'')+'</span></div>';
-            }).join('')+
-            '<div class="receiptrow"><input data-receipt-ref placeholder="receipt / bill no. optional"><input data-receipt-file type="file" accept="application/pdf,image/*,.pdf"></div>'+
-            '<button class="save-rates" data-save-rates>Save receipt rates</button></div>';
+          if(isChickenReceipt){
+            rateBox='<div class="ratebox chickenbox" data-ratebox data-chicken-box><div class="ratehead"><b>Receive chicken</b><span>'+esc(o.vendor_name)+'</span></div>'+
+              '<div class="ratehint">Daily trail: keep ordered qty as-is. Enter what arrived as output weight, then live kg + today’s live rate to create the payable bill.</div>'+
+              rateItems.map(function(i){
+                var p=+i.price_paise||0, line=lineAmount(i), pcs=pieceUnit(i.unit);
+                return '<div class="chrow" data-chicken-line data-order="'+esc(i.order_id)+'" data-idx="'+esc(i.line_idx)+'">'+
+                  '<div class="chname"><b>'+esc(i.item||'')+'</b><small>ordered '+esc(String(i.qty||''))+(i.unit?' '+esc(i.unit):'')+(line?' · bill ₹'+rupees(line):'')+'</small></div>'+
+                  '<div class="chgrid">'+
+                    (pcs?'<label><span>pcs received</span><input inputmode="decimal" data-rec-pieces value="'+esc(i.received_pieces||'')+'" placeholder="10"></label>':'')+
+                    '<label><span>output kg</span><input inputmode="decimal" data-rec-qty value="'+esc(i.received_qty||'')+'" placeholder="7.0"></label>'+
+                    '<label><span>live kg</span><input inputmode="decimal" data-bill-qty value="'+esc(i.bill_qty||i.live_qty||'')+'" placeholder="16.1"></label>'+
+                    '<label><span>₹ / kg</span><input inputmode="decimal" data-rate value="'+(p>0?esc(String(p/100)):'')+'" placeholder="rate"></label>'+
+                  '</div>'+
+                  '<input class="chnote" data-rec-note value="'+esc(i.received_note||'')+'" placeholder="split / note, e.g. 6pc 6.30 + 4pc 3.80">'+
+                '</div>';
+              }).join('')+
+              '<div class="receiptrow"><input data-receipt-ref placeholder="receipt / bill no. optional"><input data-receipt-file type="file" accept="application/pdf,image/*,.pdf"></div>'+
+              '<button class="save-receipt" data-save-receipt>Save received weights</button>'+
+              '<button class="save-rates" data-save-rates>Save live kg + rate</button></div>';
+          } else {
+            rateBox='<div class="ratebox" data-ratebox><div class="ratehead"><b>Receipt rates</b><span>'+esc(o.vendor_name)+'</span></div>'+
+              '<div class="ratehint">Enter the rates from the vendor receipt. Sauda totals the bill from qty x rate.</div>'+
+              rateItems.map(function(i){
+                var q=qtyNum(i.qty), p=+i.price_paise||0, line=Math.round(q*p);
+                return '<div class="raterow"><div class="ri"><b>'+esc(i.item||'')+'</b><small>'+esc(String(i.qty||''))+(i.unit?' '+esc(i.unit):'')+(line?' · ₹'+rupees(line):'')+'</small></div>'+
+                  '<span class="rs">₹</span><input inputmode="decimal" data-rate data-order="'+esc(i.order_id)+'" data-idx="'+esc(i.line_idx)+'" value="'+(p>0?esc(String(p/100)):'')+'" placeholder="rate">'+
+                  '<span class="pu">'+(i.unit?('/ '+esc(i.unit)):'')+'</span></div>';
+              }).join('')+
+              '<div class="receiptrow"><input data-receipt-ref placeholder="receipt / bill no. optional"><input data-receipt-file type="file" accept="application/pdf,image/*,.pdf"></div>'+
+              '<button class="save-rates" data-save-rates>Save receipt rates</button></div>';
+          }
         }
         var ids=(o.ids||[]).join(',');
         var multi=(o.order_count>1)?'<span class="tag p">'+items.length+' items · '+o.order_count+' orders</span>':'<span class="tag p">'+items.length+' item'+(items.length>1?'s':'')+'</span>';
@@ -397,13 +449,47 @@
       });
       list.innerHTML=html;
       function idsOf(el){ return (el.closest('.pb').querySelector('button[data-ids]').dataset.ids||'').split(',').map(Number).filter(Boolean); }
+      function chickenLinesFromBox(box, withBill){
+        return [].slice.call(box.querySelectorAll('[data-chicken-line]')).map(function(row){
+          var recQty=row.querySelector('[data-rec-qty]'), recPieces=row.querySelector('[data-rec-pieces]'), recNote=row.querySelector('[data-rec-note]');
+          var billQty=row.querySelector('[data-bill-qty]'), rate=row.querySelector('[data-rate]');
+          var line={ id:+row.dataset.order, line_idx:+row.dataset.idx, received_qty:recQty?recQty.value.trim():'', received_unit:'kg', received_note:recNote?recNote.value.trim():'' };
+          if(recPieces) line.received_pieces=recPieces.value.trim();
+          if(withBill){
+            line.bill_qty=billQty?billQty.value.trim():'';
+            line.bill_unit='kg';
+            line.price_paise=Math.round(num(rate&&rate.value)*100);
+          }
+          return line;
+        });
+      }
+      list.querySelectorAll('[data-save-receipt]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var box=b.closest('[data-chicken-box]');
+          var lines=chickenLinesFromBox(box, false);
+          var hasAny=lines.some(function(l){ return l.received_qty || l.received_pieces || l.received_note; });
+          if(!hasAny){ toast('Enter received weight first','err'); return; }
+          if(busy) return; busy=true; b.disabled=true; b.textContent='Saving...';
+          api('purchase-receipt',{method:'POST',body:{lines:lines}})
+            .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Received weights saved','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'receipt save failed','err'); b.disabled=false; b.textContent='Save received weights'; } })
+            .catch(function(){ busy=false; b.disabled=false; b.textContent='Save received weights'; toast('No connection','err'); });
+        });
+      });
       list.querySelectorAll('[data-save-rates]').forEach(function(b){
         b.addEventListener('click', function(){
-          var pb=b.closest('.pb'), inputs=[].slice.call(pb.querySelectorAll('input[data-rate]'));
-          var missing=inputs.some(function(inp){ return num(inp.value)<=0; });
-          if(missing){ toast('Enter every live rate first','err'); return; }
+          var pb=b.closest('.pb'), chickenBox=pb.querySelector('[data-chicken-box]');
+          var inputs=[].slice.call(pb.querySelectorAll('input[data-rate]'));
+          var missing=chickenBox
+            ? [].slice.call(chickenBox.querySelectorAll('[data-chicken-line]')).some(function(row){
+                var bill=row.querySelector('[data-bill-qty]'), rate=row.querySelector('[data-rate]');
+                return num(bill&&bill.value)<=0 || num(rate&&rate.value)<=0;
+              })
+            : inputs.some(function(inp){ return num(inp.value)<=0; });
+          if(missing){ toast(chickenBox?'Enter every live kg and rate first':'Enter every live rate first','err'); return; }
           if(busy) return; busy=true; b.disabled=true; b.textContent='Saving...';
-          var lines=inputs.map(function(inp){ return { id:+inp.dataset.order, line_idx:+inp.dataset.idx, price_paise:Math.round(num(inp.value)*100) }; });
+          var lines=chickenBox
+            ? chickenLinesFromBox(chickenBox, true)
+            : inputs.map(function(inp){ return { id:+inp.dataset.order, line_idx:+inp.dataset.idx, price_paise:Math.round(num(inp.value)*100) }; });
           var body={lines:lines};
           var refEl=pb.querySelector('[data-receipt-ref]');
           var fileEl=pb.querySelector('[data-receipt-file]');
@@ -411,15 +497,15 @@
           if(ref) body.receipt_ref=ref;
           function sendRates(){
             api('purchase-prices',{method:'POST',body:body})
-              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Receipt rates saved · bill updated','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'rate save failed','err'); b.disabled=false; b.textContent='Save receipt rates'; } })
-              .catch(function(){ busy=false; b.disabled=false; b.textContent='Save receipt rates'; toast('No connection','err'); });
+              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(chickenBox?'Live bill saved · amount updated':'Receipt rates saved · bill updated','ok'); loadPay(); } else { toast((r&&r.j&&r.j.error)||'rate save failed','err'); b.disabled=false; b.textContent=chickenBox?'Save live kg + rate':'Save receipt rates'; } })
+              .catch(function(){ busy=false; b.disabled=false; b.textContent=chickenBox?'Save live kg + rate':'Save receipt rates'; toast('No connection','err'); });
           }
           var file=fileEl&&fileEl.files&&fileEl.files[0];
           if(file){
             readFileAsDataUrl(file).then(function(dataUrl){
               body.attachment={name:file.name,mimetype:file.type||'application/octet-stream',data_url:dataUrl};
               sendRates();
-            }).catch(function(){ busy=false; b.disabled=false; b.textContent='Save receipt rates'; toast('Could not read receipt','err'); });
+            }).catch(function(){ busy=false; b.disabled=false; b.textContent=chickenBox?'Save live kg + rate':'Save receipt rates'; toast('Could not read receipt','err'); });
           } else sendRates();
         });
       });
@@ -427,7 +513,7 @@
         b.addEventListener('click', function(){
           if(!b.dataset.pay && b.dataset.rail!=='bank') return;
           var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
-          if(pb.dataset.needsRate==='1'){ toast('Save all live rates first','err'); return; }
+          if(pb.dataset.needsRate==='1'){ toast('Save live kg and rate first','err'); return; }
           if(rs<=0){ toast('Enter the amount first','err'); return; }
           if(b.dataset.pay) openPaySheet(b.dataset.pay, b.dataset.vn, rs, idsOf(b));
           else openManualPaySheet(b.dataset.vn, rs, idsOf(b), 'Transfer to the saved bank account, then record it here.', parseJsonAttr(b.dataset.bank));
@@ -437,7 +523,7 @@
         b.addEventListener('click', function(){
           var ids=idsOf(b); var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
           var payBtn=pb.querySelector('button[data-pay]'); var method=payMethodForRail((payBtn&&payBtn.dataset.rail)||b.dataset.rail||'manual');
-          if(pb.dataset.needsRate==='1'){ toast('Save all live rates first','err'); return; }
+          if(pb.dataset.needsRate==='1'){ toast('Save live kg and rate first','err'); return; }
           if(busy||!ids.length) return; busy=true;
           api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:method}})
              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(r.j.reconciled?'✓ Bank-confirmed paid':'Marked paid · bank not seen yet','ok'); loadPay(); } else toast('Failed','err'); })
@@ -1073,8 +1159,9 @@
     if(!Array.isArray(lines)||!lines.length) return '';
     return lines.slice(0,5).map(function(i){
       var q=[i.qty||'', i.unit||''].filter(Boolean).join(' ');
-      var p=+i.price_paise>0 ? (' · ₹'+rupees(i.price_paise)+(i.unit?'/'+i.unit:'')) : (pendingRate&&!i.direct?' · rate pending':'');
-      return [i.item||i.name||'', q].filter(Boolean).join(' ') + p;
+      var r=receiptSummary(i);
+      var p=+i.price_paise>0 ? (' · bill ₹'+rupees(lineAmount(i))) : (pendingRate&&!i.direct?' · receipt/bill pending':'');
+      return [i.item||i.name||'', q].filter(Boolean).join(' ') + (r?' · '+r:'') + p;
     }).filter(Boolean).join(' · ') + (lines.length>5 ? ' · +' +(lines.length-5)+' more' : '');
   }
   function diaryStage(t, signed){

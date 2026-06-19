@@ -145,6 +145,10 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await requestPay(db, body)), request);
     }
+    if (action === 'purchase-receipt' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      return withCors(json(await purchaseReceipt(db, body, auth)), request);
+    }
     if (action === 'purchase-prices' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
       return withCors(json(await purchasePrices(db, body, auth, env)), request);
@@ -588,8 +592,14 @@ function orderLineSignature(lines) {
     }))
     .sort((a, b) => (a.sku + a.item).localeCompare(b.sku + b.item)));
 }
+function lineBillingQty(l) {
+  if (l && l.bill_qty != null && String(l.bill_qty).trim() !== '') return qtyNum(l.bill_qty);
+  if (l && l.billing_qty != null && String(l.billing_qty).trim() !== '') return qtyNum(l.billing_qty);
+  if (l && l.live_qty != null && String(l.live_qty).trim() !== '') return qtyNum(l.live_qty);
+  return qtyNum(l && l.qty);
+}
 function purchaseTotal(items) {
-  return (Array.isArray(items) ? items : []).reduce((s, l) => s + Math.round(qtyNum(l.qty) * (Math.max(0, Math.round(+l.price_paise || 0)))), 0);
+  return (Array.isArray(items) ? items : []).reduce((s, l) => s + Math.round(lineBillingQty(l) * (Math.max(0, Math.round(+l.price_paise || 0)))), 0);
 }
 function ledgerEventType(value) {
   const t = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
@@ -1674,6 +1684,70 @@ async function recordReceiptEvent(db, env, vendorKey, eventDate, orderIds, amoun
   return { id: row?.id || null, event_date: date, ref: cleanRef, attachment_count: attInfo ? 1 : 0 };
 }
 
+function cleanLineField(v, max = 80) {
+  return String(v == null ? '' : v).trim().slice(0, max);
+}
+function applyReceiptFields(item, u, now, by) {
+  let changed = 0;
+  if (Object.prototype.hasOwnProperty.call(u, 'received_qty')) {
+    item.received_qty = cleanLineField(u.received_qty, 32);
+    item.received_unit = cleanLineField(u.received_unit || item.received_unit || 'kg', 16);
+    changed++;
+  }
+  if (Object.prototype.hasOwnProperty.call(u, 'received_pieces')) {
+    item.received_pieces = cleanLineField(u.received_pieces, 32);
+    changed++;
+  }
+  if (Object.prototype.hasOwnProperty.call(u, 'received_note')) {
+    item.received_note = cleanLineField(u.received_note, 160);
+    changed++;
+  }
+  if (changed) {
+    item.received_at = now;
+    item.received_by = by || '';
+  }
+  return changed;
+}
+
+// Receiving is an operational day trail, not a payment event. It keeps what
+// arrived on the order line and leaves the vendor diary/payment ledger alone.
+async function purchaseReceipt(db, body, auth) {
+  const updates = Array.isArray(body && body.lines) ? body.lines : [];
+  if (!updates.length) return { ok: false, error: 'no receipt lines' };
+  const byId = new Map();
+  for (const u of updates) {
+    const id = Math.round(+u.id || +u.order_id || 0);
+    const idx = Math.round(+u.line_idx);
+    if (!id || !Number.isFinite(idx) || idx < 0) continue;
+    if (!byId.has(id)) byId.set(id, []);
+    byId.get(id).push({ ...u, line_idx: idx });
+  }
+  if (!byId.size) return { ok: false, error: 'no valid receipt lines' };
+
+  const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+  const by = (auth && auth.u) || '';
+  let changed = 0;
+  const orders = [];
+  for (const [id, lines] of byId.entries()) {
+    const row = await db.prepare(
+      `SELECT id, vendor_name, for_date, items_json, paid_at FROM sauda_purchase
+        WHERE id=? AND (pay_timing IS NULL OR pay_timing != 'online')`
+    ).bind(id).first();
+    if (!row) continue;
+    if (row.paid_at) return { ok: false, error: 'already paid; cannot change receipt lines', id };
+    let items = [];
+    try { items = JSON.parse(row.items_json || '[]'); } catch (e) {}
+    for (const u of lines) {
+      if (!items[u.line_idx]) continue;
+      changed += applyReceiptFields(items[u.line_idx], u, now, by);
+    }
+    await db.prepare(`UPDATE sauda_purchase SET items_json=?, updated_at=? WHERE id=?`)
+      .bind(JSON.stringify(items), now, id).run();
+    orders.push({ id, vendor_name: row.vendor_name || '', for_date: row.for_date || '', items: items.length });
+  }
+  return { ok: true, changed, orders, updated_by: by };
+}
+
 // Live-priced vendors (chicken, mutton, vegetables) can receive the rate later
 // in the day. The bill amount must then be recomputed from the saved order lines,
 // not typed as an unrelated total.
@@ -1684,12 +1758,15 @@ async function purchasePrices(db, body, auth, env) {
   for (const u of updates) {
     const id = Math.round(+u.id || +u.order_id || 0);
     const idx = Math.round(+u.line_idx);
-    if (!id || idx < 0) continue;
+    if (!id || !Number.isFinite(idx) || idx < 0) continue;
     if (!byId.has(id)) byId.set(id, []);
     byId.get(id).push({
+      ...u,
       line_idx: idx,
       price_paise: Math.max(0, Math.round(+u.price_paise || 0)),
       qty: u.qty == null ? null : String(u.qty).trim(),
+      bill_qty: u.bill_qty == null ? null : cleanLineField(u.bill_qty, 32),
+      bill_unit: u.bill_unit == null ? null : cleanLineField(u.bill_unit, 16),
     });
   }
   if (!byId.size) return { ok: false, error: 'no valid rate lines' };
@@ -1710,8 +1787,11 @@ async function purchasePrices(db, body, auth, env) {
     try { items = JSON.parse(row.items_json || '[]'); } catch (e) {}
     for (const u of lines) {
       if (!items[u.line_idx]) continue;
+      applyReceiptFields(items[u.line_idx], u, now, (auth && auth.u) || '');
       items[u.line_idx].price_paise = u.price_paise;
       if (u.qty !== null && u.qty !== '') items[u.line_idx].qty = u.qty;
+      if (u.bill_qty !== null && u.bill_qty !== '') items[u.line_idx].bill_qty = u.bill_qty;
+      if (u.bill_unit !== null && u.bill_unit !== '') items[u.line_idx].bill_unit = u.bill_unit;
       changed += 1;
     }
     const expected = purchaseTotal(items);
