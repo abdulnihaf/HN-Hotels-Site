@@ -643,7 +643,13 @@ async function placeOrders(db, body, auth, env, context) {
 
   // Notify the runner: collect items → Basheer (he goes & buys); everything else
   // → Zoya (places it with the vendor for delivery). Non-blocking + fail-safe.
-  try { const p = notifyOnPlace(env, created, forDate); if (context && context.waitUntil) context.waitUntil(p); } catch (e) {}
+  const notifyCreated = created.filter((c) => !c.duplicate);
+  try {
+    if (notifyCreated.length) {
+      const p = notifyOnPlace(env, notifyCreated, forDate);
+      if (context && context.waitUntil) context.waitUntil(p);
+    }
+  } catch (e) {}
 
   return {
     ok: true, for_date: forDate, placed: inserted, duplicates,
