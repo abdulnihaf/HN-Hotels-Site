@@ -441,6 +441,7 @@
   var PAY_CACHE=[];
   function normBrand(b){ b=String(b||'').toUpperCase(); return b==='HE'||b==='NCH'?b:'both'; }
   function brandText(b){ b=normBrand(b); return b==='HE'?'Hamza Express':(b==='NCH'?'Nawabi Chai House':'Both'); }
+  function brandChip(b){ b=normBrand(b); return b==='HE'?'HE':(b==='NCH'?'NCH':'Both'); }
   function orderBrand(o, items){
     var direct=normBrand(o&&o.brand);
     if(direct!=='both') return direct;
@@ -587,8 +588,8 @@
         var key=(ids||('pay-'+m.idx+'-'+String(o.vendor_name||'').replace(/\W+/g,'-')));
         var open=!!S.pay.open[key] || cards.length===1 || !!q;
         var mini='<span class="mini"><span class="'+(needsRate?'warn':'ok')+'">'+esc(payStatusLabel(m.status))+'</span> · '+esc(brandText(m.brand))+(o.for_date?' · '+esc(businessDateLabel(o.for_date,'')):'')+(summaryLines(items,2)?' · '+esc(summaryLines(items,2)):'')+'</span>';
-        html+='<div class="basket paycard'+(open?' open':'')+'" data-paykey="'+esc(key)+'"><div class="bh"><span class="chev">›</span><span class="bn">'+esc(o.vendor_name)+'</span>'+
-          '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span><span class="tag p">'+esc(brandText(m.brand))+'</span>'+multi+'<span class="payamt">'+moneyText(o.pay_amount_paise)+'</span>'+mini+'</div>'+
+        html+='<div class="basket paycard'+(open?' open':'')+'" data-paykey="'+esc(key)+'"><div class="bh"><span class="chev">›</span><span class="bn">'+esc(o.vendor_name)+'</span><span class="payamt">'+moneyText(o.pay_amount_paise)+'</span>'+
+          '<span class="cardtags"><span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span><span class="tag p">'+esc(brandChip(m.brand))+'</span>'+multi+'</span>'+mini+'</div>'+
           '<div class="pb" data-needs-rate="'+(needsRate?'1':'0')+'">'+dayLine+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+rateBox+
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
           '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt '+(rateItems.length?'readonly':'')+' value="'+esc(amt)+'" placeholder="'+(rateItems.length?'auto after rates':'one payment for all items')+'"></div>'+
@@ -1314,17 +1315,17 @@
     var items=o.items||[];
     var brand=histBrand(o,items);
     return '<div class="hist-card'+(open?' open':'')+'" data-hkey="'+esc(rowKey)+'"><div class="hhd"><span class="chev">›</span><b>'+esc(brandText(brand))+'</b>'+
-      (o.sender?'<small>'+esc(o.sender)+'</small>':'')+
-      '<small>'+items.length+' item'+(items.length===1?'':'s')+'</small><span class="mini">'+esc(summaryLines(items,3)||'Purchase input')+'</span></div>'+
+      '<span class="cardtags">'+(o.sender?'<small>'+esc(o.sender)+'</small>':'')+
+      '<small>'+items.length+' item'+(items.length===1?'':'s')+'</small></span><span class="mini">'+esc(summaryLines(items,3)||'Purchase input')+'</span></div>'+
       '<div class="hbody">'+items.map(orderLineText).join('')+'</div></div>';
   }
   function renderPlacedCard(o,rowKey,open){
     var items=o.items||[], amt=+o.expected_amount_paise||0;
     var brand=histBrand(o,items);
     var note=/ashrafiya/i.test(o.vendor_name||'') ? '<div class="hist-note">Ashrafiya is one combined HE+NCH khata. This vendor can contain both brands, but settlement is one payment.</div>' : '';
-    return '<div class="hist-card'+(open?' open':'')+'" data-hkey="'+esc(rowKey)+'"><div class="hhd"><span class="chev">›</span><b>'+esc(o.vendor_name||'')+'</b>'+
-      '<span class="tag f">'+esc(o.fulfilmentLabel||o.fulfilment||'')+'</span><span class="tag p">'+esc(o.payLabel||o.pay_timing||'')+'</span>'+
-      '<span class="tag p">'+esc(brandText(brand))+'</span><small>'+esc(o.status||'')+'</small>'+(amt?'<span class="hamt">₹'+rupees(amt)+'</span>':'')+
+    return '<div class="hist-card'+(open?' open':'')+'" data-hkey="'+esc(rowKey)+'"><div class="hhd"><span class="chev">›</span><b>'+esc(o.vendor_name||'')+'</b>'+(amt?'<span class="hamt">₹'+rupees(amt)+'</span>':'')+
+      '<span class="cardtags"><span class="tag f">'+esc(o.fulfilmentLabel||o.fulfilment||'')+'</span><span class="tag p">'+esc(o.payLabel||o.pay_timing||'')+'</span>'+
+      '<span class="tag p">'+esc(brandChip(brand))+'</span><small>'+esc(o.status||'')+'</small></span>'+
       '<span class="mini">'+esc(summaryLines(items,3)||'Vendor order')+'</span></div>'+
       '<div class="hbody">'+note+items.map(orderLineText).join('')+'</div></div>';
   }

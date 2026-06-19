@@ -192,14 +192,16 @@
     .op-group.ready{color:var(--green)}
     .op-group.khata{color:var(--gold)}
     .paycard{background:var(--e1)}
-    .paycard .bh{cursor:pointer;min-height:52px}
+    .paycard .bh{cursor:pointer;min-height:52px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 8px;align-items:center;flex-wrap:nowrap}
+    .cardtags{grid-column:2/4;display:flex;gap:6px;flex-wrap:wrap;min-width:0}
     .paycard .bh:active,.hist-card .hhd:active{background:var(--e2)}
     .paycard .bh .bn,.hist-card .hhd b{flex:1;min-width:0}
-    .payamt{margin-left:auto;color:var(--gold);font-size:13px;font-weight:850;font-variant-numeric:tabular-nums;white-space:nowrap}
-    .chev{color:var(--mute);font-size:17px;line-height:1;transition:transform .16s var(--ease)}
+    .paycard .bh .bn,.hist-card .hhd b{grid-column:2;grid-row:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px;line-height:1.2}
+    .payamt{grid-column:3;grid-row:1;margin-left:0;color:var(--gold);font-size:13px;font-weight:850;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .chev{grid-column:1;grid-row:1;color:var(--mute);font-size:17px;line-height:1;transition:transform .16s var(--ease)}
     .paycard.open .chev,.hist-card.open .chev{transform:rotate(90deg);color:var(--gold)}
     .paycard:not(.open) .pb{display:none}
-    .mini{flex-basis:100%;font-size:11px;color:var(--mute);font-weight:500;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mini{grid-column:2/4;min-width:0;font-size:11px;color:var(--mute);font-weight:500;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .mini .warn{color:var(--amber);font-weight:750}
     .mini .ok{color:var(--green);font-weight:750}
     .empty.small{padding:24px 18px}
@@ -418,10 +420,10 @@
     .hist-box span{display:block;margin-top:2px;font-size:10.5px;color:var(--dim);line-height:1.25}
     .hist-section{margin:12px 0 8px;font:850 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
     .hist-card{margin-bottom:10px;border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;border-left:3px solid var(--sauda);background:var(--e1)}
-    .hist-card .hhd{display:flex;align-items:center;gap:7px;padding:10px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line-soft);cursor:pointer}
+    .hist-card .hhd{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 8px;padding:10px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line-soft);cursor:pointer}
     .hist-card .hhd b{font-size:14px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .hist-card .hhd small{font-size:11px;color:var(--dim);white-space:nowrap}
-    .hist-card .hamt{margin-left:auto;color:var(--gold);font-weight:850;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .hist-card .hamt{grid-column:3;grid-row:1;margin-left:0;color:var(--gold);font-weight:850;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
     .hist-card .hline{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-top:1px solid var(--line-soft)}
     .hist-card .hline:first-of-type{border-top:0}
     .hist-card .hline .hi{flex:1;min-width:0}
