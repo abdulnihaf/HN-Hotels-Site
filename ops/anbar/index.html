@@ -180,12 +180,13 @@
 
 <input type="file" accept="image/*" capture="environment" id="settle-cam" style="display:none" onchange="settleShot(this)">
 <input type="file" accept="image/*" capture="environment" id="chicken-evidence-cam" style="display:none" onchange="chickenEvidenceShot(this)">
+<input type="file" accept="image/*" capture="environment" id="nch-evidence-cam" style="display:none" onchange="nchEvidenceShot(this)">
 <div class="toast" id="toast"></div>
 
 <script>
 const API = '/api/anbar';
-const ICONS = { 'NCH-OB':'🍪', 'NCH-WTR':'💧', 'NCH-KH':'🌴', 'NCH-BUN':'🍞', 'NCH-CC':'🍗', 'NCH-PS':'🥟', 'HN-RM-202':'🍃', 'HN-RM-201':'🥛' };
-const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {}, chicken: { lines: [], rateRupees: '', date: '' } };
+const ICONS = { 'NCH-OB':'🍪', 'NCH-WTR':'💧', 'NCH-KH':'🌴', 'NCH-BUN':'🍞', 'NCH-CC':'🍗', 'NCH-PS':'🥟', 'HN-RM-200':'🥛', 'HN-RM-202':'🍃', 'HN-RM-201':'🥛' };
+const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {}, chicken: { lines: [], rateRupees: '', date: '' }, nchReceive: { lines: [], date: '', current: null, evidenceB64: '' } };
 const Q = new URLSearchParams(location.search);
 const ENTRY_PATH = location.pathname.replace(/\/index\.html$/, '/').replace(/\/+$/, '/');
 const QUERY_BRAND = (Q.get('brand') || '').toUpperCase();
@@ -220,6 +221,7 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'
 function todayIST() { return new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }
 function kg(v) { return v == null ? '—' : (Math.round(Number(v) * 100) / 100).toString(); }
 S.chicken.date = /^\d{4}-\d{2}-\d{2}$/.test(Q.get('date') || '') ? Q.get('date') : todayIST();
+S.nchReceive.date = S.chicken.date;
 
 // ── GATE ──
 function key(k) { if (S.entry.length >= 4) return; S.entry += k; dots(); if (S.entry.length === 4) verify(); }
@@ -494,6 +496,207 @@ async function saveChickenReceipt() {
   }
 }
 
+// ── NCH SAUDA RECEIVING INSIDE ANBAR ──
+function nchReceiveDate() {
+  const d = S.nchReceive.date || todayIST();
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : todayIST();
+}
+function setNchReceiveDate(v) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return;
+  S.nchReceive.date = v;
+  startFlow('receipt');
+}
+function fmtReceiveQty(v, uom) {
+  if (v == null || v === '') return '0 ' + (uom || '');
+  return `${kg(v)} ${uom || ''}`.trim();
+}
+async function loadNchReceiveQueue() {
+  const date = nchReceiveDate();
+  const r = await fetch(`${API}?action=sauda-receive-queue&brand=NCH&date=${encodeURIComponent(date)}&kind=all`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) return { lines: [], error: r.error || 'Sauda queue failed' };
+  S.nchReceive.lines = r.lines || [];
+  return { lines: S.nchReceive.lines };
+}
+function renderNchReceiveCard(line) {
+  const summary = line.receipt_summary || {};
+  const saved = line.inventory_saved || line.status === 'inventory_saved';
+  const partial = line.partial || line.status === 'partial';
+  const border = saved ? 'rgba(55,211,153,.4)' : partial ? 'rgba(251,191,36,.35)' : 'var(--gold-bd)';
+  const chipClass = saved ? 'status-saved' : partial ? 'status-partial' : 'status-ordered';
+  const chipText = saved ? 'inventory saved' : partial ? 'partial' : 'ordered';
+  const pending = partial && summary.remaining_qty != null ? ` · pending ${fmtReceiveQty(summary.remaining_qty, line.uom)}` : '';
+  const icon = line.kind === 'milk' ? '🥛' : ICONS[line.item_code] || '📦';
+  const btn = saved
+    ? '<button class="btn btn-green" disabled style="margin-top:12px;width:100%">Inventory saved</button>'
+    : `<button class="btn btn-gold" style="margin-top:12px;width:100%" onclick="openNchReceive(${line.purchase_id},${line.line_idx})">${partial ? 'Receive balance' : 'Receive now'}</button>`;
+  return `<div class="card" style="border-color:${border}">
+    <div class="item-row" style="cursor:default">
+      <div class="item-ico">${icon}</div>
+      <div style="flex:1">
+        <div class="item-name">${esc(line.item_name || line.item)}</div>
+        <div class="item-meta">${esc(line.vendor_name || '')} · Sauda #${line.purchase_id} line ${line.line_idx + 1}</div>
+        <div class="item-meta">ordered ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || line.uom || '')} · received ${fmtReceiveQty(summary.received_qty || 0, line.uom)}${pending}</div>
+        <div style="margin-top:8px"><span class="status-chip ${chipClass}">${chipText}</span></div>
+      </div>
+    </div>
+    ${btn}
+  </div>`;
+}
+function renderNchReceiptParts(line) {
+  const parts = line.receipt_parts || [];
+  if (!parts.length) return '';
+  return `<div style="margin-top:14px">${parts.map(p => `<div class="receipt-part">
+    <span>part ${p.part_no}${p.slot ? ' · ' + esc(p.slot) : ''}</span>
+    <span>${fmtReceiveQty(p.received_qty, line.uom)}${p.evidence_url ? ` · <a href="${esc(p.evidence_url)}" target="_blank" style="color:var(--gold)">photo</a>` : ''}</span>
+  </div>`).join('')}</div>`;
+}
+function nchLine(purchaseId, lineIdx) {
+  return S.nchReceive.lines.find(l => Number(l.purchase_id) === Number(purchaseId) && Number(l.line_idx) === Number(lineIdx));
+}
+function openNchReceive(purchaseId, lineIdx) {
+  const line = nchLine(purchaseId, lineIdx);
+  if (!line) return;
+  const summary = line.receipt_summary || {};
+  S.nchReceive.evidenceB64 = '';
+  S.nchReceive.current = line;
+  el('flow-title').textContent = line.item_name || line.item || 'Receive';
+  el('flow-sub').textContent = `Sauda #${line.purchase_id} · line ${line.line_idx + 1} · part ${line.next_part_no || 1}`;
+  el('flow-submit').textContent = 'Save receipt';
+  el('flow-actions').style.display = 'flex';
+  const partsHtml = renderNchReceiptParts(line);
+  if (line.kind === 'milk') {
+    const cans = line.milk_cans || [];
+    el('flow-body').innerHTML = `
+      <div class="card" style="padding:18px">
+        <div class="item-row" style="cursor:default">
+          <div class="item-ico">🥛</div>
+          <div style="flex:1">
+            <div class="item-name">Buffalo Milk</div>
+            <div class="item-meta">ordered ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || 'L')} · received ${fmtReceiveQty(summary.received_qty || 0, 'L')}</div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="rx-slot">Delivery slot</label>
+          <select id="rx-slot" style="width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;color:var(--text);font-size:20px;font-weight:800">
+            <option value="AM">Morning</option>
+            <option value="PM">Evening</option>
+            <option value="ADHOC">Extra</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rx-litres">Litres received</label>
+          <input id="rx-litres" type="number" inputmode="decimal" min="0" step="0.01" placeholder="${summary.remaining_qty || line.ordered_amount || ''}">
+        </div>
+        <div class="item-meta" style="margin:14px 2px 0;color:var(--gold);font-weight:800;text-transform:uppercase;letter-spacing:.05em">If using can weight</div>
+        <div class="split">
+          <div class="field">
+            <label for="rx-can">Can</label>
+            <select id="rx-can" style="width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;color:var(--text);font-size:16px;font-weight:800" onchange="milkPreviewLitres()">
+              <option value="">No can</option>
+              ${cans.map(c => `<option value="${esc(c.can_id)}" data-tare="${esc(c.tare_kg)}">${esc(c.label)} · tare ${esc(c.tare_kg)} kg</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label for="rx-gross">Gross kg</label>
+            <input id="rx-gross" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" oninput="milkPreviewLitres()">
+          </div>
+        </div>
+        <div id="rx-milk-preview" class="photo-ready"></div>
+        <button class="btn btn-dark" style="width:100%;margin-top:14px" onclick="pickNchEvidence()">Add receipt photo</button>
+        <div id="rx-nch-photo-ready" class="photo-ready"></div>
+        ${partsHtml}
+      </div>`;
+  } else {
+    el('flow-body').innerHTML = `
+      <div class="card" style="padding:18px">
+        <div class="item-row" style="cursor:default">
+          <div class="item-ico">${ICONS[line.item_code] || '📦'}</div>
+          <div style="flex:1">
+            <div class="item-name">${esc(line.item_name || line.item)}</div>
+            <div class="item-meta">ordered ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || line.uom || '')} · received ${fmtReceiveQty(summary.received_qty || 0, line.uom)}</div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="rx-nch-qty">Quantity received now</label>
+          <input id="rx-nch-qty" type="number" inputmode="numeric" min="1" step="1" placeholder="${summary.remaining_qty || line.ordered_amount || ''}">
+        </div>
+        <button class="btn btn-dark" style="width:100%;margin-top:14px" onclick="pickNchEvidence()">Add receipt photo</button>
+        <div id="rx-nch-photo-ready" class="photo-ready"></div>
+        ${partsHtml}
+      </div>`;
+  }
+  S.flow = 'nch-sauda-receive';
+  show('s-flow');
+}
+function milkPreviewLitres() {
+  const can = el('rx-can');
+  const gross = Number(el('rx-gross')?.value || 0);
+  const tare = Number(can?.selectedOptions?.[0]?.dataset?.tare || 0);
+  const out = el('rx-milk-preview');
+  if (!out) return;
+  if (gross > 0 && tare > 0) {
+    const litres = Math.round(((gross - tare) / 1.03) * 100) / 100;
+    out.textContent = litres > 0 ? `Anbar will save ${litres} L` : 'Check can and gross weight';
+  } else out.textContent = '';
+}
+function pickNchEvidence() {
+  el('nch-evidence-cam').value = '';
+  el('nch-evidence-cam').click();
+}
+function nchEvidenceShot(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  el('rx-nch-photo-ready').textContent = 'Preparing photo…';
+  shrink(file, (b64) => {
+    S.nchReceive.evidenceB64 = b64;
+    el('rx-nch-photo-ready').textContent = 'Receipt photo ready';
+  });
+}
+async function saveNchSaudaReceipt() {
+  const line = S.nchReceive.current;
+  if (!line) return;
+  if (!S.nchReceive.evidenceB64) return toast('Add receipt photo', true);
+  const body = {
+    pin: S.pin,
+    brand: 'NCH',
+    kind: line.kind,
+    purchase_id: line.purchase_id,
+    line_idx: line.line_idx,
+    receipt_part_no: line.next_part_no || 1,
+    evidence_image: S.nchReceive.evidenceB64,
+  };
+  if (line.kind === 'milk') {
+    const litres = Number(el('rx-litres')?.value || 0);
+    const gross = Number(el('rx-gross')?.value || 0);
+    body.slot = el('rx-slot')?.value || 'AM';
+    if (litres > 0) body.received_litres = litres;
+    if (gross > 0) {
+      body.gross_kg = gross;
+      body.can_id = el('rx-can')?.value || '';
+    }
+    if (!(body.received_litres > 0) && !(body.gross_kg > 0)) return toast('Enter litres or gross kg', true);
+  } else {
+    const qty = Number(el('rx-nch-qty')?.value || 0);
+    if (!(qty > 0)) return toast('Enter quantity received', true);
+    body.received_qty = qty;
+  }
+  el('flow-submit').disabled = true;
+  try {
+    const r = await fetch(`${API}?action=sauda-receive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'save failed');
+    toast(r.partial ? `partial saved · ${fmtReceiveQty(r.pending_qty || 0, r.received_unit) } pending` : 'inventory saved');
+    goHome();
+  } catch (e) {
+    toast(e.message || 'save failed', true);
+  } finally {
+    el('flow-submit').disabled = false;
+  }
+}
+
 // ── FLOWS ──
 async function startFlow(kind) {
   S.flow = kind; S.item = null; S.countEntries = {}; S.expectedId = null;
@@ -502,25 +705,33 @@ async function startFlow(kind) {
   el('flow-sub').textContent = `${S.loc.toUpperCase()} · ${S.person}`;
   el('flow-actions').style.display = kind === 'count' ? 'flex' : 'none';
   const items = S.live.filter(it => S.loc === 'counter' ? true : it.locs.includes('store'));
-  if (kind === 'receipt' && S.loc === 'counter') {
-    // Today's PO expectations first — the receiver just CONFIRMS what was ordered.
-    const ex = await fetch(`${API}?action=expected`).then(x => x.json()).catch(() => ({}));
-    const pending = (ex.expected || []).filter(e => e.status === 'pending');
-    let html = '';
-    if (pending.length) {
-      html += '<div class="item-meta" style="margin:14px 4px 2px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.05em">Ordered for today — tap to confirm arrival</div>';
-      html += pending.map(e => `
-        <div class="card" style="border-color:var(--gold-bd)"><div class="item-row" onclick="confirmExpected(${e.id},'${e.item_code}')">
-          <div class="item-ico">${ICONS[e.item_code] || '📦'}</div>
-          <div style="flex:1"><div class="item-name">${e.item_name}</div><div class="item-meta">ordered: ${e.ordered_qty} ${e.ordered_unit} · ${e.expect_note || ''}</div></div>
-          <div style="color:var(--gold);font-size:13px;font-weight:800">CONFIRM ›</div>
-        </div></div>`).join('');
-      html += '<div class="item-meta" style="margin:18px 4px 2px;text-transform:uppercase;letter-spacing:.05em">Or receive anything else</div>';
+  if (kind === 'receipt' && IS_NCH_ANBAR) {
+    const q = await loadNchReceiveQueue();
+    let html = `<div class="card" style="border-color:var(--anbar-bd)">
+      <div class="item-row" style="cursor:default">
+        <div class="item-ico">S</div>
+        <div style="flex:1">
+          <div class="item-name">Sauda receiving</div>
+          <div class="item-meta">Buns and buffalo milk · receive only against ordered lines</div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="nch-receive-date">Receiving date</label>
+        <input id="nch-receive-date" type="date" value="${esc(nchReceiveDate())}" onchange="setNchReceiveDate(this.value)">
+      </div>
+    </div>`;
+    if (q.error) html += `<div class="card" style="border-color:var(--red)"><div class="item-meta" style="color:var(--red)">${esc(q.error)}</div></div>`;
+    if (q.lines.length) {
+      html += '<div class="item-meta" style="margin:14px 4px 2px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.05em">Ordered for today — tap what arrived</div>';
+      html += q.lines.map(renderNchReceiveCard).join('');
+    } else {
+      html += '<div class="loading" style="padding:18px 0">No Sauda buns or buffalo milk order for this date.</div>';
     }
+    html += '<div class="item-meta" style="margin:18px 4px 2px;text-transform:uppercase;letter-spacing:.05em">Manual fallback</div>';
     html += items.map(it => `
       <div class="card"><div class="item-row" onclick="pickItem('${it.code}')">
         <div class="item-ico">${ICONS[it.code] || '📦'}</div>
-        <div style="flex:1"><div class="item-name">${it.name}</div><div class="item-meta">tap to enter quantity</div></div>
+        <div style="flex:1"><div class="item-name">${it.name}</div><div class="item-meta">manual movement, only if no Sauda line exists</div></div>
         <div style="color:var(--gold);font-size:20px">›</div>
       </div></div>`).join('');
     el('flow-body').innerHTML = html;
@@ -700,6 +911,7 @@ async function settleFinish() {
 
 async function submitFlow() {
   if (S.flow === 'he-chicken-receive') return saveChickenReceipt();
+  if (S.flow === 'nch-sauda-receive') return saveNchSaudaReceipt();
   if (S.flow === 'settle') return settleFinish();
   el('flow-submit').disabled = true;
   try {

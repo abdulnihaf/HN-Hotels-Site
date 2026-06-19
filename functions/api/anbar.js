@@ -40,6 +40,7 @@ const ITEMS = [
   // Store-only items (layer 2 ingredients): tracked at the store door from the
   // moment anything exits. No POS term — store law is count + received − issued.
   // Consumption joins later via the chai recipe lane.
+  { code: 'HN-RM-200', name: 'Buffalo Milk',         uom: 'L',  locs: ['store'], pos: [] },
   { code: 'HN-RM-202', name: 'Tea Powder',          uom: 'kg', locs: ['store'], pos: [] },
   { code: 'HN-RM-201', name: 'Skimmed Milk Powder', uom: 'kg', locs: ['store'], pos: [] },
 ];
@@ -56,6 +57,33 @@ const CHICKEN_LABELS = {
   lollipop: 'Chicken Lollipop',
 };
 const MN_BROILERS_RE = /\b(m\.?\s*n\.?\s*broilers|mn\s*broilers|m\.?\s*n\.?\s*chicken|mn\s*chicken)\b/i;
+const NCH_RECEIVE_DEFS = [
+  {
+    kind: 'buns',
+    aliases: ['bun'],
+    code: 'NCH-BUN',
+    name: 'Bun (all types)',
+    uom: 'bun',
+    loc: 'counter',
+    vendorRe: /\b(ganga\s*bake(?:ry|rs)|ganga)\b/i,
+    lineRe: /\b(bun|buns|bread|paav|pav)\b/i,
+  },
+  {
+    kind: 'milk',
+    aliases: ['buffalo-milk', 'buffalo_milk'],
+    code: 'HN-RM-200',
+    name: 'Buffalo Milk',
+    uom: 'L',
+    loc: 'store',
+    vendorRe: /\b(prabhu|buffalo\s*milk|bootha)\b/i,
+    lineRe: /\b(buffalo\s*)?milk\b/i,
+  },
+];
+const MILK_CANS = {
+  BLUE40: { can_id: 'BLUE40', label: 'Blue 40L can', color: 'blue', tare_kg: 4.70, nominal_l: 40 },
+  GREY40: { can_id: 'GREY40', label: 'Grey 40L can', color: 'grey', tare_kg: 4.38, nominal_l: 40 },
+};
+const MILK_DENSITY_KG_PER_L = 1.03;
 
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
@@ -181,6 +209,83 @@ function summariseReceiptParts(parts, ordered, mode) {
   };
 }
 
+function receiveKindParam(value) {
+  const k = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (!k || k === 'all') return 'all';
+  const hit = NCH_RECEIVE_DEFS.find(d => d.kind === k || d.aliases.includes(k));
+  return hit ? hit.kind : k;
+}
+
+function receiveTextForLine(line) {
+  return norm([line.item_key, line.sku, line.item, line.name, line.label, line.matched].filter(Boolean).join(' '));
+}
+
+function nchReceiveDefForLine(line, vendorName, requestedKind = 'all') {
+  const k = receiveKindParam(requestedKind);
+  const text = receiveTextForLine(line);
+  return NCH_RECEIVE_DEFS.find(d => {
+    if (k !== 'all' && d.kind !== k) return false;
+    if (d.kind === 'milk' && /\b(powder|milkmaid|condensed|skimmed|smp)\b/.test(text)) return false;
+    return d.lineRe.test(text) || (!text && d.vendorRe.test(vendorName || ''));
+  }) || null;
+}
+
+function normaliseGenericReceiptPart(part) {
+  if (!part || typeof part !== 'object') return null;
+  const qty = toNum(part.received_qty ?? part.qty ?? part.litres_received);
+  const partNo = Number(part.part_no || parseReceiptPartNo(part.movement_key) || 1);
+  if (!(qty > 0)) return null;
+  return {
+    kind: part.kind || '',
+    slot: part.slot || '',
+    part_no: partNo,
+    movement_key: part.movement_key || '',
+    anbar_receipt_id: part.anbar_receipt_id || null,
+    received_at: part.received_at || '',
+    received_by: part.received_by || '',
+    received_qty: round2(qty),
+    received_unit: part.received_unit || part.uom || '',
+    price_paise: toNum(part.price_paise),
+    cost_paise: toNum(part.cost_paise),
+    can_id: part.can_id || '',
+    gross_kg: toNum(part.gross_kg),
+    tare_kg: toNum(part.tare_kg),
+    density_kg_per_l: toNum(part.density_kg_per_l),
+    evidence_key: part.evidence_key || '',
+    evidence_mime: part.evidence_mime || '',
+    evidence_url: part.evidence_url || (part.evidence_key ? `/api/anbar?action=evidence&key=${encodeURIComponent(part.evidence_key)}` : ''),
+  };
+}
+
+function genericReceiptPartsFromLine(line, kind) {
+  const parts = Array.isArray(line.receipt_parts) ? line.receipt_parts : [];
+  const out = parts
+    .map(normaliseGenericReceiptPart)
+    .filter(p => p && (!kind || !p.kind || p.kind === kind));
+  const legacy = normaliseGenericReceiptPart(line.receipt);
+  if (legacy && (!kind || !legacy.kind || legacy.kind === kind) && !out.some(p => p.movement_key && p.movement_key === legacy.movement_key)) out.push(legacy);
+  return out.sort((a, b) => (a.part_no || 0) - (b.part_no || 0));
+}
+
+function summariseGenericReceiptParts(parts, ordered) {
+  const qty = round2(parts.reduce((sum, p) => sum + (toNum(p.received_qty) || 0), 0));
+  const costPaise = Math.round(parts.reduce((sum, p) => sum + (toNum(p.cost_paise) || 0), 0));
+  const complete = ordered > 0 ? qty + 0.001 >= ordered : qty > 0;
+  return {
+    part_count: parts.length,
+    received_qty: qty,
+    cost_paise: costPaise,
+    remaining_qty: ordered > 0 ? Math.max(0, round2(ordered - qty)) : null,
+    complete,
+    partial: parts.length > 0 && !complete,
+    next_part_no: (parts.reduce((m, p) => Math.max(m, Number(p.part_no || 0)), 0) || 0) + 1,
+  };
+}
+
+function linePricePaise(line) {
+  return Math.max(0, Math.round(toNum(line && line.price_paise) || 0));
+}
+
 async function ensureAnbarSchema(DB) {
   await DB.prepare(
     `CREATE TABLE IF NOT EXISTS rm_outlet_receipts (
@@ -231,6 +336,22 @@ async function storeReceiptEvidence(env, { brand, date, purchaseId, lineIdx, par
   const bytes = Uint8Array.from(atob(b64.replace(/\s+/g, '')), c => c.charCodeAt(0));
   if (bytes.byteLength > 3_000_000) throw new Error('weight photo too large');
   const key = `chicken-receipts/${brand}/${date}/sauda-${purchaseId}/line-${lineIdx}/part-${partNo}-${Date.now()}.jpg`;
+  await env.EVIDENCE.put(key, bytes, { httpMetadata: { contentType: mime } });
+  return { key, mime, bytes: bytes.byteLength };
+}
+
+async function storeGenericReceiptEvidence(env, { brand, kind, date, purchaseId, lineIdx, partNo, image }) {
+  if (!image) return null;
+  if (!env?.EVIDENCE) return null;
+  const raw = String(image);
+  const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(raw);
+  const mime = m ? m[1] : 'image/jpeg';
+  const b64 = m ? m[2] : raw;
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(b64)) throw new Error('receipt photo invalid');
+  const bytes = Uint8Array.from(atob(b64.replace(/\s+/g, '')), c => c.charCodeAt(0));
+  if (bytes.byteLength > 3_000_000) throw new Error('receipt photo too large');
+  const safeKind = String(kind || 'receipt').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+  const key = `anbar-receipts/${safeKind}/${brand}/${date}/sauda-${purchaseId}/line-${lineIdx}/part-${partNo}-${Date.now()}.jpg`;
   await env.EVIDENCE.put(key, bytes, { httpMetadata: { contentType: mime } });
   return { key, mime, bytes: bytes.byteLength };
 }
@@ -611,6 +732,300 @@ async function saveSaudaChickenReceive(DB, body, env = {}) {
   });
 }
 
+async function saudaNchReceiveQueue(DB, url) {
+  await ensureAnbarSchema(DB);
+  const brand = (url.searchParams.get('brand') || 'NCH').toUpperCase();
+  const kind = receiveKindParam(url.searchParams.get('kind') || 'all');
+  const date = url.searchParams.get('date') || istToday();
+  if (brand !== 'NCH') return json({ success: true, brand, date, kind, lines: [] });
+  if (!isYmd(date)) return json({ success: false, error: 'date invalid' }, 400);
+
+  const rows = (await DB.prepare(
+    `SELECT id, brand, vendor_name, for_date, status, items_json, ordered_at
+     FROM sauda_purchase
+     WHERE for_date=? AND COALESCE(status,'') != 'CANCELLED'
+       AND (brand='NCH' OR brand='both' OR brand IS NULL OR brand='')
+     ORDER BY id DESC`
+  ).bind(date).all()).results || [];
+
+  const lines = [];
+  for (const po of rows) {
+    const items = parseJsonArray(po.items_json);
+    for (let idx = 0; idx < items.length; idx++) {
+      const line = items[idx] || {};
+      const def = nchReceiveDefForLine(line, po.vendor_name, kind);
+      if (!def) continue;
+      const prefix = movementPrefixFor(po.id, idx);
+      const movementRows = (await DB.prepare(
+        `SELECT id, received_at, received_by, qty, movement_key, evidence_key, evidence_mime
+         FROM rm_outlet_receipts
+         WHERE movement_key=? OR movement_key LIKE ?
+         ORDER BY movement_key`
+      ).bind(legacyMovementKeyFor(po.id, idx), `${prefix}:%`).all()).results || [];
+      const ordered = orderedAmount(line);
+      const parts = genericReceiptPartsFromLine(line, def.kind);
+      const summary = summariseGenericReceiptParts(parts, ordered);
+      const legacySaved = movementRows.length > 0 && parts.length === 0;
+      const saved = summary.complete || legacySaved;
+      const partial = summary.partial;
+      const latestPart = parts[parts.length - 1] || null;
+      const latestMovement = movementRows[movementRows.length - 1] || null;
+      lines.push({
+        purchase_id: po.id,
+        line_idx: idx,
+        movement_key: movementKeyFor(po.id, idx, summary.next_part_no),
+        movement_key_prefix: prefix,
+        next_part_no: summary.next_part_no,
+        order_status: po.status,
+        vendor_name: po.vendor_name,
+        for_date: po.for_date,
+        kind: def.kind,
+        item_code: def.code,
+        item_name: def.name,
+        loc: def.loc,
+        uom: def.uom,
+        item: line.item || line.sku || line.name || def.name,
+        ordered_qty: line.qty ?? line.count ?? '',
+        ordered_unit: line.unit || '',
+        ordered_amount: ordered,
+        price_paise: linePricePaise(line),
+        partial,
+        inventory_saved: saved,
+        saved_at: latestMovement?.received_at || latestPart?.received_at || null,
+        saved_by: latestMovement?.received_by || latestPart?.received_by || '',
+        status: saved ? 'inventory_saved' : partial ? 'partial' : 'ordered',
+        receipt_parts: parts,
+        receipt_summary: summary,
+        milk_cans: def.kind === 'milk' ? Object.values(MILK_CANS) : [],
+        density_kg_per_l: def.kind === 'milk' ? MILK_DENSITY_KG_PER_L : null,
+      });
+    }
+  }
+
+  return json({ success: true, brand, date, kind, lines });
+}
+
+function milkLitresFromBody(body) {
+  const direct = toNum(body.received_litres ?? body.litres_received ?? body.received_qty ?? body.qty);
+  if (direct > 0) return { litres: round2(direct), can: null, grossKg: null, tareKg: null, density: null };
+  const grossKg = round2(toNum(body.gross_kg));
+  if (!(grossKg > 0)) return { litres: null };
+  const canId = String(body.can_id || '').trim().toUpperCase();
+  const can = MILK_CANS[canId] || null;
+  const tareKg = round2(toNum(body.tare_kg) || can?.tare_kg || 0);
+  const density = toNum(body.density_kg_per_l) || MILK_DENSITY_KG_PER_L;
+  if (!(tareKg > 0) || !(density > 0)) return { litres: null };
+  const litres = round2((grossKg - tareKg) / density);
+  return { litres, can, grossKg, tareKg, density };
+}
+
+async function saveSaudaNchReceive(DB, body, env = {}) {
+  await ensureAnbarSchema(DB);
+  const brand = (body.brand || 'NCH').toUpperCase();
+  if (brand !== 'NCH') return json({ success: false, error: 'unsupported receive brand' }, 400);
+
+  const person = PINS[body.pin];
+  if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+  const purchaseId = Number(body.purchase_id || body.id || 0);
+  const lineIdx = Number(body.line_idx);
+  if (!purchaseId || !Number.isInteger(lineIdx) || lineIdx < 0) {
+    return json({ success: false, error: 'purchase_id + line_idx required' }, 400);
+  }
+
+  const po = await DB.prepare(
+    `SELECT id, brand, vendor_name, for_date, status, items_json
+     FROM sauda_purchase WHERE id=?`
+  ).bind(purchaseId).first();
+  if (!po) return json({ success: false, error: 'Sauda order not found' }, 404);
+  const poBrand = (po.brand || '').toUpperCase();
+  if (poBrand && poBrand !== 'NCH' && poBrand !== 'BOTH') return json({ success: false, error: 'brand mismatch' }, 400);
+
+  const items = parseJsonArray(po.items_json);
+  const line = items[lineIdx];
+  if (!line) return json({ success: false, error: 'Sauda line not found' }, 404);
+  const requestedKind = receiveKindParam(body.kind || 'all');
+  const def = nchReceiveDefForLine(line, po.vendor_name, requestedKind);
+  if (!def) return json({ success: false, error: 'line is not a supported Anbar receive item' }, 400);
+
+  const ordered = orderedAmount(line);
+  const partsBefore = genericReceiptPartsFromLine(line, def.kind);
+  const summaryBefore = summariseGenericReceiptParts(partsBefore, ordered);
+  const requestedPartNo = Number(body.receipt_part_no || body.part_no || summaryBefore.next_part_no);
+  if (!Number.isInteger(requestedPartNo) || requestedPartNo < 1) {
+    return json({ success: false, error: 'receipt part invalid' }, 400);
+  }
+  const movementKey = movementKeyFor(purchaseId, lineIdx, requestedPartNo);
+  let receipt = await DB.prepare(
+    `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+  ).bind(movementKey).first();
+  const receiptExisted = !!receipt;
+
+  let qty = null, slot = '', can = null, grossKg = null, tareKg = null, density = null;
+  if (def.kind === 'milk') {
+    slot = String(body.slot || '').toUpperCase();
+    if (!['AM', 'PM', 'ADHOC'].includes(slot)) return json({ success: false, error: 'milk slot must be AM/PM/ADHOC' }, 400);
+    const calc = milkLitresFromBody(body);
+    qty = calc.litres;
+    can = calc.can;
+    grossKg = calc.grossKg;
+    tareKg = calc.tareKg;
+    density = calc.density;
+    if (!(qty > 0)) return json({ success: false, error: 'milk litres or gross kg required' }, 400);
+  } else {
+    qty = round2(toNum(body.received_qty ?? body.qty ?? body.count));
+    if (!(qty > 0)) return json({ success: false, error: 'received quantity required' }, 400);
+    if (def.kind === 'buns' && Math.round(qty) !== qty) return json({ success: false, error: 'buns must be whole numbers' }, 400);
+  }
+
+  const pricePaise = linePricePaise(line);
+  const costPaise = pricePaise > 0 ? Math.round(qty * pricePaise) : 0;
+  const now = new Date().toISOString();
+  const note = `Sauda #${purchaseId} line ${lineIdx + 1} · ${def.name} · part ${requestedPartNo}${slot ? ` · ${slot}` : ''} · received ${qty} ${def.uom}`;
+  const evidence = (!receipt || !receipt.evidence_key)
+    ? await storeGenericReceiptEvidence(env, { brand, kind: def.kind, date: po.for_date, purchaseId, lineIdx, partNo: requestedPartNo, image: body.evidence_image || body.photo || body.image })
+    : null;
+
+  if (!receipt) {
+    await DB.prepare(
+      `INSERT OR IGNORE INTO rm_outlet_receipts
+        (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes, movement_key, evidence_key, evidence_mime)
+       VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?, 'sauda', ?, ?, ?, ?)`
+    ).bind(def.loc, def.code, def.name, qty, def.uom, now, person, note, movementKey, evidence?.key || null, evidence?.mime || null).run();
+    receipt = await DB.prepare(
+      `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+    ).bind(movementKey).first();
+  } else if (evidence?.key) {
+    await DB.prepare(
+      `UPDATE rm_outlet_receipts SET evidence_key=?, evidence_mime=? WHERE movement_key=? AND COALESCE(evidence_key,'')=''`
+    ).bind(evidence.key, evidence.mime, movementKey).run();
+    receipt = await DB.prepare(
+      `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+    ).bind(movementKey).first();
+  }
+
+  const receiptAt = receipt?.received_at || now;
+  const currentPart = {
+    kind: def.kind,
+    slot,
+    part_no: requestedPartNo,
+    movement_key: movementKey,
+    anbar_receipt_id: receipt?.id || null,
+    received_at: receiptAt,
+    received_by: receipt?.received_by || person,
+    received_qty: qty,
+    received_unit: def.uom,
+    price_paise: pricePaise,
+    cost_paise: costPaise,
+    can_id: can?.can_id || String(body.can_id || ''),
+    gross_kg: grossKg,
+    tare_kg: tareKg,
+    density_kg_per_l: density,
+    evidence_key: receipt?.evidence_key || evidence?.key || '',
+    evidence_mime: receipt?.evidence_mime || evidence?.mime || '',
+    evidence_url: receipt?.evidence_key || evidence?.key ? `/api/anbar?action=evidence&key=${encodeURIComponent(receipt?.evidence_key || evidence?.key)}` : '',
+  };
+  const partsByNo = new Map(partsBefore.map(p => [Number(p.part_no), p]));
+  partsByNo.set(requestedPartNo, { ...partsByNo.get(requestedPartNo), ...currentPart });
+  const receiptParts = Array.from(partsByNo.values()).sort((a, b) => (a.part_no || 0) - (b.part_no || 0));
+  const summary = summariseGenericReceiptParts(receiptParts, ordered);
+  const lineComplete = summary.complete;
+  const receiptPayload = {
+    status: lineComplete ? 'inventory_saved' : 'partial',
+    kind: def.kind,
+    movement_key: movementKey,
+    movement_keys: receiptParts.map(p => p.movement_key).filter(Boolean),
+    latest_part_no: requestedPartNo,
+    part_count: receiptParts.length,
+    received_at: receiptAt,
+    received_by: currentPart.received_by,
+    received_qty: summary.received_qty,
+    received_unit: def.uom,
+    ordered_qty: ordered,
+    pending_qty: summary.remaining_qty,
+    cost_paise: summary.cost_paise,
+    price_paise: pricePaise,
+  };
+  items[lineIdx] = {
+    ...line,
+    receipt_status: receiptPayload.status,
+    received_at: receiptPayload.received_at,
+    received_by: receiptPayload.received_by,
+    received_qty: receiptPayload.received_qty,
+    received_unit: receiptPayload.received_unit,
+    anbar_movement_key: movementKey,
+    anbar_movement_keys: receiptPayload.movement_keys,
+    anbar_receipt_id: currentPart.anbar_receipt_id,
+    receipt_parts: receiptParts,
+    receipt: receiptPayload,
+  };
+
+  const receiveLineIndexes = items
+    .map((it, idx) => nchReceiveDefForLine(it, po.vendor_name, 'all') ? idx : -1)
+    .filter(idx => idx >= 0);
+  const allReceived = receiveLineIndexes.length > 0 && receiveLineIndexes.every(idx => {
+    const it = items[idx] || {};
+    const itDef = nchReceiveDefForLine(it, po.vendor_name, 'all');
+    const itSummary = summariseGenericReceiptParts(genericReceiptPartsFromLine(it, itDef?.kind), orderedAmount(it));
+    return it.receipt_status === 'inventory_saved' || it.receipt?.status === 'inventory_saved' || itSummary.complete;
+  });
+  const receivedItems = receiveLineIndexes.map(idx => {
+    const it = items[idx] || {};
+    return {
+      line_idx: idx,
+      item: it.item || it.sku || '',
+      kind: nchReceiveDefForLine(it, po.vendor_name, 'all')?.kind || '',
+      receipt: it.receipt || null,
+    };
+  });
+
+  await DB.prepare(
+    `UPDATE sauda_purchase
+     SET items_json=?,
+         received_items_json=?,
+         receive_note=?,
+         has_goods=1,
+         received_at=COALESCE(received_at, ?),
+         received_by=COALESCE(received_by, ?),
+         received_station=COALESCE(received_station, 'NCH-ANBAR'),
+         status=CASE WHEN ?=1 AND status IN ('ORDERED','QUEUED') THEN 'RECEIVED' ELSE status END,
+         updated_at=datetime('now')
+     WHERE id=?`
+  ).bind(
+    JSON.stringify(items),
+    JSON.stringify(receivedItems),
+    `Anbar NCH receipt · latest movement ${movementKey}`,
+    receiptAt,
+    receiptPayload.received_by,
+    allReceived ? 1 : 0,
+    purchaseId
+  ).run();
+
+  return json({
+    success: true,
+    inventory_saved: lineComplete,
+    partial: !lineComplete,
+    idempotent: receiptExisted,
+    purchase_id: purchaseId,
+    line_idx: lineIdx,
+    receipt_part_no: requestedPartNo,
+    movement_key: movementKey,
+    anbar_receipt_id: currentPart.anbar_receipt_id,
+    at: receiptAt,
+    by: currentPart.received_by,
+    kind: def.kind,
+    item_code: def.code,
+    item_name: def.name,
+    received_qty: summary.received_qty,
+    received_unit: def.uom,
+    pending_qty: summary.remaining_qty,
+    cost_paise: summary.cost_paise,
+    evidence_key: currentPart.evidence_key || '',
+    evidence_url: currentPart.evidence_url || '',
+    status: receiptPayload.status,
+    order_fully_received: allReceived,
+  });
+}
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -669,17 +1084,23 @@ export async function onRequest(context) {
 
   try {
     if (action === 'sauda-receive-queue') {
-      return await saudaChickenQueue(DB, url);
+      const brand = (url.searchParams.get('brand') || '').toUpperCase();
+      const kind = String(url.searchParams.get('kind') || '').toLowerCase();
+      if (brand === 'HE' || kind === 'chicken') return await saudaChickenQueue(DB, url);
+      return await saudaNchReceiveQueue(DB, url);
     }
 
     if (action === 'sauda-receive' && context.request.method === 'POST') {
       const body = await context.request.json();
-      return await saveSaudaChickenReceive(DB, body, context.env);
+      const brand = (body.brand || '').toUpperCase();
+      const kind = String(body.kind || '').toLowerCase();
+      if (brand === 'HE' || kind === 'chicken') return await saveSaudaChickenReceive(DB, body, context.env);
+      return await saveSaudaNchReceive(DB, body, context.env);
     }
 
     if (action === 'evidence') {
       const key = url.searchParams.get('key') || '';
-      if (!key.startsWith('chicken-receipts/')) return json({ success: false, error: 'invalid evidence key' }, 400);
+      if (!key.startsWith('chicken-receipts/') && !key.startsWith('anbar-receipts/')) return json({ success: false, error: 'invalid evidence key' }, 400);
       if (!context.env.EVIDENCE) return json({ success: false, error: 'evidence bucket missing' }, 500);
       const obj = await context.env.EVIDENCE.get(key);
       if (!obj) return json({ success: false, error: 'evidence not found' }, 404);
