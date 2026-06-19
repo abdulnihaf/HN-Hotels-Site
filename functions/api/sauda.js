@@ -105,7 +105,8 @@ export async function onRequest(context) {
       return withCors(json(await placeOrders(db, body, auth, env, context)), request);
     }
     if (action === 'open' && request.method === 'GET') {
-      return withCors(json(await openOrders(db)), request);
+      const forDate = (url.searchParams.get('for_date') || todayIST()).slice(0, 10);
+      return withCors(json(await openOrders(db, forDate)), request);
     }
     if (action === 'vendor-ledger' && request.method === 'GET') {
       const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10) || 30, 120);
@@ -683,7 +684,9 @@ async function ordersForDay(db, forDate) {
   await ensurePurchaseTable(db);
   const rows = await db.prepare(
     `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, expected_amount_paise, ordered_by, ordered_at
-       FROM sauda_purchase WHERE for_date = ? ORDER BY id DESC`
+       FROM sauda_purchase
+      WHERE for_date = ? AND COALESCE(status,'') NOT IN ('VOID','CANCELLED')
+      ORDER BY id DESC`
   ).bind(forDate).all();
   return { for_date: forDate, orders: rows?.results || [] };
 }
@@ -1715,7 +1718,9 @@ async function vendorLedger(db, days) {
               expected_amount_paise, pay_amount_paise, ordered_at, pay_requested_at, paid_at, pay_method,
               bank_ref, reconciled_at
          FROM sauda_purchase
-        WHERE (pay_timing IS NULL OR pay_timing != 'online') AND for_date >= ${since}
+        WHERE (pay_timing IS NULL OR pay_timing != 'online')
+          AND COALESCE(status,'') NOT IN ('VOID','CANCELLED')
+          AND for_date >= ${since}
         ORDER BY id DESC`
     ).all()).results) || [];
   } catch (e) { rows = []; }
@@ -1852,13 +1857,18 @@ async function vendorMedia(env, db, url, auth) {
 // All of a vendor's unpaid items (across every order placed that day) merge into
 // a single card with one summed amount and one UPI — never per-item payments.
 // Hyperpure orders are prepaid online at checkout, so they never enter the list.
-async function openOrders(db) {
+async function openOrders(db, forDate) {
   const vdir = await getVendorDirectory(db);
+  const activeDate = String(forDate || todayIST()).slice(0, 10);
   const rows = await db.prepare(
     `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, pay_amount_paise, expected_amount_paise, for_date
-       FROM sauda_purchase WHERE paid_at IS NULL AND (pay_timing IS NULL OR pay_timing != 'online')
+       FROM sauda_purchase
+      WHERE paid_at IS NULL
+        AND COALESCE(status,'') NOT IN ('PAID','VOID','CANCELLED')
+        AND (pay_timing IS NULL OR pay_timing != 'online')
+        AND for_date = ?
         ORDER BY for_date DESC, id DESC LIMIT 200`
-  ).all();
+  ).bind(activeDate).all();
   // group every unpaid row under its canonical vendor
   const byVendor = new Map();
   for (const o of (rows?.results || [])) {
@@ -1891,7 +1901,7 @@ async function openOrders(db) {
     });
   }
   orders.sort((a, b) => (b.for_date || '').localeCompare(a.for_date || ''));
-  return { orders };
+  return { for_date: activeDate, orders };
 }
 
 // accept either a single id or a vendor's whole set of ids
@@ -1900,15 +1910,52 @@ function idList(body) {
   return body.id ? [+body.id] : [];
 }
 
-// ── request payment for a vendor (records the total on the vendor's first order) ──
+async function paymentRows(db, ids) {
+  if (!ids.length) return [];
+  const ph = ids.map(() => '?').join(',');
+  const rows = ((await db.prepare(
+    `SELECT id, expected_amount_paise, pay_amount_paise
+       FROM sauda_purchase
+      WHERE id IN (${ph}) AND COALESCE(status,'') NOT IN ('VOID','CANCELLED')`
+  ).bind(...ids).all()).results) || [];
+  const order = new Map(ids.map((id, i) => [id, i]));
+  rows.sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
+  return rows;
+}
+function paymentBasis(row) {
+  return Math.max(0, Math.round(+(row && row.pay_amount_paise) || +(row && row.expected_amount_paise) || 0));
+}
+function allocatePaymentAmounts(rows, amountPaise) {
+  const target = Math.max(0, Math.round(+amountPaise || 0));
+  const basis = rows.map(paymentBasis);
+  const basisTotal = basis.reduce((s, n) => s + n, 0);
+  if (!rows.length) return [];
+  if (rows.length === 1) return [target || basisTotal || basis[0] || 0];
+  if (!target) return basis;
+  let left = target;
+  return rows.map((row, i) => {
+    if (i === rows.length - 1) return Math.max(0, left);
+    const part = basisTotal > 0 ? Math.max(0, Math.round(target * (basis[i] || 0) / basisTotal)) : Math.floor(target / rows.length);
+    left -= part;
+    return part;
+  });
+}
+
+// ── request payment for a vendor. Re-tapping the same pay flow updates the same
+// order rows and allocates the vendor total across them, instead of creating or
+// inflating a duplicate payable. ──
 async function requestPay(db, body) {
   const ids = idList(body);
   const amt = Math.round(+body.amount_paise || 0);
   if (!ids.length) return { ok: false, error: 'no id' };
+  const rows = await paymentRows(db, ids);
+  if (!rows.length) return { ok: false, error: 'order not found' };
+  const allocated = allocatePaymentAmounts(rows, amt);
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
-  await db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=?, pay_requested_at=?, status='REQUESTED', updated_at=? WHERE id=?`)
-    .bind(amt, now, now, ids[0]).run();
-  return { ok: true, ids, amount_paise: amt };
+  const stmts = rows.map((row, i) => db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=?, pay_requested_at=?, status='REQUESTED', updated_at=? WHERE id=?`)
+    .bind(allocated[i] || 0, now, now, row.id));
+  if (stmts.length) await db.batch(stmts);
+  return { ok: true, ids: rows.map((r) => r.id), amount_paise: allocated.reduce((s, n) => s + n, 0), allocations: rows.map((r, i) => ({ id: r.id, amount_paise: allocated[i] || 0 })) };
 }
 
 async function recordReceiptEvent(db, env, vendorKey, eventDate, orderIds, amountPaise, ref, attachment, by) {
@@ -2172,30 +2219,34 @@ async function markPaid(db, body, auth) {
   if (!ids.length) return { ok: false, error: 'no id' };
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   const amt = Math.round(+body.amount_paise || 0);
-  const ph = ids.map(() => '?').join(',');
-  if (amt > 0) {
-    await db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=? WHERE id=?`).bind(amt, ids[0]).run();
-  }
+  const rows = await paymentRows(db, ids);
+  if (!rows.length) return { ok: false, error: 'order not found' };
+  const allocated = allocatePaymentAmounts(rows, amt);
+  const ph = rows.map(() => '?').join(',');
+  await db.batch(rows.map((row, i) =>
+    db.prepare(`UPDATE sauda_purchase SET pay_amount_paise=? WHERE id=?`).bind(allocated[i] || 0, row.id)
+  ));
   await db.prepare(`UPDATE sauda_purchase SET paid_at=?, pay_method=?, status='PAID', updated_at=? WHERE id IN (${ph})`)
-    .bind(now, (body.method || 'upi'), now, ...ids).run();
+    .bind(now, (body.method || 'upi'), now, ...rows.map((r) => r.id)).run();
 
   // auto-reconcile: did the bank feed record this exact payment to this vendor?
   let reconciled = null;
   try {
-    const o = await db.prepare(`SELECT vendor_name, pay_requested_at, ordered_at FROM sauda_purchase WHERE id=?`).bind(ids[0]).first();
+    const o = await db.prepare(`SELECT vendor_name, pay_requested_at, ordered_at FROM sauda_purchase WHERE id=?`).bind(rows[0].id).first();
     const v = resolveVendor(await getVendorDirectory(db), o && o.vendor_name);
     const since = String((o && (o.pay_requested_at || o.ordered_at)) || now).slice(0, 10);
-    if (amt > 0 && hasPaymentRail(v)) {
-      const m = await findVendorDebit(db, v, amt, since);
+    const matchAmount = allocated.reduce((s, n) => s + n, 0);
+    if (matchAmount > 0 && hasPaymentRail(v)) {
+      const m = await findVendorDebit(db, v, matchAmount, since);
       if (m) {
         await db.prepare(`UPDATE sauda_purchase SET bank_event_id=?, bank_ref=?, reconciled_at=? WHERE id IN (${ph})`)
-          .bind(m.bank_event_id, m.bank_ref, now, ...ids).run();
+          .bind(m.bank_event_id, m.bank_ref, now, ...rows.map((r) => r.id)).run();
         reconciled = { bank_ref: m.bank_ref, txn_at: m.txn_at };
       }
     }
   } catch (e) { /* reconcile is best-effort; the PAID status still stands */ }
 
-  return { ok: true, ids, paid_by: (auth && auth.u) || '', reconciled: !!reconciled, bank_ref: reconciled ? reconciled.bank_ref : '' };
+  return { ok: true, ids: rows.map((r) => r.id), paid_by: (auth && auth.u) || '', amount_paise: allocated.reduce((s, n) => s + n, 0), allocations: rows.map((r, i) => ({ id: r.id, amount_paise: allocated[i] || 0 })), reconciled: !!reconciled, bank_ref: reconciled ? reconciled.bank_ref : '' };
 }
 
 // ── Live auto-settle: the bank feed IS the confirmation. For every order the owner
