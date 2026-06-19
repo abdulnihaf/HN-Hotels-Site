@@ -479,6 +479,15 @@
     .hist-card .hline .hi small{display:block;margin-top:2px;font-size:10.5px;color:var(--mute);line-height:1.35}
     .hist-card .hline .hq{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
     .hist-note{font-size:11.5px;line-height:1.4;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-bd);border-radius:10px;padding:8px 10px;margin:0 0 10px}
+    .hist-actions{display:flex;align-items:center;gap:8px;padding:0 16px 8px}
+    .hist-actions .needtog{min-height:42px;padding:10px 12px}
+    .hist-actions span{flex:1;min-width:0;color:var(--dim);font-size:11.2px;line-height:1.25}
+    .batch-list{border:1px solid var(--line-soft);border-radius:10px;background:rgba(255,255,255,.035);margin:0 0 10px;overflow:hidden}
+    .batch-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;padding:8px 10px;border-top:1px solid var(--line-soft);font-size:11.5px;color:var(--dim)}
+    .batch-row:first-child{border-top:0}
+    .batch-row b{color:var(--gold);font-variant-numeric:tabular-nums}
+    .batch-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .batch-row strong{color:var(--text);font-variant-numeric:tabular-nums}
     .hist-card:not(.open) .hbody{display:none}
     .hist-card .hbody{border-top:1px solid var(--line-soft)}
     @media(max-width:390px){.hist-summary{grid-template-columns:1fr}.datebar{grid-template-columns:72px 1fr 72px}}
@@ -737,6 +746,10 @@
       <button class="fchip" data-hbrand="NCH">NCH</button>
       <button class="fchip" data-hbrand="both">Both</button>
     </div>
+    <div class="hist-actions">
+      <button id="histPdf" class="needtog">A4 purchase PDF</button>
+      <span>Prints one vendor-day purchase with ordered lines, bill basis, and Ambar receiving status.</span>
+    </div>
     <div class="cmp-h" id="histHead"></div>
     <main class="pane" id="histPane">
       <div class="empty" id="histEmpty">No purchase orders for this date yet.<br>Use Buy list or Place to create one.</div>
@@ -777,6 +790,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app-v61.js"></script>
+<script src="/ops/sauda/app-v62.js"></script>
 </body>
 </html>
