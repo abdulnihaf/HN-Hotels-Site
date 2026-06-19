@@ -42,7 +42,9 @@
   .line:first-child { border-top:0; }
   .line-name { font-weight:850; font-size:16px; line-height:1.2; display:flex; justify-content:space-between; gap:10px; min-width:0; }
   .line-name span:first-child { min-width:0; overflow-wrap:anywhere; }
-  .received { color:var(--green); font-size:12px; font-weight:800; white-space:nowrap; }
+  .status-chip { font-size:12px; font-weight:800; white-space:nowrap; }
+  .status-chip.saved { color:var(--green); }
+  .status-chip.prefilled { color:var(--gold); }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
   .field { min-width:0; }
   label { display:block; color:var(--muted); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; margin:0 0 6px 2px; }
@@ -189,11 +191,13 @@ function render() {
     const first = lines[0];
     const body = lines.map(line => {
       const pieceUnit = /bird|pc|piece/i.test(line.unit || '');
-      const received = line.yielded_kg || line.delivered_kg || line.received_pieces;
+      const savedReceipt = !!line.received_at;
+      const prefilled = !savedReceipt && line.ledger_synced && (line.yielded_kg || line.delivered_kg);
+      const badge = savedReceipt ? '<span class="status-chip saved">inventory saved</span>' : prefilled ? '<span class="status-chip prefilled">prefilled</span>' : '';
       return `<div class="line" data-order="${line.order_id}" data-line="${line.line_idx}">
         <div class="line-name">
           <span>${esc(line.cut_label || line.item)}</span>
-          ${received ? '<span class="received">received</span>' : ''}
+          ${badge}
         </div>
         <div class="meta">ordered ${esc(line.qty || '0')} ${esc(line.unit || '')} · Sauda order #${line.order_id}</div>
         <div class="grid">
