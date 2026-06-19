@@ -96,7 +96,7 @@
       <div class="key" style="opacity:0"></div><div class="key" onclick="key('0')">0</div><div class="key del" onclick="del()">⌫</div>
     </div>
     <div class="err" id="gate-err"></div>
-    <div class="gate-foot">HN Hotels · Nawabi Chai House</div>
+    <div class="gate-foot" id="gate-foot">HN Hotels · Nawabi Chai House</div>
   </div>
 </div>
 
@@ -111,7 +111,7 @@
     <div class="loc-chip" id="home-loc" onclick="switchLoc()">COUNTER</div>
   </div>
   <div class="scroll" id="home-list"><div class="loading">Loading…</div></div>
-  <div class="actions">
+  <div class="actions" id="home-actions">
     <button class="btn btn-green" onclick="startFlow('receipt')">📥 Receive</button>
     <button class="btn btn-gold" id="issue-btn" onclick="startFlow('issue')">📤 Taking to counter</button>
     <button class="btn btn-gold" id="settle-btn" onclick="startSettle()">📸 Settle</button>
@@ -139,9 +139,14 @@
 const API = '/api/anbar';
 const ICONS = { 'NCH-OB':'🍪', 'NCH-WTR':'💧', 'NCH-KH':'🌴', 'NCH-BUN':'🍞', 'NCH-CC':'🍗', 'NCH-PS':'🥟', 'HN-RM-202':'🍃', 'HN-RM-201':'🥛' };
 const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {} };
+const Q = new URLSearchParams(location.search);
+const APP_BRAND = (Q.get('brand') || 'NCH').toUpperCase();
+const APP_KIND = (Q.get('kind') || '').toLowerCase();
+const IS_HE_CHICKEN = APP_BRAND === 'HE' && APP_KIND === 'chicken';
+const CUT_ICON = { boneless:'🍗', shawarma:'🌯', kebab:'🔥', tandoori:'🍗', grill:'🔥', tangdi:'🍖', lollipop:'🍗' };
 
 // QR-door scoping: ?loc=counter|store|kitchen pre-scopes the app
-const qLoc = new URLSearchParams(location.search).get('loc');
+const qLoc = Q.get('loc');
 if (qLoc === 'store' || qLoc === 'counter') S.loc = qLoc;
 if (qLoc === 'kitchen') S.loc = 'counter';  // kitchen receipts land on the counter lane at layer 1
 
@@ -149,6 +154,9 @@ function el(id) { return document.getElementById(id); }
 function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); el(id).classList.add('active'); }
 function toast(msg, bad) { const t = el('toast'); t.textContent = msg; t.style.color = bad ? 'var(--red)' : 'var(--green)'; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2600); }
 function istTime(iso) { return new Date(iso).toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Kolkata'}); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function todayIST() { return new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }
+function kg(v) { return v == null ? '—' : (Math.round(Number(v) * 100) / 100).toString(); }
 
 // ── GATE ──
 function key(k) { if (S.entry.length >= 4) return; S.entry += k; dots(); if (S.entry.length === 4) verify(); }
@@ -165,14 +173,19 @@ async function verify() {
 // ── HOME ──
 function switchLoc() { S.loc = S.loc === 'counter' ? 'store' : 'counter'; renderHomeChrome(); loadLive(); }
 function renderHomeChrome() {
+  if (IS_HE_CHICKEN) return renderChickenChrome();
   el('home-loc').textContent = S.loc.toUpperCase();
   el('home-sub').textContent = `${S.person} · tap location chip to switch`;
+  el('home-actions').classList.remove('hidden');
   el('issue-btn').classList.toggle('hidden', S.loc !== 'store');
   el('waste-btn').classList.toggle('hidden', S.loc !== 'counter');  // waste is a counter event (layer 1)
   // Hero per door: store = the MOVE, counter = the photo SETTLE. Manual count is fallback.
   el('settle-btn').classList.toggle('hidden', S.loc !== 'counter');
 }
-function goHome() { renderHomeChrome(); show('s-home'); loadLive(); }
+function goHome() {
+  if (IS_HE_CHICKEN) return goChickenHome();
+  renderHomeChrome(); show('s-home'); loadLive();
+}
 async function loadLive() {
   el('home-list').innerHTML = '<div class="loading">Loading…</div>';
   const r = await fetch(`${API}?action=live`).then(x => x.json()).catch(() => ({}));
@@ -198,6 +211,84 @@ async function loadLive() {
     </div></div>`;
   }
   el('home-list').innerHTML = html || '<div class="loading">No items for this location</div>';
+}
+
+// ── HE CHICKEN RECEIVE DOOR ──
+function renderChickenChrome() {
+  el('home-loc').textContent = 'HE';
+  el('home-loc').onclick = null;
+  el('home-actions').classList.add('hidden');
+  el('home-sub').textContent = `${S.person} · MN Broilers chicken receiving`;
+  const title = document.querySelector('#s-home .nav-title');
+  if (title) title.textContent = 'Anbar · Hamza Express';
+}
+function chickenDate() {
+  const d = Q.get('date') || todayIST();
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : todayIST();
+}
+function goChickenHome() {
+  renderChickenChrome();
+  show('s-home');
+  loadChickenQueue();
+}
+async function loadChickenQueue() {
+  const date = chickenDate();
+  el('home-list').innerHTML = '<div class="loading">Loading MN Broilers…</div>';
+  const r = await fetch(`${API}?action=sauda-receive-queue&brand=HE&date=${encodeURIComponent(date)}&kind=chicken`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) { el('home-list').innerHTML = `<div class="loading">${esc(r.error || 'Failed to load')}</div>`; return; }
+  const lines = r.lines || [];
+  if (!lines.length) {
+    el('home-list').innerHTML = '<div class="loading">No MN Broilers Sauda order for this date</div>';
+    return;
+  }
+  el('home-list').innerHTML = lines.map(line => {
+    const ce = line.chicken_entry || {};
+    const icon = CUT_ICON[line.cut] || '🍗';
+    const saved = line.inventory_saved;
+    const ready = line.status === 'prefilled';
+    const border = saved ? 'rgba(55,211,153,.4)' : ready ? 'var(--gold-bd)' : 'var(--border)';
+    const state = saved
+      ? `<span style="color:var(--green);font-weight:800">inventory saved</span>${line.saved_at ? ' · ' + istTime(line.saved_at) : ''}`
+      : ready
+        ? `<span style="color:var(--gold);font-weight:800">prefilled</span> · usable ${kg(ce.yielded_kg)} kg · live ${kg(ce.delivered_kg)} kg`
+        : '<span style="color:var(--muted);font-weight:800">waiting for Chicken Entry</span>';
+    const btn = saved
+      ? '<button class="btn btn-green" disabled style="margin-top:12px;width:100%">Inventory saved</button>'
+      : ready
+        ? `<button class="btn btn-gold" style="margin-top:12px;width:100%" onclick="confirmChicken(${line.purchase_id},${line.line_idx})">Confirm arrived</button>`
+        : '<button class="btn btn-dark" disabled style="margin-top:12px;width:100%">Not ready</button>';
+    return `<div class="card" style="border-color:${border}">
+      <div class="item-row" style="cursor:default">
+        <div class="item-ico">${icon}</div>
+        <div style="flex:1">
+          <div class="item-name">${esc(line.cut_label || line.item || line.cut)}</div>
+          <div class="item-meta">Sauda #${line.purchase_id} · line ${line.line_idx + 1} · ordered ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || '')}</div>
+          <div class="item-meta" style="margin-top:6px">${state}</div>
+        </div>
+      </div>
+      ${btn}
+    </div>`;
+  }).join('');
+}
+async function confirmChicken(purchaseId, lineIdx) {
+  if (!confirmChicken.busy) confirmChicken.busy = {};
+  const key = purchaseId + ':' + lineIdx;
+  if (confirmChicken.busy[key]) return;
+  confirmChicken.busy[key] = true;
+  try {
+    const r = await fetch(`${API}?action=sauda-receive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: S.pin, brand: 'HE', kind: 'chicken', purchase_id: purchaseId, line_idx: lineIdx }),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'save failed');
+    toast('✓ inventory saved');
+    loadChickenQueue();
+  } catch (e) {
+    toast(e.message || 'save failed', true);
+  } finally {
+    confirmChicken.busy[key] = false;
+  }
 }
 
 // ── FLOWS ──
@@ -445,7 +536,12 @@ async function showHistory(code) {
 }
 
 // ── INIT ──
-if (qLoc) el('gate-loc').innerHTML = `<span class="loc-chip">${S.loc.toUpperCase()} DOOR</span>`;
+if (IS_HE_CHICKEN) {
+  el('gate-loc').innerHTML = '<span class="loc-chip">HE CHICKEN DOOR</span>';
+  el('gate-foot').textContent = 'HN Hotels · Hamza Express';
+} else if (qLoc) {
+  el('gate-loc').innerHTML = `<span class="loc-chip">${S.loc.toUpperCase()} DOOR</span>`;
+}
 if (S.pin && S.person) { goHome(); } // device remembered
 </script>
 </body>
