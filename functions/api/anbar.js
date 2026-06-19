@@ -145,6 +145,9 @@ function normaliseReceiptPart(part) {
     daily_rate_paise: toNum(part.daily_rate_paise),
     cost_paise: toNum(part.cost_paise),
     effective_usable_price_paise: toNum(part.effective_usable_price_paise),
+    evidence_key: part.evidence_key || '',
+    evidence_mime: part.evidence_mime || '',
+    evidence_url: part.evidence_url || (part.evidence_key ? `/api/anbar?action=evidence&key=${encodeURIComponent(part.evidence_key)}` : ''),
   };
 }
 
@@ -192,11 +195,15 @@ async function ensureAnbarSchema(DB) {
       received_by TEXT,
       source TEXT,
       notes TEXT,
-      movement_key TEXT
+      movement_key TEXT,
+      evidence_key TEXT,
+      evidence_mime TEXT
     )`
   ).run();
   const alters = [
     `ALTER TABLE rm_outlet_receipts ADD COLUMN movement_key TEXT`,
+    `ALTER TABLE rm_outlet_receipts ADD COLUMN evidence_key TEXT`,
+    `ALTER TABLE rm_outlet_receipts ADD COLUMN evidence_mime TEXT`,
     `ALTER TABLE sauda_purchase ADD COLUMN received_at TEXT`,
     `ALTER TABLE sauda_purchase ADD COLUMN received_by TEXT`,
     `ALTER TABLE sauda_purchase ADD COLUMN received_station TEXT`,
@@ -211,6 +218,21 @@ async function ensureAnbarSchema(DB) {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_rm_outlet_receipts_movement_key
      ON rm_outlet_receipts(movement_key)`
   ).run();
+}
+
+async function storeReceiptEvidence(env, { brand, date, purchaseId, lineIdx, partNo, image }) {
+  if (!image) return null;
+  if (!env?.EVIDENCE) return null;
+  const raw = String(image);
+  const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(raw);
+  const mime = m ? m[1] : 'image/jpeg';
+  const b64 = m ? m[2] : raw;
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(b64)) throw new Error('weight photo invalid');
+  const bytes = Uint8Array.from(atob(b64.replace(/\s+/g, '')), c => c.charCodeAt(0));
+  if (bytes.byteLength > 3_000_000) throw new Error('weight photo too large');
+  const key = `chicken-receipts/${brand}/${date}/sauda-${purchaseId}/line-${lineIdx}/part-${partNo}-${Date.now()}.jpg`;
+  await env.EVIDENCE.put(key, bytes, { httpMetadata: { contentType: mime } });
+  return { key, mime, bytes: bytes.byteLength };
 }
 
 async function chickenLedgerEntry(DB, brand, date, cut) {
@@ -301,7 +323,7 @@ async function saudaChickenQueue(DB, url) {
       if (!cut) continue;
       const prefix = movementPrefixFor(po.id, idx);
       const movementRows = (await DB.prepare(
-        `SELECT id, received_at, received_by, qty, movement_key
+        `SELECT id, received_at, received_by, qty, movement_key, evidence_key, evidence_mime
          FROM rm_outlet_receipts
          WHERE movement_key=? OR movement_key LIKE ?
          ORDER BY movement_key`
@@ -362,7 +384,7 @@ async function saudaChickenQueue(DB, url) {
   return json({ success: true, brand, date, kind, vendor: 'M.N. Broilers', daily_rate_paise: dayRatePaise, lines });
 }
 
-async function saveSaudaChickenReceive(DB, body) {
+async function saveSaudaChickenReceive(DB, body, env = {}) {
   await ensureAnbarSchema(DB);
   const brand = (body.brand || 'HE').toUpperCase();
   const kind = String(body.kind || 'chicken').toLowerCase();
@@ -400,7 +422,7 @@ async function saveSaudaChickenReceive(DB, body) {
   }
   const movementKey = movementKeyFor(purchaseId, lineIdx, requestedPartNo);
   let receipt = await DB.prepare(
-    `SELECT id, received_at, received_by, qty FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+    `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
   ).bind(movementKey).first();
   const receiptExisted = !!receipt;
 
@@ -435,14 +457,24 @@ async function saveSaudaChickenReceive(DB, body) {
   const partEffectivePaise = Math.round(partCostPaise / yieldedKg);
   const now = new Date().toISOString();
   const note = `Sauda #${purchaseId} line ${lineIdx + 1} · MN Broilers · ${cut} · part ${requestedPartNo}${receivedPieces ? ` · ${receivedPieces} pieces` : ''} · live ${deliveredKg} kg · usable ${yieldedKg} kg`;
+  const evidence = (!receipt || !receipt.evidence_key)
+    ? await storeReceiptEvidence(env, { brand, date: po.for_date, purchaseId, lineIdx, partNo: requestedPartNo, image: body.evidence_image || body.weight_photo || body.image })
+    : null;
   if (!receipt) {
     await DB.prepare(
       `INSERT OR IGNORE INTO rm_outlet_receipts
-        (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes, movement_key)
-       VALUES (?, 'kitchen', ?, ?, ?, 'kg', ?, ?, 'sauda', ?, ?)`
-    ).bind(brand, itemCode, itemName, yieldedKg, now, person, note, movementKey).run();
+        (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes, movement_key, evidence_key, evidence_mime)
+       VALUES (?, 'kitchen', ?, ?, ?, 'kg', ?, ?, 'sauda', ?, ?, ?, ?)`
+    ).bind(brand, itemCode, itemName, yieldedKg, now, person, note, movementKey, evidence?.key || null, evidence?.mime || null).run();
     receipt = await DB.prepare(
-      `SELECT id, received_at, received_by, qty FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+      `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+    ).bind(movementKey).first();
+  } else if (evidence?.key) {
+    await DB.prepare(
+      `UPDATE rm_outlet_receipts SET evidence_key=?, evidence_mime=? WHERE movement_key=? AND COALESCE(evidence_key,'')=''`
+    ).bind(evidence.key, evidence.mime, movementKey).run();
+    receipt = await DB.prepare(
+      `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
     ).bind(movementKey).first();
   }
 
@@ -461,6 +493,9 @@ async function saveSaudaChickenReceive(DB, body) {
     daily_rate_paise: dailyRatePaise,
     cost_paise: partCostPaise,
     effective_usable_price_paise: partEffectivePaise,
+    evidence_key: receipt?.evidence_key || evidence?.key || '',
+    evidence_mime: receipt?.evidence_mime || evidence?.mime || '',
+    evidence_url: receipt?.evidence_key || evidence?.key ? `/api/anbar?action=evidence&key=${encodeURIComponent(receipt?.evidence_key || evidence?.key)}` : '',
   };
   const partsByNo = new Map(partsBefore.map(p => [Number(p.part_no), p]));
   partsByNo.set(requestedPartNo, { ...partsByNo.get(requestedPartNo), ...currentPart });
@@ -575,6 +610,8 @@ async function saveSaudaChickenReceive(DB, body) {
     yielded_kg: summary.yielded_kg,
     cost_paise: aligned.cost_paise,
     effective_usable_price_paise: aligned.effective_usable_price_paise,
+    evidence_key: currentPart.evidence_key || '',
+    evidence_url: currentPart.evidence_url || '',
     status: receiptPayload.status,
     order_fully_received: allChickenReceived,
   });
@@ -643,7 +680,21 @@ export async function onRequest(context) {
 
     if (action === 'sauda-receive' && context.request.method === 'POST') {
       const body = await context.request.json();
-      return await saveSaudaChickenReceive(DB, body);
+      return await saveSaudaChickenReceive(DB, body, context.env);
+    }
+
+    if (action === 'evidence') {
+      const key = url.searchParams.get('key') || '';
+      if (!key.startsWith('chicken-receipts/')) return json({ success: false, error: 'invalid evidence key' }, 400);
+      if (!context.env.EVIDENCE) return json({ success: false, error: 'evidence bucket missing' }, 500);
+      const obj = await context.env.EVIDENCE.get(key);
+      if (!obj) return json({ success: false, error: 'evidence not found' }, 404);
+      return new Response(obj.body, {
+        headers: {
+          'content-type': obj.httpMetadata?.contentType || 'image/jpeg',
+          'cache-control': 'private, max-age=3600',
+        },
+      });
     }
 
     if (action === 'verify-pin') {
