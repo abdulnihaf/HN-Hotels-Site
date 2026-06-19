@@ -72,6 +72,9 @@ const SOURCES = {
   meta_ads:       { path: '/api/meta-ads', period: true, desc: 'Naam: Meta/Instagram ads — spend, clicks, impressions, CTR, CPC per campaign for a period (default 7d). Spend in RUPEES. NEVER report platform conversion numbers — broken by doctrine; impact is judged by POS-spike correlation.' },
   google_ads:     { path: '/api/google-ads-live', period: true, desc: 'Naam: Google Ads — spend/clicks/impressions per campaign for a period. Spend in RUPEES. Conversions omitted by doctrine.' },
   gbp:            { path: '/api/gbp-cockpit', period: true, desc: 'Naam: Google Business Profile for ONE brand (pass brand HE or NCH) — rating, reviews, search keywords, calls/directions. Performance data lags ~2 days (stated in payload freshness).' },
+
+  // ── Hukum truth spine (health + trust of every feed) ──
+  hukm_truth:     { path: '/api/hukm-truth', desc: 'Hukum Truth Spine: per-domain HEALTH + TRUST of every feed (delivery, money…). For each domain: is it live, its trust (reconciled|single_source|unverified|stale|down|unknown), the headline number, and the ONE action if any; plus an overall verdict (all_trustworthy|attention|loss_risk) and the action list. Use this to answer "is everything ok / what is broken / what needs me / can I trust the delivery number".' },
 };
 
 function buildUrl(originBase, source, { from, to, brand, period }) {
