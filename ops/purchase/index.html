@@ -26,7 +26,8 @@
 
   /* Cat 1 (purchase) — product + cart UI */
   .product-card { background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
+    scroll-margin-top: 96px; }
   .product-card .title { font-weight: 600; font-size: 14px; }
   .product-card .meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
   .product-card .variant-btn { background: var(--brand-soft); color: var(--brand);
@@ -63,7 +64,8 @@
 
   /* Bulk items list */
   .bulk-row { display: grid; grid-template-columns: 1fr 80px 90px; gap: 8px; align-items: center;
-    padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    scroll-margin-top: 96px; }
   .bulk-row.manage-mode { grid-template-columns: 1fr auto auto; }
   .bulk-row.filled { background: rgba(16,185,129,0.06); border-left: 3px solid #34d399; }
   .bulk-row .bulk-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -280,7 +282,7 @@
 
       <div id="bulk-items-wrap" class="hidden">
         <div style="display:flex; gap:8px; margin-bottom:10px;">
-          <input id="bulk-filter" type="search" placeholder="Filter items…" oninput="renderBulkItems()" style="flex:1;">
+          <input id="bulk-filter" type="search" placeholder="Search this vendor's items…" oninput="renderBulkItems()" style="flex:1;">
           <button id="bulk-manage-btn" onclick="toggleBulkManageMode()" class="btn btn-ghost btn-sm" title="Edit this vendor's product list (add / remove / change primary)">✏️ Manage list</button>
         </div>
         <div id="bulk-manage-hint" class="hidden" style="padding:8px 10px; background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.35); border-radius:6px; font-size:11px; color:#fbbf24; margin-bottom:10px;">
@@ -600,6 +602,7 @@ let cart = [];
 let variantSearch = { q: '', results: [], timer: null };
 let vendorPickerCtx = null;    // { cartIdx } — which cart row is picking
 let vendorKnownOdooIds = new Set();
+let pendingFocusProductId = null;
 
 // ═══════════════════════════════════════════════════════════════
 // PIN entry
@@ -638,6 +641,7 @@ function logout() {
   variantSearch = { q: '', results: [], timer: null };
   vendorPickerCtx = null;
   vendorKnownOdooIds = new Set();
+  pendingFocusProductId = null;
   _newProductForCat = null;
   _uomsCache = null;
   _newVendorContext = 'generic';
@@ -1152,6 +1156,11 @@ function renderRmProducts() {
   }
   empty.classList.add('hidden');
   list.innerHTML = html.join('');
+  if (pendingFocusProductId != null) {
+    const pid = pendingFocusProductId;
+    pendingFocusProductId = null;
+    requestAnimationFrame(() => requestAnimationFrame(() => focusProductEditor(pid)));
+  }
 }
 
 function renderProductRow(p, cartIdx) {
@@ -1196,6 +1205,17 @@ function renderInlineCart(item, idx) {
   `;
 }
 
+function focusProductEditor(productId) {
+  const row = document.getElementById(`prod-${productId}`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const qtyInput = row.querySelector('input[placeholder="Qty"]') || row.querySelector('input[type="number"]');
+  if (qtyInput) {
+    qtyInput.focus({ preventScroll: true });
+    if (typeof qtyInput.select === 'function') qtyInput.select();
+  }
+}
+
 function addToCart(productId) {
   const product = rmCatalog.products.find(p => p.id === productId);
   if (!product) return;
@@ -1205,11 +1225,9 @@ function addToCart(productId) {
   cart.push({
     product, qty: '', price: product.lastPrice?.price || '', vendor,
   });
+  pendingFocusProductId = productId;
   renderRmProducts();
   renderCart();
-  setTimeout(() => {
-    document.querySelector(`#prod-${productId} input[type=number]`)?.focus();
-  }, 50);
 }
 
 function addVariantToCart(variant) {
@@ -1230,6 +1248,7 @@ function removeFromCart(idx) {
   cart.splice(idx, 1);
   renderRmProducts();
   renderCart();
+  pendingFocusProductId = null;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1702,9 +1721,14 @@ function onBulkVendorPick(vendorIdStr) {
   const myProducts = (rmCatalog.products || []).filter(p =>
     (p.vendors || []).some(v => v.odoo_id === vid));
   hint.textContent = myProducts.length
-    ? `${myProducts.length} known product${myProducts.length===1?'':'s'} for ${bulkVendor.name}. Items you didn't buy just stay blank.`
-    : `No known products mapped to ${bulkVendor.name} yet — showing all RM products. Items you enter here will implicitly link this vendor.`;
+    ? `${myProducts.length} known product${myProducts.length===1?'':'s'} for ${bulkVendor.name}. Search by item name / code to jump straight to one.`
+    : `No known products mapped to ${bulkVendor.name} yet — showing all RM products. Search by item name / code and the new entry will link this vendor.`;
   renderBulkItems();
+  setTimeout(() => {
+    const filter = document.getElementById('bulk-filter');
+    filter?.focus({ preventScroll: true });
+    filter?.select?.();
+  }, 40);
 }
 
 function renderBulkItems() {

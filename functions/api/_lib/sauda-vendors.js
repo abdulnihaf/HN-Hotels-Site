@@ -4,7 +4,7 @@
 // place the merge lives, so the catalog can route every item to a real vendor.
 //
 // Each vendor carries its own behaviour, so the placing UI never has to ask:
-//   fulfilment: deliver | collect | standing | porter
+//   fulfilment: deliver | collect | standing | porter | bus
 //   pay:        per | khata_roll | khata_periodic
 //
 // FLAGGED for owner confirmation (ground truth lives in Odoo purchase.hnhotels.in
@@ -17,6 +17,7 @@ export const FULFILMENT = {
   collect:  'collect',     // Basheer goes & fetches
   standing: 'standing',    // arrives daily, no daily order (e.g. milk)
   porter:   'porter',      // sent via Porter
+  bus:      'intercity',    // city-to-city shipment, then local pickup/porter
 };
 export const PAY = {
   per:            'pay per order',
@@ -26,14 +27,14 @@ export const PAY = {
 
 // canonical vendors. `aliases` = every spelling seen in the legacy data (lower-cased).
 export const VENDORS = {
-  ashrafiya:  { name: 'Ashrafiya Store',        cat: 'Provisions, spices, oils, cleaning', fulfilment: 'collect',  pay: 'khata_roll',     brand: 'both', vpa: 'q318394880@ybl',
+  ashrafiya:  { name: 'Ashrafiya Store',        cat: 'Provisions, spices, oils, cleaning - combined HE+NCH khata; one settlement payment', fulfilment: 'collect',  pay: 'khata_roll',     brand: 'both', vpa: 'q318394880@ybl',
                 aliases: ['ashrafiya store', 'ashrafia', 'ashrafiya'] },
   manju:      { name: 'Manju Veg Supplier',     cat: 'Vegetables, herbs, lemon',           fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: 'q025257178@ybl',
                 aliases: ['manju veg supplier', 'manjunath', 'manju'] },
   deepak:     { name: 'Deepak Packaging',       cat: 'Bags, containers, pouches, tissue',  fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: 'paytmqr6pdq3f@ptys',
                 aliases: ['deepak packaging store', 'deepak packaging', 'rupnath'] },
   nazeer:     { name: 'Nazeer Nadeem',          cat: 'Water, cold drinks',                 fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: 'q101761866@ybl',
-                aliases: ['nazeer nadeem', 'nazeer'] },
+                aliases: ['nazeer nadeem', 'nazeer', 'nadeem', 'nadeem water', 'nadeem cold drinks', 'nadeem water and cold drinks'] },
   mnbroilers: { name: 'M.N. Broilers',          cat: 'Chicken',                            fulfilment: 'deliver',  pay: 'per',            brand: 'HE',   vpa: '',
                 aliases: ['m.n. broilers (syed ahmedulla)', 'm.n. broilers', 'mn broilers', 'mn chicken'] },
   prabhu:     { name: 'Prabhu (Buffalo Milk)',  cat: 'Milk (morning/evening)',             fulfilment: 'standing', pay: 'khata_periodic', brand: 'NCH',  vpa: 'prabhurathi13@oksbi',
@@ -52,12 +53,16 @@ export const VENDORS = {
                 aliases: ['sameer hamza samosa vendor', 'krishnamoorthi', 'krishnamurthy', 'samosa vendor'] },
   eggs:       { name: 'Eggs (Syed Lais)',       cat: 'Eggs (go & buy, UPI tracked)',       fulfilment: 'collect',  pay: 'per',            brand: 'HE',   vpa: '9916374699ssa@ybl',
                 aliases: ['eggs (syed lais)', 'syed siraj ahmed', 'syed lais', 'eggs'] },
+  he_local_dairy: { name: 'HE Local Dairy (walk-in)', cat: 'Hamza Express milk and curd - bought locally; never part of Ashrafiya khata', fulfilment: 'collect', pay: 'per', brand: 'HE', vpa: '',
+                aliases: ['he local dairy', 'hamza local dairy', 'local dairy', 'milk curd local', 'he milk vendor', 'he curd vendor'] },
   gas:        { name: 'Ahmed (Gas)',            cat: 'LPG cylinder',                       fulfilment: 'deliver',  pay: 'per',            brand: 'both', vpa: '9845956333@ibl',
                 aliases: ['ahmed - gas cylinder', 'ahmed gas', 'ahmed', 'a m ruba bharat gas', 'am ruba bharat gas'] },  // bank: A M Ruba Bharat Gas
   osmania:    { name: 'Rehan (Osmania)',        cat: 'Osmania biscuits (occasional)',      fulfilment: 'deliver',  pay: 'per',            brand: 'NCH',  vpa: '7259834218@ybl',
                 aliases: ['rehan osmania', 'rehan', 'farook', 'farooq', 'm farooq ahmed siddique'] },  // bank: paid to Farook (M Farooq Ahmed Siddique)
   charcoal:   { name: 'Mudassir (Charcoal)',    cat: 'Charcoal',                           fulfilment: 'collect',  pay: 'per',            brand: 'HE',   vpa: 'muddu14321@axl',
                 aliases: ['mudassir pasha', 'mudassir', 'muda sir'] },  // bank: Mudassir Pasha
+  afeefa:     { name: 'Afeefa Impex Agencies',  cat: 'Tea powder - intercity; HDFC beneficiary ending 2951; transport/Porter as separate refs', fulfilment: 'bus', pay: 'per', brand: 'NCH', vpa: '',
+                aliases: ['afeefa impex agencies', 'afeefa impex', 'afifa impex', 'afifa impacts', 'lakhimi tea industries', 'tea powder vendor', 'liberty premium'] },
   jayjay:     { name: 'Jay & Jay',              cat: 'Milk powder',                        fulfilment: 'deliver',  pay: 'per',            brand: 'NCH',  vpa: 'vyapar.177783669496@hdfcbank',
                 aliases: ['jay & jay', 'jay and jay', 'j&j'] },
 };

@@ -2,7 +2,7 @@
 //   page/HTML  → network-first (always the latest app; cache only as offline fallback)
 //   assets     → stale-while-revalidate (instant load, refreshes in background)
 //   /api/*     → never touched (always live)
-const CACHE = 'sauda-shell-v2';
+const CACHE = 'sauda-shell-v3';
 
 self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => {

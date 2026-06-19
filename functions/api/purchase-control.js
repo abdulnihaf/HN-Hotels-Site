@@ -634,7 +634,7 @@ const VENDOR_JOURNEY = {
   'M. irshad ahmed':                    { fulfil:'deliver', pay:'per', note:'WhatsApp → delivered' },
   'Mutton Irshad':                      { fulfil:'deliver', pay:'per' },
   'Deepak Packaging Store':             { fulfil:'deliver', pay:'per', note:'WhatsApp list → delivered' },
-  'Afeefa Impex Agencies':              { fulfil:'bus', pay:'per', legs:['transport','porter'], note:'Intercity: prepaid → bus → bus-station → transport + porter to outlet' },
+  'Afeefa Impex Agencies':              { fulfil:'bus', pay:'per', legs:['transport','porter'], note:'Intercity: invoice → HDFC a/c ending 2951 → bus → bus-station → transport + porter to outlet' },
   'Jay & Jay Dehydrofoods Pvt Ltd':     { fulfil:'deliver', pay:'per', note:'WhatsApp → delivered → UPI' },
   'Nisarcha Brother (Hamza/Krispy Eats)':{ fulfil:'deliver', pay:'per' },
   'Sakthi Textiles':                    { fulfil:'collect', pay:'per', note:'Bought at outlet' },
