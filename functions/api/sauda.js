@@ -1184,7 +1184,7 @@ async function getSettings(db) {
 }
 
 // ── Bulk upsert the canonical item master (the collapse-pass result + Settings-grid saves) ──
-// body = { items: [{ item_code|'NEW', label, unit, pack_label, category, price_mode, price_paise, aliases[], note }] }
+// body = { items: [{ item_code|'NEW', label, unit, pack_label, pack_qty, category, price_mode, price_paise, aliases[], note }] }
 async function settingsBulk(db, body, auth) {
   await ensureSettingsTables(db);
   const items = Array.isArray(body && body.items) ? body.items : [];
@@ -1204,12 +1204,13 @@ async function settingsBulk(db, body, auth) {
       let base = code || slug(it.label); let c = base, n = 1;
       while (used.has(c)) c = base + '_' + (++n);
       code = c; used.add(code);
-      stmts.push(db.prepare(`INSERT INTO sauda_item (item_code,label,unit,pack_label,price_paise,price_mode,category,note,flagged,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-        .bind(code, it.label || code, it.unit || '', it.pack_label || '', price, mode, it.category || '', it.note || '', 0, by, now));
+      stmts.push(db.prepare(`INSERT INTO sauda_item (item_code,label,unit,pack_label,pack_qty,price_paise,price_mode,category,note,flagged,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .bind(code, it.label || code, it.unit || '', it.pack_label || '', Math.max(0, Number(it.pack_qty) || 0), price, mode, it.category || '', it.note || '', 0, by, now));
       ins++;
     } else {
-      stmts.push(db.prepare(`UPDATE sauda_item SET label=?, unit=COALESCE(NULLIF(?,''),unit), pack_label=COALESCE(NULLIF(?,''),pack_label), price_mode=?, category=COALESCE(NULLIF(?,''),category), note=COALESCE(NULLIF(?,''),note), price_paise=CASE WHEN ?>0 THEN ? ELSE price_paise END, updated_by=?, updated_at=? WHERE item_code=?`)
-        .bind(it.label || code, it.unit || '', it.pack_label || '', mode, it.category || '', it.note || '', price, price, by, now, code));
+      const packQty = Math.max(0, Number(it.pack_qty) || 0);
+      stmts.push(db.prepare(`UPDATE sauda_item SET label=?, unit=COALESCE(NULLIF(?,''),unit), pack_label=COALESCE(NULLIF(?,''),pack_label), pack_qty=CASE WHEN ?>0 THEN ? ELSE pack_qty END, price_mode=?, category=COALESCE(NULLIF(?,''),category), note=COALESCE(NULLIF(?,''),note), price_paise=CASE WHEN ?>0 THEN ? ELSE price_paise END, updated_by=?, updated_at=? WHERE item_code=?`)
+        .bind(it.label || code, it.unit || '', it.pack_label || '', packQty, packQty, mode, it.category || '', it.note || '', price, price, by, now, code));
       upd++;
     }
     for (const a of (Array.isArray(it.aliases) ? it.aliases : [])) {
@@ -1251,6 +1252,7 @@ async function settingsItem(db, body, auth) {
   f('label', 'label=?', String(body.label || ''));
   f('unit', 'unit=?', String(body.unit || ''));
   f('pack_label', 'pack_label=?', String(body.pack_label || ''));
+  if ('pack_qty' in body) { sets.push('pack_qty=?'); vals.push(Math.max(0, Number(body.pack_qty) || 0)); }
   f('form', 'form=?', body.form === 'defined' ? 'defined' : 'loose');
   f('brand', 'brand=?', String(body.brand || ''));
   f('price_mode', 'price_mode=?', body.price_mode === 'live' ? 'live' : 'fixed');
