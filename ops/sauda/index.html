@@ -183,6 +183,26 @@
     .flowhint{font-size:12px;line-height:1.4;color:var(--dim);padding:8px 10px;margin-bottom:8px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--line-soft)}
     .flowhint b{color:var(--gold)}
     .pday{padding:14px 18px 4px;font:800 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+    .op-search{padding-top:10px;padding-bottom:3px}
+    .opchips{padding:3px 16px 6px}
+    .opchips.compact{padding-top:0}
+    .op-group{display:flex;align-items:center;gap:8px;margin:13px 2px 8px;color:var(--dim);font-size:10.8px;font-weight:850;text-transform:uppercase;letter-spacing:.065em}
+    .op-group b{color:var(--text);font-size:12px;text-transform:none;letter-spacing:0;margin-left:auto;font-variant-numeric:tabular-nums}
+    .op-group.need{color:var(--amber)}
+    .op-group.ready{color:var(--green)}
+    .op-group.khata{color:var(--gold)}
+    .paycard{background:var(--e1)}
+    .paycard .bh{cursor:pointer;min-height:52px}
+    .paycard .bh:active,.hist-card .hhd:active{background:var(--e2)}
+    .paycard .bh .bn,.hist-card .hhd b{flex:1;min-width:0}
+    .payamt{margin-left:auto;color:var(--gold);font-size:13px;font-weight:850;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .chev{color:var(--mute);font-size:17px;line-height:1;transition:transform .16s var(--ease)}
+    .paycard.open .chev,.hist-card.open .chev{transform:rotate(90deg);color:var(--gold)}
+    .paycard:not(.open) .pb{display:none}
+    .mini{flex-basis:100%;font-size:11px;color:var(--mute);font-weight:500;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mini .warn{color:var(--amber);font-weight:750}
+    .mini .ok{color:var(--green);font-weight:750}
+    .empty.small{padding:24px 18px}
 
     /* ── Hyperpure (tomorrow's planned basket) ── */
     .hp-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 16px 2px}
@@ -398,7 +418,7 @@
     .hist-box span{display:block;margin-top:2px;font-size:10.5px;color:var(--dim);line-height:1.25}
     .hist-section{margin:12px 0 8px;font:850 11px/1 -apple-system;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
     .hist-card{margin-bottom:10px;border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;border-left:3px solid var(--sauda);background:var(--e1)}
-    .hist-card .hhd{display:flex;align-items:center;gap:7px;padding:10px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line-soft)}
+    .hist-card .hhd{display:flex;align-items:center;gap:7px;padding:10px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line-soft);cursor:pointer}
     .hist-card .hhd b{font-size:14px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .hist-card .hhd small{font-size:11px;color:var(--dim);white-space:nowrap}
     .hist-card .hamt{margin-left:auto;color:var(--gold);font-weight:850;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -409,6 +429,8 @@
     .hist-card .hline .hi small{display:block;margin-top:2px;font-size:10.5px;color:var(--mute);line-height:1.35}
     .hist-card .hline .hq{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
     .hist-note{font-size:11.5px;line-height:1.4;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-bd);border-radius:10px;padding:8px 10px;margin:0 0 10px}
+    .hist-card:not(.open) .hbody{display:none}
+    .hist-card .hbody{border-top:1px solid var(--line-soft)}
     @media(max-width:390px){.hist-summary{grid-template-columns:1fr}.datebar{grid-template-columns:72px 1fr 72px}}
     /* Settings grid */
     #viewSettings .search{display:flex;align-items:center;gap:8px}
@@ -580,6 +602,26 @@
 
   <!-- TO-PAY VIEW -->
   <div id="viewPay" class="hide">
+    <div class="search op-search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="paySearch" type="text" placeholder="Search vendor, item, amount…" autocomplete="off">
+      </div>
+    </div>
+    <div class="fchips opchips" id="payBrandChips">
+      <button class="fchip on" data-paybrand="all">All</button>
+      <button class="fchip" data-paybrand="HE">HE</button>
+      <button class="fchip" data-paybrand="NCH">NCH</button>
+      <button class="fchip" data-paybrand="both">Both</button>
+    </div>
+    <div class="fchips opchips compact" id="payStatusChips">
+      <button class="fchip on" data-payfilter="all">All</button>
+      <button class="fchip" data-payfilter="ready">Ready</button>
+      <button class="fchip am" data-payfilter="needs-rate">Needs bill</button>
+      <button class="fchip" data-payfilter="khata">Khata</button>
+      <button class="fchip" data-payfilter="manual">Manual rail</button>
+    </div>
+    <div class="cmp-h" id="payHead"></div>
     <main class="pane" id="payPane">
       <div class="empty" id="payEmpty">Nothing waiting for payment.</div>
       <div id="payList"></div>
@@ -633,6 +675,18 @@
       <button data-hquick="today">Today</button>
       <button data-hquick="tomorrow">Tomorrow</button>
     </div>
+    <div class="search op-search">
+      <div class="box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input id="histSearch" type="text" placeholder="Search vendor, item, outlet…" autocomplete="off">
+      </div>
+    </div>
+    <div class="fchips opchips" id="histBrandChips">
+      <button class="fchip on" data-hbrand="all">All</button>
+      <button class="fchip" data-hbrand="HE">HE</button>
+      <button class="fchip" data-hbrand="NCH">NCH</button>
+      <button class="fchip" data-hbrand="both">Both</button>
+    </div>
     <div class="cmp-h" id="histHead"></div>
     <main class="pane" id="histPane">
       <div class="empty" id="histEmpty">No purchase orders for this date yet.<br>Use Buy list or Place to create one.</div>
@@ -673,6 +727,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app-v54.js"></script>
+<script src="/ops/sauda/app-v55.js"></script>
 </body>
 </html>
