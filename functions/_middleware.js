@@ -31,11 +31,22 @@ export async function onRequest(context) {
     return next();
   }
 
+  // ── Anbar brand entrypoints — one backend, hard-separated app launches ──
+  // These paths work on both hnhotels.in and anbar.hnhotels.in so PWA scopes and
+  // QR links do not depend on fragile query-param launches.
+  const anbarCanonical = canonicalAnbarPath(url);
+  if (anbarCanonical) return Response.redirect(anbarCanonical.toString(), 302);
+
+  const anbarEntry = anbarEntrypointTarget(url);
+  if (anbarEntry) return rewriteTo(request, anbarEntry);
+
   // ── anbar.hnhotels.in — the storehouse chamber (inventory). App at /ops/anbar/ ──
   if (host === 'anbar.hnhotels.in') {
+    if (url.pathname === '/' || url.pathname === '' || url.pathname === '/index.html') {
+      return Response.redirect(anbarRootTarget(url).toString(), 302);
+    }
+
     const MAP = {
-      '/': '/ops/anbar/',
-      '/index.html': '/ops/anbar/',
       '/manifest.json': '/ops/anbar/manifest.json',
       '/icon-192.png': '/ops/anbar/icon-192.png',
       '/icon-512.png': '/ops/anbar/icon-512.png',
@@ -151,4 +162,58 @@ export async function onRequest(context) {
 function rewriteTo(originalRequest, targetUrl) {
   const newRequest = new Request(targetUrl.toString(), originalRequest);
   return fetch(newRequest);
+}
+
+function canonicalAnbarPath(url) {
+  const p = url.pathname;
+  if (p === '/ops/anbar/he' || p === '/ops/anbar/nch' || p === '/ops/anbar/choose') {
+    const target = new URL(p + '/', url);
+    target.search = url.search;
+    return target;
+  }
+  return null;
+}
+
+function anbarEntrypointTarget(url) {
+  const p = url.pathname;
+  const entrypoints = {
+    '/ops/anbar/he/': 'he',
+    '/ops/anbar/nch/': 'nch',
+    '/ops/anbar/choose/': 'choose',
+  };
+
+  for (const [base, brand] of Object.entries(entrypoints)) {
+    if (p === base || p === base + 'index.html') {
+      const target = new URL('/ops/anbar/index.html', url);
+      target.search = url.search;
+      return target;
+    }
+    if (p === base + 'manifest.json') {
+      const file = brand === 'he' ? '/ops/anbar/manifest-he.json'
+        : brand === 'nch' ? '/ops/anbar/manifest-nch.json'
+          : '/ops/anbar/manifest.json';
+      return new URL(file, url);
+    }
+    if (p === base + 'icon-192.png') return new URL('/ops/anbar/icon-192.png', url);
+    if (p === base + 'icon-512.png') return new URL('/ops/anbar/icon-512.png', url);
+  }
+
+  return null;
+}
+
+function anbarRootTarget(url) {
+  const target = new URL('/ops/anbar/choose/', url);
+  const brand = (url.searchParams.get('brand') || '').toUpperCase();
+  const kind = (url.searchParams.get('kind') || '').toLowerCase();
+  const vendor = (url.searchParams.get('vendor') || '').toLowerCase();
+  const loc = (url.searchParams.get('loc') || '').toLowerCase();
+
+  if (brand === 'HE' || kind === 'chicken' || vendor === 'mn') {
+    target.pathname = '/ops/anbar/he/';
+  } else if (brand === 'NCH' || loc === 'store' || loc === 'counter' || loc === 'kitchen') {
+    target.pathname = '/ops/anbar/nch/';
+  }
+
+  target.search = url.search;
+  return target;
 }

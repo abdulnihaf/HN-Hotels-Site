@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>Anbar — NCH Inventory</title>
+<title>Anbar — HN Hotels</title>
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Anbar">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
 <style>
@@ -44,6 +44,13 @@
   .brand { font-family:var(--serif); font-size:52px; font-weight:700; color:var(--text); text-shadow:0 1px 0 rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.45); }
   .brand-sub { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--gold); margin:2px 0 30px; }
   .gate-foot { font-family:var(--serif); font-style:italic; font-size:13px; color:rgba(212,162,76,.5); margin-top:26px; }
+  .choose-wrap { width:100%; max-width:360px; display:grid; gap:12px; margin-top:4px; }
+  .choose-card { display:flex; align-items:center; gap:13px; width:100%; padding:15px; border-radius:14px; border:1px solid var(--border); background:var(--card); color:var(--text); text-decoration:none; }
+  .choose-card:active { transform:scale(.98); border-color:var(--gold); background:var(--gold-dim); }
+  .choose-ico { width:48px; height:48px; border-radius:13px; display:flex; align-items:center; justify-content:center; background:var(--card2); color:var(--gold); font-weight:900; }
+  .choose-name { font-size:15px; font-weight:800; }
+  .choose-meta { font-size:11px; color:var(--muted); margin-top:3px; line-height:1.35; }
+  .choose-arrow { margin-left:auto; color:var(--gold); font-size:22px; }
 
   .pin-dots { display:flex; gap:14px; justify-content:center; margin:6px 0 24px; }
   .pin-dot { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(212,162,76,.6); transition:all .15s; }
@@ -92,8 +99,36 @@
 </head>
 <body>
 
+<!-- ENTRYPOINT CHOOSER -->
+<div id="s-choose" class="screen active">
+  <div class="gate">
+    <div class="tile">انبار</div>
+    <div class="brand">Anbar</div>
+    <div class="brand-sub">Choose the inventory chamber</div>
+    <div class="choose-wrap">
+      <a class="choose-card" href="/ops/anbar/nch/">
+        <div class="choose-ico">NCH</div>
+        <div>
+          <div class="choose-name">Nawabi Chai House</div>
+          <div class="choose-meta">live inventory board · counter and store movements</div>
+        </div>
+        <div class="choose-arrow">›</div>
+      </a>
+      <a class="choose-card" href="/ops/anbar/he/">
+        <div class="choose-ico">HE</div>
+        <div>
+          <div class="choose-name">Hamza Express</div>
+          <div class="choose-meta">receiving desk · MN Chicken first</div>
+        </div>
+        <div class="choose-arrow">›</div>
+      </a>
+    </div>
+    <div class="gate-foot">HN Hotels · Anbar</div>
+  </div>
+</div>
+
 <!-- GATE -->
-<div id="s-gate" class="screen active">
+<div id="s-gate" class="screen">
   <div class="gate">
     <div class="tile">انبار</div>
     <div class="brand">Anbar</div>
@@ -152,15 +187,30 @@ const API = '/api/anbar';
 const ICONS = { 'NCH-OB':'🍪', 'NCH-WTR':'💧', 'NCH-KH':'🌴', 'NCH-BUN':'🍞', 'NCH-CC':'🍗', 'NCH-PS':'🥟', 'HN-RM-202':'🍃', 'HN-RM-201':'🥛' };
 const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {}, chicken: { lines: [], rateRupees: '', date: '' } };
 const Q = new URLSearchParams(location.search);
-const APP_BRAND = (Q.get('brand') || 'NCH').toUpperCase();
-const APP_KIND = (Q.get('kind') || '').toLowerCase();
+const ENTRY_PATH = location.pathname.replace(/\/index\.html$/, '/').replace(/\/+$/, '/');
+const QUERY_BRAND = (Q.get('brand') || '').toUpperCase();
+const QUERY_KIND = (Q.get('kind') || '').toLowerCase();
+const QUERY_VENDOR = (Q.get('vendor') || '').toLowerCase();
+function detectEntryKind() {
+  if (ENTRY_PATH.endsWith('/ops/anbar/he/')) return 'he';
+  if (ENTRY_PATH.endsWith('/ops/anbar/nch/')) return 'nch';
+  if (ENTRY_PATH.endsWith('/ops/anbar/choose/')) return 'choose';
+  if (QUERY_BRAND === 'HE' || QUERY_KIND === 'chicken' || QUERY_VENDOR === 'mn') return 'he';
+  if (QUERY_BRAND === 'NCH' || Q.get('loc')) return 'nch';
+  return 'choose';
+}
+const ENTRY_KIND = detectEntryKind();
+const IS_CHOOSER = ENTRY_KIND === 'choose';
+const APP_BRAND = ENTRY_KIND === 'he' ? 'HE' : ENTRY_KIND === 'nch' ? 'NCH' : QUERY_BRAND;
+const APP_KIND = ENTRY_KIND === 'he' ? 'chicken' : QUERY_KIND;
 const IS_HE_CHICKEN = APP_BRAND === 'HE' && APP_KIND === 'chicken';
+const IS_NCH_ANBAR = APP_BRAND === 'NCH';
 const CUT_ICON = { boneless:'🍗', shawarma:'🌯', kebab:'🔥', tandoori:'🍗', grill:'🔥', tangdi:'🍖', lollipop:'🍗' };
 
 // QR-door scoping: ?loc=counter|store|kitchen pre-scopes the app
 const qLoc = Q.get('loc');
-if (qLoc === 'store' || qLoc === 'counter') S.loc = qLoc;
-if (qLoc === 'kitchen') S.loc = 'counter';  // kitchen receipts land on the counter lane at layer 1
+if (IS_NCH_ANBAR && (qLoc === 'store' || qLoc === 'counter')) S.loc = qLoc;
+if (IS_NCH_ANBAR && qLoc === 'kitchen') S.loc = 'counter';  // kitchen receipts land on the counter lane at layer 1
 
 function el(id) { return document.getElementById(id); }
 function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); el(id).classList.add('active'); }
@@ -187,7 +237,11 @@ async function verify() {
 function switchLoc() { S.loc = S.loc === 'counter' ? 'store' : 'counter'; renderHomeChrome(); loadLive(); }
 function renderHomeChrome() {
   if (IS_HE_CHICKEN) return renderChickenChrome();
+  document.title = 'Anbar — Nawabi Chai House';
+  const title = document.querySelector('#s-home .nav-title');
+  if (title) title.textContent = 'Anbar · Nawabi Chai House';
   el('home-loc').textContent = S.loc.toUpperCase();
+  el('home-loc').onclick = switchLoc;
   el('home-sub').textContent = `${S.person} · tap location chip to switch`;
   el('home-actions').classList.remove('hidden');
   el('issue-btn').classList.toggle('hidden', S.loc !== 'store');
@@ -232,9 +286,9 @@ function renderChickenChrome() {
   el('home-loc').onclick = null;
   el('home-actions').classList.add('hidden');
   el('home-sub').textContent = `${S.person} · receiving · Hamza Express`;
-  document.title = 'Anbar — Receiving';
+  document.title = 'Anbar — HE Receiving';
   const title = document.querySelector('#s-home .nav-title');
-  if (title) title.textContent = 'Anbar · Receiving';
+  if (title) title.textContent = 'Anbar · Hamza Express';
 }
 function chickenDate() {
   const d = S.chicken.date || todayIST();
@@ -686,13 +740,23 @@ async function showHistory(code) {
 }
 
 // ── INIT ──
-if (IS_HE_CHICKEN) {
-  el('gate-loc').innerHTML = '<span class="loc-chip">ANBAR RECEIVING</span>';
-  el('gate-foot').textContent = 'HN Hotels · Anbar Receiving';
-} else if (qLoc) {
-  el('gate-loc').innerHTML = `<span class="loc-chip">${S.loc.toUpperCase()} DOOR</span>`;
+if (IS_CHOOSER) {
+  show('s-choose');
+} else {
+  show('s-gate');
+  if (IS_HE_CHICKEN) {
+    document.title = 'Anbar — HE Receiving';
+    el('gate-loc').innerHTML = '<span class="loc-chip">ANBAR RECEIVING</span>';
+    el('gate-foot').textContent = 'HN Hotels · Hamza Express';
+  } else if (IS_NCH_ANBAR) {
+    document.title = 'Anbar — Nawabi Chai House';
+    el('gate-loc').innerHTML = qLoc
+      ? `<span class="loc-chip">${S.loc.toUpperCase()} DOOR</span>`
+      : '<span class="loc-chip">NCH INVENTORY</span>';
+    el('gate-foot').textContent = 'HN Hotels · Nawabi Chai House';
+  }
+  if (S.pin && S.person) { goHome(); } // device remembered
 }
-if (S.pin && S.person) { goHome(); } // device remembered
 </script>
 </body>
 </html>
