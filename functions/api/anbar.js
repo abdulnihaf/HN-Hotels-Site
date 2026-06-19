@@ -337,10 +337,7 @@ async function saudaChickenQueue(DB, url) {
       const legacySaved = movementRows.length > 0 && parts.length === 0;
       const saved = summary.complete || legacySaved;
       const partial = summary.partial;
-      const prefillYielded = ledger.yielded_kg > 0 ? Math.max(0, round2(ledger.yielded_kg - summary.yielded_kg)) : null;
-      const prefillDelivered = ledger.delivered_kg > 0 ? Math.max(0, round2(ledger.delivered_kg - summary.delivered_kg)) : null;
-      const hasPrefill = !saved && prefillYielded > 0 && prefillDelivered > 0 && ledger.daily_rate_paise > 0;
-      const status = saved ? 'inventory_saved' : partial ? 'partial' : hasPrefill ? 'prefilled' : 'ordered';
+      const status = saved ? 'inventory_saved' : partial ? 'partial' : 'ordered';
       const latestPart = parts[parts.length - 1] || null;
       const latestMovement = movementRows[movementRows.length - 1] || null;
       lines.push({
@@ -360,7 +357,6 @@ async function saudaChickenQueue(DB, url) {
         ordered_mode: mode,
         ordered_amount: ordered,
         ordered_pieces: mode === 'pieces' ? ordered : null,
-        prefilled: hasPrefill,
         partial,
         inventory_saved: saved,
         saved_at: latestMovement?.received_at || latestPart?.received_at || null,
@@ -374,8 +370,6 @@ async function saudaChickenQueue(DB, url) {
           yielded_kg: ledger.yielded_kg,
           purchased_kg: ledger.purchased_kg,
           daily_rate_paise: ledger.daily_rate_paise,
-          remaining_prefill_delivered_kg: prefillDelivered,
-          remaining_prefill_yielded_kg: prefillYielded,
         } : null,
       });
     }
