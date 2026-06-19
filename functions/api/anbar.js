@@ -17,12 +17,40 @@ const ODOO_DB = 'main';
 const ODOO_UID = 2;
 const POS_CONFIGS = [27, 32, 36, 37];
 
-const PINS = {
-  '0305': 'Nihaf', '8523': 'Bashir', '6890': 'Tanveer', '3754': 'Naveen',
-  '7115': 'CASH001', '8241': 'CASH002', '2847': 'CASH003', '5190': 'CASH004',
-  '3678': 'RUN001', '4421': 'RUN002', '5503': 'RUN003', '6604': 'RUN004', '7705': 'RUN005',
-  '2026': 'Zoya',
-};
+// ── DARBAR IDENTITY — the single source of truth for staff (hr_employees.staff_pin) ──
+// Anbar owns NO people. A typed 4-digit Darbar staff_pin resolves to a scoped
+// identity here, exactly as functions/api/takht-auth.js does for front-of-house.
+// Anbar is the back-of-house consumer Takht's bridge defers to ("BOH comes with
+// Anbar"): any ACTIVE staff may RECEIVE/COUNT at their OWN outlet; HQ managers
+// (Managing Director / GM / Office Executive / admin) act cross-brand.
+// SECURITY: a 4-digit PIN is enumerable — add a per-IP KV attempt limiter before
+// broad public exposure (same flagged TODO as takht-auth). Acceptable for the
+// internal staff PWA today; flagged, not silently shipped.
+function anbarScope(job, brand) {
+  const j = String(job || '').toLowerCase();
+  const mgr = /managing director|general manager|\bgm\b|\bmanager\b|cfo|office executive|\badmin\b/.test(j);
+  const cross = mgr && String(brand || '').toUpperCase() === 'HQ';
+  return { is_manager: mgr, cross_brand: cross, can_place_order: mgr };
+}
+async function resolvePerson(DB, pin) {
+  const p = String(pin == null ? '' : pin).trim();
+  if (!/^\d{4}$/.test(p)) return null;
+  const e = await DB.prepare(
+    'SELECT id, name, known_as, brand_label, job_name, is_active FROM hr_employees WHERE staff_pin = ? LIMIT 1'
+  ).bind(p).first().catch(() => null);
+  if (!e || !e.is_active) return null;
+  const brand = String(e.brand_label || '').toUpperCase();
+  return { id: e.id, name: e.known_as || e.name, brand, role: e.job_name || '', ...anbarScope(e.job_name, brand) };
+}
+// Outlet gate: HQ acts on any brand; everyone else only on their own. Empty/BOTH = unscoped.
+function personBrandOk(acct, brand) {
+  if (!acct) return false;
+  const b = String(brand || '').toUpperCase();
+  if (!b || b === 'BOTH') return true;
+  return acct.cross_brand || acct.brand === b;
+}
+const BRAND_NICE = { HE: 'Hamza Express', NCH: 'Nawabi Chai House', HQ: 'HN Hotels' };
+function brandNice(b) { return BRAND_NICE[String(b || '').toUpperCase()] || String(b || ''); }
 
 // Layer-1 NCH items. pos = product.template ids + factor (units consumed per line qty).
 // All bun SKUs consume the same physical bun → one Anbar item, factor 1 each.
@@ -590,8 +618,10 @@ async function saveSaudaChickenReceive(DB, body, env = {}) {
   const kind = String(body.kind || 'chicken').toLowerCase();
   if (brand !== 'HE' || kind !== 'chicken') return json({ success: false, error: 'unsupported receive kind' }, 400);
 
-  const person = PINS[body.pin];
-  if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+  const acct = await resolvePerson(DB, body.pin);
+  if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+  if (!personBrandOk(acct, brand)) return json({ success: false, error: `${brandNice(acct.brand)} staff cannot receive for ${brandNice(brand)}` }, 403);
+  const person = acct.name;
   const purchaseId = Number(body.purchase_id || body.id || 0);
   const lineIdx = Number(body.line_idx);
   if (!purchaseId || !Number.isInteger(lineIdx) || lineIdx < 0) {
@@ -967,8 +997,10 @@ async function saveSaudaUniversalReceive(DB, body, env = {}) {
   const brand = (body.brand || 'NCH').toUpperCase();
   if (!['NCH', 'HE'].includes(brand)) return json({ success: false, error: 'unsupported receive brand' }, 400);
 
-  const person = PINS[body.pin];
-  if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+  const acct = await resolvePerson(DB, body.pin);
+  if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+  if (!personBrandOk(acct, brand)) return json({ success: false, error: `${brandNice(acct.brand)} staff cannot receive for ${brandNice(brand)}` }, 403);
+  const person = acct.name;
   const purchaseId = Number(body.purchase_id || body.id || 0);
   const lineIdx = Number(body.line_idx);
   if (!purchaseId || !Number.isInteger(lineIdx) || lineIdx < 0) {
@@ -1267,8 +1299,15 @@ export async function onRequest(context) {
     }
 
     if (action === 'verify-pin') {
-      const person = PINS[url.searchParams.get('pin')];
-      return person ? json({ success: true, person }) : json({ success: false, error: 'Wrong PIN' });
+      const acct = await resolvePerson(DB, url.searchParams.get('pin'));
+      if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+      const door = (url.searchParams.get('brand') || '').toUpperCase();
+      if (door && door !== 'BOTH' && !acct.cross_brand && acct.brand !== door) {
+        return json({ success: false, wrong_outlet: true, person_brand: acct.brand,
+          error: `${brandNice(acct.brand)} staff — open ${brandNice(door)} receiving` });
+      }
+      return json({ success: true, person: acct.name, id: acct.id, brand: acct.brand,
+        role: acct.role, scope: { cross_brand: acct.cross_brand, can_place_order: acct.can_place_order } });
     }
 
     if (action === 'items') {
@@ -1339,8 +1378,10 @@ export async function onRequest(context) {
     // ── RECORD COUNT (counter or store) — returns variance against expected ──
     if (action === 'record-count' && context.request.method === 'POST') {
       const body = await context.request.json();
-      const person = PINS[body.pin];
-      if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+      const acct = await resolvePerson(DB, body.pin);
+      if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+      if (!personBrandOk(acct, 'NCH')) return json({ success: false, error: `${brandNice(acct.brand)} staff cannot count Nawabi inventory` }, 403);
+      const person = acct.name;
       const loc = body.loc === 'store' ? 'NCH-STORE' : 'NCH-COUNTER';
       const now = new Date().toISOString();
       const results = [];
@@ -1360,10 +1401,11 @@ export async function onRequest(context) {
     // Placement itself happens on WhatsApp; THIS is the app record that makes
     // the outlet's receive screen know what to expect on the delivery date.
     if (action === 'place-order' && context.request.method === 'POST') {
-      const ORDER_PLACERS = ['Zoya', 'Bashir', 'Nihaf', 'Tanveer', 'Naveen'];
       const body = await context.request.json();
-      const person = PINS[body.pin];
-      if (!person || !ORDER_PLACERS.includes(person)) return json({ success: false, error: 'Not authorised to place orders' }, 401);
+      const acct = await resolvePerson(DB, body.pin);
+      if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+      if (!acct.cross_brand) return json({ success: false, error: 'Not authorised to place orders' }, 403);
+      const person = acct.name;
       const poDate = body.po_date;  // 'YYYY-MM-DD' IST delivery date
       if (!/^\d{4}-\d{2}-\d{2}$/.test(poDate || '')) return json({ success: false, error: 'po_date invalid' });
       const brand = body.brand === 'HE' ? 'HE' : 'NCH';   // both houses place here
@@ -1389,10 +1431,11 @@ export async function onRequest(context) {
     // ── CANCEL ORDER LINE (Zoya/Bashir own the order — wrong lines die honestly) ──
     // Cancelled lines keep their row (audit), vanish from the receive screen.
     if (action === 'cancel-line' && context.request.method === 'POST') {
-      const ORDER_PLACERS = ['Zoya', 'Bashir', 'Nihaf', 'Tanveer', 'Naveen'];
       const body = await context.request.json();
-      const person = PINS[body.pin];
-      if (!person || !ORDER_PLACERS.includes(person)) return json({ success: false, error: 'Not authorised' }, 401);
+      const acct = await resolvePerson(DB, body.pin);
+      if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+      if (!acct.cross_brand) return json({ success: false, error: 'Not authorised to cancel order lines' }, 403);
+      const person = acct.name;
       const r = await DB.prepare(
         `UPDATE rm_po_expected SET status='cancelled', expect_note = expect_note || ' · CANCELLED by ' || ? || ' ' || ? WHERE id=? AND status='pending'`
       ).bind(person, new Date().toISOString(), body.id).run();
@@ -1425,8 +1468,10 @@ export async function onRequest(context) {
     // the receiver is confirming a PO line — it gets marked received and linked.
     if (action === 'record-receipt' && context.request.method === 'POST') {
       const body = await context.request.json();
-      const person = PINS[body.pin];
-      if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+      const acct = await resolvePerson(DB, body.pin);
+      if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+      if (!personBrandOk(acct, 'NCH')) return json({ success: false, error: `${brandNice(acct.brand)} staff cannot receive Nawabi inventory` }, 403);
+      const person = acct.name;
       const item = ITEMS.find(i => i.code === body.code);
       if (!item || !(body.qty > 0)) return json({ success: false, error: 'item/qty invalid' });
       const loc = body.loc === 'store' ? 'store' : 'counter';
@@ -1455,8 +1500,10 @@ export async function onRequest(context) {
     // ── RECORD ISSUE (store room → counter; Bashir's action) ──
     if (action === 'record-issue' && context.request.method === 'POST') {
       const body = await context.request.json();
-      const person = PINS[body.pin];
-      if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+      const acct = await resolvePerson(DB, body.pin);
+      if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+      if (!personBrandOk(acct, 'NCH')) return json({ success: false, error: `${brandNice(acct.brand)} staff cannot issue Nawabi inventory` }, 403);
+      const person = acct.name;
       const item = ITEMS.find(i => i.code === body.code);
       if (!item || !(body.qty > 0)) return json({ success: false, error: 'item/qty invalid' });
       // Pack-unit issue: server does the multiplication — humans never convert.
@@ -1478,8 +1525,10 @@ export async function onRequest(context) {
     // A recorded waste event separates spoilage from seepage permanently.
     if (action === 'record-waste' && context.request.method === 'POST') {
       const body = await context.request.json();
-      const person = PINS[body.pin];
-      if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+      const acct = await resolvePerson(DB, body.pin);
+      if (!acct) return json({ success: false, error: 'PIN not recognised' }, 401);
+      if (!personBrandOk(acct, 'NCH')) return json({ success: false, error: `${brandNice(acct.brand)} staff cannot record Nawabi waste` }, 403);
+      const person = acct.name;
       const item = ITEMS.find(i => i.code === body.code);
       if (!item || !(body.qty > 0)) return json({ success: false, error: 'item/qty invalid' });
       const now = new Date().toISOString();

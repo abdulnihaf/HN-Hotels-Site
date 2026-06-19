@@ -186,7 +186,7 @@
 <script>
 const API = '/api/anbar';
 const ICONS = { 'NCH-OB':'🍪', 'NCH-WTR':'💧', 'NCH-KH':'🌴', 'NCH-BUN':'🍞', 'NCH-CC':'🍗', 'NCH-PS':'🥟', 'HN-RM-200':'🥛', 'HN-RM-202':'🍃', 'HN-RM-201':'🥛' };
-const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {}, chicken: { lines: [], rateRupees: '', date: '' }, nchReceive: { lines: [], date: '', current: null, evidenceB64: '' } };
+const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', brand: localStorage.getItem('anbar_brand') || '', cross: localStorage.getItem('anbar_cross') === '1', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {}, chicken: { lines: [], rateRupees: '', date: '' }, nchReceive: { lines: [], date: '', current: null, evidenceB64: '' } };
 const Q = new URLSearchParams(location.search);
 const ENTRY_PATH = location.pathname.replace(/\/index\.html$/, '/').replace(/\/+$/, '/');
 const QUERY_BRAND = (Q.get('brand') || '').toUpperCase();
@@ -228,10 +228,11 @@ function key(k) { if (S.entry.length >= 4) return; S.entry += k; dots(); if (S.e
 function del() { S.entry = S.entry.slice(0, -1); dots(); el('gate-err').textContent = ''; }
 function dots() { for (let i = 0; i < 4; i++) el('d' + i).classList.toggle('filled', i < S.entry.length); }
 async function verify() {
-  const r = await fetch(`${API}?action=verify-pin&pin=${S.entry}`).then(x => x.json()).catch(() => ({}));
+  const r = await fetch(`${API}?action=verify-pin&pin=${S.entry}${APP_BRAND ? '&brand=' + APP_BRAND : ''}`).then(x => x.json()).catch(() => ({}));
   if (!r.success) { el('gate-err').textContent = r.error || 'Wrong PIN'; S.entry = ''; dots(); return; }
-  S.pin = S.entry; S.person = r.person; S.entry = '';
+  S.pin = S.entry; S.person = r.person; S.brand = (r.brand || APP_BRAND || ''); S.cross = !!(r.scope && r.scope.cross_brand); S.entry = '';
   localStorage.setItem('anbar_pin', S.pin); localStorage.setItem('anbar_person', S.person);
+  localStorage.setItem('anbar_brand', S.brand); localStorage.setItem('anbar_cross', S.cross ? '1' : '');
   goHome();
 }
 
@@ -1171,7 +1172,15 @@ if (IS_CHOOSER) {
       : '<span class="loc-chip">NCH INVENTORY</span>';
     el('gate-foot').textContent = 'HN Hotels · Nawabi Chai House';
   }
-  if (S.pin && S.person) { goHome(); } // device remembered
+  // Device remembered — but ONLY re-enter if this identity belongs to THIS outlet.
+  // A remembered PIN must never carry a worker into the wrong brand's receiving.
+  if (S.pin && S.person && (!APP_BRAND || S.cross || S.brand === APP_BRAND)) {
+    goHome();
+  } else if (S.pin) {
+    S.pin = ''; S.person = ''; S.brand = ''; S.cross = false;
+    localStorage.removeItem('anbar_pin'); localStorage.removeItem('anbar_person');
+    localStorage.removeItem('anbar_brand'); localStorage.removeItem('anbar_cross');
+  }
 }
 </script>
 </body>

@@ -122,6 +122,8 @@ const API = '/api/anbar';
 const S = {
   pin: localStorage.getItem('anbar_pin') || '',
   person: localStorage.getItem('anbar_person') || '',
+  personBrand: (localStorage.getItem('anbar_brand') || '').toUpperCase(),
+  cross: localStorage.getItem('anbar_cross') === '1',
   entry: '',
   brand: new URLSearchParams(location.search).get('brand') || localStorage.getItem('anbar_receive_brand') || 'HE',
   kind: new URLSearchParams(location.search).get('kind') || '',
@@ -164,10 +166,29 @@ async function verify() {
   }
   S.pin = S.entry;
   S.person = r.person || '';
+  S.personBrand = (r.brand || '').toUpperCase();
+  S.cross = !!(r.scope && r.scope.cross_brand);
   localStorage.setItem('anbar_pin', S.pin);
   localStorage.setItem('anbar_person', S.person);
+  localStorage.setItem('anbar_brand', S.personBrand);
+  localStorage.setItem('anbar_cross', S.cross ? '1' : '');
   S.entry = '';
+  applyBrandScope();
   showApp();
+}
+// Outlet scope: a worker sees only their own brand; HQ (cross-brand) keeps both toggles.
+// The server still enforces this on every save — this is the dumb-proof UI half.
+function applyBrandScope() {
+  const locked = !S.cross && (S.personBrand === 'HE' || S.personBrand === 'NCH');
+  if (locked) {
+    S.brand = S.personBrand;
+    S.kind = S.brand === 'HE' ? 'chicken' : 'all';
+    localStorage.setItem('anbar_receive_brand', S.brand);
+    $('brandHE').classList.toggle('active', S.brand === 'HE');
+    $('brandNCH').classList.toggle('active', S.brand === 'NCH');
+  }
+  $('brandHE').classList.toggle('hidden', locked && S.personBrand !== 'HE');
+  $('brandNCH').classList.toggle('hidden', locked && S.personBrand !== 'NCH');
 }
 function setBrand(brand) {
   S.brand = brand;
@@ -356,7 +377,7 @@ $('date').addEventListener('change', loadQueue);
 $('saveBtn').addEventListener('click', save);
 $('date').value = new URLSearchParams(location.search).get('date') || todayIST();
 setBrand(S.brand === 'NCH' ? 'NCH' : 'HE');
-if (S.pin && S.person) showApp();
+if (S.pin && S.person) { applyBrandScope(); showApp(); }
 </script>
 </body>
 </html>
