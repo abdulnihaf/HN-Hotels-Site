@@ -768,7 +768,7 @@ const DEFAULT_VENDOR = {
 };
 // item spellings (raw → canonical key), migrated from the decode dictionary + HP_CATALOG synonyms
 const ITEM_ALIASES = {
-  sugar:['cheeni','sakkar'], butter_unsalted:['unsalted butter','white butter'], atta:['whole wheat','wheat flour'],
+  sugar:['cheeni','sakkar'], butter_unsalted:['unsalted butter','white butter','amul unsalted butter','amul butter unsalted','amul 500g butter','amul 500 g butter'], atta:['whole wheat','wheat flour'],
   maida:['white atta','refined flour'], milk:['doodh'], curd:['dahi','yogurt','yoghurt'], honey:['shahad'],
   condensed_milk:['milkmaid','condensed milk'], ruchi_gold_oil:['ruchi gold','ruchigold','palmolein'],
   sunflower_oil:['sunflower'], chilli_powder:['chilly powder','red chilli powder','mirchi powder','lal mirch','mirchi'],
@@ -829,6 +829,21 @@ const MN_BROILERS_CHICKEN = [
 ];
 
 const LOCAL_VENDOR_ITEMS = [
+  {
+    item_code: 'butter_unsalted',
+    label: 'Amul unsalted butter 500g',
+    unit: 'pc',
+    pack_label: 'Amul 500 g SKU (1 pc = 0.5 kg)',
+    pack_qty: 1,
+    price_paise: 28500,
+    price_mode: 'fixed',
+    form: 'defined',
+    brand: 'NCH',
+    default_vendor: 'ashrafiya',
+    category: 'Dairy',
+    note: 'NCH purchase unit: branded Amul unsalted butter 500 g piece. Today example: 6 pc = 3 kg.',
+    aliases: ['unsalted butter', 'white butter', 'amul unsalted butter', 'amul butter unsalted', 'amul 500g butter', 'amul 500 g butter'],
+  },
   {
     item_code: 'water_bisleri_500',
     label: 'Bisleri water 500ml',
