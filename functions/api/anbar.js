@@ -258,9 +258,16 @@ function saudaBrandMatches(poBrand, line, brand) {
   const target = brandKey(brand);
   const p = brandKey(poBrand);
   const l = brandKey(line?.brand);
-  const poOk = !p || p === target || p === 'BOTH';
-  const lineOk = !l || l === target || l === 'BOTH';
-  return poOk && lineOk;
+  if (p === 'HE' || p === 'NCH') {
+    return p === target && (!l || l === target || l === 'BOTH');
+  }
+  if (p === 'BOTH') {
+    if (l === 'HE' || l === 'NCH') return l === target;
+    return target === 'HE';
+  }
+  if (l === 'HE' || l === 'NCH') return l === target;
+  if (l === 'BOTH') return target === 'HE';
+  return target === 'HE';
 }
 
 function genericItemName(line) {

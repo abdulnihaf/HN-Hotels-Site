@@ -644,6 +644,62 @@ function renderNchReceiveCard(line) {
     ${btn}
   </div>`;
 }
+function linePendingQty(line) {
+  const summary = line.receipt_summary || {};
+  if (line.kind === 'chicken') return line.ordered_mode === 'pieces' ? summary.remaining_pieces : summary.remaining_kg;
+  return summary.remaining_qty;
+}
+function batchableReceiveLine(line) {
+  return line && line.kind !== 'chicken' && line.kind !== 'milk' && !receiveLineDone(line);
+}
+function renderVendorBatchLine(line, idx) {
+  const summary = line.receipt_summary || {};
+  const saved = receiveLineDone(line);
+  const partial = receiveLinePartial(line);
+  const pending = linePendingQty(line);
+  const whole = wholeReceiveUnit(line);
+  const chip = saved ? receiveStatusChip('received') : partial ? receiveStatusChip('partial') : receiveStatusChip('ordered');
+  const input = saved
+    ? '<div class="photo-ready" style="color:var(--green)">Already received</div>'
+    : `<div class="field" style="margin-top:8px">
+        <label for="rx-vendor-${idx}">Receive now</label>
+        <input id="rx-vendor-${idx}" type="number" inputmode="${whole ? 'numeric' : 'decimal'}" min="0" step="${whole ? '1' : '0.01'}" placeholder="${pending || line.ordered_amount || ''}">
+      </div>`;
+  return `<div class="card" style="border-color:${saved ? 'rgba(55,211,153,.35)' : 'var(--border)'}">
+    <div class="item-row" style="cursor:default;align-items:flex-start">
+      <div class="item-ico">${ICONS[line.item_code] || '📦'}</div>
+      <div style="flex:1">
+        <div class="item-name">${esc(line.item_name || line.item)}</div>
+        <div class="item-meta">ordered ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || line.uom || '')} · received ${fmtReceiveQty(summary.received_qty || 0, line.uom)}${pending != null ? ' · pending ' + fmtReceiveQty(pending, line.uom) : ''}</div>
+        <div style="margin-top:8px">${chip}</div>
+        ${input}
+      </div>
+    </div>
+  </div>`;
+}
+function openVendorBatchReceive(group) {
+  S.nchReceive.currentGroup = group;
+  S.nchReceive.evidenceB64 = '';
+  el('flow-title').textContent = group.vendor;
+  el('flow-sub').textContent = `${brandName(APP_BRAND)} · ${group.lines.length} item${group.lines.length === 1 ? '' : 's'}`;
+  el('flow-submit').textContent = 'Save vendor receipt';
+  el('flow-actions').style.display = 'flex';
+  el('flow-body').innerHTML = `
+    <div class="card" style="border-color:var(--anbar-bd)">
+      <div class="item-row" style="cursor:default">
+        <div class="item-ico">${esc(group.vendor.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'S')}</div>
+        <div style="flex:1">
+          <div class="item-name">${esc(group.vendor)}</div>
+          <div class="item-meta">Enter what came now. One photo is used for this vendor delivery.</div>
+        </div>
+      </div>
+      <button class="btn btn-dark" style="width:100%;margin-top:14px" onclick="pickNchEvidence()">Add receipt photo</button>
+      <div id="rx-nch-photo-ready" class="photo-ready"></div>
+    </div>
+    ${group.lines.map(renderVendorBatchLine).join('')}`;
+  S.flow = 'vendor-sauda-receive';
+  show('s-flow');
+}
 function renderNchReceiptParts(line) {
   const parts = line.receipt_parts || [];
   if (!parts.length) return '';
@@ -658,6 +714,9 @@ function nchLine(purchaseId, lineIdx) {
 function openReceiveVendor(idx) {
   const group = S.nchReceive.groups && S.nchReceive.groups[idx];
   if (!group) return;
+  const normalLines = group.lines.filter(l => l.kind !== 'chicken' && l.kind !== 'milk');
+  const specialLines = group.lines.filter(l => l.kind === 'chicken' || l.kind === 'milk');
+  if (normalLines.length && !specialLines.length) return openVendorBatchReceive(group);
   el('flow-title').textContent = group.vendor;
   el('flow-sub').textContent = `${brandName(APP_BRAND)} · ${nchReceiveDate()}`;
   el('flow-actions').style.display = 'none';
@@ -806,6 +865,51 @@ async function saveNchSaudaReceipt() {
     }).then(x => x.json());
     if (!r.success) throw new Error(r.error || 'save failed');
     toast(r.partial ? `partial saved · ${fmtReceiveQty(r.pending_qty || 0, r.received_unit) } pending` : 'inventory saved');
+    if (IS_HE_ANBAR) goReceivingHome();
+    else startFlow('receipt');
+  } catch (e) {
+    toast(e.message || 'save failed', true);
+  } finally {
+    el('flow-submit').disabled = false;
+  }
+}
+async function saveVendorSaudaReceipt() {
+  const group = S.nchReceive.currentGroup;
+  if (!group) return;
+  if (!S.nchReceive.evidenceB64) return toast('Add receipt photo', true);
+  const entries = [];
+  for (let idx = 0; idx < group.lines.length; idx++) {
+    const line = group.lines[idx];
+    if (!batchableReceiveLine(line)) continue;
+    const qty = Number(el(`rx-vendor-${idx}`)?.value || 0);
+    if (!(qty > 0)) continue;
+    if (wholeReceiveUnit(line) && Math.round(qty) !== qty) return toast(`${line.item_name || line.item} must be whole`, true);
+    entries.push({ line, qty });
+  }
+  if (!entries.length) return toast('Enter at least one received quantity', true);
+  el('flow-submit').disabled = true;
+  let saved = 0;
+  try {
+    for (const entry of entries) {
+      const line = entry.line;
+      const r = await fetch(`${API}?action=sauda-receive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin: S.pin,
+          brand: line.brand || APP_BRAND || 'NCH',
+          kind: line.kind,
+          purchase_id: line.purchase_id,
+          line_idx: line.line_idx,
+          receipt_part_no: line.next_part_no || 1,
+          received_qty: entry.qty,
+          evidence_image: S.nchReceive.evidenceB64,
+        }),
+      }).then(x => x.json());
+      if (!r.success) throw new Error(`${line.item_name || line.item}: ${r.error || 'save failed'}`);
+      saved++;
+    }
+    toast(`vendor receipt saved · ${saved} item${saved === 1 ? '' : 's'}`);
     if (IS_HE_ANBAR) goReceivingHome();
     else startFlow('receipt');
   } catch (e) {
@@ -1011,6 +1115,7 @@ async function settleFinish() {
 async function submitFlow() {
   if (S.flow === 'he-chicken-receive') return saveChickenReceipt();
   if (S.flow === 'sauda-receive') return saveNchSaudaReceipt();
+  if (S.flow === 'vendor-sauda-receive') return saveVendorSaudaReceipt();
   if (S.flow === 'settle') return settleFinish();
   el('flow-submit').disabled = true;
   try {
