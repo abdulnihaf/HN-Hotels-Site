@@ -31,9 +31,9 @@ export async function onRequest(context) {
     return next();
   }
 
-  // ── Anbar brand entrypoints — one backend, hard-separated app launches ──
-  // These paths work on both hnhotels.in and anbar.hnhotels.in so PWA scopes and
-  // QR links do not depend on fragile query-param launches.
+  // ── Anbar brand entrypoints — one PWA/backend, brand-scoped launches ──
+  // These paths work on both hnhotels.in and anbar.hnhotels.in so QR links can
+  // preselect the right outlet without creating separate installed apps.
   const anbarCanonical = canonicalAnbarPath(url);
   if (anbarCanonical) return Response.redirect(anbarCanonical.toString(), 302);
 

@@ -230,6 +230,59 @@ function nchReceiveDefForLine(line, vendorName, requestedKind = 'all') {
   }) || null;
 }
 
+function brandKey(v) {
+  return String(v || '').trim().toUpperCase();
+}
+
+function saudaBrandMatches(poBrand, line, brand) {
+  const target = brandKey(brand);
+  const p = brandKey(poBrand);
+  const l = brandKey(line?.brand);
+  const poOk = !p || p === target || p === 'BOTH';
+  const lineOk = !l || l === target || l === 'BOTH';
+  return poOk && lineOk;
+}
+
+function genericItemName(line) {
+  return String(line?.item || line?.name || line?.label || line?.sku || line?.item_key || 'Sauda item').trim();
+}
+
+function genericItemUnit(line) {
+  return String(line?.unit || line?.uom || line?.ordered_unit || '').trim() || 'unit';
+}
+
+function genericItemCode(line, purchaseId, lineIdx) {
+  const raw = String(line?.item_code || line?.sku || line?.item_key || line?.item || `sauda-${purchaseId}-${lineIdx}`).trim();
+  const safe = raw.toUpperCase().replace(/[^A-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+  return safe || `SAUDA_${purchaseId}_${lineIdx}`;
+}
+
+function wholeNumberReceiptRequired(def) {
+  if (def?.kind === 'buns') return true;
+  const u = norm(def?.uom || '');
+  return /\b(pc|pcs|piece|pieces|bird|birds|case|packet|bundle|bottle|box|bag|bora|cylinder|can)\b/.test(u);
+}
+
+function universalReceiveDefForLine(line, vendorName, brand, requestedKind = 'all', purchaseId = 0, lineIdx = 0) {
+  const k = receiveKindParam(requestedKind);
+  if (brand === 'HE' && MN_BROILERS_RE.test(vendorName || '') && chickenCutForLine(line)) return null;
+
+  const special = brand === 'NCH' ? nchReceiveDefForLine(line, vendorName, 'all') : null;
+  if (special) return (k === 'all' || k === special.kind) ? special : null;
+  if (k !== 'all' && k !== 'generic' && k !== 'sauda') return null;
+
+  const name = genericItemName(line);
+  const ordered = orderedAmount(line);
+  if (!name && !(ordered > 0)) return null;
+  return {
+    kind: 'generic',
+    code: genericItemCode(line, purchaseId, lineIdx),
+    name,
+    uom: genericItemUnit(line),
+    loc: 'store',
+  };
+}
+
 function normaliseGenericReceiptPart(part) {
   if (!part || typeof part !== 'object') return null;
   const qty = toNum(part.received_qty ?? part.qty ?? part.litres_received);
@@ -470,8 +523,13 @@ async function saudaChickenQueue(DB, url) {
         order_status: po.status,
         vendor_name: po.vendor_name,
         for_date: po.for_date,
+        brand,
+        kind: 'chicken',
         cut,
         cut_label: CHICKEN_LABELS[cut],
+        item_code: `HE-CHICKEN-${cut.toUpperCase()}`,
+        item_name: CHICKEN_LABELS[cut],
+        uom: 'kg',
         item: line.item || line.sku || line.name || CHICKEN_LABELS[cut],
         ordered_qty: line.qty ?? line.count ?? '',
         ordered_unit: line.unit || '',
@@ -732,29 +790,31 @@ async function saveSaudaChickenReceive(DB, body, env = {}) {
   });
 }
 
-async function saudaNchReceiveQueue(DB, url) {
+async function saudaUniversalReceiveQueue(DB, url) {
   await ensureAnbarSchema(DB);
   const brand = (url.searchParams.get('brand') || 'NCH').toUpperCase();
   const kind = receiveKindParam(url.searchParams.get('kind') || 'all');
   const date = url.searchParams.get('date') || istToday();
-  if (brand !== 'NCH') return json({ success: true, brand, date, kind, lines: [] });
+  if (!['NCH', 'HE'].includes(brand)) return json({ success: true, brand, date, kind, lines: [] });
   if (!isYmd(date)) return json({ success: false, error: 'date invalid' }, 400);
 
   const rows = (await DB.prepare(
     `SELECT id, brand, vendor_name, for_date, status, items_json, ordered_at
      FROM sauda_purchase
      WHERE for_date=? AND COALESCE(status,'') != 'CANCELLED'
-       AND (brand='NCH' OR brand='both' OR brand IS NULL OR brand='')
+       AND (brand=? OR brand='both' OR brand='BOTH' OR brand IS NULL OR brand='')
      ORDER BY id DESC`
-  ).bind(date).all()).results || [];
+  ).bind(date, brand).all()).results || [];
 
   const lines = [];
+  let dayRatePaise = null;
   for (const po of rows) {
     const items = parseJsonArray(po.items_json);
     for (let idx = 0; idx < items.length; idx++) {
       const line = items[idx] || {};
-      const def = nchReceiveDefForLine(line, po.vendor_name, kind);
-      if (!def) continue;
+      if (!saudaBrandMatches(po.brand, line, brand)) continue;
+
+      const chickenCut = brand === 'HE' && MN_BROILERS_RE.test(po.vendor_name || '') ? chickenCutForLine(line) : null;
       const prefix = movementPrefixFor(po.id, idx);
       const movementRows = (await DB.prepare(
         `SELECT id, received_at, received_by, qty, movement_key, evidence_key, evidence_mime
@@ -762,6 +822,62 @@ async function saudaNchReceiveQueue(DB, url) {
          WHERE movement_key=? OR movement_key LIKE ?
          ORDER BY movement_key`
       ).bind(legacyMovementKeyFor(po.id, idx), `${prefix}:%`).all()).results || [];
+      if (chickenCut) {
+        if (kind !== 'all' && kind !== 'chicken') continue;
+        const ledger = await chickenLedgerEntry(DB, brand, date, chickenCut);
+        if (!dayRatePaise && ledger.daily_rate_paise > 0) dayRatePaise = ledger.daily_rate_paise;
+        const mode = lineOrderMode(line, chickenCut);
+        const ordered = orderedAmount(line);
+        const parts = receiptPartsFromLine(line);
+        const summary = summariseReceiptParts(parts, ordered, mode);
+        const legacySaved = movementRows.length > 0 && parts.length === 0;
+        const saved = summary.complete || legacySaved;
+        const partial = summary.partial;
+        const latestPart = parts[parts.length - 1] || null;
+        const latestMovement = movementRows[movementRows.length - 1] || null;
+        lines.push({
+          purchase_id: po.id,
+          line_idx: idx,
+          movement_key: movementKeyFor(po.id, idx, summary.next_part_no),
+          movement_key_prefix: prefix,
+          next_part_no: summary.next_part_no,
+          order_status: po.status,
+          vendor_name: po.vendor_name,
+          for_date: po.for_date,
+          brand,
+          kind: 'chicken',
+          cut: chickenCut,
+          cut_label: CHICKEN_LABELS[chickenCut],
+          item_code: `HE-CHICKEN-${chickenCut.toUpperCase()}`,
+          item_name: CHICKEN_LABELS[chickenCut],
+          loc: 'kitchen',
+          uom: 'kg',
+          item: line.item || line.sku || line.name || CHICKEN_LABELS[chickenCut],
+          ordered_qty: line.qty ?? line.count ?? '',
+          ordered_unit: line.unit || '',
+          ordered_mode: mode,
+          ordered_amount: ordered,
+          ordered_pieces: mode === 'pieces' ? ordered : null,
+          partial,
+          inventory_saved: saved,
+          saved_at: latestMovement?.received_at || latestPart?.received_at || null,
+          saved_by: latestMovement?.received_by || latestPart?.received_by || '',
+          status: saved ? 'inventory_saved' : partial ? 'partial' : 'ordered',
+          receipt_parts: parts,
+          receipt_summary: summary,
+          chicken_entry: (ledger.source || ledger.daily_rate_paise) ? {
+            source: ledger.source,
+            delivered_kg: ledger.delivered_kg,
+            yielded_kg: ledger.yielded_kg,
+            purchased_kg: ledger.purchased_kg,
+            daily_rate_paise: ledger.daily_rate_paise,
+          } : null,
+        });
+        continue;
+      }
+
+      const def = universalReceiveDefForLine(line, po.vendor_name, brand, kind, po.id, idx);
+      if (!def) continue;
       const ordered = orderedAmount(line);
       const parts = genericReceiptPartsFromLine(line, def.kind);
       const summary = summariseGenericReceiptParts(parts, ordered);
@@ -779,6 +895,7 @@ async function saudaNchReceiveQueue(DB, url) {
         order_status: po.status,
         vendor_name: po.vendor_name,
         for_date: po.for_date,
+        brand,
         kind: def.kind,
         item_code: def.code,
         item_name: def.name,
@@ -786,9 +903,8 @@ async function saudaNchReceiveQueue(DB, url) {
         uom: def.uom,
         item: line.item || line.sku || line.name || def.name,
         ordered_qty: line.qty ?? line.count ?? '',
-        ordered_unit: line.unit || '',
+        ordered_unit: line.unit || def.uom || '',
         ordered_amount: ordered,
-        price_paise: linePricePaise(line),
         partial,
         inventory_saved: saved,
         saved_at: latestMovement?.received_at || latestPart?.received_at || null,
@@ -802,7 +918,7 @@ async function saudaNchReceiveQueue(DB, url) {
     }
   }
 
-  return json({ success: true, brand, date, kind, lines });
+  return json({ success: true, brand, date, kind, daily_rate_paise: dayRatePaise, lines });
 }
 
 function milkLitresFromBody(body) {
@@ -819,10 +935,10 @@ function milkLitresFromBody(body) {
   return { litres, can, grossKg, tareKg, density };
 }
 
-async function saveSaudaNchReceive(DB, body, env = {}) {
+async function saveSaudaUniversalReceive(DB, body, env = {}) {
   await ensureAnbarSchema(DB);
   const brand = (body.brand || 'NCH').toUpperCase();
-  if (brand !== 'NCH') return json({ success: false, error: 'unsupported receive brand' }, 400);
+  if (!['NCH', 'HE'].includes(brand)) return json({ success: false, error: 'unsupported receive brand' }, 400);
 
   const person = PINS[body.pin];
   if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
@@ -837,14 +953,16 @@ async function saveSaudaNchReceive(DB, body, env = {}) {
      FROM sauda_purchase WHERE id=?`
   ).bind(purchaseId).first();
   if (!po) return json({ success: false, error: 'Sauda order not found' }, 404);
-  const poBrand = (po.brand || '').toUpperCase();
-  if (poBrand && poBrand !== 'NCH' && poBrand !== 'BOTH') return json({ success: false, error: 'brand mismatch' }, 400);
 
   const items = parseJsonArray(po.items_json);
   const line = items[lineIdx];
   if (!line) return json({ success: false, error: 'Sauda line not found' }, 404);
+  if (!saudaBrandMatches(po.brand, line, brand)) return json({ success: false, error: 'brand mismatch' }, 400);
+  if (brand === 'HE' && MN_BROILERS_RE.test(po.vendor_name || '') && chickenCutForLine(line)) {
+    return json({ success: false, error: 'use MN Chicken receiving for this line' }, 400);
+  }
   const requestedKind = receiveKindParam(body.kind || 'all');
-  const def = nchReceiveDefForLine(line, po.vendor_name, requestedKind);
+  const def = universalReceiveDefForLine(line, po.vendor_name, brand, requestedKind, purchaseId, lineIdx);
   if (!def) return json({ success: false, error: 'line is not a supported Anbar receive item' }, 400);
 
   const ordered = orderedAmount(line);
@@ -874,7 +992,7 @@ async function saveSaudaNchReceive(DB, body, env = {}) {
   } else {
     qty = round2(toNum(body.received_qty ?? body.qty ?? body.count));
     if (!(qty > 0)) return json({ success: false, error: 'received quantity required' }, 400);
-    if (def.kind === 'buns' && Math.round(qty) !== qty) return json({ success: false, error: 'buns must be whole numbers' }, 400);
+    if (wholeNumberReceiptRequired(def) && Math.round(qty) !== qty) return json({ success: false, error: `${def.name} must be whole numbers` }, 400);
   }
 
   const pricePaise = linePricePaise(line);
@@ -889,8 +1007,8 @@ async function saveSaudaNchReceive(DB, body, env = {}) {
     await DB.prepare(
       `INSERT OR IGNORE INTO rm_outlet_receipts
         (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes, movement_key, evidence_key, evidence_mime)
-       VALUES ('NCH', ?, ?, ?, ?, ?, ?, ?, 'sauda', ?, ?, ?, ?)`
-    ).bind(def.loc, def.code, def.name, qty, def.uom, now, person, note, movementKey, evidence?.key || null, evidence?.mime || null).run();
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'sauda', ?, ?, ?, ?)`
+    ).bind(brand, def.loc, def.code, def.name, qty, def.uom, now, person, note, movementKey, evidence?.key || null, evidence?.mime || null).run();
     receipt = await DB.prepare(
       `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
     ).bind(movementKey).first();
@@ -904,7 +1022,14 @@ async function saveSaudaNchReceive(DB, body, env = {}) {
   }
 
   const receiptAt = receipt?.received_at || now;
-  const currentPart = {
+  const existingPart = receiptExisted ? partsBefore.find(p => Number(p.part_no) === requestedPartNo) : null;
+  const currentPart = existingPart ? {
+    ...existingPart,
+    anbar_receipt_id: existingPart.anbar_receipt_id || receipt?.id || null,
+    evidence_key: existingPart.evidence_key || receipt?.evidence_key || evidence?.key || '',
+    evidence_mime: existingPart.evidence_mime || receipt?.evidence_mime || evidence?.mime || '',
+    evidence_url: existingPart.evidence_url || (receipt?.evidence_key || evidence?.key ? `/api/anbar?action=evidence&key=${encodeURIComponent(receipt?.evidence_key || evidence?.key)}` : ''),
+  } : {
     kind: def.kind,
     slot,
     part_no: requestedPartNo,
@@ -960,11 +1085,11 @@ async function saveSaudaNchReceive(DB, body, env = {}) {
   };
 
   const receiveLineIndexes = items
-    .map((it, idx) => nchReceiveDefForLine(it, po.vendor_name, 'all') ? idx : -1)
+    .map((it, idx) => saudaBrandMatches(po.brand, it, brand) && universalReceiveDefForLine(it, po.vendor_name, brand, 'all', purchaseId, idx) ? idx : -1)
     .filter(idx => idx >= 0);
   const allReceived = receiveLineIndexes.length > 0 && receiveLineIndexes.every(idx => {
     const it = items[idx] || {};
-    const itDef = nchReceiveDefForLine(it, po.vendor_name, 'all');
+    const itDef = universalReceiveDefForLine(it, po.vendor_name, brand, 'all', purchaseId, idx);
     const itSummary = summariseGenericReceiptParts(genericReceiptPartsFromLine(it, itDef?.kind), orderedAmount(it));
     return it.receipt_status === 'inventory_saved' || it.receipt?.status === 'inventory_saved' || itSummary.complete;
   });
@@ -973,7 +1098,7 @@ async function saveSaudaNchReceive(DB, body, env = {}) {
     return {
       line_idx: idx,
       item: it.item || it.sku || '',
-      kind: nchReceiveDefForLine(it, po.vendor_name, 'all')?.kind || '',
+      kind: universalReceiveDefForLine(it, po.vendor_name, brand, 'all', purchaseId, idx)?.kind || '',
       receipt: it.receipt || null,
     };
   });
@@ -986,16 +1111,17 @@ async function saveSaudaNchReceive(DB, body, env = {}) {
          has_goods=1,
          received_at=COALESCE(received_at, ?),
          received_by=COALESCE(received_by, ?),
-         received_station=COALESCE(received_station, 'NCH-ANBAR'),
+         received_station=COALESCE(received_station, ?),
          status=CASE WHEN ?=1 AND status IN ('ORDERED','QUEUED') THEN 'RECEIVED' ELSE status END,
          updated_at=datetime('now')
      WHERE id=?`
   ).bind(
     JSON.stringify(items),
     JSON.stringify(receivedItems),
-    `Anbar NCH receipt · latest movement ${movementKey}`,
+    `Anbar ${brand} receipt · latest movement ${movementKey}`,
     receiptAt,
     receiptPayload.received_by,
+    `${brand}-ANBAR`,
     allReceived ? 1 : 0,
     purchaseId
   ).run();
@@ -1012,6 +1138,7 @@ async function saveSaudaNchReceive(DB, body, env = {}) {
     anbar_receipt_id: currentPart.anbar_receipt_id,
     at: receiptAt,
     by: currentPart.received_by,
+    brand,
     kind: def.kind,
     item_code: def.code,
     item_name: def.name,
@@ -1086,16 +1213,16 @@ export async function onRequest(context) {
     if (action === 'sauda-receive-queue') {
       const brand = (url.searchParams.get('brand') || '').toUpperCase();
       const kind = String(url.searchParams.get('kind') || '').toLowerCase();
-      if (brand === 'HE' || kind === 'chicken') return await saudaChickenQueue(DB, url);
-      return await saudaNchReceiveQueue(DB, url);
+      if (brand === 'HE' && kind === 'chicken') return await saudaChickenQueue(DB, url);
+      return await saudaUniversalReceiveQueue(DB, url);
     }
 
     if (action === 'sauda-receive' && context.request.method === 'POST') {
       const body = await context.request.json();
       const brand = (body.brand || '').toUpperCase();
       const kind = String(body.kind || '').toLowerCase();
-      if (brand === 'HE' || kind === 'chicken') return await saveSaudaChickenReceive(DB, body, context.env);
-      return await saveSaudaNchReceive(DB, body, context.env);
+      if (brand === 'HE' && kind === 'chicken') return await saveSaudaChickenReceive(DB, body, context.env);
+      return await saveSaudaUniversalReceive(DB, body, context.env);
     }
 
     if (action === 'evidence') {
