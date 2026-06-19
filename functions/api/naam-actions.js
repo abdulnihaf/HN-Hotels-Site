@@ -30,7 +30,8 @@ const ALLOW_ORIGINS = new Set([
 ]);
 function corsHeaders(request) {
   const o = request.headers.get('Origin') || '';
-  const allow = (ALLOW_ORIGINS.has(o) || /^https:\/\/[a-z0-9-]+\.(naam|hn-hotels-site)\.pages\.dev$/.test(o))
+  // naam Pages project is "naam-ec8"; hn-hotels-site previews also allowed.
+  const allow = (ALLOW_ORIGINS.has(o) || /^https:\/\/[a-z0-9-]+\.(naam-ec8|naam|hn-hotels-site)\.pages\.dev$/.test(o))
     ? o : 'https://naam.hnhotels.in';
   return {
     'Access-Control-Allow-Origin': allow,
