@@ -144,6 +144,7 @@
     .pay-acts{display:flex;gap:8px;margin-top:10px}
     .pay-acts a,.pay-acts button{flex:1;text-align:center;padding:11px;border-radius:10px;font-weight:700;font-size:13.5px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
     .pay-acts .upi{background:var(--green);color:#04130c}
+    .pay-acts .upi.bank{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-bd)}
     .pay-acts .upi.dis{background:var(--e3);color:var(--mute);pointer-events:none}
     .pay-acts .done{background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd)}
     .pay-acts .done:active{transform:scale(.97)}
@@ -411,6 +412,11 @@
     .cpyrow{display:flex;gap:8px;margin-bottom:8px}
     .cpyrow .cpy{flex:1;padding:10px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700;font-size:12.5px}
     .vpa-line{font-size:12px;color:var(--mute);text-align:center;font-variant-numeric:tabular-nums}
+    .bankbox{border:1px solid var(--line);border-radius:12px;background:var(--e2);padding:10px 11px;margin:10px 0 10px}
+    .bankline{display:grid;grid-template-columns:82px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid var(--line-soft);font-size:12.5px;line-height:1.35}
+    .bankline:last-child{border-bottom:0}
+    .bankline b{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+    .bankline span{font-variant-numeric:tabular-nums;word-break:break-word}
   </style>
 </head>
 <body>
@@ -577,6 +583,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app.js?v=43"></script>
+<script src="/ops/sauda/app.js?v=44"></script>
 </body>
 </html>

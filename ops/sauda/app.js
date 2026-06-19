@@ -292,6 +292,19 @@
   function rupees(p){ return (Math.round(+p||0)/100).toLocaleString('en-IN'); }
   function num(v){ return parseFloat(String(v==null?'':v).replace(/,/g,''))||0; }  // strips thousands-commas; "5,500" -> 5500 (not 5)
   function upiHref(vpa,vn,rs){ return vpa ? ('upi://pay?pa='+encodeURIComponent(vpa)+'&pn='+encodeURIComponent(vn)+(rs>0?'&am='+rs:'')+'&cu=INR&tn='+encodeURIComponent('Sauda')) : '#'; }
+  function parseJsonAttr(s){ try{ var o=JSON.parse(s||'{}'); return o&&typeof o==='object'?o:{}; }catch(e){ return {}; } }
+  function bankObj(v){ return (v&&v.bank&&typeof v.bank==='object') ? v.bank : {}; }
+  function validBankObj(b){ return !!(b&&b.account_number&&b.ifsc&&(b.account_name||b.name)); }
+  function bankLast4(b){ return b&&b.account_number ? String(b.account_number).slice(-4) : (b&&b.account_last4||''); }
+  function bankSummary(b){
+    if(!b) return '';
+    var last=bankLast4(b);
+    if(validBankObj(b)) return [(b.bank||'Bank'), last?('a/c '+last):'', b.ifsc].filter(Boolean).join(' · ');
+    if(last) return [(b.bank||'Bank'), 'a/c '+last].filter(Boolean).join(' · ');
+    return '';
+  }
+  function paymentRail(v){ return v&&v.vpa ? 'upi' : (validBankObj(bankObj(v)) ? 'bank' : 'manual'); }
+  function payMethodForRail(rail){ return rail==='bank' ? 'bank_transfer' : (rail==='upi' ? 'upi' : 'manual_bank'); }
 
   function loadPay(){
     var list=document.getElementById('payList'), empty=document.getElementById('payEmpty');
@@ -302,36 +315,43 @@
       var html='';
       orders.forEach(function(o){
         var items=[]; try{ items=JSON.parse(o.items_json||'[]'); }catch(e){}
+        var rail=o.payRail || paymentRail(o), bank=bankObj(o), bankText=bankSummary(bank);
         var itemsTxt=items.map(function(i){ return esc(i.item)+(i.qty?(' '+esc(i.qty)+(i.unit?' '+esc(i.unit):'')):''); }).join(' · ');
         var amt=o.pay_amount_paise?String(o.pay_amount_paise/100):'';
         var ids=(o.ids||[]).join(',');
         var multi=(o.order_count>1)?'<span class="tag p">'+items.length+' items · '+o.order_count+' orders</span>':'<span class="tag p">'+items.length+' item'+(items.length>1?'s':'')+'</span>';
         var vendorNote=o.cat?'<div class="skuhint" style="margin-bottom:8px">'+esc(o.cat)+'</div>':'';
-        var manualHint=!o.vpa?'<div class="skuhint" style="margin-bottom:9px;color:var(--amber)">No UPI saved. Pay manually from invoice / bank / Porter, then record it here. Sauda will keep one payable trail.</div>':'';
+        var manualHint=rail==='bank'
+          ? '<div class="skuhint" style="margin-bottom:9px;color:var(--amber)">Bank transfer saved: '+esc(bankText||'account details')+'. Pay manually, then record it here.</div>'
+          : (!o.vpa?'<div class="skuhint" style="margin-bottom:9px;color:var(--amber)">No UPI saved. Pay manually from invoice / bank / Porter, then record it here. Sauda will keep one payable trail.</div>':'');
+        var bankAttr=esc(JSON.stringify(bank||{}));
+        var payLabel=o.vpa?'Pay':(rail==='bank'?'Bank details':'No rail saved');
+        var payClass=o.vpa?'upi':(rail==='bank'?'upi bank':'upi dis');
         html+='<div class="basket"><div class="bh"><span class="bn">'+esc(o.vendor_name)+'</span>'+
           '<span class="tag f">'+esc(o.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(o.payLabel||'')+'</span>'+multi+'</div>'+
           '<div class="pb">'+vendorNote+manualHint+'<div class="its">'+(itemsTxt||'—')+'</div>'+
           (o.pay==='khata_roll'?'<div class="khata" style="margin:0 0 9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Khata — clear the outstanding balance, not just this order.</span></div>':'')+
           '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" data-amt value="'+esc(amt)+'" placeholder="one payment for all items"></div>'+
           '<div class="pay-acts">'+
-            '<button class="upi'+(o.vpa?'':' dis')+'" data-pay="'+esc(o.vpa)+'" data-vn="'+esc(o.vendor_name)+'">'+(o.vpa?'Pay':'No UPI saved')+'</button>'+
-            '<button class="done" data-ids="'+ids+'">'+(o.vpa?'Mark paid':'Record paid')+'</button>'+
+            '<button class="'+payClass+'" data-pay="'+esc(o.vpa||'')+'" data-rail="'+esc(rail)+'" data-bank="'+bankAttr+'" data-vn="'+esc(o.vendor_name)+'">'+payLabel+'</button>'+
+            '<button class="done" data-ids="'+ids+'" data-rail="'+esc(rail)+'">'+(o.vpa?'Mark paid':'Record paid')+'</button>'+
           '</div></div></div>';
       });
       list.innerHTML=html;
       function idsOf(el){ return (el.closest('.pb').querySelector('button[data-ids]').dataset.ids||'').split(',').map(Number).filter(Boolean); }
       list.querySelectorAll('button[data-pay]').forEach(function(b){
         b.addEventListener('click', function(){
-          if(!b.dataset.pay) return;  // no UPI on file → manual pay
+          if(!b.dataset.pay && b.dataset.rail!=='bank') return;
           var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
           if(rs<=0){ toast('Enter the amount first','err'); return; }
-          openPaySheet(b.dataset.pay, b.dataset.vn, rs, idsOf(b));
+          if(b.dataset.pay) openPaySheet(b.dataset.pay, b.dataset.vn, rs, idsOf(b));
+          else openManualPaySheet(b.dataset.vn, rs, idsOf(b), 'Transfer to the saved bank account, then record it here.', parseJsonAttr(b.dataset.bank));
         });
       });
       list.querySelectorAll('button[data-ids]').forEach(function(b){
         b.addEventListener('click', function(){
           var ids=idsOf(b); var pb=b.closest('.pb'); var rs=num(pb.querySelector('input[data-amt]').value);
-          var payBtn=pb.querySelector('button[data-pay]'); var method=(payBtn&&payBtn.dataset.pay)?'upi':'manual_bank';
+          var payBtn=pb.querySelector('button[data-pay]'); var method=payMethodForRail((payBtn&&payBtn.dataset.rail)||b.dataset.rail||'manual');
           if(busy||!ids.length) return; busy=true;
           api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:method}})
              .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast(r.j.reconciled?'✓ Bank-confirmed paid':'Marked paid · bank not seen yet','ok'); loadPay(); } else toast('Failed','err'); })
@@ -398,20 +418,34 @@
         .catch(function(){ busy=false; toast('No connection','err'); });
     });
   }
-  function openManualPaySheet(vn, rs, ids, note){
+  function openManualPaySheet(vn, rs, ids, note, bank){
     var big='₹'+rupees(Math.round(rs*100));
+    bank=bank||{};
+    var bankHtml='';
+    if(validBankObj(bank)){
+      bankHtml='<div class="bankbox">'+
+        '<div class="bankline"><b>Name</b><span>'+esc(bank.account_name||vn)+'</span></div>'+
+        '<div class="bankline"><b>Account</b><span>'+esc(bank.account_number)+'</span></div>'+
+        '<div class="bankline"><b>IFSC</b><span>'+esc(bank.ifsc)+'</span></div>'+
+        (bank.branch?'<div class="bankline"><b>Branch</b><span>'+esc(bank.branch)+'</span></div>':'')+
+        (bank.qr_ref?'<div class="bankline"><b>QR / ref</b><span>'+esc(bank.qr_ref)+'</span></div>':'')+
+      '</div>';
+    }
     var host=document.getElementById('sheetHost');
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Record '+esc(vn)+'</h2>'+
       '<div class="paybig">'+big+'</div>'+
       '<div class="skuhint">'+esc(note||'Pay manually from the invoice, bank beneficiary, cash, or Porter app. Then tap record paid here. Reopening this same payment will not create a duplicate bill.').replace(/\n/g,'<br>')+'</div>'+
-      '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(String(Math.round(rs)))+'">Copy ₹'+rupees(Math.round(rs*100))+'</button></div>'+
+      bankHtml+
+      '<div class="cpyrow"><button class="cpy" data-cpy="'+esc(String(Math.round(rs)))+'">Copy ₹'+rupees(Math.round(rs*100))+'</button>'+
+      (validBankObj(bank)?'<button class="cpy" data-cpy="'+esc(bank.account_number)+'">Copy account</button>':'')+'</div>'+
+      (validBankObj(bank)?'<div class="cpyrow"><button class="cpy" data-cpy="'+esc(bank.ifsc)+'">Copy IFSC</button><button class="cpy" data-cpy="'+esc(bank.account_name||vn)+'">Copy name</button></div>':'')+
       '<button class="btn primary" id="paidBtn" style="width:100%;margin-top:14px">Payment done — record paid</button>'+
       '</div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
     host.querySelectorAll('button[data-cpy]').forEach(function(b){ b.addEventListener('click',function(){ try{ navigator.clipboard.writeText(b.dataset.cpy); toast('Copied','ok'); }catch(e){ toast('Copy failed','err'); } }); });
     document.getElementById('paidBtn').addEventListener('click',function(){
       if(busy) return; busy=true;
-      api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:'manual_bank'}})
+      api('mark-paid',{method:'POST',body:{ids:ids, amount_paise:Math.round(rs*100), method:validBankObj(bank)?'bank_transfer':'manual_bank'}})
         .then(function(r){ busy=false; if(r&&r.ok&&r.j&&r.j.ok){ toast('Payment recorded','ok'); host.innerHTML=''; loadPay(); } else toast('Failed','err'); })
         .catch(function(){ busy=false; toast('No connection','err'); });
     });
@@ -422,15 +456,17 @@
   //    RazorpayX is live + funded, flip PAYOUT_LIVE → true and Sauda pushes the money itself
   //    via the payout API. SAME button, no rebuild. ──
   var PAYOUT_LIVE = false;
-  function openDirectPay(vk, name, vpa){
-    if(PAYOUT_LIVE){ openDirectPayout(vk, name, vpa); return; }
+  function openDirectPay(vk, name, vpa, bank){
+    bank=bank||{};
+    if(PAYOUT_LIVE){ openDirectPayout(vk, name, vpa, bank); return; }
+    var railLine=vpa?esc(vpa):(validBankObj(bank)?esc(bankSummary(bank)):'No UPI/bank saved · manual record only');
     var host=document.getElementById('sheetHost');
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(name)+'</h2>'+
-      '<div class="skuhint">Enter the amount and invoice/reference. If UPI is saved, Sauda opens the pay sheet; otherwise it records a manual bank/cash payment trail.</div>'+
+      '<div class="skuhint">Enter the amount and invoice/reference. Sauda records one payment request first, then opens the correct payment rail.</div>'+
       '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" id="dpAmt" placeholder="amount"></div>'+
       '<div class="fld" style="margin-top:11px"><label>Invoice / reference</label><input id="dpRef" placeholder="e.g. T-431"></div>'+
       '<div class="fld"><label>Payment reason</label><input id="dpNote" placeholder="e.g. Tea powder invoice"></div>'+
-      '<div class="vpa-line" style="margin:8px 0 0">'+(vpa?esc(vpa):'No UPI saved · manual bank / cash record')+'</div>'+
+      '<div class="vpa-line" style="margin:8px 0 0">'+railLine+'</div>'+
       '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Continue to pay</button>'+
       '</div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
@@ -448,17 +484,19 @@
         if(r.j.duplicate) toast('Already recorded — opening existing payment','ok');
         host.innerHTML='';
         if(vpa) openPaySheet(vpa, name, rs, [r.j.id]);
-        else openManualPaySheet(name, rs, [r.j.id], 'Pay manually, then record it here. Ref: '+(ref||note));
+        else openManualPaySheet(name, rs, [r.j.id], 'Pay manually, then record it here. Ref: '+(ref||note), (r.j&&r.j.bank)||bank);
       }).catch(function(){ busy=false; btn.disabled=false; btn.textContent='Continue to pay'; toast('No connection','err'); });
     });
   }
   // RazorpayX automated payout — used once PAYOUT_LIVE is flipped on (account live + funded).
-  function openDirectPayout(vk, name, vpa){
+  function openDirectPayout(vk, name, vpa, bank){
+    bank=bank||{};
+    var railLine=vpa?esc(vpa):(validBankObj(bank)?esc(bankSummary(bank)):'No payment rail saved');
     var host=document.getElementById('sheetHost');
     host.innerHTML='<div class="ov" id="ov"><div class="sheet"><h2>Pay '+esc(name)+'</h2>'+
       '<div class="skuhint">Sauda sends the money <b>straight to the vendor</b> via RazorpayX — no UPI app. A payout reference comes back instantly.</div>'+
       '<div class="pay-row"><span class="rupee">₹</span><input inputmode="decimal" id="dpAmt" placeholder="amount"></div>'+
-      (vpa?'<div class="vpa-line" style="margin:8px 0 0">'+esc(vpa)+'</div>':'')+
+      '<div class="vpa-line" style="margin:8px 0 0">'+railLine+'</div>'+
       '<button class="btn primary" id="dpGo" style="width:100%;margin-top:14px">Pay '+esc(name)+'</button>'+
       '</div></div>';
     document.getElementById('ov').addEventListener('click',function(e){ if(e.target.id==='ov') host.innerHTML=''; });
@@ -925,6 +963,7 @@
       var vs=res.j.vendors||[];
       if(!vs.length){ list.innerHTML=''; empty.classList.remove('hide'); return; }
       list.innerHTML=vs.map(function(v,vi){
+        var rail=v.payRail || paymentRail(v), bank=bankObj(v), bankText=bankSummary(bank);
         var trail=(v.trail||[]).map(function(t){
           var when = t.paid_at?('paid '+fmtTs(t.paid_at)+(t.method?' · '+esc(t.method):'')+(t.reconciled?' · ✓ bank':'')) : (t.pay_requested_at?('asked '+fmtTs(t.pay_requested_at)) : ('placed '+fmtTs(t.ordered_at)));
           var stcls = t.status==='PAID'?'ok':(t.status==='REQUESTED'?'amber':'dim');
@@ -938,17 +977,19 @@
         var meta = v.order_count>0
           ? '<span>'+v.order_count+' order'+(v.order_count!==1?'s':'')+'</span><span>paid ₹'+rupees(v.paid_paise)+'</span>'+(v.last_paid_at?'<span>last '+esc(fmtTs(v.last_paid_at))+'</span>':'')
           : '<span>'+esc(v.cat||'no orders in 30 days')+'</span>';
+        var railText=v.vpa?esc(v.vpa):(bankText?esc(bankText):'manual only'+(v.cat?' · '+esc(v.cat):''));
+        var buttonText=v.vpa?'Pay now':(rail==='bank'?'Record bank payment':'Record payment');
         return '<div class="ven"><div class="vhd" data-vi="'+vi+'">'+
           '<div class="vleft"><span class="bn">'+esc(v.vendor_name)+'</span>'+
             '<span class="tag f">'+esc(v.fulfilmentLabel||'')+'</span><span class="tag p">'+esc(v.payLabel||'')+'</span></div>'+
           '<div class="vright">'+right+'</div></div>'+
-          '<div class="vpay"><span class="vid">'+(v.vpa?esc(v.vpa):'manual/bank only'+(v.cat?' · '+esc(v.cat):''))+'</span>'+
-            '<button class="paynow'+(v.vpa?'':' manual')+'" data-vk="'+esc(v.vendorKey)+'" data-vn="'+esc(v.vendor_name)+'" data-vpa="'+esc(v.vpa||'')+'">'+(v.vpa?'Pay now':'Record payment')+'</button></div>'+
+          '<div class="vpay"><span class="vid">'+railText+'</span>'+
+            '<button class="paynow'+(v.vpa?'':' manual')+'" data-vk="'+esc(v.vendorKey)+'" data-vn="'+esc(v.vendor_name)+'" data-vpa="'+esc(v.vpa||'')+'" data-bank="'+esc(JSON.stringify(bank||{}))+'">'+buttonText+'</button></div>'+
           '<div class="vmeta">'+meta+'</div>'+
           '<div class="vtrail hide" id="vt'+vi+'">'+(trail||'<div style="padding:8px;color:var(--mute)">No orders in the last 30 days.</div>')+'</div></div>';
       }).join('');
       list.querySelectorAll('.vhd[data-vi]').forEach(function(h){ h.addEventListener('click',function(){ var el=document.getElementById('vt'+h.dataset.vi); if(el) el.classList.toggle('hide'); }); });
-      list.querySelectorAll('.paynow').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openDirectPay(b.dataset.vk, b.dataset.vn, b.dataset.vpa); }); });
+      list.querySelectorAll('.paynow').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openDirectPay(b.dataset.vk, b.dataset.vn, b.dataset.vpa, parseJsonAttr(b.dataset.bank)); }); });
     }).catch(function(){ list.innerHTML=''; toast('No connection','err'); });
   }
 
@@ -1031,7 +1072,7 @@
     list.querySelectorAll('input[data-sbr]').forEach(function(p){ p.addEventListener('change',function(){ saveItem(p.dataset.sbr,{brand:p.value}); }); });
     list.querySelectorAll('input[data-spk]').forEach(function(p){ p.addEventListener('change',function(){ saveItem(p.dataset.spk,{pack_label:p.value}); }); });
   }
-  function vendorMissing(v){ var m=[]; if(!v.phone)m.push('phone'); if(!(v.vpas&&v.vpas.length))m.push('UPI'); return m; }
+  function vendorMissing(v){ var m=[]; if(!v.phone)m.push('phone'); if(!(v.vpas&&v.vpas.length) && !validBankObj(bankObj(v)))m.push('payment rail'); return m; }
   function renderSetVendors(list){
     var q=SET.q;
     var ce=document.getElementById('setChips'); if(ce) ce.classList.add('hide');
@@ -1044,17 +1085,25 @@
     });
     var rows=SET.vendors.filter(function(v){ if(SET.chip==='attn' && !vendorMissing(v).length) return false; return !q || (v.name+' '+(v.aliases||[]).join(' ')).toLowerCase().indexOf(q)>=0; });
     function opts(arr,sel,lab){ return arr.map(function(x){return '<option value="'+esc(x)+'"'+(x===sel?' selected':'')+'>'+esc(lab?lab(x):x)+'</option>';}).join(''); }
-    list.innerHTML='<div class="setcount">'+rows.length+' vendors · <b style="color:var(--amber)">'+inc.length+' to fill</b> · phone + UPI mandatory</div>'+
+    list.innerHTML='<div class="setcount">'+rows.length+' vendors · <b style="color:var(--amber)">'+inc.length+' to fill</b> · phone + UPI or bank rail required</div>'+
       '<button class="setadd" onclick="openAddVendor()">+ add vendor</button>'+rows.map(function(v){
       var vpa=(v.vpas&&v.vpas[0])||''; var miss=vendorMissing(v); var nc=miss.length?' need':'';
+      var bank=bankObj(v), rail=vpa?'UPI':(validBankObj(bank)?'bank':'no rail');
       var cnt=itemCount[v.vendor_key]||0, iss=itemIssues[v.vendor_key]||0;
-      var meta=(miss.length?'<span style="color:var(--amber)">⚠ add '+miss.join(' / ')+'</span>':esc(v.vendor_key)+' · '+(v.vpas?v.vpas.length:0)+' UPI')+
+      var meta=(miss.length?'<span style="color:var(--amber)">⚠ add '+miss.join(' / ')+'</span>':esc(v.vendor_key)+' · '+esc(rail))+
         ' · '+cnt+' item'+(cnt===1?'':'s')+(iss?' · <span style="color:var(--amber)">'+iss+' item issue'+(iss===1?'':'s')+'</span>':'');
       return '<div class="srow col'+nc+'" data-vrow="'+esc(v.vendor_key)+'"><div class="top"><div class="sl"><b>'+esc(v.name)+'</b><small>'+meta+'</small></div></div>'+
         '<div class="vendor-edit">'+
           '<input data-vph="'+esc(v.vendor_key)+'" inputmode="tel" value="'+esc(v.phone||'')+'" placeholder="phone required">'+
-          '<input data-vpa="'+esc(v.vendor_key)+'" value="'+esc(vpa)+'" placeholder="UPI ID required">'+
+          '<input data-vpa="'+esc(v.vendor_key)+'" value="'+esc(vpa)+'" placeholder="UPI ID">'+
           '<input class="wide" data-vcat="'+esc(v.vendor_key)+'" value="'+esc(v.cat||'')+'" placeholder="supplies e.g. tissues / packaging">'+
+          '<input class="wide" data-vban="'+esc(v.vendor_key)+'" value="'+esc(bank.account_name||'')+'" placeholder="bank account name">'+
+          '<input data-vbac="'+esc(v.vendor_key)+'" inputmode="numeric" value="'+esc(bank.account_number||'')+'" placeholder="bank account number">'+
+          '<input data-vbif="'+esc(v.vendor_key)+'" value="'+esc(bank.ifsc||'')+'" placeholder="IFSC">'+
+          '<input data-vbbank="'+esc(v.vendor_key)+'" value="'+esc(bank.bank||'')+'" placeholder="bank name">'+
+          '<input data-vbbr="'+esc(v.vendor_key)+'" value="'+esc(bank.branch||'')+'" placeholder="branch">'+
+          '<input data-vbqr="'+esc(v.vendor_key)+'" value="'+esc(bank.qr_ref||'')+'" placeholder="QR / reference">'+
+          '<input data-vodoo="'+esc(v.vendor_key)+'" inputmode="numeric" value="'+esc(v.odoo_partner_id||'')+'" placeholder="Odoo vendor id">'+
           '<select data-vbrand="'+esc(v.vendor_key)+'">'+opts(SET_BRANDS,v.brand||'both')+'</select>'+
           '<select data-vf="'+esc(v.vendor_key)+'">'+opts(SET_FUL,v.fulfilment||'deliver')+'</select>'+
           '<select data-vpy="'+esc(v.vendor_key)+'">'+opts(SET_PAY,v.pay||'per',function(p){return p.replace('khata_','khata ');})+'</select>'+
@@ -1072,21 +1121,31 @@
   function validPhoneText(x){ return String(x||'').replace(/\D/g,'').length>=10; }
   function validVpaText(x){ return /@/.test(String(x||'')); }
   function saveVendorFromRow(key){
+    var bank={
+      account_name:fieldVal('[data-vban="'+key+'"]'),
+      account_number:fieldVal('[data-vbac="'+key+'"]').replace(/\s+/g,''),
+      ifsc:fieldVal('[data-vbif="'+key+'"]').toUpperCase().replace(/\s+/g,''),
+      bank:fieldVal('[data-vbbank="'+key+'"]'),
+      branch:fieldVal('[data-vbbr="'+key+'"]'),
+      qr_ref:fieldVal('[data-vbqr="'+key+'"]')
+    };
     var fields={
       phone:fieldVal('[data-vph="'+key+'"]'),
       vpas:[fieldVal('[data-vpa="'+key+'"]')].filter(Boolean),
+      bank:bank,
+      odoo_partner_id:fieldVal('[data-vodoo="'+key+'"]'),
       cat:fieldVal('[data-vcat="'+key+'"]'),
       brand:fieldVal('[data-vbrand="'+key+'"]')||'both',
       fulfilment:fieldVal('[data-vf="'+key+'"]')||'deliver',
       pay:fieldVal('[data-vpy="'+key+'"]')||'per'
     };
-    if(!validPhoneText(fields.phone)){ toast('phone required','err'); return; }
-    if(!fields.vpas.length||!validVpaText(fields.vpas[0])){ toast('UPI ID required','err'); return; }
+    if(!validPhoneText(fields.phone) && !validBankObj(bank)){ toast('phone required unless bank transfer vendor','err'); return; }
+    if((!fields.vpas.length||!validVpaText(fields.vpas[0])) && !validBankObj(bank)){ toast('UPI or bank account required','err'); return; }
     saveVendor(key,fields,true);
   }
   function saveVendor(key,fields,reload){
     var v=SET.vendors.find(function(x){return x.vendor_key===key;});
-    if(v){ if('phone' in fields)v.phone=fields.phone; if('vpas' in fields)v.vpas=fields.vpas; if('fulfilment' in fields)v.fulfilment=fields.fulfilment; if('pay' in fields)v.pay=fields.pay; if('cat' in fields)v.cat=fields.cat; if('brand' in fields)v.brand=fields.brand; }
+    if(v){ if('phone' in fields)v.phone=fields.phone; if('vpas' in fields)v.vpas=fields.vpas; if('bank' in fields)v.bank=fields.bank; if('odoo_partner_id' in fields)v.odoo_partner_id=fields.odoo_partner_id; if('fulfilment' in fields)v.fulfilment=fields.fulfilment; if('pay' in fields)v.pay=fields.pay; if('cat' in fields)v.cat=fields.cat; if('brand' in fields)v.brand=fields.brand; }
     api('settings-vendor',{method:'POST',body:Object.assign({vendor_key:key},fields)}).then(function(r){ var ok=r&&r.j&&r.j.ok; toast(ok?'saved ✓':((r&&r.j&&r.j.error)||'save failed'),ok?'ok':'err'); if(ok&&reload) loadSettings(); });
   }
   function simpleOpts(arr,sel,lab){ return arr.map(function(x){return '<option value="'+esc(x)+'"'+(x===sel?' selected':'')+'>'+esc(lab?lab(x):x)+'</option>';}).join(''); }
@@ -1152,6 +1211,13 @@
     function vendorFor(k){ return SET.vendors.find(function(x){return x.vendor_key===k;}) || null; }
     function vendorName(k){ if(!k) return 'UNASSIGNED'; var v=vendorFor(k); return v?v.name:k; }
     function firstVpa(v){ return (v&&v.vpas&&v.vpas[0]) ? v.vpas[0] : ''; }
+    function paymentSummary(v){
+      if(!v) return 'MISSING';
+      if(firstVpa(v)) return 'UPI: '+firstVpa(v);
+      var b=bankObj(v);
+      if(validBankObj(b)) return 'Bank: '+(b.bank||'Bank')+' / a/c '+bankLast4(b)+' / '+b.ifsc;
+      return 'MISSING';
+    }
     function payLabel(p){ return String(p||'per').replace('khata_','khata '); }
     function statusOf(i){ var m=itemMissing(i); if(i.flagged) m.unshift('confirm'); if(i.price_mode==='live') m=m.filter(function(x){return x!=='price';}); return m.length?m.join(', '):(i.price_mode==='live'?'daily rate':'ready'); }
     function priceOf(i){
@@ -1192,7 +1258,7 @@
     keys.forEach(function(k){
       var v=vendorFor(k), vm=v?vendorMissing(v):['vendor'];
       var vmeta=v
-        ? '<b>Phone:</b> '+esc(v.phone||'MISSING')+' &nbsp; <b>UPI:</b> '+esc(firstVpa(v)||'MISSING')+' &nbsp; <b>Supplies:</b> '+esc(v.cat||'')+' &nbsp; <b>Pay:</b> '+esc(payLabel(v.pay))+' &nbsp; <b>Fulfilment:</b> '+esc(v.fulfilment||'')
+        ? '<b>Phone:</b> '+esc(v.phone||'MISSING')+' &nbsp; <b>Payment:</b> '+esc(paymentSummary(v))+' &nbsp; <b>Supplies:</b> '+esc(v.cat||'')+' &nbsp; <b>Pay:</b> '+esc(payLabel(v.pay))+' &nbsp; <b>Fulfilment:</b> '+esc(v.fulfilment||'')
         : 'Items below do not have a vendor mapped yet.';
       body+='<section><h2>'+esc(vendorName(k))+' <span class="n">'+by[k].length+' item'+(by[k].length===1?'':'s')+'</span></h2>'+
         '<div class="vmeta '+((v&&vm.length)||!v?'warn':'')+'">'+vmeta+'</div>'+

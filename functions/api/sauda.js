@@ -638,6 +638,7 @@ async function notifyOnPlace(env, created, forDate) {
 // these yet (the consumers get wired in later slices). One source, not four.
 // ═══════════════════════════════════════════════════════════════════════════
 const VENDOR_PHONES = { prabhu:'9886806395', ganga:'7019547835', nisarcha:'8971457998', samosa:'9746581122', osmania:'9482965179', gas:'8553568718', jayjay:'9976688833' };
+const VENDOR_ODOO_PARTNERS = { afeefa: 11 };
 // obvious default vendor per item (editable in Settings; '' = decide later)
 const DEFAULT_VENDOR = {
   sugar:'ashrafiya', atta:'ashrafiya', maida:'ashrafiya', honey:'ashrafiya', chilli_powder:'ashrafiya',
@@ -804,6 +805,8 @@ async function ensureSettingsTables(db) {
     db.prepare(`CREATE TABLE IF NOT EXISTS sauda_item_alias (alias TEXT PRIMARY KEY, item_code TEXT, created_at TEXT DEFAULT '')`),
     db.prepare(`CREATE TABLE IF NOT EXISTS sauda_vendor (vendor_key TEXT PRIMARY KEY, name TEXT, brand TEXT DEFAULT 'both',
       fulfilment TEXT DEFAULT 'deliver', pay TEXT DEFAULT 'per', phone TEXT DEFAULT '', vpa_json TEXT DEFAULT '[]',
+      bank_json TEXT DEFAULT '{}', odoo_partner_id INTEGER, rzp_contact_id TEXT DEFAULT '',
+      rzp_fund_account_id TEXT DEFAULT '', rzp_fund_account_mode TEXT DEFAULT '',
       aliases_json TEXT DEFAULT '[]', cat TEXT DEFAULT '', flagged INTEGER DEFAULT 0, active INTEGER DEFAULT 1,
       updated_by TEXT DEFAULT '', updated_at TEXT DEFAULT '')`),
   ]);
@@ -812,6 +815,11 @@ async function ensureSettingsTables(db) {
   let added = false;
   try { await db.prepare("ALTER TABLE sauda_item ADD COLUMN form TEXT DEFAULT 'loose'").run(); added = true; } catch (e) {}
   try { await db.prepare("ALTER TABLE sauda_item ADD COLUMN brand TEXT DEFAULT ''").run(); } catch (e) {}
+  try { await db.prepare("ALTER TABLE sauda_vendor ADD COLUMN bank_json TEXT DEFAULT '{}'").run(); } catch (e) {}
+  try { await db.prepare("ALTER TABLE sauda_vendor ADD COLUMN odoo_partner_id INTEGER").run(); } catch (e) {}
+  try { await db.prepare("ALTER TABLE sauda_vendor ADD COLUMN rzp_contact_id TEXT DEFAULT ''").run(); } catch (e) {}
+  try { await db.prepare("ALTER TABLE sauda_vendor ADD COLUMN rzp_fund_account_id TEXT DEFAULT ''").run(); } catch (e) {}
+  try { await db.prepare("ALTER TABLE sauda_vendor ADD COLUMN rzp_fund_account_mode TEXT DEFAULT ''").run(); } catch (e) {}
   if (added) {
     const keys = HP_CATALOG.map((c) => c.key);
     try { await db.prepare(`UPDATE sauda_item SET form='defined' WHERE item_code IN (${keys.map(() => '?').join(',')})`).bind(...keys).run(); } catch (e) {}
@@ -835,6 +843,10 @@ async function seedSettings(db) {
     stmts.push(db.prepare(`INSERT OR IGNORE INTO sauda_item_alias (alias,item_code,created_at) VALUES (?,?,?)`).bind(String(a).toLowerCase(), code, now));
   }
   for (let i = 0; i < stmts.length; i += 20) await db.batch(stmts.slice(i, i + 20));
+  for (const [vendorKey, partnerId] of Object.entries(VENDOR_ODOO_PARTNERS)) {
+    await db.prepare(`UPDATE sauda_vendor SET odoo_partner_id=COALESCE(odoo_partner_id, ?) WHERE vendor_key=?`)
+      .bind(partnerId, vendorKey).run().catch(() => {});
+  }
   await upsertChickenItems(db, now);
   await upsertLocalVendorItems(db, now);
   return { seeded, vendors: Object.keys(VENDORS).length, items: HP_CATALOG.length + MN_BROILERS_CHICKEN.length + LOCAL_VENDOR_ITEMS.length };
@@ -854,6 +866,29 @@ const PAY_LABEL = {
 };
 function jsonArray(s) {
   try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a.map((x) => String(x).trim()).filter(Boolean) : []; } catch (e) { return []; }
+}
+function jsonObject(s) {
+  try { const o = typeof s === 'string' ? JSON.parse(s || '{}') : (s || {}); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; }
+}
+function cleanBankDetails(raw, prev) {
+  const src = jsonObject(raw);
+  const old = jsonObject(prev);
+  const val = (k, fallback) => String(src[k] != null ? src[k] : (fallback != null ? fallback : '')).trim();
+  const accountNumber = val('account_number', '');
+  const bank = {
+    account_name: val('account_name', val('name', '')),
+    account_number: accountNumber.replace(/\s+/g, ''),
+    ifsc: val('ifsc', '').toUpperCase().replace(/\s+/g, ''),
+    bank: val('bank', ''),
+    branch: val('branch', ''),
+    qr_ref: val('qr_ref', ''),
+    source: val('source', ''),
+  };
+  if (!bank.account_number && val('account_last4', '')) bank.account_last4 = val('account_last4', '');
+  else if (bank.account_number) bank.account_last4 = bank.account_number.slice(-4);
+  if (!bank.bank && old.bank && !('bank' in src)) bank.bank = old.bank;
+  Object.keys(bank).forEach((k) => { if (!bank[k]) delete bank[k]; });
+  return bank;
 }
 function vendorKeyBase(s) {
   const slug = String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 42);
@@ -875,12 +910,31 @@ function validPhone(phone) {
 function validVpaList(vpas) {
   return Array.isArray(vpas) && vpas.some((x) => /@/.test(String(x || '')));
 }
+function validBankDetails(bank) {
+  const b = jsonObject(bank);
+  return !!(String(b.account_number || '').trim() && String(b.ifsc || '').trim() && String(b.account_name || '').trim());
+}
+function hasPaymentRail(v) {
+  return !!((v && v.vpa) || validBankDetails(v && v.bank));
+}
+function bankLabel(bank) {
+  const b = jsonObject(bank);
+  if (!Object.keys(b).length) return '';
+  const last4 = b.account_last4 || (b.account_number ? String(b.account_number).slice(-4) : '');
+  return [b.bank || 'Bank', last4 ? ('a/c ' + last4) : '', b.ifsc || ''].filter(Boolean).join(' · ');
+}
+function payRail(v) {
+  if (v && v.vpa) return 'upi';
+  if (validBankDetails(v && v.bank)) return 'bank';
+  return 'manual';
+}
 function vendorFromRow(r) {
   const vpas = jsonArray(r.vpa_json);
   const aliases = jsonArray(r.aliases_json);
+  const bank = cleanBankDetails(r.bank_json || '{}');
   const fulfilment = r.fulfilment || 'deliver';
   const pay = r.pay || 'per';
-  return {
+  const v = {
     key: r.vendor_key,
     name: r.name || r.vendor_key,
     brand: r.brand || 'both',
@@ -889,17 +943,22 @@ function vendorFromRow(r) {
     phone: r.phone || '',
     vpas,
     vpa: vpas[0] || '',
+    bank,
+    bankLabel: bankLabel(bank),
+    odoo_partner_id: r.odoo_partner_id || null,
     aliases,
     cat: r.cat || '',
     flagged: r.flagged ? 1 : 0,
     fulfilmentLabel: FULFILMENT_LABEL[fulfilment] || fulfilment,
     payLabel: PAY_LABEL[pay] || pay,
   };
+  v.payRail = payRail(v);
+  return v;
 }
 async function getVendorDirectory(db) {
   await ensureSettingsTables(db);
   await seedSettings(db);
-  const rows = ((await db.prepare(`SELECT vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged FROM sauda_vendor WHERE active=1 ORDER BY name`).all()).results) || [];
+  const rows = ((await db.prepare(`SELECT vendor_key,name,brand,fulfilment,pay,phone,vpa_json,bank_json,odoo_partner_id,aliases_json,cat,flagged FROM sauda_vendor WHERE active=1 ORDER BY name`).all()).results) || [];
   const byKey = { unassigned: vendorView('unassigned') };
   const byAlias = {};
   for (const r of rows) {
@@ -925,12 +984,18 @@ async function getSettings(db) {
   await ensureSettingsTables(db);
   const seed = await seedSettings(db);
   const items = ((await db.prepare(`SELECT item_code,label,unit,pack_label,pack_qty,price_paise,price_mode,form,brand,default_vendor,category,flagged,note FROM sauda_item WHERE active=1 ORDER BY label`).all()).results) || [];
-  const vendors = ((await db.prepare(`SELECT vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged FROM sauda_vendor WHERE active=1 ORDER BY name`).all()).results) || [];
+  const vendors = ((await db.prepare(`SELECT vendor_key,name,brand,fulfilment,pay,phone,vpa_json,bank_json,odoo_partner_id,aliases_json,cat,flagged FROM sauda_vendor WHERE active=1 ORDER BY name`).all()).results) || [];
   const aliasRows = ((await db.prepare(`SELECT alias,item_code FROM sauda_item_alias`).all()).results) || [];
   const aliasByItem = {};
   for (const r of aliasRows) (aliasByItem[r.item_code] = aliasByItem[r.item_code] || []).push(r.alias);
   for (const it of items) it.aliases = aliasByItem[it.item_code] || [];
-  for (const v of vendors) { v.vpas = jsonArray(v.vpa_json); v.aliases = jsonArray(v.aliases_json); }
+  for (const v of vendors) {
+    v.vpas = jsonArray(v.vpa_json);
+    v.aliases = jsonArray(v.aliases_json);
+    v.bank = cleanBankDetails(v.bank_json || '{}');
+    v.bankLabel = bankLabel(v.bank);
+    v.payRail = v.vpas[0] ? 'upi' : (validBankDetails(v.bank) ? 'bank' : 'manual');
+  }
   return { ok: true, seeded: seed.seeded, counts: { items: items.length, vendors: vendors.length, aliases: aliasRows.length }, items, vendors };
 }
 
@@ -1016,36 +1081,42 @@ async function settingsVendor(db, body, auth) {
   const by = (auth && auth.u) || '';
   let key = String((body && body.vendor_key) || '').trim();
   const vpas = cleanVpas(body && body.vpas, body && body.vpa);
+  const bodyHasBank = body && ('bank' in body || 'bank_json' in body);
+  const bank = bodyHasBank ? cleanBankDetails((body && (body.bank || body.bank_json)) || {}) : {};
   const phone = String((body && body.phone) || '').trim();
   if (!key || key === 'NEW') {
     const name = String((body && body.name) || '').trim();
     if (!name) return { ok: false, error: 'vendor name required' };
     if (!validPhone(phone)) return { ok: false, error: 'vendor phone required' };
-    if (!validVpaList(vpas)) return { ok: false, error: 'vendor UPI required' };
+    if (!validVpaList(vpas) && !validBankDetails(bank)) return { ok: false, error: 'vendor UPI or bank account required' };
     key = await uniqueVendorKey(db, name);
-    await db.prepare(`INSERT INTO sauda_vendor (vendor_key,name,brand,fulfilment,pay,phone,vpa_json,aliases_json,cat,flagged,updated_by,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+    await db.prepare(`INSERT INTO sauda_vendor (vendor_key,name,brand,fulfilment,pay,phone,vpa_json,bank_json,odoo_partner_id,aliases_json,cat,flagged,updated_by,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
       key, name, body.brand || 'both', body.fulfilment || 'deliver', body.pay || 'per',
-      phone, JSON.stringify(vpas), JSON.stringify(cleanVpas(body && body.aliases)), body.cat || '', 0, by, now
+      phone, JSON.stringify(vpas), JSON.stringify(bank), Number(body && body.odoo_partner_id) || null,
+      JSON.stringify(cleanVpas(body && body.aliases)), body.cat || '', 0, by, now
     ).run();
     return { ok: true, created: true, vendor_key: key, vendor: vendorFromRow({
       vendor_key: key, name, brand: body.brand || 'both', fulfilment: body.fulfilment || 'deliver',
       pay: body.pay || 'per', phone, vpa_json: JSON.stringify(vpas), aliases_json: JSON.stringify(cleanVpas(body && body.aliases)),
-      cat: body.cat || '', flagged: 0,
+      bank_json: JSON.stringify(bank), odoo_partner_id: Number(body && body.odoo_partner_id) || null, cat: body.cat || '', flagged: 0,
     }) };
   }
   const existing = await db.prepare('SELECT * FROM sauda_vendor WHERE vendor_key=? AND active=1').bind(key).first();
   if (!existing) return { ok: false, error: 'vendor not found' };
   const nextPhone = ('phone' in body) ? phone : (existing.phone || '');
   const nextVpas = ('vpas' in body || 'vpa' in body) ? vpas : jsonArray(existing.vpa_json);
-  if (!validPhone(nextPhone)) return { ok: false, error: 'vendor phone required' };
-  if (!validVpaList(nextVpas)) return { ok: false, error: 'vendor UPI required' };
+  const nextBank = bodyHasBank ? bank : cleanBankDetails(existing.bank_json || '{}');
+  if (!validPhone(nextPhone) && !validBankDetails(nextBank)) return { ok: false, error: 'vendor phone required' };
+  if (!validVpaList(nextVpas) && !validBankDetails(nextBank)) return { ok: false, error: 'vendor UPI or bank account required' };
   const sets = [], vals = [];
   if ('name' in body) { sets.push('name=?'); vals.push(String(body.name || '')); }
   if ('brand' in body) { sets.push('brand=?'); vals.push(String(body.brand || 'both')); }
   if ('cat' in body) { sets.push('cat=?'); vals.push(String(body.cat || '')); }
   if ('phone' in body) { sets.push('phone=?'); vals.push(nextPhone); }
   if ('vpas' in body || 'vpa' in body) { sets.push('vpa_json=?'); vals.push(JSON.stringify(nextVpas)); }
+  if (bodyHasBank) { sets.push('bank_json=?'); vals.push(JSON.stringify(nextBank)); }
+  if ('odoo_partner_id' in body) { sets.push('odoo_partner_id=?'); vals.push(Number(body.odoo_partner_id) || null); }
   if ('fulfilment' in body) { sets.push('fulfilment=?'); vals.push(String(body.fulfilment || 'deliver')); }
   if ('pay' in body) { sets.push('pay=?'); vals.push(String(body.pay || 'per')); }
   if ('aliases' in body) { const a = Array.isArray(body.aliases) ? body.aliases.map((x) => String(x).trim()).filter(Boolean) : []; sets.push('aliases_json=?'); vals.push(JSON.stringify(a)); }
@@ -1076,9 +1147,9 @@ async function reconcileSweep(db, sinceFloor) {
   for (const r of rows) {
     const v = resolveVendor(vdir, r.vendor_name);
     const amt = r.pay_amount_paise || r.expected_amount_paise || 0;
-    if (!v.vpa || !amt) continue;
+    if (!hasPaymentRail(v) || !amt) continue;
     const since = String(r.pay_requested_at || r.ordered_at || '').slice(0, 10) || '2000-01-01';
-    const m = await findVendorDebit(db, v.vpa, amt, since);
+    const m = await findVendorDebit(db, v, amt, since);
     if (m) { try { await db.prepare(`UPDATE sauda_purchase SET bank_event_id=?, bank_ref=?, reconciled_at=? WHERE id=?`).bind(m.bank_event_id, m.bank_ref, now, r.id).run(); } catch (e) {} }
   }
 }
@@ -1125,6 +1196,7 @@ async function vendorLedger(db, days) {
     }
     return {
       vendorKey: v.key, vendor_name: v.name, cat: v.cat || '', vpa: v.vpa || '',
+      bank: v.bank || {}, bankLabel: v.bankLabel || '', payRail: v.payRail || payRail(v),
       fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
       order_count: list.length, paid_paise: paid, outstanding_paise: outstanding,
       last_paid_at: lastPaidAt, trail,
@@ -1174,7 +1246,8 @@ async function openOrders(db) {
     orders.push({
       ids, order_count: list.length,
       vendorKey: v.key, vendor_name: v.name, brand: list[0].brand,
-      vpa: v.vpa || '', cat: v.cat || '', fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
+      vpa: v.vpa || '', bank: v.bank || {}, bankLabel: v.bankLabel || '', payRail: v.payRail || payRail(v),
+      cat: v.cat || '', fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
       items_json: JSON.stringify(items),
       pay_amount_paise: amount,                       // summed; 0 if not yet known
       for_date: forDates[forDates.length - 1] || '', for_dates: forDates,
@@ -1201,13 +1274,27 @@ async function requestPay(db, body) {
   return { ok: true, ids, amount_paise: amt };
 }
 
-// ── Bank-feed match: find the UPI debit that proves this vendor was paid ──
-// Matches by vendor VPA appearing in money_events.counterparty_ref + exact amount,
+// ── Bank-feed match: find the debit that proves this vendor was paid ──
+// Matches by vendor UPI or bank details appearing in money_events + exact amount,
 // on/after `sinceDate` (so a prior same-amount payment can't false-match), and not
 // already claimed by another order (one debit confirms one order). This turns a
 // trusted "mark paid" tap into a bank-proven fact — the COA "don't rely on honesty".
-async function findVendorDebit(db, vpa, amountPaise, sinceDate) {
-  if (!vpa || !amountPaise) return null;
+function vendorPaymentTerms(vendorOrVpa) {
+  if (typeof vendorOrVpa === 'string') return [vendorOrVpa].filter(Boolean);
+  const v = vendorOrVpa || {};
+  const b = jsonObject(v.bank || {});
+  return [
+    v.vpa,
+    ...(Array.isArray(v.vpas) ? v.vpas : []),
+    b.account_number,
+    b.ifsc,
+    b.account_name,
+    v.name,
+  ].map((x) => String(x || '').trim().toLowerCase()).filter((x, i, a) => x.length >= 5 && a.indexOf(x) === i);
+}
+async function findVendorDebit(db, vendorOrVpa, amountPaise, sinceDate) {
+  const terms = vendorPaymentTerms(vendorOrVpa);
+  if (!terms.length || !amountPaise) return null;
   let used = new Set();
   try {
     const ur = (await db.prepare(`SELECT bank_event_id FROM sauda_purchase WHERE bank_event_id IS NOT NULL`).all()).results || [];
@@ -1218,12 +1305,16 @@ async function findVendorDebit(db, vpa, amountPaise, sinceDate) {
     rows = ((await db.prepare(
       `SELECT id, source_ref, counterparty_ref, narration, amount_paise, txn_at
          FROM money_events
-        WHERE direction='debit' AND amount_paise=? AND lower(counterparty_ref) LIKE ?
+        WHERE direction='debit' AND amount_paise=?
           AND substr(COALESCE(txn_at,received_at),1,10) >= ?
-        ORDER BY COALESCE(txn_at,received_at) DESC LIMIT 10`
-    ).bind(amountPaise, '%' + String(vpa).toLowerCase() + '%', sinceDate).all()).results) || [];
+        ORDER BY COALESCE(txn_at,received_at) DESC LIMIT 30`
+    ).bind(amountPaise, sinceDate).all()).results) || [];
   } catch (e) { return null; }
-  const hit = rows.find((r) => !used.has(r.id));
+  const hit = rows.find((r) => {
+    if (used.has(r.id)) return false;
+    const hay = [r.source_ref, r.counterparty_ref, r.narration].map((x) => String(x || '').toLowerCase()).join(' ');
+    return terms.some((t) => hay.indexOf(t) >= 0);
+  });
   if (!hit) return null;
   return { bank_event_id: hit.id, bank_ref: hit.source_ref || hit.counterparty_ref || '', txn_at: hit.txn_at || '' };
 }
@@ -1235,7 +1326,7 @@ async function previewMatch(db, ids, amount) {
   if (!o) return { ok: true, matched: false };
   const v = resolveVendor(await getVendorDirectory(db), o.vendor_name);
   const since = String(o.pay_requested_at || o.ordered_at || '').slice(0, 10) || todayIST();
-  const m = await findVendorDebit(db, v.vpa, amount, since);
+  const m = await findVendorDebit(db, v, amount, since);
   return { ok: true, matched: !!m, bank_ref: m ? m.bank_ref : '', txn_at: m ? m.txn_at : '', vendor: v.name };
 }
 
@@ -1259,8 +1350,8 @@ async function markPaid(db, body, auth) {
     const o = await db.prepare(`SELECT vendor_name, pay_requested_at, ordered_at FROM sauda_purchase WHERE id=?`).bind(ids[0]).first();
     const v = resolveVendor(await getVendorDirectory(db), o && o.vendor_name);
     const since = String((o && (o.pay_requested_at || o.ordered_at)) || now).slice(0, 10);
-    if (amt > 0 && v.vpa) {
-      const m = await findVendorDebit(db, v.vpa, amt, since);
+    if (amt > 0 && hasPaymentRail(v)) {
+      const m = await findVendorDebit(db, v, amt, since);
       if (m) {
         await db.prepare(`UPDATE sauda_purchase SET bank_event_id=?, bank_ref=?, reconciled_at=? WHERE id IN (${ph})`)
           .bind(m.bank_event_id, m.bank_ref, now, ...ids).run();
@@ -1292,16 +1383,16 @@ async function autoSettle(db) {
   for (const r of rows) {
     const v = resolveVendor(vdir, r.vendor_name);
     const amt = r.pay_amount_paise || r.expected_amount_paise || 0;
-    if (!v.vpa || !amt) continue;
+    if (!hasPaymentRail(v) || !amt) continue;
     const since = String(r.pay_requested_at || r.ordered_at || '').slice(0, 10) || '2000-01-01';
-    const m = await findVendorDebit(db, v.vpa, amt, since);
+    const m = await findVendorDebit(db, v, amt, since);
     if (!m) continue;
     await db.prepare(
       `UPDATE sauda_purchase
           SET status='PAID', paid_at=COALESCE(paid_at,?),
-              pay_method=CASE WHEN pay_method IS NULL OR pay_method='' THEN 'upi' ELSE pay_method END,
+              pay_method=CASE WHEN pay_method IS NULL OR pay_method='' THEN ? ELSE pay_method END,
               bank_event_id=?, bank_ref=?, reconciled_at=?, updated_at=? WHERE id=?`
-    ).bind(now, m.bank_event_id, m.bank_ref, now, now, r.id).run();
+    ).bind(now, (v.payRail === 'bank' ? 'bank_transfer' : 'upi'), m.bank_event_id, m.bank_ref, now, now, r.id).run();
     settled.push({ id: r.id, vendor: v.name, amount_paise: amt, bank_ref: m.bank_ref });
   }
   return { ok: true, settled, count: settled.length };
@@ -1346,16 +1437,24 @@ async function directPay(db, body, auth) {
     let parsed = [];
     try { parsed = JSON.parse(row.items_json || '[]'); } catch (e) {}
     if (directItemMatch(parsed, note, ref)) {
-      return { ok: true, id: row.id, duplicate: true, status: row.status, vendor: v.name, vpa: v.vpa || '', amount_paise: amt };
+      return {
+        ok: true, id: row.id, duplicate: true, status: row.status, vendor: v.name,
+        vpa: v.vpa || '', bank: v.bank || {}, bankLabel: v.bankLabel || '',
+        payRail: v.payRail || payRail(v), amount_paise: amt,
+      };
     }
   }
 
-  const items = [{ item: note, qty: '', unit: '', price_paise: amt, direct: true, ref, method_hint: v.vpa ? 'upi' : 'manual' }];
+  const items = [{ item: note, qty: '', unit: '', price_paise: amt, direct: true, ref, method_hint: v.payRail || payRail(v) }];
   const res = await db.prepare(
     `INSERT INTO sauda_purchase (brand, vendor_name, for_date, fulfilment, pay_timing, items_json, status, expected_amount_paise, pay_amount_paise, pay_requested_at, ordered_at, ordered_by)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(v.brand || 'both', v.name, forDate, v.fulfilment, v.pay, JSON.stringify(items), 'REQUESTED', amt, amt, now, now, (auth && auth.u) || '').run();
-  return { ok: true, id: res?.meta?.last_row_id, duplicate: false, vendor: v.name, vpa: v.vpa || '', amount_paise: amt };
+  return {
+    ok: true, id: res?.meta?.last_row_id, duplicate: false, vendor: v.name,
+    vpa: v.vpa || '', bank: v.bank || {}, bankLabel: v.bankLabel || '',
+    payRail: v.payRail || payRail(v), amount_paise: amt,
+  };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1378,20 +1477,25 @@ async function rzpFetch(env, path, method, body, extra) {
 }
 // Ensure a Razorpay Contact + Fund Account exist for this vendor; cache ids on sauda_vendor.
 async function ensureRzpFundAccount(db, env, vk, v) {
-  const row = await db.prepare(`SELECT rzp_contact_id, rzp_fund_account_id FROM sauda_vendor WHERE vendor_key=?`).bind(vk).first().catch(() => null);
-  if (row && row.rzp_fund_account_id) return { fund_account_id: row.rzp_fund_account_id };
+  const row = await db.prepare(`SELECT rzp_contact_id, rzp_fund_account_id, rzp_fund_account_mode FROM sauda_vendor WHERE vendor_key=?`).bind(vk).first().catch(() => null);
+  if (row && row.rzp_fund_account_id) return { fund_account_id: row.rzp_fund_account_id, mode: row.rzp_fund_account_mode || (v && v.vpa ? 'UPI' : 'NEFT') };
   const vpa = String((v && v.vpa) || '').trim();
-  if (!vpa) return { error: 'no UPI on file for ' + ((v && v.name) || vk) };
+  const bank = jsonObject(v && v.bank);
+  if (!vpa && !validBankDetails(bank)) return { error: 'no UPI or bank account on file for ' + ((v && v.name) || vk) };
   let contactId = row && row.rzp_contact_id;
   if (!contactId) {
     const c = await rzpFetch(env, '/contacts', 'POST', { name: (v && v.name) || vk, type: 'vendor', reference_id: 'sauda_vendor_' + vk, contact: (v && v.phone) || undefined });
     if (!c.ok || !c.data.id) return { error: 'contact failed: ' + ((c.data.error && c.data.error.description) || c.status) };
     contactId = c.data.id;
   }
-  const fa = await rzpFetch(env, '/fund_accounts', 'POST', { contact_id: contactId, account_type: 'vpa', vpa: { address: vpa } });
+  const mode = vpa ? 'UPI' : 'NEFT';
+  const payload = vpa
+    ? { contact_id: contactId, account_type: 'vpa', vpa: { address: vpa } }
+    : { contact_id: contactId, account_type: 'bank_account', bank_account: { name: bank.account_name || ((v && v.name) || vk), ifsc: bank.ifsc, account_number: bank.account_number } };
+  const fa = await rzpFetch(env, '/fund_accounts', 'POST', payload);
   if (!fa.ok || !fa.data.id) return { error: 'fund account failed: ' + ((fa.data.error && fa.data.error.description) || fa.status) };
-  await db.prepare(`UPDATE sauda_vendor SET rzp_contact_id=?, rzp_fund_account_id=? WHERE vendor_key=?`).bind(contactId, fa.data.id, vk).run().catch(() => {});
-  return { fund_account_id: fa.data.id, contact_id: contactId };
+  await db.prepare(`UPDATE sauda_vendor SET rzp_contact_id=?, rzp_fund_account_id=?, rzp_fund_account_mode=? WHERE vendor_key=?`).bind(contactId, fa.data.id, mode, vk).run().catch(() => {});
+  return { fund_account_id: fa.data.id, contact_id: contactId, mode };
 }
 async function payoutVendor(db, body, auth, env) {
   const acct = env.RAZORPAYX_ACCOUNT_NUMBER || '';
@@ -1411,12 +1515,13 @@ async function payoutVendor(db, body, auth, env) {
   // persist the idempotency key BEFORE the call — a network retry must never double-pay
   const idem = crypto.randomUUID();
   const ref = 'sauda_' + (orderIds[0] || ('d' + Date.now()));
+  const mode = ensured.mode || 'UPI';
   await db.prepare(`INSERT INTO sauda_payout (idempotency_key, vendor_key, order_ids, amount_paise, mode, ref, status) VALUES (?,?,?,?,?,?,?)`)
-    .bind(idem, vk, JSON.stringify(orderIds), amt, 'UPI', ref, 'creating').run().catch(() => {});
+    .bind(idem, vk, JSON.stringify(orderIds), amt, mode, ref, 'creating').run().catch(() => {});
 
   const p = await rzpFetch(env, '/payouts', 'POST', {
     account_number: acct, fund_account_id: ensured.fund_account_id, amount: amt, currency: 'INR',
-    mode: 'UPI', purpose: 'vendor bill', queue_if_low_balance: true, reference_id: ref, narration: ('HN Hotels ' + ((v && v.name) || '')).slice(0, 30),
+    mode, purpose: 'vendor bill', queue_if_low_balance: true, reference_id: ref, narration: ('HN Hotels ' + ((v && v.name) || '')).slice(0, 30),
   }, { 'X-Payout-Idempotency': idem });
 
   if (!p.ok || !p.data.id) {
