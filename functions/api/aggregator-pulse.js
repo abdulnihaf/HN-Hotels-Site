@@ -782,9 +782,9 @@ async function handleGet(db, url, headers, env = {}) {
 
     const [coordsRes, freshRes] = await Promise.all([
       db.prepare(`SELECT coordinate, platform_code, brand_code, pull_source_code, status_code,
-                         http_status, consecutive_failures, last_success_at, last_attempt_at,
+                         last_http_status AS http_status, consecutive_failures, last_success_at, last_attempt_at,
                          last_rows_seen, last_error
-                  FROM aggregator_coa_coordinate_health`).all().catch(() => ({ results: [] })),
+                  FROM aggregator_coa_coordinate_health`).all().catch((e) => ({ results: [], _error: e.message })),
       db.prepare(`SELECT platform,
                     MAX(captured_at) AS last_order_at,
                     SUM(CASE WHEN captured_at >= datetime('now','-7 days') THEN 1 ELSE 0 END) AS last7d,
@@ -845,17 +845,25 @@ async function handleGet(db, url, headers, env = {}) {
       });
     }
 
-    const integrity = (worst === 'dead' || worst === 'suspect_empty') ? 'loss_risk'
+    // If the health table couldn't be read, do NOT claim "live" — that would be the
+    // very silent-failure this endpoint exists to kill. Report unknown instead.
+    const coordError = coordsRes._error || null;
+    const noCoords = coordinates.length === 0;
+    const integrity = (coordError || noCoords) ? 'unknown'
+                    : (worst === 'dead' || worst === 'suspect_empty') ? 'loss_risk'
                     : (worst === 'stale' || worst === 'enrichment_blocked') ? 'degraded' : 'live';
 
     return new Response(JSON.stringify({
       ok: true,
-      integrity,                       // live | degraded | loss_risk  ← glance verdict
-      headline: lossFlags.length ? lossFlags.join(' · ') : 'all delivery feeds live — no data loss detected',
+      integrity,                       // live | degraded | loss_risk | unknown  ← glance verdict
+      headline: integrity === 'unknown'
+        ? `cannot read capture health${coordError ? ' (' + coordError + ')' : ' — no coordinates'}`
+        : (lossFlags.length ? lossFlags.join(' · ') : 'all delivery feeds live — no data loss detected'),
       loss_flags: lossFlags,
       business_hours: businessHours,
       orders_freshness: fresh,
       coordinates,
+      coordinates_error: coordError,
       checked_at: new Date().toISOString(),
       ist: istNow.toISOString(),
     }), { headers });
