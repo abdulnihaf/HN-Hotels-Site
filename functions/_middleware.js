@@ -80,6 +80,21 @@ export async function onRequest(context) {
     return next();
   }
 
+  // ── hisaab.hnhotels.in — the reckoning chamber (daily P&L). App at /ops/hisaab/ ──
+  if (host === 'hisaab.hnhotels.in') {
+    const MAP = {
+      '/': '/ops/hisaab/',
+      '/index.html': '/ops/hisaab/',
+    };
+    const target = MAP[url.pathname];
+    if (target) {
+      const t = new URL(target, url);
+      t.search = url.search;
+      return rewriteTo(request, t);
+    }
+    return next();
+  }
+
   // Only intervene for the trade subdomain
   if (host !== 'trade.hnhotels.in') {
     return next();

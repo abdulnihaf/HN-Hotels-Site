@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hisaab">
+<title>Hisaab — HN Daily P&L</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 12px 14px 92px; }
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .topbar h1 { font-size: 22px; font-weight: 800; }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .pin-screen { max-width: 340px; margin: 64px auto; padding: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); text-align: center; }
+  .pin-screen h1 { font-size: 20px; margin-bottom: 4px; }
+  .pin-screen input { text-align: center; letter-spacing: .28em; font-size: 18px; background: var(--surface-2); margin: 16px 0 10px; }
+  .pin-error { min-height: 18px; color: var(--danger); font-size: 12px; }
+  .filters { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
+  .brand-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: rgba(255,255,255,.035); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; }
+  .brand-tab { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--text-dim); font-weight: 800; cursor: pointer; }
+  .brand-tab.active { background: var(--brand); color: #0c0c14; }
+  .date-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .status-band { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); margin-bottom: 14px; }
+  .status-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .status-title strong { font-size: 15px; }
+  .status-meta { font-size: 12px; color: var(--text-dim); overflow-wrap: anywhere; }
+  .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; min-height: 88px; }
+  .metric .label { color: var(--text-dim); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .metric .value { margin-top: 8px; font-size: 20px; line-height: 1.1; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .metric .subline { margin-top: 4px; font-size: 11px; color: var(--text-mute); }
+  .metric.good .value { color: #34d399; }
+  .metric.bad .value { color: #f87171; }
+  .metric.warn .value { color: #fbbf24; }
+  .layout { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .panel-head h2 { font-size: 14px; font-weight: 800; }
+  .row-list { display: grid; gap: 7px; }
+  .line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+  .line:first-child { border-top: 0; }
+  .line-main { min-width: 0; }
+  .line-title { font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
+  .line-note { color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
+  .line-value { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .gate-ok .line-value { color: #34d399; }
+  .gate-miss .line-value { color: #f87171; }
+  .source-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .source-box { background: rgba(255,255,255,.035); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px; }
+  .source-box .k { font-size: 10px; color: var(--text-mute); text-transform: uppercase; letter-spacing: .04em; font-weight: 800; }
+  .source-box .v { margin-top: 6px; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .source-box .n { margin-top: 3px; color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
+  .bill-form { display: grid; gap: 10px; }
+  .bill-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .message { display: none; margin-bottom: 10px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border); font-size: 13px; }
+  .message.show { display: block; }
+  .message.ok { color: #34d399; border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.08); }
+  .message.err { color: #f87171; border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08); }
+  .hidden { display: none !important; }
+  .loading { padding: 28px; text-align: center; color: var(--text-dim); }
+  .finalize-row { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+  @media (min-width: 700px) {
+    .filters { grid-template-columns: minmax(300px, 1fr) minmax(260px, .8fr); align-items: end; }
+    .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .layout { grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); align-items: start; }
+    .source-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bill-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .finalize-row { grid-template-columns: 1fr auto; align-items: center; }
+  }
+</style>
+</head>
+<body>
+<div id="pin-screen" class="pin-screen">
+  <h1>Hisaab</h1>
+  <div class="sub">Daily Profit &amp; Loss · owner access</div>
+  <input id="pin-input" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off">
+  <button class="btn btn-primary btn-full" id="pin-btn" type="button">Unlock</button>
+  <div id="pin-error" class="pin-error"></div>
+</div>
+
+<main id="app" class="wrap hidden">
+  <header class="topbar">
+    <div>
+      <h1>Hisaab</h1>
+      <div class="sub" id="who">Daily Profit &amp; Loss</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" type="button" id="refresh-btn">Refresh</button>
+      <button class="btn btn-ghost btn-sm" type="button" id="logout-btn">Exit</button>
+    </div>
+  </header>
+
+  <section class="filters">
+    <div>
+      <label>Brand</label>
+      <div class="brand-tabs">
+        <button class="brand-tab active" type="button" data-brand="HE">Hamza Express</button>
+        <button class="brand-tab" type="button" data-brand="NCH">Nawabi Chai House</button>
+      </div>
+    </div>
+    <div>
+      <label>Business date</label>
+      <div class="date-row">
+        <input id="date-input" type="date">
+        <button class="btn btn-ghost" type="button" id="today-btn">Today</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="message" class="message"></div>
+  <div id="loading" class="loading">Loading...</div>
+  <section id="content" class="hidden"></section>
+</main>
+
+<script>
+const API = '/api/daily-pnl';
+const BRAND_NAME = { HE: 'Hamza Express', NCH: 'Nawabi Chai House' };
+const GATE_LABELS = {
+  revenue: 'Revenue settlement',
+  anbar_settlement: 'Anbar consumption settlement',
+  labor: 'Darbar labor',
+  major_bills: 'Major bill allocation',
+};
+
+let S = {
+  pin: localStorage.getItem('hisaab_pin') || '',
+  brand: localStorage.getItem('hisaab_brand') || 'HE',
+  date: todayIST(),
+  data: null,
+  loading: false,
+};
+
+function $(id) { return document.getElementById(id); }
+function todayIST() { return new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function money(paise) {
+  if (paise === null || paise === undefined) return '-';
+  const rupees = Number(paise || 0) / 100;
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(rupees);
+}
+function pct(bp) {
+  if (bp === null || bp === undefined) return '-';
+  return `${(Number(bp || 0) / 100).toFixed(1)}%`;
+}
+function badge(status) {
+  const cls = status === 'final' ? 'badge-success' : status === 'draft' ? 'badge-warn' : 'badge-danger';
+  return `<span class="badge ${cls}">${esc(status)}</span>`;
+}
+function metric(label, value, subline, cls = '') {
+  return `<div class="metric ${cls}">
+    <div class="label">${esc(label)}</div>
+    <div class="value">${esc(value)}</div>
+    <div class="subline">${esc(subline || '')}</div>
+  </div>`;
+}
+function showMessage(text, kind) {
+  const m = $('message');
+  if (!text) {
+    m.className = 'message';
+    m.textContent = '';
+    return;
+  }
+  m.className = `message show ${kind || ''}`;
+  m.textContent = text;
+}
+
+function setBusy(on) {
+  S.loading = on;
+  $('loading').classList.toggle('hidden', !on);
+  $('content').classList.toggle('hidden', on || !S.data);
+}
+
+function showApp() {
+  $('pin-screen').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('date-input').value = S.date;
+  document.querySelectorAll('.brand-tab').forEach(b => b.classList.toggle('active', b.dataset.brand === S.brand));
+}
+
+function logout() {
+  localStorage.removeItem('hisaab_pin');
+  S.pin = '';
+  S.data = null;
+  $('app').classList.add('hidden');
+  $('pin-screen').classList.remove('hidden');
+  $('pin-input').value = '';
+  $('pin-error').textContent = '';
+  showMessage('');
+}
+
+async function loadSummary() {
+  showMessage('');
+  setBusy(true);
+  try {
+    const url = `${API}?action=summary&pin=${encodeURIComponent(S.pin)}&brand=${S.brand}&date=${S.date}`;
+    const r = await fetch(url).then(x => x.json());
+    if (!r.success) {
+      if (/pin/i.test(r.error || '')) {
+        logout();
+        $('pin-error').textContent = r.error || 'Invalid PIN';
+        return;
+      }
+      showMessage(r.error || 'Unable to load P&L', 'err');
+      S.data = null;
+      return;
+    }
+    S.data = r;
+    localStorage.setItem('hisaab_pin', S.pin);
+    localStorage.setItem('hisaab_brand', S.brand);
+    $('who').textContent = `${r.user?.name || 'User'} · ${BRAND_NAME[S.brand]} · ${S.date}`;
+    render();
+  } catch (e) {
+    showMessage(e.message || 'Network error', 'err');
+  } finally {
+    setBusy(false);
+  }
+}
+
+function render() {
+  const d = S.data;
+  if (!d) return;
+  const p = d.pnl || {};
+  const missing = d.missing_gates || [];
+  const statusNote = d.status === 'blocked'
+    ? `${missing.length} gate${missing.length === 1 ? '' : 's'} missing`
+    : d.status === 'final'
+      ? `Final run ${d.final_run?.id || ''}`
+      : d.final_source_changed
+        ? 'Final source changed'
+        : 'Ready to finalize';
+
+  $('content').innerHTML = `
+    <section class="status-band">
+      <div>
+        <div class="status-title">
+          <strong>${esc(d.brand_label || BRAND_NAME[S.brand])}</strong>
+          ${badge(d.status)}
+        </div>
+        <div class="status-meta">${esc(statusNote)} · source ${esc(String(d.source_hash || '').slice(0, 12))}</div>
+      </div>
+      <button class="btn ${d.status === 'blocked' ? 'btn-ghost' : 'btn-primary'}" type="button" id="finalize-btn" ${d.status === 'blocked' || d.status === 'final' ? 'disabled' : ''}>
+        ${d.status === 'final' ? 'Finalized' : d.final_source_changed ? 'Re-finalize' : 'Finalize'}
+      </button>
+    </section>
+
+    <section class="metrics">
+      ${metric('Revenue', money(p.revenue_paise), 'POS after settlement')}
+      ${metric('Raw COGS', money(p.raw_cogs_paise), 'Anbar settled consumption', p.raw_cogs_paise == null ? 'warn' : '')}
+      ${metric('Gross food profit', money(p.gross_food_profit_paise), `margin ${pct(p.gross_food_margin_bp)}`, (p.gross_food_profit_paise || 0) >= 0 ? 'good' : 'bad')}
+      ${metric('Labor', money(p.labor_paise), 'Darbar accrual')}
+      ${metric('Major bills', money(p.major_bills_paise), 'daily allocation', p.major_bills_paise == null ? 'warn' : '')}
+      ${metric('Operating profit', money(p.operating_profit_paise), `margin ${pct(p.operating_margin_bp)}`, (p.operating_profit_paise || 0) >= 0 ? 'good' : 'bad')}
+      ${metric('Status', d.status.toUpperCase(), statusNote, d.status === 'blocked' ? 'bad' : d.status === 'final' ? 'good' : 'warn')}
+      ${metric('Business date', d.business_date, 'IST')}
+    </section>
+
+    <section class="layout">
+      <div>
+        ${renderGates(d)}
+        ${renderSources(d)}
+      </div>
+      <div>
+        ${renderBillForm()}
+        ${renderOverheads(d)}
+        ${renderFinalizePanel(d)}
+      </div>
+    </section>
+  `;
+
+  $('finalize-btn')?.addEventListener('click', finalizeDay);
+  $('bill-form')?.addEventListener('submit', saveBill);
+  $('bill-period-start').value = S.date;
+  $('bill-period-end').value = S.date;
+  $('bill-brand').value = S.brand;
+  $('bill-brand')?.addEventListener('change', e => {
+    $('bill-share').value = e.target.value === 'BOTH' ? '5000' : '10000';
+  });
+}
+
+function renderGates(d) {
+  const gates = d.gates || {};
+  const rows = Object.keys(GATE_LABELS).map(k => {
+    const g = gates[k] || {};
+    return `<div class="line ${g.ok ? 'gate-ok' : 'gate-miss'}">
+      <div class="line-main">
+        <div class="line-title">${esc(GATE_LABELS[k])}</div>
+        <div class="line-note">${esc(g.ok ? 'complete' : (g.reason || 'missing'))}</div>
+      </div>
+      <div class="line-value">${g.ok ? 'OK' : 'MISSING'}</div>
+    </div>`;
+  }).join('');
+  return `<section class="panel">
+    <div class="panel-head"><h2>Gates</h2><span class="mute">${esc(d.status)}</span></div>
+    <div class="row-list">${rows}</div>
+  </section>`;
+}
+
+function renderSources(d) {
+  const inputs = d.inputs || {};
+  const rev = inputs.revenue || {};
+  const anbar = inputs.anbar || {};
+  const wit = anbar.witnesses || {};
+  const labor = inputs.labor || {};
+  const boxes = [
+    ['Revenue rows', rev.order_count == null ? '-' : rev.order_count, rev.last_recomputed_at || rev.latest_day || 'sales_recon_daily'],
+    ['Anbar settlement', anbar.id ? `#${anbar.id}` : '-', anbar.settled_at || anbar.latest_day || 'rm_settlements'],
+    ['Sauda purchases', `${wit.sauda_purchase?.rows || 0} rows`, money(wit.sauda_purchase?.amount_paise || 0)],
+    ['Shared Sauda', `${wit.sauda_both_purchase?.rows || 0} rows`, money(wit.sauda_both_purchase?.amount_paise || 0)],
+    ['Chicken ledger', `${wit.chicken_daily_ledger?.rows || 0} rows`, money(wit.chicken_daily_ledger?.cost_paise || 0)],
+    ['Anbar receipts', `${wit.receipts?.rows || 0} rows`, `${Number(wit.receipts?.qty || 0).toLocaleString('en-IN')} units`],
+    ['Darbar staff', labor.active_staff == null ? '-' : labor.active_staff, labor.method || 'hr_employees'],
+    ['Source hash', String(d.source_hash || '').slice(0, 16), d.final_source_changed ? 'changed after final' : 'current inputs'],
+  ].map(([k, v, n]) => `<div class="source-box"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="n">${esc(n)}</div></div>`).join('');
+
+  return `<section class="panel" style="margin-top:12px">
+    <div class="panel-head"><h2>Sources</h2><span class="mute">read-only witnesses</span></div>
+    <div class="source-grid">${boxes}</div>
+  </section>`;
+}
+
+function renderBillForm() {
+  return `<section class="panel">
+    <div class="panel-head"><h2>Major bill allocation</h2><span class="mute">electricity first</span></div>
+    <form class="bill-form" id="bill-form">
+      <div class="bill-row">
+        <div>
+          <label>Brand</label>
+          <select id="bill-brand">
+            <option value="HE">Hamza Express</option>
+            <option value="NCH">Nawabi Chai House</option>
+            <option value="BOTH">Both brands</option>
+          </select>
+        </div>
+        <div>
+          <label>Label</label>
+          <input id="bill-label" placeholder="Electricity">
+        </div>
+      </div>
+      <div class="bill-row">
+        <div>
+          <label>Amount</label>
+          <input id="bill-amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0">
+        </div>
+        <div>
+          <label>Share basis points</label>
+          <input id="bill-share" type="number" inputmode="numeric" min="0" max="10000" step="1" value="10000">
+        </div>
+      </div>
+      <div class="bill-row">
+        <div>
+          <label>Period start</label>
+          <input id="bill-period-start" type="date">
+        </div>
+        <div>
+          <label>Period end</label>
+          <input id="bill-period-end" type="date">
+        </div>
+      </div>
+      <div class="bill-row">
+        <div>
+          <label>Vendor</label>
+          <input id="bill-vendor" placeholder="BESCOM">
+        </div>
+        <div>
+          <label>Reference</label>
+          <input id="bill-ref" placeholder="bill no.">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full" type="submit">Save allocation</button>
+    </form>
+  </section>`;
+}
+
+function renderOverheads(d) {
+  const rows = d.inputs?.overhead?.allocations || [];
+  const body = rows.length ? rows.map(r => `<div class="line">
+    <div class="line-main">
+      <div class="line-title">${esc(r.label)} · ${esc(r.brand)}</div>
+      <div class="line-note">${esc(r.period_start)} to ${esc(r.period_end)} · ${r.brand_share_bp} bp</div>
+    </div>
+    <div class="line-value">${money(r.daily_allocated_paise)}</div>
+  </div>`).join('') : `<div class="line"><div class="line-main"><div class="line-title">No major bills</div><div class="line-note">This gate remains blocked until an allocation is entered.</div></div><div class="line-value">-</div></div>`;
+  return `<section class="panel" style="margin-top:12px">
+    <div class="panel-head"><h2>Allocated bills</h2><span class="mute">${rows.length} active</span></div>
+    <div class="row-list">${body}</div>
+  </section>`;
+}
+
+function renderFinalizePanel(d) {
+  const final = d.final_run;
+  const sourceChanged = d.final_source_changed;
+  const title = final ? `Final run #${final.id}` : 'No final run';
+  const note = final
+    ? `${final.finalized_at || final.created_at || ''}${sourceChanged ? ' · source changed' : ''}`
+    : d.status === 'blocked' ? 'blocked by missing gates' : 'ready after review';
+  return `<section class="panel" style="margin-top:12px">
+    <div class="panel-head"><h2>Freeze</h2><span class="mute">${esc(d.status)}</span></div>
+    <div class="finalize-row">
+      <div>
+        <div class="line-title">${esc(title)}</div>
+        <div class="line-note">${esc(note)}</div>
+      </div>
+      <button class="btn ${d.status === 'blocked' || d.status === 'final' ? 'btn-ghost' : 'btn-primary'}" type="button" id="finalize-btn-2" ${d.status === 'blocked' || d.status === 'final' ? 'disabled' : ''}>${sourceChanged ? 'Re-finalize' : 'Finalize'}</button>
+    </div>
+  </section>`;
+}
+
+async function saveBill(e) {
+  e.preventDefault();
+  const body = {
+    pin: S.pin,
+    brand: $('bill-brand').value,
+    label: $('bill-label').value.trim() || 'Electricity',
+    amount: $('bill-amount').value,
+    brand_share_bp: Number($('bill-share').value || 10000),
+    period_start: $('bill-period-start').value,
+    period_end: $('bill-period-end').value,
+    vendor_name: $('bill-vendor').value.trim(),
+    source_ref: $('bill-ref').value.trim(),
+  };
+  try {
+    const r = await fetch(`${API}?action=upsert-overhead`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'Allocation failed');
+    await loadSummary();
+    showMessage('Allocation saved', 'ok');
+  } catch (err) {
+    showMessage(err.message, 'err');
+  }
+}
+
+async function finalizeDay() {
+  if (!S.data || S.data.status === 'blocked' || S.data.status === 'final') return;
+  const force = !!S.data.final_source_changed && confirm('Source data changed after finalization. Re-finalize this business date?');
+  if (S.data.final_source_changed && !force) return;
+  try {
+    const r = await fetch(`${API}?action=finalize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: S.pin, brand: S.brand, date: S.date, force }),
+    }).then(x => x.json());
+    if (!r.success && !r.finalized) throw new Error(r.error || 'Finalize failed');
+    await loadSummary();
+    showMessage(r.idempotent ? 'Already finalized' : 'P&L finalized', 'ok');
+  } catch (err) {
+    showMessage(err.message, 'err');
+  }
+}
+
+function wire() {
+  $('pin-btn').addEventListener('click', () => {
+    const pin = $('pin-input').value.trim();
+    if (!pin) {
+      $('pin-error').textContent = 'Enter PIN';
+      return;
+    }
+    S.pin = pin;
+    showApp();
+    loadSummary();
+  });
+  $('pin-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') $('pin-btn').click();
+  });
+  $('refresh-btn').addEventListener('click', loadSummary);
+  $('logout-btn').addEventListener('click', logout);
+  $('today-btn').addEventListener('click', () => {
+    S.date = todayIST();
+    $('date-input').value = S.date;
+    loadSummary();
+  });
+  $('date-input').addEventListener('change', e => {
+    S.date = e.target.value || todayIST();
+    loadSummary();
+  });
+  document.querySelectorAll('.brand-tab').forEach(btn => btn.addEventListener('click', () => {
+    S.brand = btn.dataset.brand;
+    localStorage.setItem('hisaab_brand', S.brand);
+    document.querySelectorAll('.brand-tab').forEach(b => b.classList.toggle('active', b.dataset.brand === S.brand));
+    loadSummary();
+  }));
+  document.addEventListener('click', e => {
+    if (e.target?.id === 'finalize-btn-2') finalizeDay();
+  });
+}
+
+wire();
+if (S.pin) {
+  showApp();
+  loadSummary();
+}
+</script>
+</body>
+</html>
