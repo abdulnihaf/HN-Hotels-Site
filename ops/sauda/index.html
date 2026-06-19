@@ -224,6 +224,31 @@
     .mini .warn{color:var(--amber);font-weight:750}
     .mini .ok{color:var(--green);font-weight:750}
     .empty.small{padding:24px 18px}
+    /* Operational truth rows: the same compact language across Place, Orders, To Pay, and Diary */
+    .truth{border:1px solid var(--line-soft);border-radius:11px;background:rgba(255,255,255,.035);padding:8px 9px;margin:0 0 9px}
+    .truth-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+    .truth-row span{font-size:10.5px;font-weight:850;color:var(--dim);background:rgba(255,255,255,.055);border:1px solid var(--line-soft);border-radius:8px;padding:2px 7px;line-height:1.4}
+    .truth-chips{display:flex;gap:5px;flex-wrap:wrap}
+    .truth-chip{font-size:10px;font-weight:850;border-radius:8px;padding:2px 7px;line-height:1.4;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:var(--dim)}
+    .truth-chip.ok{background:var(--green-soft);border-color:rgba(55,211,153,.28);color:var(--green)}
+    .truth-chip.warn{background:var(--amber-soft);border-color:var(--amber-bd);color:var(--amber)}
+    .truth-chip.mut{background:rgba(255,255,255,.055);color:var(--dim)}
+    .truth-note{font-size:11px;line-height:1.35;color:var(--amber);margin-top:6px}
+    .olist{display:grid;gap:8px}
+    .oline{border:1px solid var(--line-soft);border-radius:11px;background:rgba(0,0,0,.18);padding:9px;margin:0}
+    .oline.need{border-color:var(--amber-bd);background:rgba(224,161,58,.07)}
+    .oline-top{display:flex;align-items:flex-start;gap:8px}
+    .oline-name{flex:1;min-width:0}
+    .oline-name b{display:block;font-size:13.5px;font-weight:800;line-height:1.22;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .oline-name small{display:block;margin-top:2px;font-size:10.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .oline-top strong{font-size:13px;font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap}
+    .oline-calc{font-size:11.4px;line-height:1.35;color:var(--text);margin-top:6px;font-variant-numeric:tabular-nums}
+    .oline-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+    .oline-meta span{font-size:10.5px;color:var(--dim);background:rgba(255,255,255,.045);border-radius:7px;padding:1px 7px}
+    .oline-note{font-size:11px;line-height:1.35;color:var(--amber);margin-top:6px;padding-top:6px;border-top:1px solid var(--line-soft)}
+    .placecalc{font-size:11px;line-height:1.35;border-radius:8px;padding:6px 8px;font-variant-numeric:tabular-nums}
+    .placecalc.ok{background:var(--green-soft);color:var(--green);border:1px solid rgba(55,211,153,.25)}
+    .placecalc.warn{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-bd)}
 
     /* ── Hyperpure (tomorrow's planned basket) ── */
     .hp-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 16px 2px}
@@ -748,6 +773,6 @@
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
-<script src="/ops/sauda/app-v57.js"></script>
+<script src="/ops/sauda/app-v58.js"></script>
 </body>
 </html>
