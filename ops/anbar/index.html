@@ -84,6 +84,7 @@
   .status-saved { color:var(--green); background:var(--green-dim); border-color:rgba(55,211,153,.4); }
   .split { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .receipt-part { display:flex; justify-content:space-between; gap:10px; padding:9px 0; border-top:1px solid var(--border); font-size:12px; color:var(--muted); }
+  .photo-ready { margin-top:9px; color:var(--green); font-size:12px; font-weight:800; }
   .toast { position:fixed; bottom:calc(28px + var(--safe-bot)); left:50%; transform:translateX(-50%); padding:12px 22px; border-radius:12px; font-size:14px; font-weight:700; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; background:var(--green-dim); color:var(--green); border:1px solid rgba(55,211,153,.4); }
   .toast.show { opacity:1; }
   .hidden { display:none !important; }
@@ -144,6 +145,7 @@
 </div>
 
 <input type="file" accept="image/*" capture="environment" id="settle-cam" style="display:none" onchange="settleShot(this)">
+<input type="file" accept="image/*" capture="environment" id="chicken-evidence-cam" style="display:none" onchange="chickenEvidenceShot(this)">
 <div class="toast" id="toast"></div>
 
 <script>
@@ -320,7 +322,7 @@ function renderChickenParts(line) {
   if (!parts.length) return '';
   return `<div style="margin-top:14px">${parts.map(p => `<div class="receipt-part">
     <span>part ${p.part_no}${p.received_pieces ? ' · ' + p.received_pieces + ' pcs' : ''}</span>
-    <span>${kg(p.yielded_kg)} kg usable · ${kg(p.delivered_kg)} kg live</span>
+    <span>${kg(p.yielded_kg)} kg usable · ${kg(p.delivered_kg)} kg live${p.evidence_url ? ` · <a href="${esc(p.evidence_url)}" target="_blank" style="color:var(--gold)">photo</a>` : ''}</span>
   </div>`).join('')}</div>`;
 }
 function openChickenReceive(purchaseId, lineIdx) {
@@ -332,6 +334,7 @@ function openChickenReceive(purchaseId, lineIdx) {
   const usableDefault = ce.remaining_prefill_yielded_kg > 0 ? ce.remaining_prefill_yielded_kg : '';
   const liveDefault = ce.remaining_prefill_delivered_kg > 0 ? ce.remaining_prefill_delivered_kg : '';
   if (!S.chicken.rateRupees && ce.daily_rate_paise) S.chicken.rateRupees = (Number(ce.daily_rate_paise) / 100).toString();
+  S.chicken.evidenceB64 = '';
   el('flow-title').textContent = line.cut_label || line.item || 'MN Chicken';
   el('flow-sub').textContent = `Sauda #${line.purchase_id} · line ${line.line_idx + 1} · part ${line.next_part_no || 1}`;
   el('flow-submit').textContent = 'Save receipt';
@@ -363,11 +366,26 @@ function openChickenReceive(purchaseId, lineIdx) {
           <input id="rx-live" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" value="${esc(liveDefault)}">
         </div>
       </div>
+      <button class="btn btn-dark" style="width:100%;margin-top:14px" onclick="pickChickenEvidence()">Add weight photo</button>
+      <div id="rx-photo-ready" class="photo-ready"></div>
       ${renderChickenParts(line)}
     </div>`;
   S.flow = 'he-chicken-receive';
   S.chicken.current = line;
   show('s-flow');
+}
+function pickChickenEvidence() {
+  el('chicken-evidence-cam').value = '';
+  el('chicken-evidence-cam').click();
+}
+function chickenEvidenceShot(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  el('rx-photo-ready').textContent = 'Preparing photo…';
+  shrink(file, (b64) => {
+    S.chicken.evidenceB64 = b64;
+    el('rx-photo-ready').textContent = 'Weight photo ready';
+  });
 }
 async function saveChickenReceipt() {
   const line = S.chicken.current;
@@ -380,6 +398,7 @@ async function saveChickenReceipt() {
   if (!(dailyRatePaise > 0)) return toast('Enter today live rate', true);
   if (!(yieldedKg > 0) || !(deliveredKg > 0)) return toast('Enter usable kg and live kg', true);
   if (line.ordered_mode === 'pieces' && (!(pieces > 0) || Math.round(pieces) !== pieces)) return toast('Enter pieces received now', true);
+  if (!S.chicken.evidenceB64) return toast('Add weight photo', true);
   el('flow-submit').disabled = true;
   try {
     const r = await fetch(`${API}?action=sauda-receive`, {
@@ -396,6 +415,7 @@ async function saveChickenReceipt() {
         received_pieces: pieces,
         yielded_kg: yieldedKg,
         delivered_kg: deliveredKg,
+        evidence_image: S.chicken.evidenceB64 || '',
       }),
     }).then(x => x.json());
     if (!r.success) throw new Error(r.error || 'save failed');
