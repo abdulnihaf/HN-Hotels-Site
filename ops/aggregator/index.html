@@ -681,6 +681,36 @@ async function loadHealth(){
     renderSourceFreshness();
     renderAll();
   }
+  loadIntegrity();
+}
+
+// Feed-integrity banner: the "is delivery data being LOST?" verdict that `health`
+// can't give (health treats an empty pull as healthy). loss_risk = a source that
+// was producing orders has gone silently empty, or capture stopped.
+async function loadIntegrity(){
+  try {
+    const r = await fetch(`${API}?action=feed-integrity&key=${KEY}`);
+    const d = await r.json();
+    let el = document.getElementById('integrityBanner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'integrityBanner';
+      const hdr = document.querySelector('header.topbar');
+      hdr.parentNode.insertBefore(el, hdr.nextSibling);
+    }
+    state.integrity = d;
+    if (!d || !d.ok) { el.style.display = 'none'; return; }
+    const map = {
+      live:      ['#0c2418', '#1f7a4d', '#8ee6b4', '✓ Delivery feeds live — no data loss detected'],
+      degraded:  ['#2a230c', '#7a5a1f', '#ffd27e', '⚠ '],
+      loss_risk: ['#2a0c0c', '#7a1f1f', '#ff9b9b', '⛔ DATA-LOSS RISK · '],
+      unknown:   ['#16161c', '#555', '#aaa', '? Capture health unknown · '],
+    };
+    const m = map[d.integrity] || map.unknown;
+    el.style.cssText = `margin:10px 16px 0;padding:10px 14px;border-radius:12px;background:${m[0]};border:1px solid ${m[1]};color:${m[2]};font-size:13px;font-weight:700;line-height:1.5`;
+    el.textContent = (d.integrity === 'live') ? m[3] : m[3] + (d.headline || '');
+    el.style.display = 'block';
+  } catch { /* keep last banner; never break the dashboard */ }
 }
 
 async function loadOrders(){

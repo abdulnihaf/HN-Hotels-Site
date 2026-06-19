@@ -832,8 +832,10 @@ async function handleGet(db, url, headers, env = {}) {
         }
       }
 
-      if (verdict === 'suspect_empty' || verdict === 'dead') lossFlags.push(`${plat} ${c.brand_code || ''}: ${note}`.trim());
-      else if (verdict === 'enrichment_blocked') lossFlags.push(`${plat} ${c.brand_code || ''}: enrichment degraded (401)`.trim());
+      // Platform-level messages so HE/NCH + orders/history collapse to one each on dedup.
+      if (verdict === 'suspect_empty') lossFlags.push(`${plat}: no order ${pf.age_minutes}m (had ${pf.last7d} in 7d) — verify capture (session ok)`);
+      else if (verdict === 'dead') lossFlags.push(`${plat} ${c.brand_code || ''}: capture STOPPED — ${note}`.trim());
+      else if (verdict === 'enrichment_blocked') lossFlags.push(`${plat} ${c.brand_code || ''}: order-detail 401 — re-login partner (orders still captured)`.trim());
       if (rank[verdict] > rank[worst]) worst = verdict;
 
       coordinates.push({
@@ -852,14 +854,15 @@ async function handleGet(db, url, headers, env = {}) {
     const integrity = (coordError || noCoords) ? 'unknown'
                     : (worst === 'dead' || worst === 'suspect_empty') ? 'loss_risk'
                     : (worst === 'stale' || worst === 'enrichment_blocked') ? 'degraded' : 'live';
+    const flags = [...new Set(lossFlags)];   // collapse per-coordinate dups to one per issue
 
     return new Response(JSON.stringify({
       ok: true,
       integrity,                       // live | degraded | loss_risk | unknown  ← glance verdict
       headline: integrity === 'unknown'
         ? `cannot read capture health${coordError ? ' (' + coordError + ')' : ' — no coordinates'}`
-        : (lossFlags.length ? lossFlags.join(' · ') : 'all delivery feeds live — no data loss detected'),
-      loss_flags: lossFlags,
+        : (flags.length ? flags.join(' · ') : 'all delivery feeds live — no data loss detected'),
+      loss_flags: flags,
       business_hours: businessHours,
       orders_freshness: fresh,
       coordinates,
