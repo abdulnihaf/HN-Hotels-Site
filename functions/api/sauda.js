@@ -520,14 +520,71 @@ async function buildCatalog(db) {
 // ── Orders already placed for a given day ──
 async function ordersForDay(db, forDate) {
   const rows = await db.prepare(
-    `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, expected_amount_paise, ordered_by, ordered_at
+    `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, expected_amount_paise, pay_amount_paise, paid_at, ordered_by, ordered_at
        FROM sauda_purchase WHERE for_date = ? ORDER BY id DESC`
   ).bind(forDate).all();
-  return { for_date: forDate, orders: rows?.results || [] };
+  return { for_date: forDate, orders: (rows?.results || []).map(withPurchaseAmount) };
 }
 
 // parse a leading numeric quantity from a string like "2", "2.5", "2 kg", "1.5L"
 function qtyNum(q) { const m = String(q == null ? '' : q).match(/-?[\d.]+/); return m ? (parseFloat(m[0]) || 0) : 0; }
+
+function parseItemsJson(itemsJson) {
+  try { return JSON.parse(itemsJson || '[]') || []; } catch (e) { return []; }
+}
+
+function lineIntentAmountPaise(line) {
+  const qty = qtyNum(line && (line.qty ?? line.count ?? line.ordered_qty ?? line.ordered_count));
+  const price = Math.max(0, Math.round(Number(line && line.price_paise) || 0));
+  return Math.round(qty * price);
+}
+
+function lineReceiptCostPaise(line) {
+  const receiptCost = Math.round(Number(line && line.receipt && line.receipt.cost_paise) || 0);
+  if (receiptCost > 0) return receiptCost;
+  const parts = Array.isArray(line && line.receipt_parts) ? line.receipt_parts : [];
+  const partsCost = parts.reduce((sum, p) => sum + Math.max(0, Math.round(Number(p && p.cost_paise) || 0)), 0);
+  return partsCost > 0 ? partsCost : 0;
+}
+
+function receiptAmountFromItems(items) {
+  let total = 0;
+  let hasReceiptCost = false;
+  for (const line of items) {
+    const receiptCost = lineReceiptCostPaise(line);
+    if (receiptCost > 0) {
+      total += receiptCost;
+      hasReceiptCost = true;
+    } else {
+      total += lineIntentAmountPaise(line);
+    }
+  }
+  return hasReceiptCost ? total : null;
+}
+
+function purchaseAmount(row, opts = {}) {
+  const items = Array.isArray(row && row.items) ? row.items : parseItemsJson(row && row.items_json);
+  const receiptAmount = receiptAmountFromItems(items);
+  const paid = !!(row && row.paid_at) || (row && row.status) === 'PAID';
+  const requested = (row && row.status) === 'REQUESTED' && Math.round(Number(row.pay_amount_paise) || 0) > 0;
+  if (receiptAmount != null && !paid && !(opts.settlement && requested)) {
+    return { amount_paise: receiptAmount, amount_source: 'anbar_receipt', actual_receipt_cost_paise: receiptAmount };
+  }
+  const stored = Math.round(Number((row && row.pay_amount_paise) || (row && row.expected_amount_paise) || 0));
+  if (stored > 0) return { amount_paise: stored, amount_source: row && row.pay_amount_paise ? 'pay_amount' : 'expected', actual_receipt_cost_paise: receiptAmount || 0 };
+  if (receiptAmount != null) return { amount_paise: receiptAmount, amount_source: 'anbar_receipt', actual_receipt_cost_paise: receiptAmount };
+  return { amount_paise: 0, amount_source: 'unknown', actual_receipt_cost_paise: 0 };
+}
+
+function withPurchaseAmount(row) {
+  const amount = purchaseAmount(row);
+  return {
+    ...row,
+    amount_paise: amount.amount_paise,
+    amount_source: amount.amount_source,
+    actual_receipt_cost_paise: amount.actual_receipt_cost_paise,
+  };
+}
 
 // ── Place: one sauda_purchase row per vendor basket ──
 // body = { for_date?, lines: [{ item, sku?, qty, unit, vendorKey, brand, price_paise? }] }
@@ -815,7 +872,7 @@ async function reconcileSweep(db, sinceFloor) {
   let rows = [];
   try {
     rows = ((await db.prepare(
-      `SELECT id, vendor_name, pay_amount_paise, expected_amount_paise, pay_requested_at, ordered_at
+      `SELECT id, vendor_name, pay_amount_paise, expected_amount_paise, items_json, status, paid_at, pay_requested_at, ordered_at
          FROM sauda_purchase
         WHERE status='PAID' AND reconciled_at IS NULL AND (pay_timing IS NULL OR pay_timing != 'online')
           AND for_date >= ${sinceFloor} ORDER BY id DESC LIMIT 50`).all()).results) || [];
@@ -824,7 +881,7 @@ async function reconcileSweep(db, sinceFloor) {
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   for (const r of rows) {
     const v = vendorView(canonVendorKey(r.vendor_name) || 'unassigned');
-    const amt = r.pay_amount_paise || r.expected_amount_paise || 0;
+    const amt = purchaseAmount(r, { settlement: true }).amount_paise;
     if (!v.vpa || !amt) continue;
     const since = String(r.pay_requested_at || r.ordered_at || '').slice(0, 10) || '2000-01-01';
     const m = await findVendorDebit(db, v.vpa, amt, since);
@@ -859,13 +916,15 @@ async function vendorLedger(db, days) {
     let paid = 0, outstanding = 0, lastPaidAt = '';
     const trail = [];
     for (const r of list) {
-      const amt = (r.pay_amount_paise || r.expected_amount_paise || 0);
+      const amount = purchaseAmount(r);
+      const amt = amount.amount_paise;
       const isPaid = !!r.paid_at || r.status === 'PAID';
       if (isPaid) { paid += amt; if (r.paid_at && r.paid_at > lastPaidAt) lastPaidAt = r.paid_at; }
       else outstanding += amt;
       let itemCount = 0; try { itemCount = JSON.parse(r.items_json || '[]').length; } catch (e) {}
       trail.push({
         id: r.id, for_date: r.for_date, status: r.status, amount_paise: amt, items: itemCount,
+        amount_source: amount.amount_source, actual_receipt_cost_paise: amount.actual_receipt_cost_paise,
         ordered_at: r.ordered_at || '', pay_requested_at: r.pay_requested_at || '',
         paid_at: r.paid_at || '', method: r.pay_method || '',
         reconciled: !!r.reconciled_at, bank_ref: r.bank_ref || '',
@@ -896,7 +955,7 @@ async function vendorLedger(db, days) {
 // Hyperpure orders are prepaid online at checkout, so they never enter the list.
 async function openOrders(db) {
   const rows = await db.prepare(
-    `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, pay_amount_paise, expected_amount_paise, for_date
+    `SELECT id, brand, vendor_name, fulfilment, pay_timing, items_json, status, pay_amount_paise, expected_amount_paise, paid_at, for_date
        FROM sauda_purchase WHERE paid_at IS NULL AND (pay_timing IS NULL OR pay_timing != 'online')
         ORDER BY for_date DESC, id DESC LIMIT 200`
   ).all();
@@ -910,11 +969,14 @@ async function openOrders(db) {
   const orders = [];
   for (const [vk, list] of byVendor.entries()) {
     const v = vendorView(vk);
-    let items = [], amount = 0; const ids = []; const dates = new Set();
+    let items = [], amount = 0, receiptCost = 0; const ids = []; const dates = new Set(); const sources = new Set();
     for (const o of list) {
       ids.push(o.id);
       try { items = items.concat(JSON.parse(o.items_json || '[]')); } catch (e) {}
-      amount += (o.pay_amount_paise || o.expected_amount_paise || 0);
+      const amt = purchaseAmount(o);
+      amount += amt.amount_paise;
+      receiptCost += amt.actual_receipt_cost_paise || 0;
+      sources.add(amt.amount_source);
       if (o.for_date) dates.add(o.for_date);
     }
     const forDates = [...dates].sort();
@@ -924,6 +986,8 @@ async function openOrders(db) {
       vpa: v.vpa || '', fulfilmentLabel: v.fulfilmentLabel, payLabel: v.payLabel, pay: v.pay,
       items_json: JSON.stringify(items),
       pay_amount_paise: amount,                       // summed; 0 if not yet known
+      amount_source: sources.has('anbar_receipt') ? 'anbar_receipt' : [...sources][0] || 'unknown',
+      actual_receipt_cost_paise: receiptCost,
       for_date: forDates[forDates.length - 1] || '', for_dates: forDates,
     });
   }
@@ -1027,7 +1091,7 @@ async function autoSettle(db) {
   let rows = [];
   try {
     rows = ((await db.prepare(
-      `SELECT id, vendor_name, pay_amount_paise, expected_amount_paise, pay_requested_at, ordered_at
+      `SELECT id, vendor_name, pay_amount_paise, expected_amount_paise, items_json, status, paid_at, pay_requested_at, ordered_at
          FROM sauda_purchase
         WHERE (pay_timing IS NULL OR pay_timing != 'online')
           AND ( status='REQUESTED' OR (status='PAID' AND reconciled_at IS NULL) )
@@ -1037,7 +1101,7 @@ async function autoSettle(db) {
   const now = new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
   for (const r of rows) {
     const v = vendorView(canonVendorKey(r.vendor_name) || 'unassigned');
-    const amt = r.pay_amount_paise || r.expected_amount_paise || 0;
+    const amt = purchaseAmount(r, { settlement: true }).amount_paise;
     if (!v.vpa || !amt) continue;
     const since = String(r.pay_requested_at || r.ordered_at || '').slice(0, 10) || '2000-01-01';
     const m = await findVendorDebit(db, v.vpa, amt, since);
