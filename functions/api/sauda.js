@@ -1359,7 +1359,7 @@ async function vendorLedger(db, days) {
       trail.push({
         id: 'event-' + e.id, event: true, for_date: e.event_date, status,
         amount_paise: Math.abs(signed), signed_amount_paise: signed, items: 0,
-        ordered_at: e.created_at || e.event_date || '', pay_requested_at: '',
+        ordered_at: e.event_date || e.created_at || '', pay_requested_at: '',
         paid_at: signed < 0 ? (e.event_date || '') : '', method: e.event_type || '',
         reconciled: false, bank_ref: e.ref || '', note: e.note || '', source: e.source || '',
       });
