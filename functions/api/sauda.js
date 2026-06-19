@@ -2165,6 +2165,9 @@ async function purchasePrices(db, body, auth, env) {
       yielded_kg: u.yielded_kg == null ? null : cleanLineField(u.yielded_kg, 32),
       delivered_kg: u.delivered_kg == null ? null : cleanLineField(u.delivered_kg, 32),
       qty: u.qty == null ? null : String(u.qty).trim(),
+      unit: u.unit == null ? null : cleanLineField(u.unit, 24),
+      pack_label: u.pack_label == null ? null : cleanLineField(u.pack_label, 80),
+      pack_qty: u.pack_qty == null ? null : Math.max(0, Number(u.pack_qty) || 0),
       bill_qty: u.bill_qty == null ? null : cleanLineField(u.bill_qty, 32),
       bill_unit: u.bill_unit == null ? null : cleanLineField(u.bill_unit, 16),
     });
@@ -2189,6 +2192,9 @@ async function purchasePrices(db, body, auth, env) {
       if (!items[u.line_idx]) continue;
       applyReceiptFields(items[u.line_idx], u, now, (auth && auth.u) || '');
       if (u.qty !== null && u.qty !== '') items[u.line_idx].qty = u.qty;
+      if (u.unit !== null && u.unit !== '') items[u.line_idx].unit = u.unit;
+      if (u.pack_label !== null && u.pack_label !== '') items[u.line_idx].pack_label = u.pack_label;
+      if (u.pack_qty !== null && u.pack_qty > 0) items[u.line_idx].pack_qty = u.pack_qty;
       if (u.bill_qty !== null && u.bill_qty !== '') items[u.line_idx].bill_qty = u.bill_qty;
       if (u.bill_unit !== null && u.bill_unit !== '') items[u.line_idx].bill_unit = u.bill_unit;
       if (u.yielded_kg !== null && u.yielded_kg !== '') items[u.line_idx].yielded_kg = u.yielded_kg;
