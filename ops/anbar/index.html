@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>Anbar — NCH Inventory</title>
+<title>Anbar — HN Hotels</title>
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Anbar">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="/ops/anbar/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
 <style>
@@ -44,6 +44,13 @@
   .brand { font-family:var(--serif); font-size:52px; font-weight:700; color:var(--text); text-shadow:0 1px 0 rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.45); }
   .brand-sub { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--gold); margin:2px 0 30px; }
   .gate-foot { font-family:var(--serif); font-style:italic; font-size:13px; color:rgba(212,162,76,.5); margin-top:26px; }
+  .choose-wrap { width:100%; max-width:360px; display:grid; gap:12px; margin-top:4px; }
+  .choose-card { display:flex; align-items:center; gap:13px; width:100%; padding:15px; border-radius:14px; border:1px solid var(--border); background:var(--card); color:var(--text); text-decoration:none; }
+  .choose-card:active { transform:scale(.98); border-color:var(--gold); background:var(--gold-dim); }
+  .choose-ico { width:48px; height:48px; border-radius:13px; display:flex; align-items:center; justify-content:center; background:var(--card2); color:var(--gold); font-weight:900; }
+  .choose-name { font-size:15px; font-weight:800; }
+  .choose-meta { font-size:11px; color:var(--muted); margin-top:3px; line-height:1.35; }
+  .choose-arrow { margin-left:auto; color:var(--gold); font-size:22px; }
 
   .pin-dots { display:flex; gap:14px; justify-content:center; margin:6px 0 24px; }
   .pin-dot { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(212,162,76,.6); transition:all .15s; }
@@ -73,6 +80,17 @@
 
   .qty-input { width:100%; background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:16px; color:var(--text); font-size:30px; font-weight:800; text-align:center; outline:none; font-variant-numeric:tabular-nums; }
   .qty-input:focus { border-color:var(--gold); }
+  .field { margin-top:12px; text-align:left; }
+  .field label { display:block; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:800; margin:0 0 6px 2px; }
+  .field input { width:100%; background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:14px; color:var(--text); font-size:24px; font-weight:800; outline:none; font-variant-numeric:tabular-nums; }
+  .field input:focus { border-color:var(--gold); }
+  .status-chip { display:inline-flex; align-items:center; min-height:25px; padding:4px 9px; border-radius:999px; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--border); }
+  .status-ordered { color:var(--muted); background:rgba(255,255,255,.04); }
+  .status-partial { color:var(--amber); background:var(--amber-dim); border-color:rgba(251,191,36,.35); }
+  .status-saved { color:var(--green); background:var(--green-dim); border-color:rgba(55,211,153,.4); }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .receipt-part { display:flex; justify-content:space-between; gap:10px; padding:9px 0; border-top:1px solid var(--border); font-size:12px; color:var(--muted); }
+  .photo-ready { margin-top:9px; color:var(--green); font-size:12px; font-weight:800; }
   .toast { position:fixed; bottom:calc(28px + var(--safe-bot)); left:50%; transform:translateX(-50%); padding:12px 22px; border-radius:12px; font-size:14px; font-weight:700; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; background:var(--green-dim); color:var(--green); border:1px solid rgba(55,211,153,.4); }
   .toast.show { opacity:1; }
   .hidden { display:none !important; }
@@ -81,8 +99,36 @@
 </head>
 <body>
 
+<!-- ENTRYPOINT CHOOSER -->
+<div id="s-choose" class="screen active">
+  <div class="gate">
+    <div class="tile">انبار</div>
+    <div class="brand">Anbar</div>
+    <div class="brand-sub">Choose the inventory chamber</div>
+    <div class="choose-wrap">
+      <a class="choose-card" href="/ops/anbar/nch/">
+        <div class="choose-ico">NCH</div>
+        <div>
+          <div class="choose-name">Nawabi Chai House</div>
+          <div class="choose-meta">live inventory board · counter and store movements</div>
+        </div>
+        <div class="choose-arrow">›</div>
+      </a>
+      <a class="choose-card" href="/ops/anbar/he/">
+        <div class="choose-ico">HE</div>
+        <div>
+          <div class="choose-name">Hamza Express</div>
+          <div class="choose-meta">receiving desk · MN Chicken first</div>
+        </div>
+        <div class="choose-arrow">›</div>
+      </a>
+    </div>
+    <div class="gate-foot">HN Hotels · Anbar</div>
+  </div>
+</div>
+
 <!-- GATE -->
-<div id="s-gate" class="screen active">
+<div id="s-gate" class="screen">
   <div class="gate">
     <div class="tile">انبار</div>
     <div class="brand">Anbar</div>
@@ -96,7 +142,7 @@
       <div class="key" style="opacity:0"></div><div class="key" onclick="key('0')">0</div><div class="key del" onclick="del()">⌫</div>
     </div>
     <div class="err" id="gate-err"></div>
-    <div class="gate-foot">HN Hotels · Nawabi Chai House</div>
+    <div class="gate-foot" id="gate-foot">HN Hotels · Nawabi Chai House</div>
   </div>
 </div>
 
@@ -111,7 +157,7 @@
     <div class="loc-chip" id="home-loc" onclick="switchLoc()">COUNTER</div>
   </div>
   <div class="scroll" id="home-list"><div class="loading">Loading…</div></div>
-  <div class="actions">
+  <div class="actions" id="home-actions">
     <button class="btn btn-green" onclick="startFlow('receipt')">📥 Receive</button>
     <button class="btn btn-gold" id="issue-btn" onclick="startFlow('issue')">📤 Taking to counter</button>
     <button class="btn btn-gold" id="settle-btn" onclick="startSettle()">📸 Settle</button>
@@ -133,22 +179,47 @@
 </div>
 
 <input type="file" accept="image/*" capture="environment" id="settle-cam" style="display:none" onchange="settleShot(this)">
+<input type="file" accept="image/*" capture="environment" id="chicken-evidence-cam" style="display:none" onchange="chickenEvidenceShot(this)">
 <div class="toast" id="toast"></div>
 
 <script>
 const API = '/api/anbar';
 const ICONS = { 'NCH-OB':'🍪', 'NCH-WTR':'💧', 'NCH-KH':'🌴', 'NCH-BUN':'🍞', 'NCH-CC':'🍗', 'NCH-PS':'🥟', 'HN-RM-202':'🍃', 'HN-RM-201':'🥛' };
-const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {} };
+const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {}, chicken: { lines: [], rateRupees: '', date: '' } };
+const Q = new URLSearchParams(location.search);
+const ENTRY_PATH = location.pathname.replace(/\/index\.html$/, '/').replace(/\/+$/, '/');
+const QUERY_BRAND = (Q.get('brand') || '').toUpperCase();
+const QUERY_KIND = (Q.get('kind') || '').toLowerCase();
+const QUERY_VENDOR = (Q.get('vendor') || '').toLowerCase();
+function detectEntryKind() {
+  if (ENTRY_PATH.endsWith('/ops/anbar/he/')) return 'he';
+  if (ENTRY_PATH.endsWith('/ops/anbar/nch/')) return 'nch';
+  if (ENTRY_PATH.endsWith('/ops/anbar/choose/')) return 'choose';
+  if (QUERY_BRAND === 'HE' || QUERY_KIND === 'chicken' || QUERY_VENDOR === 'mn') return 'he';
+  if (QUERY_BRAND === 'NCH' || Q.get('loc')) return 'nch';
+  return 'choose';
+}
+const ENTRY_KIND = detectEntryKind();
+const IS_CHOOSER = ENTRY_KIND === 'choose';
+const APP_BRAND = ENTRY_KIND === 'he' ? 'HE' : ENTRY_KIND === 'nch' ? 'NCH' : QUERY_BRAND;
+const APP_KIND = ENTRY_KIND === 'he' ? 'chicken' : QUERY_KIND;
+const IS_HE_CHICKEN = APP_BRAND === 'HE' && APP_KIND === 'chicken';
+const IS_NCH_ANBAR = APP_BRAND === 'NCH';
+const CUT_ICON = { boneless:'🍗', shawarma:'🌯', kebab:'🔥', tandoori:'🍗', grill:'🔥', tangdi:'🍖', lollipop:'🍗' };
 
 // QR-door scoping: ?loc=counter|store|kitchen pre-scopes the app
-const qLoc = new URLSearchParams(location.search).get('loc');
-if (qLoc === 'store' || qLoc === 'counter') S.loc = qLoc;
-if (qLoc === 'kitchen') S.loc = 'counter';  // kitchen receipts land on the counter lane at layer 1
+const qLoc = Q.get('loc');
+if (IS_NCH_ANBAR && (qLoc === 'store' || qLoc === 'counter')) S.loc = qLoc;
+if (IS_NCH_ANBAR && qLoc === 'kitchen') S.loc = 'counter';  // kitchen receipts land on the counter lane at layer 1
 
 function el(id) { return document.getElementById(id); }
 function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); el(id).classList.add('active'); }
 function toast(msg, bad) { const t = el('toast'); t.textContent = msg; t.style.color = bad ? 'var(--red)' : 'var(--green)'; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2600); }
 function istTime(iso) { return new Date(iso).toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Kolkata'}); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function todayIST() { return new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }
+function kg(v) { return v == null ? '—' : (Math.round(Number(v) * 100) / 100).toString(); }
+S.chicken.date = /^\d{4}-\d{2}-\d{2}$/.test(Q.get('date') || '') ? Q.get('date') : todayIST();
 
 // ── GATE ──
 function key(k) { if (S.entry.length >= 4) return; S.entry += k; dots(); if (S.entry.length === 4) verify(); }
@@ -165,14 +236,23 @@ async function verify() {
 // ── HOME ──
 function switchLoc() { S.loc = S.loc === 'counter' ? 'store' : 'counter'; renderHomeChrome(); loadLive(); }
 function renderHomeChrome() {
+  if (IS_HE_CHICKEN) return renderChickenChrome();
+  document.title = 'Anbar — Nawabi Chai House';
+  const title = document.querySelector('#s-home .nav-title');
+  if (title) title.textContent = 'Anbar · Nawabi Chai House';
   el('home-loc').textContent = S.loc.toUpperCase();
+  el('home-loc').onclick = switchLoc;
   el('home-sub').textContent = `${S.person} · tap location chip to switch`;
+  el('home-actions').classList.remove('hidden');
   el('issue-btn').classList.toggle('hidden', S.loc !== 'store');
   el('waste-btn').classList.toggle('hidden', S.loc !== 'counter');  // waste is a counter event (layer 1)
   // Hero per door: store = the MOVE, counter = the photo SETTLE. Manual count is fallback.
   el('settle-btn').classList.toggle('hidden', S.loc !== 'counter');
 }
-function goHome() { renderHomeChrome(); show('s-home'); loadLive(); }
+function goHome() {
+  if (IS_HE_CHICKEN) return goChickenHome();
+  renderHomeChrome(); show('s-home'); loadLive();
+}
 async function loadLive() {
   el('home-list').innerHTML = '<div class="loading">Loading…</div>';
   const r = await fetch(`${API}?action=live`).then(x => x.json()).catch(() => ({}));
@@ -198,6 +278,220 @@ async function loadLive() {
     </div></div>`;
   }
   el('home-list').innerHTML = html || '<div class="loading">No items for this location</div>';
+}
+
+// ── HE CHICKEN RECEIVING INSIDE ANBAR ──
+function renderChickenChrome() {
+  el('home-loc').textContent = 'RECEIVE';
+  el('home-loc').onclick = null;
+  el('home-actions').classList.add('hidden');
+  el('home-sub').textContent = `${S.person} · receiving · Hamza Express`;
+  document.title = 'Anbar — HE Receiving';
+  const title = document.querySelector('#s-home .nav-title');
+  if (title) title.textContent = 'Anbar · Hamza Express';
+}
+function chickenDate() {
+  const d = S.chicken.date || todayIST();
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : todayIST();
+}
+function setChickenDate(v) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return;
+  S.chicken.date = v;
+  S.chicken.rateRupees = '';
+  loadChickenQueue();
+}
+function goChickenHome() {
+  renderChickenChrome();
+  show('s-home');
+  loadChickenQueue();
+}
+async function loadChickenQueue() {
+  const date = chickenDate();
+  el('home-list').innerHTML = '<div class="loading">Loading MN Broilers…</div>';
+  const r = await fetch(`${API}?action=sauda-receive-queue&brand=HE&date=${encodeURIComponent(date)}&kind=chicken`).then(x => x.json()).catch(() => ({}));
+  if (!r.success) { el('home-list').innerHTML = `<div class="loading">${esc(r.error || 'Failed to load')}</div>`; return; }
+  const lines = r.lines || [];
+  S.chicken.lines = lines;
+  if (!lines.length) {
+    el('home-list').innerHTML = `<div class="card" style="border-color:var(--anbar-bd)">
+      <div class="item-row" style="cursor:default">
+        <div class="item-ico">MN</div>
+        <div style="flex:1">
+          <div class="item-name">MN Chicken</div>
+          <div class="item-meta">Sauda receiving trail</div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="chicken-date">Receiving date</label>
+        <input id="chicken-date" type="date" value="${esc(date)}" onchange="setChickenDate(this.value)">
+      </div>
+    </div><div class="loading">No MN Broilers Sauda order for this date</div>`;
+    return;
+  }
+  const savedCount = lines.filter(l => l.inventory_saved).length;
+  const partialCount = lines.filter(l => l.partial).length;
+  const header = `<div class="card" style="border-color:var(--anbar-bd)">
+    <div class="item-row" style="cursor:default">
+      <div class="item-ico">MN</div>
+      <div style="flex:1">
+        <div class="item-name">MN Chicken</div>
+        <div class="item-meta">${esc(date)} · ${lines.length} Sauda lines · ${savedCount} saved${partialCount ? ' · ' + partialCount + ' partial' : ''}</div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="chicken-date">Receiving date</label>
+      <input id="chicken-date" type="date" value="${esc(date)}" onchange="setChickenDate(this.value)">
+    </div>
+    <div class="field">
+      <label for="chicken-rate">Today live rate</label>
+      <input id="chicken-rate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="135" value="${esc(S.chicken.rateRupees)}" oninput="S.chicken.rateRupees=this.value">
+    </div>
+  </div>`;
+  el('home-list').innerHTML = header + lines.map(line => {
+    const icon = CUT_ICON[line.cut] || '🍗';
+    const summary = line.receipt_summary || {};
+    const saved = line.inventory_saved || line.status === 'inventory_saved';
+    const partial = line.partial || line.status === 'partial';
+    const border = saved ? 'rgba(55,211,153,.4)' : partial ? 'rgba(251,191,36,.35)' : 'var(--border)';
+    const chipClass = saved ? 'status-saved' : partial ? 'status-partial' : 'status-ordered';
+    const chipText = saved ? 'inventory saved' : partial ? 'partial' : 'ordered';
+    const progress = line.ordered_mode === 'pieces'
+      ? `${summary.received_pieces || 0}/${line.ordered_pieces || line.ordered_amount || '—'} pieces`
+      : `${kg(summary.yielded_kg || 0)}/${kg(line.ordered_amount || line.ordered_qty)} kg`;
+    const sub = saved
+        ? `${line.saved_at ? 'saved ' + istTime(line.saved_at) : 'saved'}${line.saved_by ? ' · ' + esc(line.saved_by) : ''}`
+        : partial
+          ? `${progress} received · pending ${line.ordered_mode === 'pieces' ? (summary.remaining_pieces || 0) + ' pieces' : kg(summary.remaining_kg || 0) + ' kg'}`
+          : `order ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || '')}`;
+    const btn = saved
+      ? '<button class="btn btn-green" disabled style="margin-top:12px;width:100%">Inventory saved</button>'
+      : `<button class="btn btn-gold" style="margin-top:12px;width:100%" onclick="openChickenReceive(${line.purchase_id},${line.line_idx})">${partial ? 'Receive balance' : 'Receive now'}</button>`;
+    return `<div class="card" style="border-color:${border}">
+      <div class="item-row" style="cursor:default">
+        <div class="item-ico">${icon}</div>
+        <div style="flex:1">
+          <div class="item-name">${esc(line.cut_label || line.item || line.cut)}</div>
+          <div class="item-meta">Sauda #${line.purchase_id} · line ${line.line_idx + 1} · ordered ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || '')}</div>
+          <div style="margin-top:8px"><span class="status-chip ${chipClass}">${chipText}</span></div>
+          <div class="item-meta" style="margin-top:7px">${sub}</div>
+        </div>
+      </div>
+      ${btn}
+    </div>`;
+  }).join('');
+}
+function paiseFromRateInput() {
+  const v = Number(String(S.chicken.rateRupees || el('chicken-rate')?.value || '').replace(/,/g, ''));
+  return v > 0 ? Math.round(v * 100) : null;
+}
+function chickenLine(purchaseId, lineIdx) {
+  return S.chicken.lines.find(l => Number(l.purchase_id) === Number(purchaseId) && Number(l.line_idx) === Number(lineIdx));
+}
+function renderChickenParts(line) {
+  const parts = line.receipt_parts || [];
+  if (!parts.length) return '';
+  return `<div style="margin-top:14px">${parts.map(p => `<div class="receipt-part">
+    <span>part ${p.part_no}${p.received_pieces ? ' · ' + p.received_pieces + ' pcs' : ''}</span>
+    <span>${kg(p.yielded_kg)} kg usable · ${kg(p.delivered_kg)} kg live${p.evidence_url ? ` · <a href="${esc(p.evidence_url)}" target="_blank" style="color:var(--gold)">photo</a>` : ''}</span>
+  </div>`).join('')}</div>`;
+}
+function openChickenReceive(purchaseId, lineIdx) {
+  const line = chickenLine(purchaseId, lineIdx);
+  if (!line) return;
+  const summary = line.receipt_summary || {};
+  const isPieces = line.ordered_mode === 'pieces';
+  S.chicken.evidenceB64 = '';
+  el('flow-title').textContent = line.cut_label || line.item || 'MN Chicken';
+  el('flow-sub').textContent = `Sauda #${line.purchase_id} · line ${line.line_idx + 1} · part ${line.next_part_no || 1}`;
+  el('flow-submit').textContent = 'Save receipt';
+  el('flow-actions').style.display = 'flex';
+  el('flow-body').innerHTML = `
+    <div class="card" style="padding:18px">
+      <div class="item-row" style="cursor:default">
+        <div class="item-ico">${CUT_ICON[line.cut] || '🍗'}</div>
+        <div style="flex:1">
+          <div class="item-name">${esc(line.cut_label || line.item)}</div>
+          <div class="item-meta">ordered ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || '')}${isPieces ? ` · received ${summary.received_pieces || 0}/${line.ordered_pieces || line.ordered_amount || '—'} pieces` : ''}</div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="rx-rate">Today live rate</label>
+        <input id="rx-rate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="135" value="${esc(S.chicken.rateRupees)}" oninput="S.chicken.rateRupees=this.value">
+      </div>
+      ${isPieces ? `<div class="field">
+        <label for="rx-pieces">Pieces received now</label>
+        <input id="rx-pieces" type="number" inputmode="numeric" min="1" step="1" placeholder="${summary.remaining_pieces || line.ordered_pieces || ''}">
+      </div>` : ''}
+      <div class="split">
+        <div class="field">
+          <label for="rx-usable">Usable kg received</label>
+          <input id="rx-usable" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label for="rx-live">Live kg used</label>
+          <input id="rx-live" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <button class="btn btn-dark" style="width:100%;margin-top:14px" onclick="pickChickenEvidence()">Add weight photo</button>
+      <div id="rx-photo-ready" class="photo-ready"></div>
+      ${renderChickenParts(line)}
+    </div>`;
+  S.flow = 'he-chicken-receive';
+  S.chicken.current = line;
+  show('s-flow');
+}
+function pickChickenEvidence() {
+  el('chicken-evidence-cam').value = '';
+  el('chicken-evidence-cam').click();
+}
+function chickenEvidenceShot(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  el('rx-photo-ready').textContent = 'Preparing photo…';
+  shrink(file, (b64) => {
+    S.chicken.evidenceB64 = b64;
+    el('rx-photo-ready').textContent = 'Weight photo ready';
+  });
+}
+async function saveChickenReceipt() {
+  const line = S.chicken.current;
+  if (!line) return;
+  S.chicken.rateRupees = el('rx-rate')?.value || S.chicken.rateRupees;
+  const dailyRatePaise = paiseFromRateInput();
+  const yieldedKg = Number(el('rx-usable')?.value || 0);
+  const deliveredKg = Number(el('rx-live')?.value || 0);
+  const pieces = line.ordered_mode === 'pieces' ? Number(el('rx-pieces')?.value || 0) : null;
+  if (!(dailyRatePaise > 0)) return toast('Enter today live rate', true);
+  if (!(yieldedKg > 0) || !(deliveredKg > 0)) return toast('Enter usable kg and live kg', true);
+  if (line.ordered_mode === 'pieces' && (!(pieces > 0) || Math.round(pieces) !== pieces)) return toast('Enter pieces received now', true);
+  if (!S.chicken.evidenceB64) return toast('Add weight photo', true);
+  el('flow-submit').disabled = true;
+  try {
+    const r = await fetch(`${API}?action=sauda-receive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pin: S.pin,
+        brand: 'HE',
+        kind: 'chicken',
+        purchase_id: line.purchase_id,
+        line_idx: line.line_idx,
+        receipt_part_no: line.next_part_no || 1,
+        daily_rate_paise: dailyRatePaise,
+        received_pieces: pieces,
+        yielded_kg: yieldedKg,
+        delivered_kg: deliveredKg,
+        evidence_image: S.chicken.evidenceB64 || '',
+      }),
+    }).then(x => x.json());
+    if (!r.success) throw new Error(r.error || 'save failed');
+    toast(r.partial ? `partial saved · ${r.pending_pieces || 0} pieces pending` : 'inventory saved');
+    goChickenHome();
+  } catch (e) {
+    toast(e.message || 'save failed', true);
+  } finally {
+    el('flow-submit').disabled = false;
+  }
 }
 
 // ── FLOWS ──
@@ -405,6 +699,7 @@ async function settleFinish() {
 }
 
 async function submitFlow() {
+  if (S.flow === 'he-chicken-receive') return saveChickenReceipt();
   if (S.flow === 'settle') return settleFinish();
   el('flow-submit').disabled = true;
   try {
@@ -445,8 +740,23 @@ async function showHistory(code) {
 }
 
 // ── INIT ──
-if (qLoc) el('gate-loc').innerHTML = `<span class="loc-chip">${S.loc.toUpperCase()} DOOR</span>`;
-if (S.pin && S.person) { goHome(); } // device remembered
+if (IS_CHOOSER) {
+  show('s-choose');
+} else {
+  show('s-gate');
+  if (IS_HE_CHICKEN) {
+    document.title = 'Anbar — HE Receiving';
+    el('gate-loc').innerHTML = '<span class="loc-chip">ANBAR RECEIVING</span>';
+    el('gate-foot').textContent = 'HN Hotels · Hamza Express';
+  } else if (IS_NCH_ANBAR) {
+    document.title = 'Anbar — Nawabi Chai House';
+    el('gate-loc').innerHTML = qLoc
+      ? `<span class="loc-chip">${S.loc.toUpperCase()} DOOR</span>`
+      : '<span class="loc-chip">NCH INVENTORY</span>';
+    el('gate-foot').textContent = 'HN Hotels · Nawabi Chai House';
+  }
+  if (S.pin && S.person) { goHome(); } // device remembered
+}
 </script>
 </body>
 </html>

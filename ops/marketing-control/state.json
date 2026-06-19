@@ -1,7 +1,7 @@
 {
   "version": "execution-memory-v1",
-  "updated_at": "2026-06-17T14:47:20+0530",
-  "published_at": "2026-06-17T14:47:20+0530",
+  "updated_at": "2026-06-17T15:08:21+0530",
+  "published_at": "2026-06-17T15:08:21+0530",
   "source": "github-main-static-json",
   "lanes": {
     "master": {
@@ -149,21 +149,36 @@
       "title": "11 Reel Making",
       "subgroup": "Creative Surface",
       "risk": "creative publishing and claim accuracy",
-      "status": "execution_plan_locked",
-      "last_task": "Plan QISSA Intelligence V2 execution",
-      "last_summary": "Execution plan locked: do not render another reel directly. Build the reel machine as gated modules: source inventory audit, frame-window scorer, quality/stability gate, clip repair/enhancement lane, transition grammar, transparent overlay grammar, Meta objective contract, variant render lane, approval desk creative PASS/FAIL, and Meta readback learner. The next deliverable is not a better single reel first; it is the intelligence pipeline that makes bad reels impossible to pass.",
-      "next_action": "Start Phase 1: scan raw clip library and create per-window quality ledger with clarity, shake, exposure, crop, food recognizability, transition handles, overlay-safe space, and recommended use. Then use only passing windows for HE Cold Local Classifier V1.",
-      "mutation_status": "Memory only; no creative render, no ad spend, no production deploy",
+      "status": "plan_corrected_on_demand_optimization",
+      "last_task": "Correct QISSA V2 plan to on-demand execution-time optimization",
+      "last_summary": "Owner corrected the prior plan: do not pre-split and pre-enhance the whole raw library into 1-2 second windows. Keep raw clips immutable. Store only lightweight metadata and tags. At execution time, when a specific Meta reel job is defined, copy/select the needed raw clips into a job workspace and optimize only those clips in context: crop, stabilization, speed ramp, clarity enhancement, grade, transition handles, and overlay-safe treatment. This keeps execution lighter and avoids blind enhancement without marketing context.",
+      "next_action": "Build QISSA V2 as on-demand pipeline: raw vault unchanged -> reel job contract -> selected clip list -> execution-time optimizer -> Remotion/Figma overlay compositor -> QA -> output/cache with settings. Approval desk should show raw source, optimization recipe, and final output separately.",
+      "mutation_status": "Memory only; no render, no ad spend, no production deploy",
       "command": "/Users/nihaf/Documents/Tech/HN-Hotels-Site/_context/Marketing_Execution_Terminals_2026-05-24/open_lane.command reel-making",
-      "last_run_at": "2026-06-17T14:47:20+0530",
-      "proof": "Owner asked for exact execution plan and emphasized breaking flow into n pieces for high-output Meta targeting/retargeting reels.",
+      "last_run_at": "2026-06-17T15:08:21+0530",
+      "proof": "Owner direct correction: raw videos should stay as-is; optimization should happen at execution time based on context, not by blindly enhancing the whole library beforehand.",
       "artifacts": "PR #400 comment added as shell-only warning; Cloudflare preview remains review artifact only",
       "live_ids": "hn-hotels-site Cloudflare Pages deployment 6c29f293-0903-4226-8f0b-e93d8ffb8bb6",
       "rollback": "not applicable: read-only extraction",
-      "data_freshness": "2026-06-17T14:30+05:30"
+      "data_freshness": "2026-06-17T14:35+05:30"
     }
   },
   "events": [
+    {
+      "id": "20260617150821-reel-making",
+      "at": "2026-06-17T15:08:21+0530",
+      "lane": "reel-making",
+      "task": "Correct QISSA V2 plan to on-demand execution-time optimization",
+      "status": "plan_corrected_on_demand_optimization",
+      "summary": "Owner corrected the prior plan: do not pre-split and pre-enhance the whole raw library into 1-2 second windows. Keep raw clips immutable. Store only lightweight metadata and tags. At execution time, when a specific Meta reel job is defined, copy/select the needed raw clips into a job workspace and optimize only those clips in context: crop, stabilization, speed ramp, clarity enhancement, grade, transition handles, and overlay-safe treatment. This keeps execution lighter and avoids blind enhancement without marketing context.",
+      "next_action": "Build QISSA V2 as on-demand pipeline: raw vault unchanged -> reel job contract -> selected clip list -> execution-time optimizer -> Remotion/Figma overlay compositor -> QA -> output/cache with settings. Approval desk should show raw source, optimization recipe, and final output separately.",
+      "mutation_status": "Memory only; no render, no ad spend, no production deploy",
+      "proof": "Owner direct correction: raw videos should stay as-is; optimization should happen at execution time based on context, not by blindly enhancing the whole library beforehand.",
+      "artifacts": "PR #400 comment added as shell-only warning; Cloudflare preview remains review artifact only",
+      "live_ids": "hn-hotels-site Cloudflare Pages deployment 6c29f293-0903-4226-8f0b-e93d8ffb8bb6",
+      "rollback": "not applicable: read-only extraction",
+      "data_freshness": "2026-06-17T14:35+05:30"
+    },
     {
       "id": "20260617144720-reel-making",
       "at": "2026-06-17T14:47:20+0530",
@@ -1103,16 +1118,6 @@
       "summary": "Adjusted the late-night Brand copy to reflect the core intelligence that the person actively searched Hamza Hotel. Final frame now starts with 'Hamza Hotel Search Kiya?' then opens curiosity with 'Hamza Express: Naya Andaaz', followed by HKP Road/new Hamza face, Wahi Hamza naam, Open till 3 AM, and 10% dine-in. Updated config, copy doc, and mockup; removed blunt action wording.",
       "next_action": "If approved, use this search-mirroring curiosity copy for landing/RSA pins before live campaign mutation.",
       "mutation_status": "No live Google Ads mutation. Local docs/mockup only."
-    },
-    {
-      "id": "20260525100234-delivery-aggregator",
-      "at": "2026-05-25T10:02:34+0530",
-      "lane": "delivery-aggregator",
-      "task": "Swiggy historical order capture support",
-      "status": "ready",
-      "summary": "Verified Swiggy past-orders endpoint /orders/v1/history with restaurant_id/date/limit/offset. Added swiggy_order_history ingestion and paginated Swiggy history backfill runner. Ingested NCH Swiggy May 1-25 from restaurant_id 1342887: 20 Swiggy rows upserted; NCH May owner-orders now 55 total with 20 Swiggy and 35 Zomato. User's Hamza cURL still had restaurant_id 1342887, so HE historical Swiggy remains pending until 1342888 cURL is captured.",
-      "next_action": "Get Hamza Express Swiggy history cURL with restaurant_id=1342888, run the same May 1-25 backfill, then compare HE/NCH item demand and offer proof before any price or offer action.",
-      "mutation_status": "read-only data ingestion/parser deploy; no partner portal, POS, Odoo, ad, WABA, price, or offer mutation"
     }
   ]
 }

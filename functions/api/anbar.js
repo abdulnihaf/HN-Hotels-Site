@@ -44,28 +44,572 @@ const ITEMS = [
   { code: 'HN-RM-201', name: 'Skimmed Milk Powder', uom: 'kg', locs: ['store'], pos: [] },
 ];
 
-// Sauda -> Anbar bridge, phase 1: HE chicken receiving. The purchase order line
-// remains canonical; Anbar only adds received weights and the inventory movement.
-const CHICKEN_SKU_TO_CUT = {
-  HE_BONELESS: 'boneless',
-  HE_SHAWARMA: 'shawarma',
-  HE_KEBAB: 'kebab',
-  HE_TANDOORI: 'tandoori',
-  HE_GRILL: 'grill',
-  HE_TANGDI: 'tangdi',
-  HE_LOLLIPOP: 'lollipop',
-  HE_WINGS: 'lollipop',
+const CHICKEN_CUTS = ['boneless', 'shawarma', 'kebab', 'tandoori', 'grill', 'tangdi', 'lollipop'];
+const KG_ORDERED_CHICKEN_CUTS = ['boneless', 'shawarma'];
+const CHICKEN_LABELS = {
+  boneless: 'Boneless Chicken',
+  shawarma: 'Shawarma Chicken',
+  kebab: 'Kebab Chicken',
+  tandoori: 'Tandoori Cut Chicken',
+  grill: 'Grill Chicken',
+  tangdi: 'Tangdi Chicken',
+  lollipop: 'Chicken Lollipop',
 };
-const CHICKEN_CUT_LABEL = {
-  boneless: 'Boneless chicken',
-  shawarma: 'Shawarma chicken',
-  kebab: 'Kebab chicken',
-  tandoori: 'Tandoori chicken',
-  grill: 'Grill chicken',
-  tangdi: 'Tangdi (drumstick)',
-  lollipop: 'Lollipop / wings',
+const MN_BROILERS_RE = /\b(m\.?\s*n\.?\s*broilers|mn\s*broilers|m\.?\s*n\.?\s*chicken|mn\s*chicken)\b/i;
+
+const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+const toNum = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
 };
-const CHICKEN_CUT_ORDER = ['shawarma', 'boneless', 'kebab', 'tandoori', 'grill', 'tangdi', 'lollipop'];
+const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+function parseJsonArray(s) {
+  try {
+    const v = JSON.parse(s || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function chickenCutForLine(line) {
+  const explicit = norm(line.cut || line.chicken_cut || line.kind || '');
+  if (CHICKEN_CUTS.includes(explicit)) return explicit;
+  const n = norm([line.item_key, line.sku, line.item, line.name, line.label, line.matched].filter(Boolean).join(' '));
+  if (!n) return null;
+  if (/\bboneless\b/.test(n)) return 'boneless';
+  if (/\b(shawarma|shawarama)\b/.test(n)) return 'shawarma';
+  if (/\b(kebab|kabab)\b/.test(n)) return 'kebab';
+  if (/\b(tandoori|biryani\s*cut)\b/.test(n)) return 'tandoori';
+  if (/\bgrill\b/.test(n)) return 'grill';
+  if (/\b(tangdi|drumstick|kalmi)\b/.test(n)) return 'tangdi';
+  if (/\b(lollipop|wings?)\b/.test(n)) return 'lollipop';
+  return null;
+}
+
+function legacyMovementKeyFor(purchaseId, lineIdx) {
+  return `sauda_purchase:${purchaseId}:${lineIdx}:receipt`;
+}
+
+function movementKeyFor(purchaseId, lineIdx, partNo = 1) {
+  return `sauda_purchase:${purchaseId}:${lineIdx}:receipt:${partNo}`;
+}
+
+function movementPrefixFor(purchaseId, lineIdx) {
+  return `sauda_purchase:${purchaseId}:${lineIdx}:receipt`;
+}
+
+function lineOrderMode(line, cut) {
+  const unit = norm(line.unit || line.uom || line.ordered_unit || '');
+  if (unit === 'kg' || unit === 'kgs' || unit === 'kilogram' || unit === 'kilograms') return 'kg';
+  return KG_ORDERED_CHICKEN_CUTS.includes(cut) ? 'kg' : 'pieces';
+}
+
+function orderedAmount(line) {
+  return toNum(line.qty ?? line.count ?? line.ordered_qty ?? line.ordered_count) || 0;
+}
+
+function parseReceiptPartNo(key) {
+  const m = String(key || '').match(/:receipt:(\d+)$/);
+  return m ? Number(m[1]) : 1;
+}
+
+function dailyRatePaiseFrom(body, fallback) {
+  const paise = toNum(body.daily_rate_paise);
+  if (paise > 0) return Math.round(paise);
+  const rupees = toNum(body.daily_rate);
+  if (rupees > 0) return Math.round(rupees * 100);
+  return fallback > 0 ? Math.round(fallback) : null;
+}
+
+function normaliseReceiptPart(part) {
+  if (!part || typeof part !== 'object') return null;
+  const yieldedKg = toNum(part.yielded_kg ?? part.purchased_kg ?? part.received_qty);
+  const deliveredKg = toNum(part.delivered_kg);
+  const partNo = Number(part.part_no || parseReceiptPartNo(part.movement_key) || 1);
+  if (!(yieldedKg > 0) || !(deliveredKg > 0)) return null;
+  return {
+    part_no: partNo,
+    movement_key: part.movement_key || '',
+    anbar_receipt_id: part.anbar_receipt_id || null,
+    received_at: part.received_at || '',
+    received_by: part.received_by || '',
+    received_pieces: toNum(part.received_pieces),
+    yielded_kg: round2(yieldedKg),
+    purchased_kg: round2(yieldedKg),
+    delivered_kg: round2(deliveredKg),
+    daily_rate_paise: toNum(part.daily_rate_paise),
+    cost_paise: toNum(part.cost_paise),
+    effective_usable_price_paise: toNum(part.effective_usable_price_paise),
+    evidence_key: part.evidence_key || '',
+    evidence_mime: part.evidence_mime || '',
+    evidence_url: part.evidence_url || (part.evidence_key ? `/api/anbar?action=evidence&key=${encodeURIComponent(part.evidence_key)}` : ''),
+  };
+}
+
+function receiptPartsFromLine(line) {
+  const parts = Array.isArray(line.receipt_parts) ? line.receipt_parts : [];
+  const out = parts.map(normaliseReceiptPart).filter(Boolean);
+  const legacy = normaliseReceiptPart(line.receipt);
+  if (legacy && !out.some(p => p.movement_key && p.movement_key === legacy.movement_key)) out.push(legacy);
+  return out.sort((a, b) => (a.part_no || 0) - (b.part_no || 0));
+}
+
+function summariseReceiptParts(parts, ordered, mode) {
+  const receivedPieces = round2(parts.reduce((sum, p) => sum + (toNum(p.received_pieces) || 0), 0));
+  const yieldedKg = round2(parts.reduce((sum, p) => sum + (toNum(p.yielded_kg) || 0), 0));
+  const deliveredKg = round2(parts.reduce((sum, p) => sum + (toNum(p.delivered_kg) || 0), 0));
+  const complete = mode === 'pieces'
+    ? ordered > 0 && receivedPieces >= ordered
+    : ordered > 0 ? yieldedKg + 0.001 >= ordered : yieldedKg > 0;
+  const partial = parts.length > 0 && !complete;
+  return {
+    part_count: parts.length,
+    received_pieces: receivedPieces,
+    yielded_kg: yieldedKg,
+    purchased_kg: yieldedKg,
+    delivered_kg: deliveredKg,
+    remaining_pieces: mode === 'pieces' && ordered > 0 ? Math.max(0, round2(ordered - receivedPieces)) : null,
+    remaining_kg: mode === 'kg' && ordered > 0 ? Math.max(0, round2(ordered - yieldedKg)) : null,
+    complete,
+    partial,
+    next_part_no: (parts.reduce((m, p) => Math.max(m, Number(p.part_no || 0)), 0) || 0) + 1,
+  };
+}
+
+async function ensureAnbarSchema(DB) {
+  await DB.prepare(
+    `CREATE TABLE IF NOT EXISTS rm_outlet_receipts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      brand TEXT NOT NULL,
+      loc TEXT,
+      item_code TEXT,
+      item_name TEXT,
+      qty REAL,
+      uom TEXT,
+      received_at TEXT,
+      received_by TEXT,
+      source TEXT,
+      notes TEXT,
+      movement_key TEXT,
+      evidence_key TEXT,
+      evidence_mime TEXT
+    )`
+  ).run();
+  const alters = [
+    `ALTER TABLE rm_outlet_receipts ADD COLUMN movement_key TEXT`,
+    `ALTER TABLE rm_outlet_receipts ADD COLUMN evidence_key TEXT`,
+    `ALTER TABLE rm_outlet_receipts ADD COLUMN evidence_mime TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN received_at TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN received_by TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN received_station TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN received_items_json TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN receive_note TEXT`,
+    `ALTER TABLE sauda_purchase ADD COLUMN has_goods INTEGER DEFAULT 0`,
+  ];
+  for (const sql of alters) {
+    try { await DB.prepare(sql).run(); } catch (_) {}
+  }
+  await DB.prepare(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_rm_outlet_receipts_movement_key
+     ON rm_outlet_receipts(movement_key)`
+  ).run();
+}
+
+async function storeReceiptEvidence(env, { brand, date, purchaseId, lineIdx, partNo, image }) {
+  if (!image) return null;
+  if (!env?.EVIDENCE) return null;
+  const raw = String(image);
+  const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(raw);
+  const mime = m ? m[1] : 'image/jpeg';
+  const b64 = m ? m[2] : raw;
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(b64)) throw new Error('weight photo invalid');
+  const bytes = Uint8Array.from(atob(b64.replace(/\s+/g, '')), c => c.charCodeAt(0));
+  if (bytes.byteLength > 3_000_000) throw new Error('weight photo too large');
+  const key = `chicken-receipts/${brand}/${date}/sauda-${purchaseId}/line-${lineIdx}/part-${partNo}-${Date.now()}.jpg`;
+  await env.EVIDENCE.put(key, bytes, { httpMetadata: { contentType: mime } });
+  return { key, mime, bytes: bytes.byteLength };
+}
+
+async function chickenLedgerEntry(DB, brand, date, cut) {
+  const row = await DB.prepare(
+    `SELECT * FROM chicken_daily_ledger WHERE brand=? AND business_date=? AND cut=?`
+  ).bind(brand, date, cut).first().catch(() => null);
+  const rateRow = row?.daily_rate_paise
+    ? row
+    : await DB.prepare(
+        `SELECT daily_rate_paise FROM chicken_daily_ledger
+         WHERE brand=? AND business_date=? AND daily_rate_paise IS NOT NULL AND daily_rate_paise > 0
+         ORDER BY updated_at DESC, id DESC LIMIT 1`
+      ).bind(brand, date).first().catch(() => null);
+  const deliveredKg = toNum(row?.delivered_kg);
+  const yieldedKg = toNum(row?.purchased_kg);
+  const dailyRatePaise = toNum(row?.daily_rate_paise || rateRow?.daily_rate_paise);
+  const costPaise = deliveredKg && dailyRatePaise ? Math.round(deliveredKg * dailyRatePaise) : toNum(row?.cost_paise);
+  const effectivePaise = yieldedKg && costPaise ? Math.round(costPaise / yieldedKg) : toNum(row?.price_per_kg_paise);
+  return {
+    row: row || null,
+    delivered_kg: deliveredKg,
+    yielded_kg: yieldedKg,
+    purchased_kg: yieldedKg,
+    daily_rate_paise: dailyRatePaise,
+    cost_paise: costPaise,
+    effective_usable_price_paise: effectivePaise,
+    ready: deliveredKg > 0 && yieldedKg > 0 && dailyRatePaise > 0,
+    source: row ? 'chicken_daily_ledger' : null,
+  };
+}
+
+async function alignChickenLedger(DB, { brand, date, cut, deliveredKg, yieldedKg, dailyRatePaise, pin }) {
+  const existing = await DB.prepare(
+    `SELECT id, recipe_consumed_g FROM chicken_daily_ledger WHERE brand=? AND business_date=? AND cut=?`
+  ).bind(brand, date, cut).first();
+  const costPaise = Math.round(deliveredKg * dailyRatePaise);
+  const effectivePricePaise = Math.round(costPaise / yieldedKg);
+  const recipeG = existing?.recipe_consumed_g || 0;
+  const variancePct = recipeG > 0
+    ? Math.round(((yieldedKg * 1000 - recipeG) / recipeG) * 100 * 100) / 100
+    : null;
+
+  if (existing) {
+    await DB.prepare(
+      `UPDATE chicken_daily_ledger
+       SET purchased_kg=?, delivered_kg=?, daily_rate_paise=?,
+           price_per_kg_paise=?, cost_paise=?, variance_pct=?,
+           price_entered_by_pin=COALESCE(price_entered_by_pin, ?),
+           price_entered_at=COALESCE(price_entered_at, datetime('now')),
+           updated_at=datetime('now')
+       WHERE id=?`
+    ).bind(yieldedKg, deliveredKg, dailyRatePaise, effectivePricePaise, costPaise, variancePct, pin || '', existing.id).run();
+  } else {
+    await DB.prepare(
+      `INSERT INTO chicken_daily_ledger
+        (business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
+         price_per_kg_paise, cost_paise, variance_pct, price_entered_by_pin, price_entered_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    ).bind(date, brand, cut, yieldedKg, deliveredKg, dailyRatePaise, effectivePricePaise, costPaise, variancePct, pin || '').run();
+  }
+
+  return { cost_paise: costPaise, effective_usable_price_paise: effectivePricePaise, variance_pct: variancePct };
+}
+
+async function saudaChickenQueue(DB, url) {
+  await ensureAnbarSchema(DB);
+  const brand = (url.searchParams.get('brand') || 'HE').toUpperCase();
+  const kind = (url.searchParams.get('kind') || '').toLowerCase();
+  const date = url.searchParams.get('date') || istToday();
+  if (brand !== 'HE' || kind !== 'chicken') return json({ success: true, brand, date, kind, lines: [] });
+  if (!isYmd(date)) return json({ success: false, error: 'date invalid' }, 400);
+
+  const rows = (await DB.prepare(
+    `SELECT id, brand, vendor_name, for_date, status, items_json, ordered_at
+     FROM sauda_purchase
+     WHERE brand=? AND for_date=? AND COALESCE(status,'') != 'CANCELLED'
+     ORDER BY id DESC`
+  ).bind(brand, date).all()).results || [];
+
+  const lines = [];
+  let dayRatePaise = null;
+  for (const po of rows) {
+    if (!MN_BROILERS_RE.test(po.vendor_name || '')) continue;
+    const items = parseJsonArray(po.items_json);
+    for (let idx = 0; idx < items.length; idx++) {
+      const line = items[idx] || {};
+      const cut = chickenCutForLine(line);
+      if (!cut) continue;
+      const prefix = movementPrefixFor(po.id, idx);
+      const movementRows = (await DB.prepare(
+        `SELECT id, received_at, received_by, qty, movement_key, evidence_key, evidence_mime
+         FROM rm_outlet_receipts
+         WHERE movement_key=? OR movement_key LIKE ?
+         ORDER BY movement_key`
+      ).bind(legacyMovementKeyFor(po.id, idx), `${prefix}:%`).all()).results || [];
+      const ledger = await chickenLedgerEntry(DB, brand, date, cut);
+      if (!dayRatePaise && ledger.daily_rate_paise > 0) dayRatePaise = ledger.daily_rate_paise;
+      const mode = lineOrderMode(line, cut);
+      const ordered = orderedAmount(line);
+      const parts = receiptPartsFromLine(line);
+      const summary = summariseReceiptParts(parts, ordered, mode);
+      const legacySaved = movementRows.length > 0 && parts.length === 0;
+      const saved = summary.complete || legacySaved;
+      const partial = summary.partial;
+      const status = saved ? 'inventory_saved' : partial ? 'partial' : 'ordered';
+      const latestPart = parts[parts.length - 1] || null;
+      const latestMovement = movementRows[movementRows.length - 1] || null;
+      lines.push({
+        purchase_id: po.id,
+        line_idx: idx,
+        movement_key: movementKeyFor(po.id, idx, summary.next_part_no),
+        movement_key_prefix: prefix,
+        next_part_no: summary.next_part_no,
+        order_status: po.status,
+        vendor_name: po.vendor_name,
+        for_date: po.for_date,
+        cut,
+        cut_label: CHICKEN_LABELS[cut],
+        item: line.item || line.sku || line.name || CHICKEN_LABELS[cut],
+        ordered_qty: line.qty ?? line.count ?? '',
+        ordered_unit: line.unit || '',
+        ordered_mode: mode,
+        ordered_amount: ordered,
+        ordered_pieces: mode === 'pieces' ? ordered : null,
+        partial,
+        inventory_saved: saved,
+        saved_at: latestMovement?.received_at || latestPart?.received_at || null,
+        saved_by: latestMovement?.received_by || latestPart?.received_by || '',
+        status,
+        receipt_parts: parts,
+        receipt_summary: summary,
+        chicken_entry: (ledger.source || ledger.daily_rate_paise) ? {
+          source: ledger.source,
+          delivered_kg: ledger.delivered_kg,
+          yielded_kg: ledger.yielded_kg,
+          purchased_kg: ledger.purchased_kg,
+          daily_rate_paise: ledger.daily_rate_paise,
+        } : null,
+      });
+    }
+  }
+
+  return json({ success: true, brand, date, kind, vendor: 'M.N. Broilers', daily_rate_paise: dayRatePaise, lines });
+}
+
+async function saveSaudaChickenReceive(DB, body, env = {}) {
+  await ensureAnbarSchema(DB);
+  const brand = (body.brand || 'HE').toUpperCase();
+  const kind = String(body.kind || 'chicken').toLowerCase();
+  if (brand !== 'HE' || kind !== 'chicken') return json({ success: false, error: 'unsupported receive kind' }, 400);
+
+  const person = PINS[body.pin];
+  if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
+  const purchaseId = Number(body.purchase_id || body.id || 0);
+  const lineIdx = Number(body.line_idx);
+  if (!purchaseId || !Number.isInteger(lineIdx) || lineIdx < 0) {
+    return json({ success: false, error: 'purchase_id + line_idx required' }, 400);
+  }
+
+  const po = await DB.prepare(
+    `SELECT id, brand, vendor_name, for_date, status, items_json
+     FROM sauda_purchase WHERE id=?`
+  ).bind(purchaseId).first();
+  if (!po) return json({ success: false, error: 'Sauda order not found' }, 404);
+  if ((po.brand || '').toUpperCase() !== brand) return json({ success: false, error: 'brand mismatch' }, 400);
+  if (!MN_BROILERS_RE.test(po.vendor_name || '')) return json({ success: false, error: 'not an MN Broilers order' }, 400);
+
+  const items = parseJsonArray(po.items_json);
+  const line = items[lineIdx];
+  if (!line) return json({ success: false, error: 'Sauda line not found' }, 404);
+  const cut = chickenCutForLine(line);
+  if (!cut) return json({ success: false, error: 'chicken cut missing on Sauda line' }, 400);
+
+  const mode = lineOrderMode(line, cut);
+  const ordered = orderedAmount(line);
+  const partsBefore = receiptPartsFromLine(line);
+  const summaryBefore = summariseReceiptParts(partsBefore, ordered, mode);
+  const requestedPartNo = Number(body.receipt_part_no || body.part_no || summaryBefore.next_part_no);
+  if (!Number.isInteger(requestedPartNo) || requestedPartNo < 1) {
+    return json({ success: false, error: 'receipt part invalid' }, 400);
+  }
+  const movementKey = movementKeyFor(purchaseId, lineIdx, requestedPartNo);
+  let receipt = await DB.prepare(
+    `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+  ).bind(movementKey).first();
+  const receiptExisted = !!receipt;
+
+  const ledger = await chickenLedgerEntry(DB, brand, po.for_date, cut);
+  const dailyRatePaise = dailyRatePaiseFrom(body, ledger.daily_rate_paise);
+  if (!(dailyRatePaise > 0)) {
+    return json({ success: false, error: 'Today live rate required' }, 409);
+  }
+
+  const deliveredKg = round2(toNum(body.delivered_kg));
+  const yieldedKg = round2(toNum(body.yielded_kg ?? body.purchased_kg ?? body.received_qty));
+  if (!(deliveredKg > 0) || !(yieldedKg > 0)) {
+    return json({ success: false, error: 'usable kg and live kg required' }, 400);
+  }
+
+  let receivedPieces = null;
+  if (mode === 'pieces') {
+    receivedPieces = toNum(body.received_pieces ?? body.pieces);
+    if (!(receivedPieces > 0) || Math.round(receivedPieces) !== receivedPieces) {
+      return json({ success: false, error: 'received pieces required' }, 400);
+    }
+    const partsExcludingThis = partsBefore.filter(p => Number(p.part_no) !== requestedPartNo);
+    const baseSummary = summariseReceiptParts(partsExcludingThis, ordered, mode);
+    if (ordered > 0 && receivedPieces > (baseSummary.remaining_pieces + 0.001)) {
+      return json({ success: false, error: `only ${baseSummary.remaining_pieces} pieces pending` }, 400);
+    }
+  }
+
+  const itemCode = `HE-CHICKEN-${cut.toUpperCase()}`;
+  const itemName = CHICKEN_LABELS[cut];
+  const partCostPaise = Math.round(deliveredKg * dailyRatePaise);
+  const partEffectivePaise = Math.round(partCostPaise / yieldedKg);
+  const now = new Date().toISOString();
+  const note = `Sauda #${purchaseId} line ${lineIdx + 1} · MN Broilers · ${cut} · part ${requestedPartNo}${receivedPieces ? ` · ${receivedPieces} pieces` : ''} · live ${deliveredKg} kg · usable ${yieldedKg} kg`;
+  const evidence = (!receipt || !receipt.evidence_key)
+    ? await storeReceiptEvidence(env, { brand, date: po.for_date, purchaseId, lineIdx, partNo: requestedPartNo, image: body.evidence_image || body.weight_photo || body.image })
+    : null;
+  if (!receipt) {
+    await DB.prepare(
+      `INSERT OR IGNORE INTO rm_outlet_receipts
+        (brand, loc, item_code, item_name, qty, uom, received_at, received_by, source, notes, movement_key, evidence_key, evidence_mime)
+       VALUES (?, 'kitchen', ?, ?, ?, 'kg', ?, ?, 'sauda', ?, ?, ?, ?)`
+    ).bind(brand, itemCode, itemName, yieldedKg, now, person, note, movementKey, evidence?.key || null, evidence?.mime || null).run();
+    receipt = await DB.prepare(
+      `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+    ).bind(movementKey).first();
+  } else if (evidence?.key) {
+    await DB.prepare(
+      `UPDATE rm_outlet_receipts SET evidence_key=?, evidence_mime=? WHERE movement_key=? AND COALESCE(evidence_key,'')=''`
+    ).bind(evidence.key, evidence.mime, movementKey).run();
+    receipt = await DB.prepare(
+      `SELECT id, received_at, received_by, qty, evidence_key, evidence_mime FROM rm_outlet_receipts WHERE movement_key=? LIMIT 1`
+    ).bind(movementKey).first();
+  }
+
+  const receiptAt = receipt?.received_at || new Date().toISOString();
+  const currentPart = {
+    kind: 'chicken',
+    part_no: requestedPartNo,
+    movement_key: movementKey,
+    anbar_receipt_id: receipt?.id || null,
+    received_at: receiptAt,
+    received_by: receipt?.received_by || person,
+    received_pieces: receivedPieces,
+    delivered_kg: deliveredKg,
+    yielded_kg: yieldedKg,
+    purchased_kg: yieldedKg,
+    daily_rate_paise: dailyRatePaise,
+    cost_paise: partCostPaise,
+    effective_usable_price_paise: partEffectivePaise,
+    evidence_key: receipt?.evidence_key || evidence?.key || '',
+    evidence_mime: receipt?.evidence_mime || evidence?.mime || '',
+    evidence_url: receipt?.evidence_key || evidence?.key ? `/api/anbar?action=evidence&key=${encodeURIComponent(receipt?.evidence_key || evidence?.key)}` : '',
+  };
+  const partsByNo = new Map(partsBefore.map(p => [Number(p.part_no), p]));
+  partsByNo.set(requestedPartNo, { ...partsByNo.get(requestedPartNo), ...currentPart });
+  const receiptParts = Array.from(partsByNo.values()).sort((a, b) => (a.part_no || 0) - (b.part_no || 0));
+  const summary = summariseReceiptParts(receiptParts, ordered, mode);
+  const aligned = await alignChickenLedger(DB, {
+    brand,
+    date: po.for_date,
+    cut,
+    deliveredKg: summary.delivered_kg,
+    yieldedKg: summary.yielded_kg,
+    dailyRatePaise,
+    pin: body.pin,
+  });
+
+  const lineComplete = summary.complete;
+  const receiptPayload = {
+    status: lineComplete ? 'inventory_saved' : 'partial',
+    kind: 'chicken',
+    movement_key: movementKey,
+    movement_keys: receiptParts.map(p => p.movement_key).filter(Boolean),
+    latest_part_no: requestedPartNo,
+    part_count: receiptParts.length,
+    received_at: receiptAt,
+    received_by: currentPart.received_by,
+    received_pieces: mode === 'pieces' ? summary.received_pieces : null,
+    ordered_pieces: mode === 'pieces' ? ordered : null,
+    pending_pieces: summary.remaining_pieces,
+    received_qty: summary.yielded_kg,
+    received_unit: 'kg',
+    delivered_kg: summary.delivered_kg,
+    yielded_kg: summary.yielded_kg,
+    purchased_kg: summary.yielded_kg,
+    daily_rate_paise: dailyRatePaise,
+    cost_paise: aligned.cost_paise,
+    effective_usable_price_paise: aligned.effective_usable_price_paise,
+  };
+  items[lineIdx] = {
+    ...line,
+    receipt_status: receiptPayload.status,
+    received_at: receiptPayload.received_at,
+    received_by: receiptPayload.received_by,
+    received_pieces: receiptPayload.received_pieces,
+    received_qty: receiptPayload.received_qty,
+    received_unit: receiptPayload.received_unit,
+    anbar_movement_key: movementKey,
+    anbar_movement_keys: receiptPayload.movement_keys,
+    anbar_receipt_id: currentPart.anbar_receipt_id,
+    receipt_parts: receiptParts,
+    receipt: receiptPayload,
+  };
+
+  const chickenLineIndexes = items
+    .map((it, idx) => chickenCutForLine(it) ? idx : -1)
+    .filter(idx => idx >= 0);
+  const allChickenReceived = chickenLineIndexes.length > 0 && chickenLineIndexes.every(idx => {
+    const it = items[idx] || {};
+    const itCut = chickenCutForLine(it);
+    const itMode = lineOrderMode(it, itCut);
+    const itSummary = summariseReceiptParts(receiptPartsFromLine(it), orderedAmount(it), itMode);
+    return it.receipt_status === 'inventory_saved' || it.receipt?.status === 'inventory_saved' || itSummary.complete;
+  });
+  const receivedItems = chickenLineIndexes.map(idx => {
+    const it = items[idx] || {};
+    return {
+      line_idx: idx,
+      item: it.item || it.sku || CHICKEN_LABELS[chickenCutForLine(it)],
+      cut: chickenCutForLine(it),
+      receipt: it.receipt || null,
+    };
+  });
+
+  await DB.prepare(
+    `UPDATE sauda_purchase
+     SET items_json=?,
+         received_items_json=?,
+         receive_note=?,
+         has_goods=1,
+         received_at=COALESCE(received_at, ?),
+         received_by=COALESCE(received_by, ?),
+         received_station=COALESCE(received_station, 'HE-K'),
+         status=CASE WHEN ?=1 AND status IN ('ORDERED','QUEUED') THEN 'RECEIVED' ELSE status END,
+         updated_at=datetime('now')
+     WHERE id=?`
+  ).bind(
+    JSON.stringify(items),
+    JSON.stringify(receivedItems),
+    `Anbar HE chicken receipt · latest movement ${movementKey}`,
+    receiptAt,
+    receiptPayload.received_by,
+    allChickenReceived ? 1 : 0,
+    purchaseId
+  ).run();
+
+  return json({
+    success: true,
+    inventory_saved: lineComplete,
+    partial: !lineComplete,
+    idempotent: receiptExisted,
+    purchase_id: purchaseId,
+    line_idx: lineIdx,
+    receipt_part_no: requestedPartNo,
+    movement_key: movementKey,
+    anbar_receipt_id: currentPart.anbar_receipt_id,
+    at: receiptAt,
+    by: currentPart.received_by,
+    cut,
+    cut_label: itemName,
+    received_pieces: receiptPayload.received_pieces,
+    pending_pieces: receiptPayload.pending_pieces,
+    delivered_kg: summary.delivered_kg,
+    yielded_kg: summary.yielded_kg,
+    cost_paise: aligned.cost_paise,
+    effective_usable_price_paise: aligned.effective_usable_price_paise,
+    evidence_key: currentPart.evidence_key || '',
+    evidence_url: currentPart.evidence_url || '',
+    status: receiptPayload.status,
+    order_fully_received: allChickenReceived,
+  });
+}
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -74,305 +618,6 @@ const cors = {
   'Content-Type': 'application/json',
 };
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: cors });
-
-function todayIST() {
-  return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-}
-function nowISTText() {
-  return new Date(Date.now() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 19);
-}
-function clean(v, max = 160) {
-  return String(v == null ? '' : v).trim().slice(0, max);
-}
-function qtyNum(v) {
-  const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '').trim());
-  return Number.isFinite(n) ? n : 0;
-}
-function parseItems(raw) {
-  try {
-    const out = JSON.parse(raw || '[]');
-    return Array.isArray(out) ? out : [];
-  } catch (e) {
-    return [];
-  }
-}
-function lineText(line) {
-  return [
-    line?.sku, line?.item_code, line?.item, line?.label, line?.name, line?.item_name,
-    line?.note, line?.received_note,
-  ].map((x) => String(x || '')).join(' ').toLowerCase();
-}
-function chickenCutForLine(line) {
-  const sku = clean(line?.sku || line?.item_code, 80).toUpperCase();
-  if (CHICKEN_SKU_TO_CUT[sku]) return CHICKEN_SKU_TO_CUT[sku];
-  const t = lineText(line);
-  // Shawarma boneless is the same Sauda/MN cut, not a second item.
-  if (/shawa?rma|shawarama/.test(t)) return 'shawarma';
-  if (/boneless/.test(t)) return 'boneless';
-  if (/kebab|kabab/.test(t)) return 'kebab';
-  if (/tandoor|tandur|tandoori/.test(t)) return 'tandoori';
-  if (/grill/.test(t)) return 'grill';
-  if (/tangdi|drumstick/.test(t)) return 'tangdi';
-  if (/lollipop|wings?\b/.test(t)) return 'lollipop';
-  return '';
-}
-function itemLabel(line) {
-  return clean(line?.item || line?.label || line?.name || line?.item_name || line?.sku || 'Item', 120);
-}
-function lineUnit(line) {
-  return clean(line?.unit || line?.uom || line?.ordered_unit || 'unit', 24);
-}
-function chickenMovementCode(cut) {
-  return `HE-CHICKEN-${String(cut || 'UNKNOWN').toUpperCase()}`;
-}
-function lineForQueue(order, line, lineIdx) {
-  const cut = chickenCutForLine(line);
-  const yieldedKg = clean(line?.yielded_kg || line?.received_qty, 32);
-  const deliveredKg = clean(line?.delivered_kg || line?.bill_qty || line?.live_qty, 32);
-  return {
-    order_id: order.id,
-    line_idx: lineIdx,
-    brand: order.brand || 'HE',
-    vendor_name: order.vendor_name || '',
-    for_date: order.for_date || '',
-    status: order.status || '',
-    item: itemLabel(line),
-    sku: clean(line?.sku || line?.item_code, 80),
-    qty: clean(line?.qty ?? line?.ordered_qty, 32),
-    unit: lineUnit(line),
-    chicken: !!cut,
-    cut,
-    cut_label: cut ? CHICKEN_CUT_LABEL[cut] : '',
-    yielded_kg: yieldedKg,
-    delivered_kg: deliveredKg,
-    received_pieces: clean(line?.received_pieces, 32),
-    received_note: clean(line?.received_note, 220),
-    received_at: clean(line?.received_at, 32),
-    received_by: clean(line?.received_by, 80),
-    daily_rate_paise: Math.round(+line?.daily_rate_paise || 0),
-    cost_paise: Math.round(+line?.cost_paise || 0),
-    effective_price_paise: Math.round(+line?.effective_price_paise || +line?.price_paise || 0),
-    movement_key: `sauda_purchase:${order.id}:${lineIdx}:receipt`,
-  };
-}
-function applyLedgerToQueueLine(queueLine, ledger) {
-  if (!queueLine || !ledger) return queueLine;
-  if (!queueLine.yielded_kg && ledger.purchased_kg != null) queueLine.yielded_kg = clean(ledger.purchased_kg, 32);
-  if (!queueLine.delivered_kg && ledger.delivered_kg != null) queueLine.delivered_kg = clean(ledger.delivered_kg, 32);
-  if (!queueLine.daily_rate_paise && ledger.daily_rate_paise) queueLine.daily_rate_paise = Math.round(+ledger.daily_rate_paise || 0);
-  if (!queueLine.cost_paise && ledger.cost_paise) queueLine.cost_paise = Math.round(+ledger.cost_paise || 0);
-  if (!queueLine.effective_price_paise && ledger.price_per_kg_paise) queueLine.effective_price_paise = Math.round(+ledger.price_per_kg_paise || 0);
-  queueLine.ledger_synced = true;
-  return queueLine;
-}
-function applyLedgerToSaudaLine(line, ledger) {
-  if (!line || !ledger) return;
-  const dailyRate = Math.round(+ledger.daily_rate_paise || 0);
-  const cost = Math.round(+ledger.cost_paise || 0);
-  const effective = Math.round(+ledger.price_per_kg_paise || 0);
-  if (dailyRate > 0) line.daily_rate_paise = dailyRate;
-  if (cost > 0) line.cost_paise = cost;
-  if (effective > 0) {
-    line.price_paise = effective;
-    line.effective_price_paise = effective;
-  }
-}
-function itemAmountPaise(line) {
-  const cost = Math.round(+line?.cost_paise || 0);
-  if (cost > 0) return cost;
-  const price = Math.round(+line?.price_paise || +line?.effective_price_paise || 0);
-  const qty = qtyNum(line?.bill_qty || line?.qty || line?.ordered_qty);
-  return price > 0 && qty > 0 ? Math.round(price * qty) : 0;
-}
-function purchaseTotalPaise(items) {
-  return (items || []).reduce((sum, line) => sum + itemAmountPaise(line), 0);
-}
-async function ensureSaudaBridgeTables(DB) {
-  await DB.prepare(
-    `CREATE TABLE IF NOT EXISTS sauda_purchase (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      brand TEXT,
-      vendor_name TEXT,
-      for_date TEXT,
-      fulfilment TEXT,
-      pay_timing TEXT,
-      items_json TEXT,
-      status TEXT,
-      expected_amount_paise INTEGER DEFAULT 0,
-      pay_amount_paise INTEGER DEFAULT 0,
-      ordered_at TEXT,
-      ordered_by TEXT,
-      received_at TEXT,
-      received_by TEXT,
-      received_station TEXT,
-      received_items_json TEXT,
-      paid_at TEXT,
-      updated_at TEXT
-    )`
-  ).run();
-  for (const sql of [
-    "ALTER TABLE sauda_purchase ADD COLUMN brand TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN vendor_name TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN for_date TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN pay_timing TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN items_json TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN status TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN ordered_at TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN ordered_by TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN received_at TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN received_by TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN received_station TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN received_items_json TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN paid_at TEXT",
-    "ALTER TABLE sauda_purchase ADD COLUMN updated_at TEXT",
-  ]) {
-    try { await DB.prepare(sql).run(); } catch (e) {}
-  }
-  await DB.prepare(
-    `CREATE TABLE IF NOT EXISTS anbar_inventory_movements (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      movement_key TEXT UNIQUE,
-      brand TEXT NOT NULL,
-      loc TEXT DEFAULT 'kitchen',
-      item_code TEXT NOT NULL,
-      item_name TEXT NOT NULL,
-      qty REAL NOT NULL,
-      uom TEXT NOT NULL,
-      movement_type TEXT NOT NULL,
-      source TEXT NOT NULL,
-      source_ref TEXT DEFAULT '',
-      sauda_purchase_id INTEGER,
-      sauda_line_idx INTEGER,
-      event_at TEXT NOT NULL,
-      by_person TEXT DEFAULT '',
-      meta_json TEXT DEFAULT '{}',
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    )`
-  ).run();
-  await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_anbar_movements_day ON anbar_inventory_movements(brand, event_at, item_code)`).run();
-  await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_anbar_movements_sauda ON anbar_inventory_movements(sauda_purchase_id, sauda_line_idx)`).run();
-}
-async function ensureChickenLedgerCompat(DB) {
-  await DB.prepare(
-    `CREATE TABLE IF NOT EXISTS chicken_daily_ledger (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      business_date TEXT NOT NULL,
-      brand TEXT NOT NULL DEFAULT 'HE',
-      cut TEXT NOT NULL,
-      purchased_kg REAL,
-      delivered_kg REAL,
-      daily_rate_paise INTEGER,
-      price_per_kg_paise INTEGER,
-      cost_paise INTEGER,
-      recipe_consumed_g INTEGER DEFAULT 0,
-      variance_pct REAL,
-      updated_at TEXT
-    )`
-  ).run();
-  for (const sql of [
-    "ALTER TABLE chicken_daily_ledger ADD COLUMN delivered_kg REAL",
-    "ALTER TABLE chicken_daily_ledger ADD COLUMN daily_rate_paise INTEGER",
-    "ALTER TABLE chicken_daily_ledger ADD COLUMN price_per_kg_paise INTEGER",
-    "ALTER TABLE chicken_daily_ledger ADD COLUMN cost_paise INTEGER",
-    "ALTER TABLE chicken_daily_ledger ADD COLUMN recipe_consumed_g INTEGER DEFAULT 0",
-    "ALTER TABLE chicken_daily_ledger ADD COLUMN variance_pct REAL",
-    "ALTER TABLE chicken_daily_ledger ADD COLUMN updated_at TEXT",
-  ]) {
-    try { await DB.prepare(sql).run(); } catch (e) {}
-  }
-  try { await DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_chicken_daily_ledger_unique ON chicken_daily_ledger(business_date, brand, cut)`).run(); } catch (e) {}
-}
-async function chickenLedgerByCut(DB, brand, date) {
-  await ensureChickenLedgerCompat(DB);
-  const rows = (await DB.prepare(
-    `SELECT business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
-            price_per_kg_paise, cost_paise, recipe_consumed_g, variance_pct
-       FROM chicken_daily_ledger
-      WHERE brand=? AND business_date=?`
-  ).bind(brand, date).all()).results || [];
-  const out = new Map();
-  for (const row of rows) out.set(row.cut, row);
-  return out;
-}
-async function upsertChickenLedgerReceipt(DB, { date, brand, cut, yieldedKg, deliveredKg }) {
-  await ensureChickenLedgerCompat(DB);
-  const existing = await DB.prepare(
-    `SELECT id, daily_rate_paise, recipe_consumed_g
-       FROM chicken_daily_ledger
-      WHERE brand=? AND business_date=? AND cut=?`
-  ).bind(brand, date, cut).first();
-  const dailyRate = Math.round(+existing?.daily_rate_paise || 0);
-  const recipeG = Math.round(+existing?.recipe_consumed_g || 0);
-  const costPaise = dailyRate > 0 ? Math.round(deliveredKg * dailyRate) : null;
-  const effectivePricePaise = costPaise && yieldedKg > 0 ? Math.round(costPaise / yieldedKg) : null;
-  let variancePct = null;
-  if (recipeG > 0 && yieldedKg > 0) {
-    variancePct = Math.round(((yieldedKg * 1000 - recipeG) / recipeG) * 100 * 100) / 100;
-  }
-  if (existing) {
-    await DB.prepare(
-      `UPDATE chicken_daily_ledger
-          SET purchased_kg=?,
-              delivered_kg=?,
-              price_per_kg_paise=CASE WHEN ? IS NOT NULL THEN ? ELSE price_per_kg_paise END,
-              cost_paise=CASE WHEN ? IS NOT NULL THEN ? ELSE cost_paise END,
-              variance_pct=CASE WHEN ? IS NOT NULL THEN ? ELSE variance_pct END,
-              updated_at=datetime('now')
-        WHERE id=?`
-    ).bind(
-      yieldedKg, deliveredKg,
-      effectivePricePaise, effectivePricePaise,
-      costPaise, costPaise,
-      variancePct, variancePct,
-      existing.id
-    ).run();
-  } else {
-    await DB.prepare(
-      `INSERT INTO chicken_daily_ledger
-        (business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
-         price_per_kg_paise, cost_paise, variance_pct, updated_at)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, datetime('now'))`
-    ).bind(date, brand, cut, yieldedKg, deliveredKg, effectivePricePaise, costPaise, variancePct).run();
-  }
-  return await DB.prepare(
-    `SELECT business_date, brand, cut, purchased_kg, delivered_kg, daily_rate_paise,
-            price_per_kg_paise, cost_paise, recipe_consumed_g, variance_pct
-       FROM chicken_daily_ledger
-      WHERE brand=? AND business_date=? AND cut=?`
-  ).bind(brand, date, cut).first();
-}
-function applySaudaReceipt(line, update, now, person) {
-  let changed = 0;
-  const yielded = clean(update.yielded_kg ?? update.received_qty, 32);
-  if (yielded) {
-    if (line.yielded_kg !== yielded) changed++;
-    line.yielded_kg = yielded;
-    delete line.received_qty;
-  }
-  const delivered = clean(update.delivered_kg ?? update.bill_qty ?? update.live_qty, 32);
-  if (delivered) {
-    if (line.delivered_kg !== delivered) changed++;
-    line.delivered_kg = delivered;
-    delete line.bill_qty;
-    delete line.live_qty;
-  }
-  const pieces = clean(update.received_pieces, 32);
-  if (pieces) {
-    if (line.received_pieces !== pieces) changed++;
-    line.received_pieces = pieces;
-  }
-  const note = clean(update.received_note || update.note, 220);
-  if (note) {
-    if (line.received_note !== note) changed++;
-    line.received_note = note;
-  }
-  if (changed) {
-    line.received_at = now;
-    line.received_by = person;
-  }
-  return changed;
-}
 
 async function odoo(key, model, method, args, kwargs = {}) {
   const r = await fetch(ODOO_URL, {
@@ -423,6 +668,29 @@ export async function onRequest(context) {
   const ODOO_KEY = context.env.ODOO_NCH_POS_KEY;
 
   try {
+    if (action === 'sauda-receive-queue') {
+      return await saudaChickenQueue(DB, url);
+    }
+
+    if (action === 'sauda-receive' && context.request.method === 'POST') {
+      const body = await context.request.json();
+      return await saveSaudaChickenReceive(DB, body, context.env);
+    }
+
+    if (action === 'evidence') {
+      const key = url.searchParams.get('key') || '';
+      if (!key.startsWith('chicken-receipts/')) return json({ success: false, error: 'invalid evidence key' }, 400);
+      if (!context.env.EVIDENCE) return json({ success: false, error: 'evidence bucket missing' }, 500);
+      const obj = await context.env.EVIDENCE.get(key);
+      if (!obj) return json({ success: false, error: 'evidence not found' }, 404);
+      return new Response(obj.body, {
+        headers: {
+          'content-type': obj.httpMetadata?.contentType || 'image/jpeg',
+          'cache-control': 'private, max-age=3600',
+        },
+      });
+    }
+
     if (action === 'verify-pin') {
       const person = PINS[url.searchParams.get('pin')];
       return person ? json({ success: true, person }) : json({ success: false, error: 'Wrong PIN' });
@@ -430,174 +698,6 @@ export async function onRequest(context) {
 
     if (action === 'items') {
       return json({ success: true, items: ITEMS.map(({ code, name, uom, locs, pack }) => ({ code, name, uom, locs, pack: pack || null })) });
-    }
-
-    // ── SAUDA RECEIVE QUEUE: Anbar reads the placed purchase lines. It does not
-    // create another order trail. First production use: HE MN Broilers chicken.
-    if (action === 'sauda-receive-queue') {
-      await ensureSaudaBridgeTables(DB);
-      const date = (url.searchParams.get('date') || url.searchParams.get('for_date') || todayIST()).slice(0, 10);
-      const brand = (url.searchParams.get('brand') || 'HE').toUpperCase() === 'NCH' ? 'NCH' : 'HE';
-      const kind = (url.searchParams.get('kind') || 'chicken').toLowerCase();
-      const ledger = kind === 'chicken' ? await chickenLedgerByCut(DB, brand, date) : new Map();
-      const rows = (await DB.prepare(
-        `SELECT id, brand, vendor_name, for_date, status, pay_timing, paid_at, ordered_at, ordered_by, items_json
-           FROM sauda_purchase
-          WHERE brand=? AND for_date=? AND (paid_at IS NULL OR paid_at='')
-            AND (pay_timing IS NULL OR pay_timing != 'online')
-            AND (status IS NULL OR status NOT IN ('PAID','CANCELLED'))
-          ORDER BY id`
-      ).bind(brand, date).all()).results || [];
-      const orders = [];
-      const lines = [];
-      for (const row of rows) {
-        const items = parseItems(row.items_json);
-        const qLines = items.map((line, idx) => lineForQueue(row, line, idx))
-          .filter((line) => kind !== 'chicken' || line.chicken);
-        for (const line of qLines) applyLedgerToQueueLine(line, ledger.get(line.cut));
-        if (!qLines.length) continue;
-        qLines.sort((a, b) => CHICKEN_CUT_ORDER.indexOf(a.cut) - CHICKEN_CUT_ORDER.indexOf(b.cut));
-        orders.push({ ...row, items_json: undefined, lines: qLines });
-        lines.push(...qLines);
-      }
-      return json({ success: true, date, brand, kind, orders, lines, line_count: lines.length });
-    }
-
-    // ── SAUDA RECEIVE WRITE: records actual received weights on the canonical
-    // Sauda line and writes one idempotent Anbar stock receipt movement.
-    if (action === 'sauda-receive' && context.request.method === 'POST') {
-      await ensureSaudaBridgeTables(DB);
-      const body = await context.request.json();
-      const person = PINS[body.pin];
-      if (!person) return json({ success: false, error: 'Wrong PIN' }, 401);
-      const updates = Array.isArray(body.lines) ? body.lines : [];
-      const byId = new Map();
-      for (const raw of updates) {
-        const id = Math.round(+raw.order_id || +raw.id || 0);
-        const idx = Math.round(+raw.line_idx);
-        if (!id || !Number.isFinite(idx) || idx < 0) continue;
-        if (!byId.has(id)) byId.set(id, []);
-        byId.get(id).push({ ...raw, line_idx: idx });
-      }
-      if (!byId.size) return json({ success: false, error: 'No valid receipt lines' }, 400);
-      const now = nowISTText();
-      const station = clean(body.station || body.loc || 'HE-KITCHEN', 40) || 'HE-KITCHEN';
-      let changed = 0;
-      const saved = [];
-      const movements = [];
-      for (const [id, lines] of byId.entries()) {
-        const row = await DB.prepare(
-          `SELECT id, brand, vendor_name, for_date, status, pay_timing, paid_at, items_json
-             FROM sauda_purchase
-            WHERE id=? AND (pay_timing IS NULL OR pay_timing != 'online')`
-        ).bind(id).first();
-        if (!row) continue;
-        if (row.paid_at) return json({ success: false, error: 'Already paid; receipt cannot change', id }, 409);
-        const items = parseItems(row.items_json);
-        const receivedLines = [];
-        for (const u of lines) {
-          const line = items[u.line_idx];
-          if (!line) continue;
-          const before = JSON.stringify(line);
-          const lineChanged = applySaudaReceipt(line, u, now, person);
-          if (lineChanged) changed += lineChanged;
-          const cut = chickenCutForLine(line);
-          const yieldedKg = qtyNum(line.yielded_kg || line.received_qty);
-          const deliveredKg = qtyNum(line.delivered_kg || line.bill_qty || line.live_qty);
-          const eventAt = clean(line.received_at, 32) || now;
-          let ledger = null;
-          if (cut && yieldedKg > 0 && deliveredKg > 0) {
-            ledger = await upsertChickenLedgerReceipt(DB, {
-              date: (row.for_date || todayIST()).slice(0, 10),
-              brand: row.brand || 'HE',
-              cut,
-              yieldedKg,
-              deliveredKg,
-            });
-            applyLedgerToSaudaLine(line, ledger);
-          }
-          const qLine = applyLedgerToQueueLine(lineForQueue(row, line, u.line_idx), ledger);
-          receivedLines.push(qLine);
-          if (cut && yieldedKg > 0) {
-            const movementKey = `sauda_purchase:${id}:${u.line_idx}:receipt`;
-            const meta = {
-              vendor_name: row.vendor_name || '',
-              for_date: row.for_date || '',
-              ordered_qty: clean(line.qty ?? line.ordered_qty, 32),
-              ordered_unit: lineUnit(line),
-              delivered_kg: deliveredKg || null,
-              received_pieces: clean(line.received_pieces, 32),
-              note: clean(line.received_note, 220),
-              cut,
-              sauda_sku: clean(line.sku || line.item_code, 80),
-            };
-            await DB.prepare(
-              `INSERT INTO anbar_inventory_movements (
-                 movement_key, brand, loc, item_code, item_name, qty, uom,
-                 movement_type, source, source_ref, sauda_purchase_id, sauda_line_idx,
-                 event_at, by_person, meta_json, updated_at
-               ) VALUES (?, ?, ?, ?, ?, ?, 'kg', 'receipt', 'sauda_receive', ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(movement_key) DO UPDATE SET
-                 brand=excluded.brand,
-                 loc=excluded.loc,
-                 item_code=excluded.item_code,
-                 item_name=excluded.item_name,
-                 qty=excluded.qty,
-                 event_at=excluded.event_at,
-                 by_person=excluded.by_person,
-                 meta_json=excluded.meta_json,
-                 updated_at=excluded.updated_at`
-            ).bind(
-              movementKey,
-              row.brand || 'HE',
-              station,
-              chickenMovementCode(cut),
-              CHICKEN_CUT_LABEL[cut] || itemLabel(line),
-              yieldedKg,
-              String(id),
-              id,
-              u.line_idx,
-              eventAt,
-              person,
-              JSON.stringify(meta),
-              now
-            ).run();
-            movements.push({ movement_key: movementKey, item_code: chickenMovementCode(cut), qty: yieldedKg, uom: 'kg', cut });
-          } else if (before !== JSON.stringify(line)) {
-            movements.push({ movement_key: null, item_code: clean(line.sku || line.item_code, 80), qty: yieldedKg || 0, uom: 'kg', cut: cut || '' });
-          }
-        }
-        const expected = purchaseTotalPaise(items);
-        await DB.prepare(
-          `UPDATE sauda_purchase
-              SET items_json=?,
-                  expected_amount_paise=CASE WHEN ? > 0 THEN ? ELSE expected_amount_paise END,
-                  status=CASE WHEN status='ORDERED' THEN 'RECEIVED' ELSE status END,
-                  received_at=?,
-                  received_by=?,
-                  received_station=?,
-                  received_items_json=?,
-                  updated_at=?
-            WHERE id=?`
-        ).bind(JSON.stringify(items), expected, expected, now, person, station, JSON.stringify(receivedLines), now, id).run();
-        saved.push({ id, vendor_name: row.vendor_name || '', for_date: row.for_date || '', received_lines: receivedLines.length });
-      }
-      return json({ success: true, changed, orders: saved, movements, at: now, by: person, station });
-    }
-
-    // Generic movement trail for Takht/TV inventory views.
-    if (action === 'movements') {
-      await ensureSaudaBridgeTables(DB);
-      const brand = (url.searchParams.get('brand') || 'HE').toUpperCase() === 'NCH' ? 'NCH' : 'HE';
-      const date = (url.searchParams.get('date') || todayIST()).slice(0, 10);
-      const limit = Math.min(parseInt(url.searchParams.get('limit') || '120', 10) || 120, 300);
-      const rows = (await DB.prepare(
-        `SELECT * FROM anbar_inventory_movements
-          WHERE brand=? AND substr(event_at,1,10)=?
-          ORDER BY event_at DESC, id DESC
-          LIMIT ?`
-      ).bind(brand, date, limit).all()).results || [];
-      return json({ success: true, brand, date, movements: rows });
     }
 
     // ── LIVE BOARD: per item per location — expected vs last count ──

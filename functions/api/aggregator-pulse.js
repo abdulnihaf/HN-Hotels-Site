@@ -30,8 +30,8 @@ export async function onRequest(context) {
   const db = env.DB;
 
   try {
-    if (method === 'POST') return handlePost(db, request, headers, env);
-    if (method === 'GET') return handleGet(db, url, headers);
+    if (method === 'POST') return await handlePost(db, request, headers, env);
+    if (method === 'GET') return await handleGet(db, url, headers, env);
     return new Response(JSON.stringify({ error: 'method not allowed' }), { status: 405, headers });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
@@ -229,7 +229,7 @@ async function upsertOrders(db, orders) {
 }
 
 // ========= GET =========
-async function handleGet(db, url, headers) {
+async function handleGet(db, url, headers, env = {}) {
   const action = url.searchParams.get('action') || 'orders';
 
   // --- ORDERS: the primary view ---
@@ -550,6 +550,21 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
+  // --- SESSION-HEALTH: auth/session guard for the delivery aggregator loop ---
+  // This is the closed-loop diagnostic endpoint for "is the feed broken, or is
+  // only enrichment/auth stale?" It never returns secret values; it only exposes
+  // presence, health states, OTP readiness, and the exact coordinate that needs
+  // refresh. Secret rotation remains outside D1.
+  if (action === 'session-health' || action === 'session-guard') {
+    const guard = await readAggregatorSessionGuard(db, env);
+    return new Response(JSON.stringify({
+      ok: true,
+      action,
+      generated_at: new Date().toISOString(),
+      ...guard,
+    }), { headers });
+  }
+
   // --- COA EVENTS: Ring 3 event/intelligence layer over Ring 2 order actions ---
   if (action === 'coa-events') {
     await ensureAggregatorCoaRing3(db);
@@ -701,8 +716,18 @@ async function handleGet(db, url, headers) {
     const zomatoSnapAge = ageMin(lastSnapByPlatform.zomato);
     const swiggyDirectAge = ageMin(lastDirectByPlatform.swiggy);
     const zomatoDirectAge = ageMin(lastDirectByPlatform.zomato);
-    const swiggyEffectiveAge = swiggyDirectAge ?? swiggySnapAge;
-    const zomatoEffectiveAge = zomatoDirectAge ?? zomatoSnapAge;
+    const swiggyEffective = firstAvailableFreshness([
+      ['direct', swiggyDirectAge],
+      ['order', swiggyAge],
+      ['snapshot', swiggySnapAge],
+    ]);
+    const zomatoEffective = firstAvailableFreshness([
+      ['direct', zomatoDirectAge],
+      ['order', zomatoAge],
+      ['snapshot', zomatoSnapAge],
+    ]);
+    const swiggyEffectiveAge = swiggyEffective.age;
+    const zomatoEffectiveAge = zomatoEffective.age;
 
     let status = 'ok';
     const issues = [];
@@ -725,9 +750,14 @@ async function handleGet(db, url, headers) {
       age_minutes: {
         swiggy_order: swiggyAge, zomato_order: zomatoAge,
         swiggy_direct: swiggyDirectAge, zomato_direct: zomatoDirectAge,
+        swiggy_effective: swiggyEffectiveAge, zomato_effective: zomatoEffectiveAge,
         swiggy_kds: kdsByPlatform.swiggy?.age_minutes ?? null,
         zomato_kds: kdsByPlatform.zomato?.age_minutes ?? null,
         swiggy_snap: swiggySnapAge, zomato_snap: zomatoSnapAge,
+      },
+      freshness_source: {
+        swiggy: swiggyEffective.source,
+        zomato: zomatoEffective.source,
       },
       zomato_business_hours: zomatoBusiness,
       checked_at: new Date().toISOString(),
@@ -1515,10 +1545,18 @@ async function handleGet(db, url, headers) {
     }), { headers });
   }
 
-  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'coa-actions', 'coa-events', 'daily-owner-report', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
+  return new Response(JSON.stringify({ error: 'unknown action', valid: ['orders', 'owner-orders', 'latest', 'stats', 'coa-entities', 'coa-actions', 'session-health', 'session-guard', 'coa-events', 'daily-owner-report', 'finance', 'health', 'snapshots', 'reviews', 'parsed', 'day-orders', 'order-detail', 'dine-health', 'dine-summary', 'dine-attribution'] }), { status: 400, headers });
 }
 
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return s; } }
+function firstAvailableFreshness(pairs) {
+  for (const [source, age] of pairs) {
+    if (age !== null && age !== undefined && Number.isFinite(Number(age))) {
+      return { source, age: Number(age) };
+    }
+  }
+  return { source: 'none', age: null };
+}
 
 const AGGREGATOR_COA_RING1_VERSION = '2026-05-25-ring1-v1';
 const AGGREGATOR_COA_RING2_VERSION = '2026-05-25-ring2-v1';
@@ -1526,6 +1564,8 @@ const AGGREGATOR_COA_RING3_VERSION = '2026-05-25-ring3-v1';
 const AGGREGATOR_DAILY_REPORT_VERSION = '2026-05-25-daily-report-v2';
 const AGGREGATOR_DAILY_REPORT_TEMPLATE = 'aggregator_daily_owner_report_v1';
 const ANTHROPIC_VERSION = '2023-06-01';
+const AGGREGATOR_CORE_PULL_SOURCES = new Set(['swiggy_fetch_orders', 'swiggy_history', 'zomato_history_v2']);
+const AGGREGATOR_CRITICAL_PULL_STATES = new Set(['unauthorized', 'parser_failed']);
 
 const AGGREGATOR_COA_RING1_SEED = {
   brands: [
@@ -1865,6 +1905,185 @@ function parseRing2JsonColumns(row) {
   };
 }
 
+function envPresent(env, name) {
+  return Boolean(String(env?.[name] || '').trim());
+}
+
+async function readAggregatorSessionGuard(db, env) {
+  await ensureAggregatorCoaRing2(db);
+  const enrichmentSources = new Set(['zomato_order_detail']);
+  const now = Date.now();
+  const ageMin = (iso) => iso ? Math.round((now - new Date(iso).getTime()) / 60000) : null;
+
+  const [healthRows, slotRows, orderRows] = await Promise.all([
+    db.prepare(`
+      SELECT h.*, po.canonical_code AS platform_outlet_canonical,
+             po.partner_outlet_name, ps.canonical_code AS pull_source_canonical,
+             ps.source_kind, ps.freshness_sla_minutes
+      FROM aggregator_coa_coordinate_health h
+      LEFT JOIN aggregator_coa_platform_outlet po ON po.code = h.platform_outlet_code
+      LEFT JOIN aggregator_coa_pull_source ps ON ps.code = h.pull_source_code
+      ORDER BY h.platform_code, h.brand_code, h.pull_source_code
+    `).all(),
+    db.prepare(`SELECT * FROM aggregator_coa_session_slot ORDER BY platform_code, code`).all(),
+    db.prepare(`
+      SELECT platform, MAX(captured_at) AS last_order_at, COUNT(*) AS total_orders
+      FROM aggregator_orders
+      WHERE platform IN ('swiggy','zomato')
+      GROUP BY platform
+    `).all().catch(() => ({ results: [] })),
+  ]);
+
+  let otpRows = { results: [] };
+  let otpError = null;
+  try {
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    otpRows = await db.prepare(`
+      SELECT platform,
+             COUNT(*) AS total_seen,
+             MAX(received_at) AS last_received_at,
+             SUM(CASE WHEN consumed_at IS NULL AND received_at >= ? THEN 1 ELSE 0 END) AS fresh_unconsumed
+      FROM otp_inbox
+      WHERE platform IN ('zomato','zomato_partner','zomato_merchant','swiggy','swiggy_partner','swiggy_merchant','eazydiner','eazydiner_partner')
+      GROUP BY platform
+      ORDER BY platform
+    `).bind(cutoff).all();
+  } catch (err) {
+    otpError = err.message;
+  }
+
+  const coordinateHealth = (healthRows.results || []).map(row => ({
+    ...parseRing2JsonColumns(row),
+    last_attempt_age_minutes: ageMin(row.last_attempt_at),
+    last_success_age_minutes: ageMin(row.last_success_at),
+    is_core_feed: AGGREGATOR_CORE_PULL_SOURCES.has(row.pull_source_code),
+    is_enrichment: enrichmentSources.has(row.pull_source_code),
+    needs_session_refresh: AGGREGATOR_CRITICAL_PULL_STATES.has(row.status_code),
+  }));
+
+  const coreFailures = coordinateHealth.filter(row => row.is_core_feed && row.needs_session_refresh);
+  const enrichmentFailures = coordinateHealth.filter(row => row.is_enrichment && row.needs_session_refresh);
+  const coreFreshByPlatform = {};
+  for (const row of coordinateHealth) {
+    if (!row.is_core_feed || !row.last_success_at) continue;
+    const prev = coreFreshByPlatform[row.platform_code];
+    if (!prev || row.last_success_at > prev.last_success_at) {
+      coreFreshByPlatform[row.platform_code] = {
+        last_success_at: row.last_success_at,
+        age_minutes: row.last_success_age_minutes,
+        source: row.pull_source_code,
+      };
+    }
+  }
+  const ordersByPlatform = {};
+  for (const row of orderRows.results || []) {
+    ordersByPlatform[row.platform] = {
+      last_order_at: row.last_order_at || null,
+      age_minutes: ageMin(row.last_order_at),
+      total_orders: Number(row.total_orders || 0),
+    };
+  }
+
+  const secret_inventory = {
+    swiggy_fetch_curl_present: envPresent(env, 'AGG_SWIGGY_FETCH_CURL'),
+    swiggy_history_curl_present: envPresent(env, 'AGG_SWIGGY_HISTORY_CURL'),
+    swiggy_access_token_present: envPresent(env, 'AGG_SWIGGY_ACCESS_TOKEN'),
+    zomato_history_curl_present: envPresent(env, 'AGG_ZOMATO_HISTORY_CURL'),
+    zomato_order_detail_curl_present: envPresent(env, 'AGG_ZOMATO_ORDER_DETAIL_CURL'),
+  };
+  secret_inventory.swiggy_core_configured = secret_inventory.swiggy_access_token_present || secret_inventory.swiggy_fetch_curl_present || secret_inventory.swiggy_history_curl_present;
+  secret_inventory.zomato_core_configured = secret_inventory.zomato_history_curl_present;
+  secret_inventory.zomato_enrichment_configured = secret_inventory.zomato_order_detail_curl_present;
+
+  const otpRowsPublic = (otpRows.results || []).map(row => ({
+    platform: row.platform,
+    total_seen: Number(row.total_seen || 0),
+    last_received_at: row.last_received_at || null,
+    last_received_age_minutes: ageMin(row.last_received_at),
+    fresh_unconsumed: Number(row.fresh_unconsumed || 0),
+  }));
+
+  const slots = (slotRows.results || []).map(slot => {
+    const configured = slot.platform_code === 'swiggy'
+      ? secret_inventory.swiggy_core_configured
+      : secret_inventory.zomato_core_configured;
+    return {
+      code: slot.code,
+      canonical_code: slot.canonical_code,
+      platform_code: slot.platform_code,
+      auth_shape: slot.auth_shape,
+      secret_storage: slot.secret_storage,
+      state_code: slot.state_code,
+      configured,
+      last_validated_at: slot.last_validated_at || null,
+      last_validated_age_minutes: ageMin(slot.last_validated_at),
+      expires_at: slot.expires_at || null,
+      updated_at: slot.updated_at || null,
+    };
+  });
+
+  const next_actions = [];
+  if (!secret_inventory.swiggy_core_configured) {
+    next_actions.push('Configure Swiggy core session secret: AGG_SWIGGY_ACCESS_TOKEN or AGG_SWIGGY_FETCH_CURL/AGG_SWIGGY_HISTORY_CURL.');
+  }
+  if (!secret_inventory.zomato_core_configured) {
+    next_actions.push('Configure Zomato core session secret: AGG_ZOMATO_HISTORY_CURL.');
+  }
+  if (!secret_inventory.zomato_enrichment_configured) {
+    next_actions.push('Configure Zomato enrichment secret: AGG_ZOMATO_ORDER_DETAIL_CURL.');
+  }
+  for (const row of coreFailures) {
+    next_actions.push(`Refresh core ${row.platform_code}/${row.brand_code}/${row.pull_source_code} session; last error: ${row.last_error || row.status_code}.`);
+  }
+  for (const row of enrichmentFailures) {
+    next_actions.push(`Refresh enrichment ${row.platform_code}/${row.brand_code}/${row.pull_source_code} session; core orders can remain usable while this is repaired.`);
+  }
+  if (otpError) {
+    next_actions.push(`OTP inbox status could not be read: ${otpError}.`);
+  }
+  if (!next_actions.length) next_actions.push('No auth repair required right now.');
+
+  const overall_status = coreFailures.length
+    ? 'core_feed_session_refresh_required'
+    : enrichmentFailures.length
+      ? 'enrichment_degraded_core_feed_ok'
+      : 'healthy';
+
+  return {
+    doctrine: 'COA session guard. Core order flow, enrichment, OTP relay, and secret slots are separated so one degraded layer cannot falsely mark the whole aggregator dead.',
+    overall_status,
+    core_feed: {
+      status: coreFailures.length ? 'broken' : 'ok',
+      failures: coreFailures,
+      latest_success_by_platform: coreFreshByPlatform,
+      latest_order_by_platform: ordersByPlatform,
+    },
+    enrichment: {
+      status: enrichmentFailures.length ? 'degraded' : 'ok',
+      failures: enrichmentFailures,
+      note: 'Zomato order-detail enriches discounts/dishes/customer signals. It must not page as delivery-dead while core Zomato history is fresh.',
+    },
+    session_slots: slots,
+    secret_inventory,
+    otp_bridge: {
+      status: otpError ? 'unreadable' : 'ready',
+      ttl_minutes: 5,
+      platforms: otpRowsPublic,
+      error: otpError,
+      note: 'Shows OTP availability only. Codes are never returned by this endpoint.',
+    },
+    state_machine: [
+      'healthy',
+      'enrichment_degraded_core_feed_ok',
+      'core_feed_session_refresh_required',
+      'owner_otp_waiting',
+      'validated_after_no_alert_ring2_pull',
+    ],
+    next_actions,
+    mutation_boundary: 'Read-only diagnostic. No partner portal, Cloudflare secret, POS, Odoo, price, offer, ad, or WABA mutation.',
+  };
+}
+
 async function executeAggregatorCoaRing2Pull(db, env, body = {}) {
   await ensureAggregatorCoaRing2(db);
   const entities = await readAggregatorCoaRing1(db);
@@ -1896,7 +2115,9 @@ async function executeAggregatorCoaRing2Pull(db, env, body = {}) {
   }
 
   const attemptsOk = attempts.filter(a => a.status_code === 'ok' || a.status_code === 'empty_response').length;
-  const critical = attempts.filter(a => ['unauthorized', 'parser_failed'].includes(a.status_code));
+  const critical = attempts.filter(a => AGGREGATOR_CRITICAL_PULL_STATES.has(a.status_code));
+  const coreCritical = critical.filter(a => AGGREGATOR_CORE_PULL_SOURCES.has(a.pull_source_code));
+  const enrichmentCritical = critical.filter(a => !AGGREGATOR_CORE_PULL_SOURCES.has(a.pull_source_code));
   const runnable = attempts.filter(a => a.status_code !== 'not_configured');
   const statusCode = critical.length ? 'partial' : runnable.length && attemptsOk === runnable.length ? 'ok' : 'partial';
   const ordersSeen = attempts.reduce((sum, a) => sum + (a.rows_seen || 0), 0);
@@ -1906,6 +2127,8 @@ async function executeAggregatorCoaRing2Pull(db, env, body = {}) {
     pairs_requested: attempts.length,
     attempts_ok: attemptsOk,
     critical_failures: critical.length,
+    core_critical_failures: coreCritical.length,
+    enrichment_critical_failures: enrichmentCritical.length,
     not_configured: attempts.filter(a => a.status_code === 'not_configured').length,
     source_status_counts: countBy(attempts, 'status_code'),
   };
@@ -1917,7 +2140,7 @@ async function executeAggregatorCoaRing2Pull(db, env, body = {}) {
   `).bind(completedAt, statusCode, attempts.length, attemptsOk, ordersSeen, ordersUpserted, JSON.stringify(summary), runId).run();
 
   return {
-    ok: critical.length === 0,
+    ok: coreCritical.length === 0,
     action: 'coa_ring2_pull',
     doctrine: 'COA Ring 2 - Action. Pull attempts over Ring 1 coordinates.',
     seed_version: AGGREGATOR_COA_RING2_VERSION,
@@ -1927,6 +2150,8 @@ async function executeAggregatorCoaRing2Pull(db, env, body = {}) {
     requested_to: to,
     status_code: statusCode,
     summary,
+    core_ok: coreCritical.length === 0,
+    enrichment_degraded: enrichmentCritical.length > 0,
     attempts,
     mutation_boundary: 'HN D1 order/action/health rows only. No partner portal, POS, Odoo, price, or offer mutation.',
   };
@@ -2069,7 +2294,8 @@ async function updateCoordinateHealth(db, pair, result, atIso) {
 
 async function maybeSendAggregatorSessionAlert(db, env, pair, result, opts) {
   if (!opts.notify) return { skipped: true, reason: 'notify_false' };
-  if (!['unauthorized', 'parser_failed'].includes(result.status_code)) return { skipped: true, reason: 'not_critical' };
+  if (!AGGREGATOR_CORE_PULL_SOURCES.has(pair.pull_source_code)) return { skipped: true, reason: 'enrichment_probe_only' };
+  if (!AGGREGATOR_CRITICAL_PULL_STATES.has(result.status_code)) return { skipped: true, reason: 'not_critical' };
   if (!env.ALERT_PHONE) return { skipped: true, reason: 'no_ALERT_PHONE' };
 
   const row = await db.prepare(`

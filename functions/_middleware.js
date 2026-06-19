@@ -31,8 +31,18 @@ export async function onRequest(context) {
     return next();
   }
 
+  // ── Anbar brand entrypoints — one backend, hard-separated app launches ──
+  // These paths work on both hnhotels.in and anbar.hnhotels.in so PWA scopes and
+  // QR links do not depend on fragile query-param launches.
+  const anbarCanonical = canonicalAnbarPath(url);
+  if (anbarCanonical) return Response.redirect(anbarCanonical.toString(), 302);
+
   // ── anbar.hnhotels.in — the storehouse chamber (inventory). App at /ops/anbar/ ──
   if (host === 'anbar.hnhotels.in') {
+    if (url.pathname === '/' || url.pathname === '' || url.pathname === '/index.html') {
+      return Response.redirect(anbarRootTarget(url).toString(), 302);
+    }
+
     const MAP = {
       '/': '/ops/anbar/',
       '/index.html': '/ops/anbar/',
@@ -153,4 +163,31 @@ export async function onRequest(context) {
 function rewriteTo(originalRequest, targetUrl) {
   const newRequest = new Request(targetUrl.toString(), originalRequest);
   return fetch(newRequest);
+}
+
+function canonicalAnbarPath(url) {
+  const p = url.pathname;
+  if (p === '/ops/anbar/he' || p === '/ops/anbar/nch' || p === '/ops/anbar/choose') {
+    const target = new URL(p + '/', url);
+    target.search = url.search;
+    return target;
+  }
+  return null;
+}
+
+function anbarRootTarget(url) {
+  const target = new URL('/ops/anbar/choose/', url);
+  const brand = (url.searchParams.get('brand') || '').toUpperCase();
+  const kind = (url.searchParams.get('kind') || '').toLowerCase();
+  const vendor = (url.searchParams.get('vendor') || '').toLowerCase();
+  const loc = (url.searchParams.get('loc') || '').toLowerCase();
+
+  if (brand === 'HE' || kind === 'chicken' || vendor === 'mn') {
+    target.pathname = '/ops/anbar/he/';
+  } else if (brand === 'NCH' || loc === 'store' || loc === 'counter' || loc === 'kitchen') {
+    target.pathname = '/ops/anbar/nch/';
+  }
+
+  target.search = url.search;
+  return target;
 }
