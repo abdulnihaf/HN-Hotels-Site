@@ -764,6 +764,103 @@ async function handleGet(db, url, headers, env = {}) {
     }), { headers });
   }
 
+  // --- FEED-INTEGRITY (2026-06-20): the authoritative "is delivery data being LOST?" view.
+  // `health` answers "is the poller alive?" — and deliberately treats an empty_response as a
+  // successful pull (freshness), so a source that connects (HTTP 200) but always returns ZERO
+  // orders reads as healthy. That is the SILENT-loss blind spot. This action closes it: it
+  // cross-checks each Ring-2 capture coordinate against actual order production and classifies
+  //   live | idle_ok | suspect_empty | enrichment_blocked | stale | dead
+  // so a feed that "was producing, now silently empty" (the Swiggy case) is surfaced, not hidden.
+  // Read-only over aggregator_coa_coordinate_health + aggregator_orders. Consumed by the
+  // dashboard and the iOS app. Never alerts (the watcher owns alerting).
+  if (action === 'feed-integrity' || action === 'integrity') {
+    const IST = "'+5 hours', '+30 minutes'";
+    const now = Date.now();
+    const ageMin = (iso) => iso ? Math.round((now - new Date(iso).getTime()) / 60000) : null;
+    const istNow = new Date(now + 5.5 * 3600 * 1000);
+    const businessHours = istNow.getUTCHours() >= 12 || istNow.getUTCHours() < 1; // 12pm–1am IST
+
+    const [coordsRes, freshRes] = await Promise.all([
+      db.prepare(`SELECT coordinate, platform_code, brand_code, pull_source_code, status_code,
+                         http_status, consecutive_failures, last_success_at, last_attempt_at,
+                         last_rows_seen, last_error
+                  FROM aggregator_coa_coordinate_health`).all().catch(() => ({ results: [] })),
+      db.prepare(`SELECT platform,
+                    MAX(captured_at) AS last_order_at,
+                    SUM(CASE WHEN captured_at >= datetime('now','-7 days') THEN 1 ELSE 0 END) AS last7d,
+                    SUM(CASE WHEN date(captured_at, ${IST}) = date('now', ${IST}) THEN 1 ELSE 0 END) AS today
+                  FROM aggregator_orders GROUP BY platform`).all().catch(() => ({ results: [] })),
+    ]);
+
+    const fresh = {};
+    for (const r of (freshRes.results || [])) {
+      fresh[r.platform] = { last_order_at: r.last_order_at, age_minutes: ageMin(r.last_order_at), last7d: Number(r.last7d || 0), today: Number(r.today || 0) };
+    }
+
+    const roleOf = (src) => /order_detail|order-detail/i.test(src) ? 'detail'
+                          : /history/i.test(src) ? 'history'
+                          : /fetch_orders|fetch-orders/i.test(src) ? 'orders' : 'other';
+    const rank = { live: 0, idle_ok: 0, enrichment_blocked: 1, stale: 2, suspect_empty: 3, dead: 4 };
+    const coordinates = [];
+    const lossFlags = [];
+    let worst = 'live';
+
+    for (const c of (coordsRes.results || [])) {
+      const role = roleOf(c.pull_source_code || c.coordinate || '');
+      const plat = (c.platform_code || '').toLowerCase();
+      const pf = fresh[plat] || {};
+      const sinceSuccess = ageMin(c.last_success_at);
+      const sinceAttempt = ageMin(c.last_attempt_at);
+      const empty = (c.last_rows_seen || 0) === 0;
+      let verdict = 'live', note = '';
+
+      if (sinceAttempt !== null && sinceAttempt > 30) {
+        verdict = 'dead'; note = `poller not attempting this source (${sinceAttempt}m since last attempt) — capture stopped`;
+      } else if (role === 'detail') {
+        if (c.status_code === 'unauthorized' || c.http_status === 401) {
+          verdict = 'enrichment_blocked';
+          note = `order-detail auth expired (401 ×${c.consecutive_failures}) — orders still captured at list level; item/payout detail NOT enriched`;
+        }
+      } else if (role === 'orders' || role === 'history') {
+        if (c.consecutive_failures > 0 || (c.http_status && c.http_status >= 400)) {
+          verdict = 'stale'; note = `${c.status_code} http ${c.http_status} ×${c.consecutive_failures}`;
+        } else if (empty && (pf.last7d || 0) > 0 && (pf.age_minutes === null || pf.age_minutes > 720)) {
+          verdict = 'suspect_empty';
+          note = `source returns EMPTY but ${plat} produced ${pf.last7d} orders in last 7d and last order was ${pf.age_minutes}m ago — likely silent capture loss, verify session`;
+        } else if (empty) {
+          verdict = 'idle_ok'; note = 'no orders this pull (genuinely quiet)';
+        }
+      }
+
+      if (verdict === 'suspect_empty' || verdict === 'dead') lossFlags.push(`${plat} ${c.brand_code || ''}: ${note}`.trim());
+      else if (verdict === 'enrichment_blocked') lossFlags.push(`${plat} ${c.brand_code || ''}: enrichment degraded (401)`.trim());
+      if (rank[verdict] > rank[worst]) worst = verdict;
+
+      coordinates.push({
+        coordinate: c.coordinate, platform: plat, brand: c.brand_code, role,
+        status_code: c.status_code, http_status: c.http_status,
+        consecutive_failures: c.consecutive_failures,
+        minutes_since_success: sinceSuccess, minutes_since_attempt: sinceAttempt,
+        last_rows_seen: c.last_rows_seen, verdict, note,
+      });
+    }
+
+    const integrity = (worst === 'dead' || worst === 'suspect_empty') ? 'loss_risk'
+                    : (worst === 'stale' || worst === 'enrichment_blocked') ? 'degraded' : 'live';
+
+    return new Response(JSON.stringify({
+      ok: true,
+      integrity,                       // live | degraded | loss_risk  ← glance verdict
+      headline: lossFlags.length ? lossFlags.join(' · ') : 'all delivery feeds live — no data loss detected',
+      loss_flags: lossFlags,
+      business_hours: businessHours,
+      orders_freshness: fresh,
+      coordinates,
+      checked_at: new Date().toISOString(),
+      ist: istNow.toISOString(),
+    }), { headers });
+  }
+
   // --- v6.0 SNAPSHOTS: time-series query for analytics dashboards ---
   if (action === 'snapshots') {
     const metricType = url.searchParams.get('metric_type');
