@@ -518,7 +518,7 @@ function catalogPickRank(it) {
 async function buildCatalog(db) {
   const vdir = await getVendorDirectory(db);
   const [itemsRes, aliasRes] = await Promise.all([
-    db.prepare(`SELECT item_code,label,unit,price_paise,price_mode,default_vendor,flagged FROM sauda_item WHERE active=1 ORDER BY label`).all(),
+    db.prepare(`SELECT item_code,label,unit,brand,price_paise,price_mode,default_vendor,flagged FROM sauda_item WHERE active=1 ORDER BY label`).all(),
     db.prepare(`SELECT alias,item_code FROM sauda_item_alias`).all(),
   ]);
   const items = (itemsRes && itemsRes.results) || [];
@@ -539,7 +539,7 @@ async function buildCatalog(db) {
       name: it.label,
       item_code: it.item_code,
       unit: it.unit || '',
-      brand: 'both',
+      brand: it.brand || 'both',
       live,
       price_paise: live ? 0 : (it.price_paise || 0),
       alias: (aliasByCode.get(it.item_code) || []).slice(0, 8).join(' '),
