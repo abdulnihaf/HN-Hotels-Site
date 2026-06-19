@@ -79,7 +79,6 @@
   .field input:focus { border-color:var(--gold); }
   .status-chip { display:inline-flex; align-items:center; min-height:25px; padding:4px 9px; border-radius:999px; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--border); }
   .status-ordered { color:var(--muted); background:rgba(255,255,255,.04); }
-  .status-prefilled { color:var(--gold); background:var(--gold-dim); border-color:var(--gold-bd); }
   .status-partial { color:var(--amber); background:var(--amber-dim); border-color:rgba(251,191,36,.35); }
   .status-saved { color:var(--green); background:var(--green-dim); border-color:rgba(55,211,153,.4); }
   .split { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -151,7 +150,7 @@
 <script>
 const API = '/api/anbar';
 const ICONS = { 'NCH-OB':'🍪', 'NCH-WTR':'💧', 'NCH-KH':'🌴', 'NCH-BUN':'🍞', 'NCH-CC':'🍗', 'NCH-PS':'🥟', 'HN-RM-202':'🍃', 'HN-RM-201':'🥛' };
-const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {}, chicken: { lines: [], rateRupees: '' } };
+const S = { pin: localStorage.getItem('anbar_pin') || '', person: localStorage.getItem('anbar_person') || '', loc: 'counter', entry: '', flow: null, item: null, live: [], countEntries: {}, chicken: { lines: [], rateRupees: '', date: '' } };
 const Q = new URLSearchParams(location.search);
 const APP_BRAND = (Q.get('brand') || 'NCH').toUpperCase();
 const APP_KIND = (Q.get('kind') || '').toLowerCase();
@@ -170,6 +169,7 @@ function istTime(iso) { return new Date(iso).toLocaleTimeString('en-IN', {hour:'
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function todayIST() { return new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }
 function kg(v) { return v == null ? '—' : (Math.round(Number(v) * 100) / 100).toString(); }
+S.chicken.date = /^\d{4}-\d{2}-\d{2}$/.test(Q.get('date') || '') ? Q.get('date') : todayIST();
 
 // ── GATE ──
 function key(k) { if (S.entry.length >= 4) return; S.entry += k; dots(); if (S.entry.length === 4) verify(); }
@@ -226,19 +226,25 @@ async function loadLive() {
   el('home-list').innerHTML = html || '<div class="loading">No items for this location</div>';
 }
 
-// ── HE CHICKEN RECEIVE DOOR ──
+// ── HE CHICKEN RECEIVING INSIDE ANBAR ──
 function renderChickenChrome() {
-  el('home-loc').textContent = 'HE';
+  el('home-loc').textContent = 'RECEIVE';
   el('home-loc').onclick = null;
   el('home-actions').classList.add('hidden');
-  el('home-sub').textContent = `${S.person} · MN Broilers chicken receiving`;
-  document.title = 'Anbar — HE Chicken';
+  el('home-sub').textContent = `${S.person} · receiving · Hamza Express`;
+  document.title = 'Anbar — Receiving';
   const title = document.querySelector('#s-home .nav-title');
-  if (title) title.textContent = 'Anbar · Hamza Express';
+  if (title) title.textContent = 'Anbar · Receiving';
 }
 function chickenDate() {
-  const d = Q.get('date') || todayIST();
+  const d = S.chicken.date || todayIST();
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : todayIST();
+}
+function setChickenDate(v) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return;
+  S.chicken.date = v;
+  S.chicken.rateRupees = '';
+  loadChickenQueue();
 }
 function goChickenHome() {
   renderChickenChrome();
@@ -252,10 +258,20 @@ async function loadChickenQueue() {
   if (!r.success) { el('home-list').innerHTML = `<div class="loading">${esc(r.error || 'Failed to load')}</div>`; return; }
   const lines = r.lines || [];
   S.chicken.lines = lines;
-  const queueRate = r.daily_rate_paise ? (Number(r.daily_rate_paise) / 100).toString() : '';
-  if (!S.chicken.rateRupees && queueRate) S.chicken.rateRupees = queueRate;
   if (!lines.length) {
-    el('home-list').innerHTML = '<div class="loading">No MN Broilers Sauda order for this date</div>';
+    el('home-list').innerHTML = `<div class="card" style="border-color:var(--anbar-bd)">
+      <div class="item-row" style="cursor:default">
+        <div class="item-ico">MN</div>
+        <div style="flex:1">
+          <div class="item-name">MN Chicken</div>
+          <div class="item-meta">Sauda receiving trail</div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="chicken-date">Receiving date</label>
+        <input id="chicken-date" type="date" value="${esc(date)}" onchange="setChickenDate(this.value)">
+      </div>
+    </div><div class="loading">No MN Broilers Sauda order for this date</div>`;
     return;
   }
   const savedCount = lines.filter(l => l.inventory_saved).length;
@@ -269,30 +285,30 @@ async function loadChickenQueue() {
       </div>
     </div>
     <div class="field">
+      <label for="chicken-date">Receiving date</label>
+      <input id="chicken-date" type="date" value="${esc(date)}" onchange="setChickenDate(this.value)">
+    </div>
+    <div class="field">
       <label for="chicken-rate">Today live rate</label>
       <input id="chicken-rate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="135" value="${esc(S.chicken.rateRupees)}" oninput="S.chicken.rateRupees=this.value">
     </div>
   </div>`;
   el('home-list').innerHTML = header + lines.map(line => {
-    const ce = line.chicken_entry || {};
     const icon = CUT_ICON[line.cut] || '🍗';
     const summary = line.receipt_summary || {};
     const saved = line.inventory_saved || line.status === 'inventory_saved';
     const partial = line.partial || line.status === 'partial';
-    const prefilled = line.prefilled || line.status === 'prefilled';
-    const border = saved ? 'rgba(55,211,153,.4)' : partial ? 'rgba(251,191,36,.35)' : prefilled ? 'var(--gold-bd)' : 'var(--border)';
-    const chipClass = saved ? 'status-saved' : partial ? 'status-partial' : prefilled ? 'status-prefilled' : 'status-ordered';
-    const chipText = saved ? 'inventory saved' : partial ? 'partial' : prefilled ? 'prefilled' : 'ordered';
+    const border = saved ? 'rgba(55,211,153,.4)' : partial ? 'rgba(251,191,36,.35)' : 'var(--border)';
+    const chipClass = saved ? 'status-saved' : partial ? 'status-partial' : 'status-ordered';
+    const chipText = saved ? 'inventory saved' : partial ? 'partial' : 'ordered';
     const progress = line.ordered_mode === 'pieces'
       ? `${summary.received_pieces || 0}/${line.ordered_pieces || line.ordered_amount || '—'} pieces`
       : `${kg(summary.yielded_kg || 0)}/${kg(line.ordered_amount || line.ordered_qty)} kg`;
-    const sub = prefilled && !saved
-      ? `prefilled usable ${kg(ce.remaining_prefill_yielded_kg || ce.yielded_kg)} kg · live ${kg(ce.remaining_prefill_delivered_kg || ce.delivered_kg)} kg`
-      : saved
+    const sub = saved
         ? `${line.saved_at ? 'saved ' + istTime(line.saved_at) : 'saved'}${line.saved_by ? ' · ' + esc(line.saved_by) : ''}`
         : partial
           ? `${progress} received · pending ${line.ordered_mode === 'pieces' ? (summary.remaining_pieces || 0) + ' pieces' : kg(summary.remaining_kg || 0) + ' kg'}`
-          : 'tap receive when chicken is in hand';
+          : `order ${esc(line.ordered_qty || '—')} ${esc(line.ordered_unit || '')}`;
     const btn = saved
       ? '<button class="btn btn-green" disabled style="margin-top:12px;width:100%">Inventory saved</button>'
       : `<button class="btn btn-gold" style="margin-top:12px;width:100%" onclick="openChickenReceive(${line.purchase_id},${line.line_idx})">${partial ? 'Receive balance' : 'Receive now'}</button>`;
@@ -328,12 +344,8 @@ function renderChickenParts(line) {
 function openChickenReceive(purchaseId, lineIdx) {
   const line = chickenLine(purchaseId, lineIdx);
   if (!line) return;
-  const ce = line.chicken_entry || {};
   const summary = line.receipt_summary || {};
   const isPieces = line.ordered_mode === 'pieces';
-  const usableDefault = ce.remaining_prefill_yielded_kg > 0 ? ce.remaining_prefill_yielded_kg : '';
-  const liveDefault = ce.remaining_prefill_delivered_kg > 0 ? ce.remaining_prefill_delivered_kg : '';
-  if (!S.chicken.rateRupees && ce.daily_rate_paise) S.chicken.rateRupees = (Number(ce.daily_rate_paise) / 100).toString();
   S.chicken.evidenceB64 = '';
   el('flow-title').textContent = line.cut_label || line.item || 'MN Chicken';
   el('flow-sub').textContent = `Sauda #${line.purchase_id} · line ${line.line_idx + 1} · part ${line.next_part_no || 1}`;
@@ -359,11 +371,11 @@ function openChickenReceive(purchaseId, lineIdx) {
       <div class="split">
         <div class="field">
           <label for="rx-usable">Usable kg received</label>
-          <input id="rx-usable" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" value="${esc(usableDefault)}">
+          <input id="rx-usable" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
         </div>
         <div class="field">
           <label for="rx-live">Live kg used</label>
-          <input id="rx-live" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" value="${esc(liveDefault)}">
+          <input id="rx-live" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
         </div>
       </div>
       <button class="btn btn-dark" style="width:100%;margin-top:14px" onclick="pickChickenEvidence()">Add weight photo</button>
@@ -675,8 +687,8 @@ async function showHistory(code) {
 
 // ── INIT ──
 if (IS_HE_CHICKEN) {
-  el('gate-loc').innerHTML = '<span class="loc-chip">HE CHICKEN DOOR</span>';
-  el('gate-foot').textContent = 'HN Hotels · Hamza Express';
+  el('gate-loc').innerHTML = '<span class="loc-chip">ANBAR RECEIVING</span>';
+  el('gate-foot').textContent = 'HN Hotels · Anbar Receiving';
 } else if (qLoc) {
   el('gate-loc').innerHTML = `<span class="loc-chip">${S.loc.toUpperCase()} DOOR</span>`;
 }
