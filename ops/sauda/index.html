@@ -245,7 +245,7 @@
     .vnew input{flex:1;background:var(--e2);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:14px;padding:10px 12px}
     .vnew button{flex-shrink:0;padding:0 16px;border-radius:10px;background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-bd);font-weight:700}
     /* scrollable mode tabs */
-    .seg.scrollx{max-width:calc(100vw - 32px);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .seg.scrollx{display:flex;width:calc(100vw - 32px);max-width:calc(100vw - 32px);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain}
     .seg.scrollx::-webkit-scrollbar{display:none}
     .seg.scrollx button{white-space:nowrap;flex:0 0 auto}
     /* Compare view */
