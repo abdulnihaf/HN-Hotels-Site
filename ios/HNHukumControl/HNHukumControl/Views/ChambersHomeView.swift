@@ -13,7 +13,7 @@ struct ChambersHomeView: View {
                     DiwanHeader()
                     VStack(spacing: 12) {
                         HStack(spacing: 12) {
-                            NavigationLink { AnbarBoardView() } label: {
+                            NavigationLink { AnbarView() } label: {
                                 ChamberTile(title: "Anbar", subtitle: "Inventory · receive & count",
                                             icon: "shippingbox.fill", accent: Color(hex: 0x4FAE6A), live: true)
                             }.buttonStyle(.plain)
@@ -28,20 +28,31 @@ struct ChambersHomeView: View {
                                 ChamberTile(title: "Darbar", subtitle: "Staff & attendance",
                                             icon: "person.2.fill", accent: Color(hex: 0x5B86C9), live: true)
                             }.buttonStyle(.plain)
-                            NavigationLink { SaudaBoardView() } label: {
+                            NavigationLink { SaudaView() } label: {
                                 ChamberTile(title: "Sauda", subtitle: "Purchase & pay",
                                             icon: "cart.fill", accent: Color(hex: 0xC85A8E), live: true)
                             }.buttonStyle(.plain)
                         }
                         .frame(maxHeight: .infinity)
                         HStack(spacing: 12) {
-                            NavigationLink { HisabTodayView() } label: {
+                            NavigationLink { HisaabView() } label: {
                                 ChamberTile(title: "Hesab", subtitle: "Daily P&L",
                                             icon: "indianrupeesign.circle.fill", accent: Color(hex: 0x7FA86A), live: true)
                             }.buttonStyle(.plain)
-                            NavigationLink { NaamLiveView() } label: {
+                            NavigationLink { NaamView() } label: {
                                 ChamberTile(title: "Naam", subtitle: "Marketing · live",
                                             icon: "megaphone.fill", accent: Color(hex: 0xE0762D), live: true)
+                            }.buttonStyle(.plain)
+                        }
+                        .frame(maxHeight: .infinity)
+                        HStack(spacing: 12) {
+                            NavigationLink { MoneyView() } label: {
+                                ChamberTile(title: "Tijori", subtitle: "Money · bank & cash",
+                                            icon: "banknote.fill", accent: Color(hex: 0x4FB0A8), live: true)
+                            }.buttonStyle(.plain)
+                            NavigationLink { NazarView() } label: {
+                                ChamberTile(title: "Nazar", subtitle: "Cameras · live watch",
+                                            icon: "eye.fill", accent: Color(hex: 0x6AA9FF), live: true)
                             }.buttonStyle(.plain)
                         }
                         .frame(maxHeight: .infinity)

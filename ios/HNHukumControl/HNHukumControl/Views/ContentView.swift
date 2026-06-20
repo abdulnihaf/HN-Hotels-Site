@@ -5,12 +5,13 @@ struct ContentView: View {
 
     var body: some View {
         switch ProcessInfo.processInfo.environment["HUKUM_VIEW"] {
-        case "anbar": AnbarBoardView()
-        case "naam": NaamLiveView()
+        case "anbar": AnbarView()
+        case "naam": NaamView()
         case "darbar": DarbarView()
-        case "sauda": SaudaBoardView()
-        case "hisab": HisabTodayView()
+        case "sauda": SaudaView()
+        case "hisab", "hisaab": HisaabView()
         case "takht": TakhtSettlementView()
+        case "money", "tijori": MoneyView()
         default:
             if session.unlocked {
                 tabs
