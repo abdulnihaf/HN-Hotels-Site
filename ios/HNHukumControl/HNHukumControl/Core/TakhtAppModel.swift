@@ -16,6 +16,8 @@ final class TakhtAppModel: ObservableObject {
     @Published var token: TakhtTokenSettlement?
     @Published var upi: TakhtUpiResponse?
     @Published var shift: TakhtShift?
+    @Published var preview: TakhtPreviewResponse?   // drawer preview — kept for cross-ref, not rendered (PWA shows none)
+    @Published var upiLoading = false               // the Razorpay reconciliation is slow — honest "Loading…" vs "unreachable"
     @Published var flags: [TakhtFlag] = []
     @Published var status = "opening the court…"
     @Published var isRefreshing = false
@@ -42,23 +44,36 @@ final class TakhtAppModel: ObservableObject {
     func bootstrap() async { await refresh(); startPolling() }
 
     func refresh() async {
-        guard unlocked else { return }
+        // No per-chamber gate: the Takht reads are public owner-witness GETs behind the shared
+        // Diwan token. Re-read the unlock flag for the UI, but never block the read on it.
+        unlocked = DiwanAuth.isUnlocked("takht")
         isRefreshing = true
+        upiLoading = true
         defer { isRefreshing = false }
 
-        // Read all four witnesses in parallel; each one is independently optional/honest.
+        // All five witnesses fire in parallel, but the UPI reconciliation (a Razorpay round-trip)
+        // is far slower than the rest — so settle the FAST witnesses first and paint the glance
+        // (chain / chai / session / flags / status) in ~1–2s, then fold the slow UPI in when it lands.
         async let bal = TakhtClient.shared.balance()
         async let tok = TakhtClient.shared.tokens()
-        async let up  = TakhtClient.shared.upi()
         async let sh  = TakhtClient.shared.shift()
+        async let pv  = TakhtClient.shared.preview()
+        async let up  = TakhtClient.shared.upi()
 
         balance = (try? await bal)?.balance
         token   = (try? await tok)?.lastSettlement
-        upi     = try? await up
         shift   = (try? await sh)?.current
-
+        preview = try? await pv
         buildFlags()
+        updateStatus()
 
+        upi = try? await up
+        upiLoading = false
+        buildFlags()        // re-fold the flags now that the UPI discrepancies are known
+        updateStatus()
+    }
+
+    private func updateStatus() {
         if balance == nil {
             status = "Takht offline — counter balance unreadable"
         } else if let name = shift?.name {
