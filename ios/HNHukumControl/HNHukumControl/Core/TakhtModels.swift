@@ -61,18 +61,27 @@ struct TakhtTokenSettlement: Codable {
 // GET /api/validator?action=razorpay-verify  → UPI witness (Razorpay actually-received vs POS-billed).
 struct TakhtUpiResponse: Codable {
     var success: Bool?
+    var period: TakhtPeriod?         // settlement window (from/to) — cross-ref for Darbar/Nazar correlation
     var snapshots: [TakhtUpiSnapshot]?
     var discrepancies: [TakhtUpiDiscrepancy]?
     var error: String?
 }
 
+// The settlement period window — a cross-ref key so the coordinator can line Takht up with
+// Darbar shifts and Nazar flags over the same window.
+struct TakhtPeriod: Codable {
+    var from: String?
+    var to: String?
+}
+
 struct TakhtUpiSnapshot: Codable, Identifiable {
-    var entity: String
+    var entity: String              // COUNTER / RUNNER_COUNTER / RUN001…RUN005 — runner-identity cross-ref
     var razorpay: Double?            // RUPEES actually received
     var posUpi: Double?             // RUPEES POS recorded
-    var excess: Double?
-    var deficit: Double?
-    var isRunnerQr: Bool?
+    var excess: Double?             // raw integer kept (not just the derived gap)
+    var deficit: Double?            // raw integer kept
+    var isRunnerQr: Bool?           // links this QR to a runner identity
+    var rzpCount: Int?              // Razorpay txn count on this QR
 
     var id: String { entity }
 
@@ -80,6 +89,7 @@ struct TakhtUpiSnapshot: Codable, Identifiable {
         case entity, razorpay, excess, deficit
         case posUpi = "pos_upi"
         case isRunnerQr = "is_runner_qr"
+        case rzpCount = "rzp_count"
     }
 
     // Signed gap (Razorpay − POS), matching the owner-witness page maths.
@@ -105,12 +115,51 @@ struct TakhtShiftResponse: Codable {
 }
 
 struct TakhtShift: Codable {
-    var name: String?
+    var name: String?               // cashier display name
+    var code: String?               // cashier slot code (CASH001…) — links to the Darbar staff identity
     var shiftMinutes: Int?
     var stale: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case name, stale
+        case name, code, stale
         case shiftMinutes = "shift_minutes"
+    }
+}
+
+// GET /api/settlement?action=shift-preview  → drawer-preview witness. The live PWA fetches this in
+// parallel but renders no section from it; kept here (decoded, not invented) for the coordinator to
+// correlate the expected drawer + UPI variance with the rest of the chain.
+struct TakhtPreviewResponse: Codable {
+    var success: Bool?
+    var periodStart: String?
+    var runnerCashReceived: Double?
+    var pm37WalkIn: Double?
+    var expensesTotal: Double?
+    var cashCollections: Double?
+    var expectedDrawer: Double?
+    var upiSnapshot: TakhtPreviewUpi?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case periodStart = "period_start"
+        case runnerCashReceived = "runner_cash_received"
+        case pm37WalkIn = "pm37_walk_in"
+        case expensesTotal = "expenses_total"
+        case cashCollections = "cash_collections"
+        case expectedDrawer = "expected_drawer"
+        case upiSnapshot = "upi_snapshot"
+    }
+}
+
+struct TakhtPreviewUpi: Codable {
+    var odooPm38: Double?
+    var rzpCounter: Double?
+    var variance: Double?
+    var flag: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case odooPm38 = "odoo_pm38"
+        case rzpCounter = "rzp_counter"
+        case variance, flag
     }
 }

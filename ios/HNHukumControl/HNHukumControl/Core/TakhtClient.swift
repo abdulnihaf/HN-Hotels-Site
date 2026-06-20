@@ -38,6 +38,12 @@ actor TakhtClient {
         return try decoder.decode(TakhtShiftResponse.self, from: data)
     }
 
+    // Drawer preview — period window + expected drawer + UPI variance. Decoded for cross-ref.
+    func preview() async throws -> TakhtPreviewResponse {
+        let data = try await request(path: "/api/settlement", query: ["action": "shift-preview"])
+        return try decoder.decode(TakhtPreviewResponse.self, from: data)
+    }
+
     private func request(path: String, query: [String: String] = [:], timeout: TimeInterval = 15) async throws -> Data {
         guard var c = URLComponents(string: base) else { throw HukumError.badURL }
         c.path = path
@@ -45,6 +51,11 @@ actor TakhtClient {
         guard let url = c.url else { throw HukumError.badURL }
         var req = URLRequest(url: url)
         req.timeoutInterval = timeout
+        // ONE shared Diwan token, seeded by the single Diwan unlock — sent on every read.
+        // No per-chamber PIN gate; the Takht reads are owner-witness GETs behind this shared token.
+        if let token = DiwanAuth.credential("darbar") ?? DiwanAuth.credential("takht") {
+            req.setValue(token, forHTTPHeaderField: "x-darbar-token")
+        }
         let (data, resp) = try await URLSession.shared.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw HukumError.server("Takht HTTP \(http.statusCode)")
