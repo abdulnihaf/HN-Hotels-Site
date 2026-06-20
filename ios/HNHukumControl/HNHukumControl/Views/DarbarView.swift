@@ -1,232 +1,160 @@
 import SwiftUI
+import WebKit
 
-// Darbar entry. Gated: if no token (or token expired) show the court gate, else the TODAY inbox.
-// READ-ONLY — shows the exception inbox; resolve / exit / pay are execution (out of scope here).
+// Darbar — "the Court". The native chamber is a thin shell hosting the LIVE deployed PWA
+// (https://darbar.hnhotels.in/ops/darbar/). Owner-directed (2026-06-20): tapping Darbar in the
+// Diwan must open EXACTLY the deployed app — all four tabs (Today / Attendance / Pay / Roster),
+// every sheet and action (settle · advance · set-pay · onboard · fix-punch · mark-left …), salary
+// recording included. We reuse the real build instead of re-porting it, so nothing is lost or
+// mis-copied.
+//
+// The one native job: mint the shared Diwan token (DarbarAppModel) and inject it into the page's
+// sessionStorage BEFORE its scripts run, so the PWA's auto() enters straight past its own PIN gate.
+// No per-chamber login screen (DIWAN-IOS-CONTRACT §4). The full screen is the PWA; the only native
+// chrome is a back affordance to return to the Diwan, sized to sit in the PWA's empty top-left slot.
 struct DarbarView: View {
     @StateObject private var model = DarbarAppModel()
-    private let accent = Color(hex: 0x9E3B4D)   // court hue
+    @Environment(\.dismiss) private var dismiss
+    private let accent = Color(hex: 0x5B86C9)   // Darbar blue
 
     var body: some View {
-        Group {
-            if model.needsAuth {
-                DarbarGateView { await model.onAuthenticated() }
-            } else {
-                DarbarTodayView(model: model, accent: accent)
-            }
-        }
-        .task { await model.bootstrap() }
-    }
-}
+        ZStack(alignment: .topLeading) {
+            Color.black.ignoresSafeArea()   // matches the PWA's black so there is no seam
 
-struct DarbarTodayView: View {
-    @ObservedObject var model: DarbarAppModel
-    let accent: Color
-
-    var body: some View {
-        ZStack {
-            HK.bg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                ChamberHeader(title: "Darbar", subtitle: model.statusLine, accent: accent)
-                ScrollView {
-                    VStack(spacing: 14) {
-                        heroBand
-                        camsHealth
-                        inbox
-                    }
-                    .padding(.horizontal, 16).padding(.bottom, 18)
+            switch model.phase {
+            case .loading:
+                loadingState
+            case .locked:
+                lockedState
+            case .offline:
+                offlineState
+            case .ready:
+                if let token = model.token, let user = model.userJSONBase64 {
+                    DarbarWebHost(url: model.appURL, token: token, userJSONBase64: user,
+                                  onLoadFailed: { model.markOffline() })
+                        .ignoresSafeArea()
+                } else {
+                    lockedState
                 }
-                .scrollIndicators(.hidden)
-                .refreshable { await model.refresh() }
             }
+
+            backButton   // always reachable — returns to the Diwan
         }
-        .navigationTitle("Darbar").navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .task { await model.prepare() }
     }
 
-    // 4-stat hero band: Present / In-progress / Missing-punch / Absent.
-    private var heroBand: some View {
-        let s = model.stats
-        return HStack(spacing: 10) {
-            statCell("Present", s?.present, HK.ready)
-            statCell("In progress", s?.inProgress, HK.running)
-            statCell("Missing", s?.missingPunch, accent)
-            statCell("Absent", s?.absent, HK.error)
+    // The single piece of native chrome — a small back chip in the PWA's empty top-left nav slot.
+    private var backButton: some View {
+        Button { dismiss() } label: {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(.black.opacity(0.38), in: Circle())
+                .overlay(Circle().stroke(.white.opacity(0.18), lineWidth: 1))
         }
+        .buttonStyle(.plain)
+        .padding(.leading, 8)
+        .padding(.top, 4)
+        .accessibilityLabel("Back to Diwan")
     }
 
-    private func statCell(_ label: String, _ value: Int?, _ tint: Color) -> some View {
-        VStack(spacing: 5) {
-            Text(value.map(String.init) ?? "–")
-                .font(.system(size: 26, weight: .heavy, design: .rounded))
-                .foregroundStyle(value == nil ? HK.textFaint : tint)
-            Text(label.uppercased())
-                .font(.system(size: 9.5, weight: .heavy)).tracking(0.3)
-                .foregroundStyle(HK.textFaint)
+    // MARK: native states (black, to blend with the PWA — the only moments without the web app)
+
+    private var loadingState: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            Text("Darbar")
+                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+            ProgressView().tint(accent)
+            Text(model.statusLine).font(.system(size: 13)).foregroundStyle(.white.opacity(0.55))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var lockedState: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "lock.fill").font(.system(size: 30)).foregroundStyle(accent)
+            Text("Court locked").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+            Text("Unlock from the Diwan home to hold court.")
+                .font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
+            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(HK.card, in: RoundedRectangle(cornerRadius: HK.radiusSm))
-        .overlay(RoundedRectangle(cornerRadius: HK.radiusSm).stroke(HK.line, lineWidth: 1))
+        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(.horizontal, 36)
     }
 
-    // CAMS device health strip — honest when the device is quiet/stale.
-    @ViewBuilder
-    private var camsHealth: some View {
-        if let h = model.home?.health {
-            let ok = h.camsOk ?? false
-            HStack(spacing: 8) {
-                Circle().fill(ok ? HK.ready : HK.error).frame(width: 8, height: 8)
-                Text(ok ? "CAMS live" : "CAMS attention")
-                    .font(.system(size: 12, weight: .bold)).foregroundStyle(HK.text)
-                if let age = h.camsLastPunchAgeMin {
-                    Text("· last punch \(age)m ago")
-                        .font(.system(size: 12)).foregroundStyle(HK.textDim)
-                }
-                if h.camsQuietHours == true {
-                    Text("· quiet hours").font(.system(size: 12)).foregroundStyle(HK.textFaint)
-                }
-                Spacer()
-                if let g = h.ghostCount, g > 0 {
-                    Text("\(g) ghost").font(.system(size: 11, weight: .heavy))
-                        .foregroundStyle(accent)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(accent.opacity(0.16), in: Capsule())
-                }
+    private var offlineState: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "wifi.exclamationmark").font(.system(size: 30)).foregroundStyle(HK.error)
+            Text("Can't reach the court").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+            Text(model.statusLine).font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+            Button { Task { await model.retry() } } label: {
+                Text("Retry").font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
+                    .padding(.horizontal, 22).padding(.vertical, 10)
+                    .background(accent, in: Capsule())
             }
-            .padding(.horizontal, 13).padding(.vertical, 11)
-            .background(HK.bgElev, in: RoundedRectangle(cornerRadius: HK.radiusSm))
-            .overlay(RoundedRectangle(cornerRadius: HK.radiusSm).stroke(HK.lineSoft, lineWidth: 1))
+            .padding(.top, 4)
+            Spacer()
         }
-    }
-
-    // The exception inbox, grouped by type.
-    @ViewBuilder
-    private var inbox: some View {
-        if model.exceptions.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "checkmark.seal.fill").font(.system(size: 30)).foregroundStyle(HK.ready)
-                Text("No exceptions today").font(.system(size: 15, weight: .semibold)).foregroundStyle(HK.textDim)
-                Text(model.statusLine).font(.system(size: 12)).foregroundStyle(HK.textFaint)
-            }
-            .frame(maxWidth: .infinity).padding(.top, 40)
-        } else {
-            VStack(alignment: .leading, spacing: 14) {
-                exceptionGroup("Ghost identities", "Punching with no roster match",
-                               model.ghosts, "questionmark.circle.fill")
-                exceptionGroup("Chronic missed punches", "Repeated odd days",
-                               model.chronicMissed, "exclamationmark.arrow.triangle.2.circlepath")
-                exceptionGroup("Pay missing", "No pay record",
-                               model.payMissing, "indianrupeesign.circle.fill")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func exceptionGroup(_ title: String, _ subtitle: String,
-                                _ rows: [DarbarException], _ icon: String) -> some View {
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: icon).font(.system(size: 13, weight: .bold)).foregroundStyle(accent)
-                    Text(title.uppercased()).font(.system(size: 11.5, weight: .heavy)).tracking(0.4)
-                        .foregroundStyle(HK.textDim)
-                    Text("\(rows.count)").font(.system(size: 11, weight: .heavy)).foregroundStyle(HK.textFaint)
-                    Spacer()
-                }
-                ForEach(rows) { DarbarExceptionRow(ex: $0, token: model.token, accent: accent) }
-            }
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(.horizontal, 36)
     }
 }
 
-// One exception card: CAMS face (AsyncImage, initials fallback) + identity + the type-specific evidence.
-struct DarbarExceptionRow: View {
-    let ex: DarbarException
-    let token: String?
-    let accent: Color
+// Hosts the deployed PWA. A document-start user-script seeds the minted token + user into
+// sessionStorage so the page's own auto() enters past the gate; the page then makes every API call
+// itself (same-origin, token in the x-darbar-token header). base64 injection avoids all escaping.
+struct DarbarWebHost: UIViewRepresentable {
+    let url: String
+    let token: String
+    let userJSONBase64: String
+    let onLoadFailed: () -> Void
 
-    var body: some View {
-        HStack(spacing: 12) {
-            face
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(ex.displayName)
-                        .font(.system(size: 15.5, weight: .bold)).foregroundStyle(HK.text)
-                        .lineLimit(1)
-                    if let b = ex.brand, !b.isEmpty {
-                        Text(b).font(.system(size: 9.5, weight: .heavy))
-                            .foregroundStyle(HK.textFaint)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(HK.bgElev, in: Capsule())
-                    }
-                }
-                Text(evidence).font(.system(size: 12)).foregroundStyle(HK.textDim).lineLimit(2)
-            }
-            Spacer(minLength: 4)
-            // READ-ONLY: a disabled placeholder where the resolve action will live (execution, out of scope).
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .bold)).foregroundStyle(HK.textFaint.opacity(0.5))
+    func makeUIView(context: Context) -> WKWebView {
+        let cfg = WKWebViewConfiguration()
+        cfg.allowsInlineMediaPlayback = true
+
+        let inject = """
+        (function(){try{
+          sessionStorage.setItem('darbar_token','\(token)');
+          sessionStorage.setItem('darbar_user', atob('\(userJSONBase64)'));
+        }catch(e){}})();
+        """
+        cfg.userContentController.addUserScript(
+            WKUserScript(source: inject, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        )
+
+        let wv = WKWebView(frame: .zero, configuration: cfg)
+        wv.navigationDelegate = context.coordinator
+        wv.isOpaque = false
+        wv.backgroundColor = .black
+        wv.scrollView.backgroundColor = .black
+        wv.scrollView.contentInsetAdjustmentBehavior = .never   // the PWA owns its safe-area insets
+        wv.allowsBackForwardNavigationGestures = false          // leave edge-swipe for the NavigationStack
+        if let u = URL(string: url) { wv.load(URLRequest(url: u)) }
+        return wv
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(onFail: onLoadFailed) }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        let onFail: () -> Void
+        init(onFail: @escaping () -> Void) { self.onFail = onFail }
+
+        func webView(_ w: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            if (error as NSError).code != NSURLErrorCancelled { onFail() }
         }
-        .padding(13)
-        .background(HK.card, in: RoundedRectangle(cornerRadius: HK.radius))
-        .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(HK.line, lineWidth: 1))
-    }
-
-    // CAMS face by pin; initials circle when there's no pin or the image fails.
-    @ViewBuilder
-    private var face: some View {
-        let size: CGFloat = 46
-        if let pin = ex.pin, let token, let url = DarbarClient.photoURL(pin: pin, token: token) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img):
-                    img.resizable().scaledToFill()
-                default:
-                    initials
-                }
-            }
-            .frame(width: size, height: size)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(accent.opacity(0.4), lineWidth: 1.4))
-        } else {
-            initials
-                .frame(width: size, height: size)
-                .overlay(Circle().stroke(accent.opacity(0.4), lineWidth: 1.4))
-        }
-    }
-
-    private var initials: some View {
-        ZStack {
-            Circle().fill(accent.opacity(0.18))
-            Text(initialsText)
-                .font(.system(size: 16, weight: .heavy, design: .rounded))
-                .foregroundStyle(accent)
-        }
-    }
-
-    private var initialsText: String {
-        let parts = ex.displayName.split(separator: " ").prefix(2)
-        let s = parts.compactMap { $0.first }.map(String.init).joined()
-        return s.isEmpty ? "?" : s.uppercased()
-    }
-
-    // Type-specific one-liner of evidence (honest, no fabricated numbers).
-    private var evidence: String {
-        switch ex.type {
-        case "ghost":
-            var bits: [String] = []
-            if let p = ex.punches, let d = ex.days { bits.append("\(p) punches / \(d)d") }
-            if let s = ex.shape { bits.append(s) }
-            if let ls = ex.daysSilent, ls > 0 { bits.append("silent \(ls)d") }
-            else if let last = ex.lastPunch { bits.append("last \(last)") }
-            return bits.isEmpty ? "Ghost — no roster match" : bits.joined(separator: " · ")
-        case "chronic_missed":
-            if let o = ex.oddDays { return "\(o) odd days · PIN \(ex.pin ?? "?")" }
-            return "Repeated missed punches"
-        case "pay_missing":
-            return ex.pin.map { "No pay record · PIN \($0)" } ?? "No pay record"
-        default:
-            return ex.type ?? "Exception"
+        func webView(_ w: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            if (error as NSError).code != NSURLErrorCancelled { onFail() }
         }
     }
 }
