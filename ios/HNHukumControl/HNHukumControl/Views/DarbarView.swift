@@ -1,160 +1,162 @@
 import SwiftUI
-import WebKit
 
-// Darbar — "the Court". The native chamber is a thin shell hosting the LIVE deployed PWA
-// (https://darbar.hnhotels.in/ops/darbar/). Owner-directed (2026-06-20): tapping Darbar in the
-// Diwan must open EXACTLY the deployed app — all four tabs (Today / Attendance / Pay / Roster),
-// every sheet and action (settle · advance · set-pay · onboard · fix-punch · mark-left …), salary
-// recording included. We reuse the real build instead of re-porting it, so nothing is lost or
-// mis-copied.
-//
-// The one native job: mint the shared Diwan token (DarbarAppModel) and inject it into the page's
-// sessionStorage BEFORE its scripts run, so the PWA's auto() enters straight past its own PIN gate.
-// No per-chamber login screen (DIWAN-IOS-CONTRACT §4). The full screen is the PWA; the only native
-// chrome is a back affordance to return to the Diwan, sized to sit in the PWA's empty top-left slot.
+// Darbar — "the Court". FULLY NATIVE port of the deployed PWA: four tabs (Today / Attendance / Pay /
+// Roster) with the real execution — pay advance, settle, set-pay, mark-exit, on-leave, onboard,
+// dismiss-ghost, fix-punch — all wired to the live endpoints. Accent 0x5B86C9 is the only per-chamber
+// colour; everything else is the shared HK kit. Read-glance first, one-tap to act, honest states.
 struct DarbarView: View {
     @StateObject private var model = DarbarAppModel()
-    @Environment(\.dismiss) private var dismiss
-    private let accent = Color(hex: 0x5B86C9)   // Darbar blue
+    static let accent = Color(hex: 0x5B86C9)
+    private var accent: Color { Self.accent }
+    @State private var tab = 0
+    @State private var sheet: DarbarSheet?
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color.black.ignoresSafeArea()   // matches the PWA's black so there is no seam
-
-            switch model.phase {
-            case .loading:
-                loadingState
-            case .locked:
-                lockedState
-            case .offline:
-                offlineState
-            case .ready:
-                if let token = model.token, let user = model.userJSONBase64 {
-                    DarbarWebHost(url: model.appURL, token: token, userJSONBase64: user,
-                                  onLoadFailed: { model.markOffline() })
-                        .ignoresSafeArea()
-                } else {
-                    lockedState
-                }
+        ZStack(alignment: .bottom) {
+            TabView(selection: $tab) {
+                DarbarTodayTab(model: model, sheet: $sheet).tag(0)
+                    .tabItem { Label("Today", systemImage: "house.fill") }
+                DarbarAttendanceTab(model: model).tag(1)
+                    .tabItem { Label("Attendance", systemImage: "calendar") }
+                DarbarPayTab(model: model, sheet: $sheet).tag(2)
+                    .tabItem { Label("Pay", systemImage: "indianrupeesign.circle.fill") }
+                DarbarRosterTab(model: model, sheet: $sheet).tag(3)
+                    .tabItem { Label("Roster", systemImage: "person.3.fill") }
             }
-
-            backButton   // always reachable — returns to the Diwan
+            .tint(accent)
+            toast
         }
-        .navigationBarHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
-        .task { await model.prepare() }
+        .task { await model.bootstrap() }
+        .sheet(item: $sheet) { s in DarbarSheetHost(sheet: s, model: model).presentationDragIndicator(.visible) }
     }
 
-    // The single piece of native chrome — a small back chip in the PWA's empty top-left nav slot.
-    private var backButton: some View {
-        Button { dismiss() } label: {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(.black.opacity(0.38), in: Circle())
-                .overlay(Circle().stroke(.white.opacity(0.18), lineWidth: 1))
+    @ViewBuilder private var toast: some View {
+        if let t = model.toast {
+            Text(t.text)
+                .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(t.ok ? .black : .white)
+                .padding(.horizontal, 18).padding(.vertical, 11)
+                .background(t.ok ? HK.ready : HK.error, in: Capsule())
+                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+                .padding(.bottom, 96)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task { try? await Task.sleep(nanoseconds: 2_200_000_000); model.toast = nil }
         }
-        .buttonStyle(.plain)
-        .padding(.leading, 8)
-        .padding(.top, 4)
-        .accessibilityLabel("Back to Diwan")
-    }
-
-    // MARK: native states (black, to blend with the PWA — the only moments without the web app)
-
-    private var loadingState: some View {
-        VStack(spacing: 14) {
-            Spacer()
-            Text("Darbar")
-                .font(.system(size: 30, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-            ProgressView().tint(accent)
-            Text(model.statusLine).font(.system(size: 13)).foregroundStyle(.white.opacity(0.55))
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var lockedState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: "lock.fill").font(.system(size: 30)).foregroundStyle(accent)
-            Text("Court locked").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-            Text("Unlock from the Diwan home to hold court.")
-                .font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(.horizontal, 36)
-    }
-
-    private var offlineState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: "wifi.exclamationmark").font(.system(size: 30)).foregroundStyle(HK.error)
-            Text("Can't reach the court").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-            Text(model.statusLine).font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-            Button { Task { await model.retry() } } label: {
-                Text("Retry").font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
-                    .padding(.horizontal, 22).padding(.vertical, 10)
-                    .background(accent, in: Capsule())
-            }
-            .padding(.top, 4)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(.horizontal, 36)
     }
 }
 
-// Hosts the deployed PWA. A document-start user-script seeds the minted token + user into
-// sessionStorage so the page's own auto() enters past the gate; the page then makes every API call
-// itself (same-origin, token in the x-darbar-token header). base64 injection avoids all escaping.
-struct DarbarWebHost: UIViewRepresentable {
-    let url: String
-    let token: String
-    let userJSONBase64: String
-    let onLoadFailed: () -> Void
+// MARK: - sheets (one host, enum-driven)
 
-    func makeUIView(context: Context) -> WKWebView {
-        let cfg = WKWebViewConfiguration()
-        cfg.allowsInlineMediaPlayback = true
+enum DarbarSheet: Identifiable {
+    case advance(DarbarEmployee?)
+    case setPay(id: Int, name: String)
+    case exit(id: Int, name: String)
+    case leave(id: Int, name: String)
+    case onboard(pin: String, name: String)
+    case settle(id: Int, name: String)
+    case editAdvance(AdvanceRow)
 
-        let inject = """
-        (function(){try{
-          sessionStorage.setItem('darbar_token','\(token)');
-          sessionStorage.setItem('darbar_user', atob('\(userJSONBase64)'));
-        }catch(e){}})();
-        """
-        cfg.userContentController.addUserScript(
-            WKUserScript(source: inject, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-        )
-
-        let wv = WKWebView(frame: .zero, configuration: cfg)
-        wv.navigationDelegate = context.coordinator
-        wv.isOpaque = false
-        wv.backgroundColor = .black
-        wv.scrollView.backgroundColor = .black
-        wv.scrollView.contentInsetAdjustmentBehavior = .never   // the PWA owns its safe-area insets
-        wv.allowsBackForwardNavigationGestures = false          // leave edge-swipe for the NavigationStack
-        if let u = URL(string: url) { wv.load(URLRequest(url: u)) }
-        return wv
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(onFail: onLoadFailed) }
-
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        let onFail: () -> Void
-        init(onFail: @escaping () -> Void) { self.onFail = onFail }
-
-        func webView(_ w: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            if (error as NSError).code != NSURLErrorCancelled { onFail() }
-        }
-        func webView(_ w: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            if (error as NSError).code != NSURLErrorCancelled { onFail() }
+    var id: String {
+        switch self {
+        case .advance(let e): return "adv-\(e?.id ?? 0)"
+        case .setPay(let i, _): return "setpay-\(i)"
+        case .exit(let i, _): return "exit-\(i)"
+        case .leave(let i, _): return "leave-\(i)"
+        case .onboard(let p, _): return "onb-\(p)"
+        case .settle(let i, _): return "settle-\(i)"
+        case .editAdvance(let r): return "edit-\(r.id)"
         }
     }
+}
+
+struct DarbarSheetHost: View {
+    let sheet: DarbarSheet
+    @ObservedObject var model: DarbarAppModel
+    var body: some View {
+        switch sheet {
+        case .advance(let e):           PayAdvanceSheet(model: model, preset: e)
+        case .setPay(let id, let n):    SetPaySheet(model: model, id: id, name: n)
+        case .exit(let id, let n):      MarkExitSheet(model: model, id: id, name: n)
+        case .leave(let id, let n):     MarkLeaveSheet(model: model, id: id, name: n)
+        case .onboard(let p, let n):    OnboardSheet(model: model, pin: p, deviceName: n)
+        case .settle(let id, let n):    SettleSheet(model: model, id: id, name: n)
+        case .editAdvance(let r):       EditAdvanceSheet(model: model, row: r)
+        }
+    }
+}
+
+// MARK: - shared bits
+
+struct DarbarScreen<Content: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        ZStack {
+            HK.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                ChamberHeader(title: title, subtitle: subtitle, accent: DarbarView.accent)
+                content()
+            }
+        }
+    }
+}
+
+func darbarBrandChip(_ b: String?, accent: Color = DarbarView.accent) -> some View {
+    Group {
+        if let b, !b.isEmpty {
+            Text(b.uppercased()).font(.system(size: 9, weight: .heavy)).tracking(0.3)
+                .foregroundStyle(accent).padding(.horizontal, 6).padding(.vertical, 2)
+                .background(accent.opacity(0.16), in: Capsule())
+        }
+    }
+}
+
+struct DarbarBrandSeg: View {
+    @Binding var sel: String
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(["all", "HE", "NCH", "HQ"], id: \.self) { b in
+                let on = sel == b
+                Text(b == "all" ? "All" : b)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(on ? .black : HK.textDim)
+                    .frame(maxWidth: .infinity).padding(.vertical, 7)
+                    .background(on ? DarbarView.accent : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                    .onTapGesture { sel = b }
+            }
+        }
+        .padding(3).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 11))
+        .padding(.horizontal, 16)
+    }
+}
+
+struct DarbarFace: View {
+    var pin: String?; var id: Int?; var name: String; var token: String?
+    var size: CGFloat = 46
+    var body: some View {
+        Group {
+            if let token, let url = DarbarClient.photoURL(pin: pin, id: id, token: token) {
+                AsyncImage(url: url) { p in
+                    if case .success(let img) = p { img.resizable().scaledToFill() } else { initials }
+                }
+            } else { initials }
+        }
+        .frame(width: size, height: size).clipShape(Circle())
+        .overlay(Circle().stroke(DarbarView.accent.opacity(0.4), lineWidth: 1.4))
+    }
+    private var initials: some View {
+        ZStack {
+            Circle().fill(DarbarView.accent.opacity(0.18))
+            Text(initialsText).font(.system(size: size * 0.34, weight: .heavy, design: .rounded)).foregroundStyle(DarbarView.accent)
+        }
+    }
+    private var initialsText: String {
+        let p = name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
+        return p.isEmpty ? "?" : p.uppercased()
+    }
+}
+
+func inrLabel(_ v: Double?) -> String {
+    let f = NumberFormatter(); f.numberStyle = .decimal; f.maximumFractionDigits = 0; f.locale = Locale(identifier: "en_IN")
+    return "₹" + (f.string(from: NSNumber(value: (v ?? 0).rounded())) ?? "0")
 }
