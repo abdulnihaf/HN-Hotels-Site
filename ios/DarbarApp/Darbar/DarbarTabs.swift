@@ -10,7 +10,11 @@ struct DarbarTodayTab: View {
     private let accent = DarbarView.accent
 
     var body: some View {
-        DarbarScreen(title: "Darbar", subtitle: model.todayStatus) {
+        DarbarScreen(title: "Darbar", subtitle: model.todayStatus, trailing: {
+            Button { sheet = .account } label: {
+                Image(systemName: "gearshape.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(HK.textDim)
+            }.buttonStyle(.plain)
+        }) {
             ScrollView {
                 VStack(spacing: 12) {
                     hero
@@ -78,6 +82,7 @@ struct CourtCard: View {
     @ObservedObject var model: DarbarAppModel
     @Binding var sheet: DarbarSheet?
     private let accent = DarbarView.accent
+    @State private var ignoring = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -103,19 +108,31 @@ struct CourtCard: View {
         .padding(13)
         .background(HK.card, in: RoundedRectangle(cornerRadius: HK.radius))
         .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(HK.line, lineWidth: 1))
+        // chronic / never_punched / pay_missing / departed top row drills into the person's month.
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if drillable, let id = ex.id { sheet = .settle(id: id, name: ex.displayName, mode: "settle") }
+        }
+        .confirmationDialog("Ignore PIN \(ex.pin ?? "")? It drops out of the inbox.", isPresented: $ignoring, titleVisibility: .visible) {
+            Button("Ignore ghost", role: .destructive) { if let p = ex.pin { Task { await model.dismissGhost(pin: p) } } }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
-    // (label, style, action)
+    private var drillable: Bool { ["chronic", "chronic_missed", "never_punched", "pay_missing", "departed"].contains(ex.type ?? "") }
+
+    // (label, style, action). dismissGhost is confirm-gated; the rest open a sheet.
     private var actions: [(String, ActStyle, () -> Void)] {
         switch ex.type {
         case "ghost":
             return [("Add to roster", .primary, { sheet = .onboard(pin: ex.pin ?? "", name: ex.deviceName ?? "") }),
-                    ("Ignore", .ghost, { if let p = ex.pin { Task { await model.dismissGhost(pin: p) } } })]
+                    ("Ignore", .ghost, { ignoring = true })]
         case "pay_missing":
             return [("Set pay", .primary, { if let id = ex.id { sheet = .setPay(id: id, name: ex.displayName) } })]
         case "departed":
             return [("Mark left", .danger, { if let id = ex.id { sheet = .exit(id: id, name: ex.displayName) } }),
-                    ("On leave", .dark, { if let id = ex.id { sheet = .leave(id: id, name: ex.displayName) } })]
+                    ("On leave", .dark, { if let id = ex.id { sheet = .leave(id: id, name: ex.displayName) } }),
+                    ("Keep", .ghost, { model.keepActive() })]
         default: return []
         }
     }
@@ -168,52 +185,170 @@ struct DarbarAttendanceTab: View {
     private let accent = DarbarView.accent
 
     var body: some View {
-        DarbarScreen(title: "Attendance", subtitle: "The punch-intelligence board") {
+        DarbarScreen(title: "Attendance", subtitle: "The punch-intelligence board", trailing: {
+            Button { Task { await model.pullAttendance() } } label: {
+                Image(systemName: "arrow.clockwise").font(.system(size: 16, weight: .bold)).foregroundStyle(HK.textDim)
+            }.buttonStyle(.plain)
+        }) {
             VStack(spacing: 10) {
                 dateStepper
                 DarbarBrandSeg(sel: $model.attendBrand)
-                if model.loadingAttend && model.attendRows.isEmpty {
+                if model.attMode == "day" { dayStats }
+                if model.loadingAttend && (model.attMode == "day" ? model.attendRows.isEmpty : model.monthRows.isEmpty) {
                     ProgressView().tint(accent).frame(maxHeight: .infinity)
+                } else if model.attMode == "month" {
+                    monthList
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 9) {
-                            ForEach(model.attendFiltered) { AttendRowCard(row: $0, model: model) }
-                            if model.attendFiltered.isEmpty {
-                                Text("No punches for this day.").font(.system(size: 14)).foregroundStyle(HK.textFaint).padding(.top, 40)
-                            }
-                        }.padding(.horizontal, 16).padding(.bottom, 16)
-                    }
-                    .scrollIndicators(.hidden)
-                    .refreshable { await model.loadAttendance() }
+                    dayList
                 }
             }
         }
-        .task(id: model.attendDate) { await model.loadAttendance() }
+        .task(id: model.attendDate + model.attMode) { await model.loadAttendance() }
+    }
+
+    // DAY: four clickable stat cards that filter the list (tap again clears).
+    private var dayStats: some View {
+        let rows = model.attendBrand == "all" ? model.attendRows : model.attendRows.filter { $0.brandLabel == model.attendBrand }
+        let present = rows.filter { !$0.isAbsent && !$0.missingPunch && $0.status?.lowercased() != "off" }.count
+        let incomplete = rows.filter { $0.missingPunch && !$0.working }.count
+        let absent = rows.filter { $0.isAbsent }.count
+        let off = rows.filter { $0.status?.lowercased() == "off" }.count
+        return HStack(spacing: 8) {
+            filterTile("Present", present, HK.ready, "present")
+            filterTile("⚠ Fix", incomplete, HK.running, "incomplete")
+            filterTile("Absent", absent, HK.error, "absent")
+            filterTile("Off", off, HK.textDim, "off")
+        }.padding(.horizontal, 16)
+    }
+    private func filterTile(_ l: String, _ v: Int, _ tint: Color, _ key: String) -> some View {
+        let on = model.attendFilter == key
+        return VStack(spacing: 3) {
+            Text("\(v)").font(.system(size: 21, weight: .heavy, design: .rounded)).foregroundStyle(tint).monospacedDigit()
+            Text(l.uppercased()).font(.system(size: 8.5, weight: .heavy)).tracking(0.3).foregroundStyle(HK.textFaint).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 9)
+        .background(HK.card, in: RoundedRectangle(cornerRadius: HK.radiusSm))
+        .overlay(RoundedRectangle(cornerRadius: HK.radiusSm).stroke(on ? accent : HK.line, lineWidth: on ? 2 : 1))
+        .contentShape(Rectangle())
+        .onTapGesture { model.attendFilter = (model.attendFilter == key) ? nil : key }
+    }
+
+    private var dayList: some View {
+        ScrollView {
+            LazyVStack(spacing: 9) {
+                if let f = model.attendFilter {
+                    Text("Showing \(f) — tap the card again to clear").font(.system(size: 11.5)).foregroundStyle(accent)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+                }
+                ForEach(model.attendFiltered) { AttendRowCard(row: $0, model: model) }
+                if model.attendFiltered.isEmpty {
+                    Text("No punches for this day.").font(.system(size: 14)).foregroundStyle(HK.textFaint).padding(.top, 40)
+                }
+            }.padding(.horizontal, 16).padding(.bottom, 16)
+        }
+        .scrollIndicators(.hidden)
+        .refreshable { await model.loadAttendance() }
+    }
+
+    private var monthList: some View {
+        ScrollView {
+            LazyVStack(spacing: 9) {
+                ForEach(model.monthPeople) { MonthStripRow(p: $0, month: String(model.attendDate.prefix(7)), token: model.photoToken) }
+                if model.monthPeople.isEmpty {
+                    Text("No attendance recorded this month.").font(.system(size: 14)).foregroundStyle(HK.textFaint).padding(.top, 40)
+                }
+            }.padding(.horizontal, 16).padding(.bottom, 16)
+        }
+        .scrollIndicators(.hidden)
+        .refreshable { await model.loadMonthAttendance() }
     }
 
     private var dateStepper: some View {
         HStack(spacing: 8) {
             stepBtn("chevron.left") { shift(-1) }
-            Text(prettyDate(model.attendDate)).font(.system(size: 14, weight: .semibold)).foregroundStyle(HK.text)
+            Text(model.attMode == "month" ? monthLabel(String(model.attendDate.prefix(7))) : prettyDate(model.attendDate))
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(HK.text)
                 .frame(maxWidth: .infinity).padding(.vertical, 9).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
             stepBtn("chevron.right") { shift(1) }
+            Button(model.attMode == "month" ? "Day" : "Month") {
+                model.attMode = model.attMode == "month" ? "day" : "month"
+            }
+            .font(.system(size: 13, weight: .semibold)).foregroundStyle(accent)
+            .padding(.horizontal, 11).padding(.vertical, 9).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
             Button("Today") { model.attendDate = DarbarClient.bizDayIST() }
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(accent)
-                .padding(.horizontal, 12).padding(.vertical, 9).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 11).padding(.vertical, 9).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
         }.padding(.horizontal, 16)
     }
     private func stepBtn(_ icon: String, _ act: @escaping () -> Void) -> some View {
         Button(action: act) { Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundStyle(HK.text)
-            .frame(width: 40, height: 40).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10)) }.buttonStyle(.plain)
+            .frame(width: 38, height: 40).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10)) }.buttonStyle(.plain)
     }
     private func shift(_ d: Int) {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Kolkata")
-        if let dt = f.date(from: model.attendDate) { model.attendDate = f.string(from: dt.addingTimeInterval(Double(d) * 86400)) }
+        guard let dt = f.date(from: model.attendDate) else { return }
+        if model.attMode == "month" {
+            let cur = String(model.attendDate.prefix(7))
+            model.attendDate = shiftMonth(cur, by: d) + "-01"
+        } else {
+            model.attendDate = f.string(from: dt.addingTimeInterval(Double(d) * 86400))
+        }
     }
     private func prettyDate(_ s: String) -> String {
         let i = DateFormatter(); i.dateFormat = "yyyy-MM-dd"; i.timeZone = TimeZone(identifier: "Asia/Kolkata")
         let o = DateFormatter(); o.dateFormat = "EEE, d MMM"; o.timeZone = TimeZone(identifier: "Asia/Kolkata")
         return i.date(from: s).map { o.string(from: $0) } ?? s
+    }
+}
+
+// One person's full-month dot strip (PWA renderAttendMonth row).
+struct MonthStripRow: View {
+    let p: MonthPerson
+    let month: String
+    let token: String?
+    private let purple = Color(hex: 0xA78BFA)
+
+    var body: some View {
+        HStack(spacing: 10) {
+            DarbarFace(pin: nil, id: p.id, name: p.name, token: token, size: 36)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(p.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(HK.text).lineLimit(1)
+                    darbarBrandChip(p.brand)
+                }
+                strip
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(p.worked)w").font(.system(size: 11, weight: .bold)).foregroundStyle(HK.ready)
+                if p.errs > 0 { Text("\(p.errs)!").font(.system(size: 10.5, weight: .bold)).foregroundStyle(HK.running) }
+                Text("\(p.absent)a").font(.system(size: 10.5, weight: .bold)).foregroundStyle(HK.error)
+            }
+        }
+        .padding(11).background(HK.card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(HK.line, lineWidth: 1))
+    }
+    private var strip: some View {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        let y = parts.first ?? 2026, m = parts.count > 1 ? parts[1] : 1
+        let n = daysInMonth(y: y, m: m)
+        let biz = DarbarClient.bizDayIST()
+        return HStack(spacing: 2) {
+            ForEach(1...max(1, n), id: \.self) { d in
+                let ds = "\(month)-" + String(format: "%02d", d)
+                Circle().fill(color(ds: ds, r: p.byDate[ds], biz: biz)).frame(width: 5, height: 5)
+            }
+        }
+    }
+    private func color(ds: String, r: MonthAttendanceRow?, biz: String) -> Color {
+        if ds > biz { return HK.line }
+        if ds == biz { return DarbarView.accent }
+        guard let r else { return HK.bgElev }
+        let st = r.status?.lowercased()
+        if st == "week_off" || st == "leave" { return purple }
+        let pc = r.punchCount ?? 0
+        if pc == 0 { return HK.error }
+        return pc % 2 == 1 ? HK.running : HK.ready
     }
 }
 
@@ -262,22 +397,25 @@ struct DarbarPayTab: View {
     private let accent = DarbarView.accent
 
     var body: some View {
-        DarbarScreen(title: "Pay", subtitle: model.loadingPay ? "Loading payments…" : "\(model.payFiltered.count) payments · \(inrLabel(model.payTotal)) this month") {
+        DarbarScreen(title: "Pay", subtitle: model.loadingPay ? "Loading payments…" : "\(model.payPeople.count) paid · \(inrLabel(model.payTotal)) this month", trailing: {
+            Button { sheet = .advance(nil) } label: {
+                Image(systemName: "plus.circle.fill").font(.system(size: 19, weight: .semibold)).foregroundStyle(accent)
+            }.buttonStyle(.plain)
+        }) {
             VStack(spacing: 10) {
-                Button { sheet = .advance(nil) } label: {
-                    HStack(spacing: 8) { Image(systemName: "plus.circle.fill"); Text("Pay an advance") }
-                        .font(.system(size: 15, weight: .bold)).foregroundStyle(.black)
-                        .frame(maxWidth: .infinity).padding(.vertical, 13).background(accent, in: RoundedRectangle(cornerRadius: 12))
-                }.buttonStyle(.plain).padding(.horizontal, 16)
+                settleBanner
+                actionsRow
                 DarbarBrandSeg(sel: $model.payBrand)
                 ScrollView {
                     LazyVStack(spacing: 9) {
-                        sectionLabel("PAYMENTS THIS MONTH", trailing: inrLabel(model.payTotal), trailingColor: accent).padding(.horizontal, 12)
-                        ForEach(model.payFiltered) { row in
-                            AdvanceCard(row: row).onTapGesture { sheet = .editAdvance(row) }
+                        if !model.payPeople.isEmpty || model.loadingPay {
+                            sectionLabel("PAID THIS MONTH", trailing: inrLabel(model.payTotal), trailingColor: accent).padding(.horizontal, 12)
                         }
-                        if model.payFiltered.isEmpty && !model.loadingPay {
-                            Text("No advances paid this month.").font(.system(size: 14)).foregroundStyle(HK.textFaint).padding(.top, 36)
+                        ForEach(model.payPeople) { p in
+                            PayPersonCard(p: p).onTapGesture { sheet = .settle(id: p.id, name: p.name, mode: "settle") }
+                        }
+                        if model.payPeople.isEmpty && !model.loadingPay {
+                            Text("No payments recorded for \(monthLabel(model.payMonth)) yet.").font(.system(size: 14)).foregroundStyle(HK.textFaint).padding(.top, 36)
                         }
                     }.padding(.horizontal, 16).padding(.bottom, 16)
                 }
@@ -287,26 +425,78 @@ struct DarbarPayTab: View {
         }
         .task { await model.loadPay(); if model.employees.isEmpty { await model.loadRoster() } }
     }
+
+    // Month navigator + active-period hint (PWA settleBanner).
+    private var settleBanner: some View {
+        HStack {
+            Button { model.changePayMonth(-1) } label: { Text("◄").font(.system(size: 18, weight: .bold)).foregroundStyle(accent).frame(width: 48) }.buttonStyle(.plain)
+            VStack(spacing: 2) {
+                Text(monthLabel(model.payMonth)).font(.system(size: 16, weight: .heavy)).foregroundStyle(HK.text)
+                Text(model.isActiveSettlementMonth ? "Salary period being cleared now — paid by the 10th" : "Browsing — ◄ ► to change month")
+                    .font(.system(size: 10.5)).foregroundStyle(HK.textDim).lineLimit(1).minimumScaleFactor(0.7)
+            }.frame(maxWidth: .infinity)
+            Button { model.changePayMonth(1) } label: { Text("►").font(.system(size: 18, weight: .bold)).foregroundStyle(accent).frame(width: 48) }.buttonStyle(.plain)
+        }
+        .padding(.vertical, 10).padding(.horizontal, 6)
+        .background(HK.card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(HK.line, lineWidth: 1))
+        .padding(.horizontal, 16)
+    }
+
+    private var actionsRow: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button { sheet = .advance(nil) } label: {
+                    Text("Settle a person").font(.system(size: 14, weight: .bold)).foregroundStyle(.black)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12).background(accent, in: RoundedRectangle(cornerRadius: 11))
+                }.buttonStyle(.plain)
+                Button { sheet = .advance(nil) } label: {
+                    Text("Pay advance").font(.system(size: 14, weight: .bold)).foregroundStyle(HK.text)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12).background(HK.cardHi, in: RoundedRectangle(cornerRadius: 11))
+                        .overlay(RoundedRectangle(cornerRadius: 11).stroke(HK.line, lineWidth: 1))
+                }.buttonStyle(.plain)
+            }
+            Button { sheet = .monthBoard } label: {
+                HStack(spacing: 7) { Image(systemName: "list.bullet.rectangle"); Text("Month board — who’s done, who’s left") }
+                    .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(HK.text)
+                    .frame(maxWidth: .infinity).padding(.vertical, 11).background(HK.cardHi, in: RoundedRectangle(cornerRadius: 11))
+                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(HK.line, lineWidth: 1))
+            }.buttonStyle(.plain)
+        }.padding(.horizontal, 16)
+    }
 }
 
-struct AdvanceCard: View {
-    let row: AdvanceRow
+// Pay list card — GROUPED BY PERSON (the month's total paid), not per-transaction.
+struct PayPersonCard: View {
+    let p: DarbarAppModel.PayPerson
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(row.who).font(.system(size: 15, weight: .semibold)).foregroundStyle(HK.text)
-                    darbarBrandChip(row.brandLabel)
+                    Text(p.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(HK.text).lineLimit(1)
+                    darbarBrandChip(p.brand)
+                    if p.settled {
+                        Text("✓ Settled").font(.system(size: 8.5, weight: .heavy)).foregroundStyle(HK.ready)
+                            .padding(.horizontal, 6).padding(.vertical, 2).background(HK.ready.opacity(0.16), in: Capsule())
+                    } else {
+                        Text("advance only").font(.system(size: 8.5, weight: .heavy)).foregroundStyle(DarbarView.accent)
+                            .padding(.horizontal, 6).padding(.vertical, 2).background(DarbarView.accent.opacity(0.16), in: Capsule())
+                    }
                 }
-                Text("\(row.advanceDate?.prefix(10) ?? "") · \(PayVia(rawValue: row.paidVia ?? "")?.label ?? row.paidVia ?? "")\(row.receiptStatus == "sent" ? " · receipt sent" : "")")
-                    .font(.system(size: 12)).foregroundStyle(HK.textDim)
+                Text(breakdown).font(.system(size: 12)).foregroundStyle(HK.textDim)
             }
             Spacer()
-            Text(inrLabel(row.amount)).font(.system(size: 16, weight: .heavy, design: .rounded)).foregroundStyle(HK.text).monospacedDigit()
+            Text(inrLabel(p.total)).font(.system(size: 16, weight: .heavy, design: .rounded)).foregroundStyle(HK.text).monospacedDigit()
             Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(HK.textFaint)
         }
         .padding(13).background(HK.card, in: RoundedRectangle(cornerRadius: HK.radius))
         .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(HK.line, lineWidth: 1))
+    }
+    private var breakdown: String {
+        var parts: [String] = []
+        if p.advTotal > 0 { parts.append("advance \(inrLabel(p.advTotal))") }
+        if p.setTotal > 0 { parts.append("settlement \(inrLabel(p.setTotal))") }
+        return (parts.isEmpty ? "—" : parts.joined(separator: " + ")) + " · tap for the trail"
     }
 }
 
@@ -316,7 +506,7 @@ struct DarbarRosterTab: View {
     @ObservedObject var model: DarbarAppModel
     @Binding var sheet: DarbarSheet?
     var body: some View {
-        DarbarScreen(title: "Roster", subtitle: "\(model.rosterFiltered.count) serving the realm") {
+        DarbarScreen(title: "Roster", subtitle: "\(model.rosterFiltered.count) serving · tap a person for their month") {
             VStack(spacing: 10) {
                 DarbarBrandSeg(sel: $model.rosterBrand)
                 if model.loadingRoster && model.employees.isEmpty {
@@ -324,10 +514,15 @@ struct DarbarRosterTab: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 9) {
+                            if model.fin { costCard }
                             ForEach(model.rosterFiltered) { e in
                                 RosterRow(e: e, token: model.photoToken, fin: model.fin)
-                                    .onTapGesture { sheet = .settle(id: e.id, name: e.displayName) }
+                                    .onTapGesture {
+                                        if model.fin { sheet = .settle(id: e.id, name: e.displayName, mode: "settle") }
+                                        else { model.show("Pay is owner-only", ok: false) }
+                                    }
                             }
+                            if model.rosterFiltered.isEmpty { Text("No one here.").font(.system(size: 14)).foregroundStyle(HK.textFaint).padding(.top, 40) }
                         }.padding(.horizontal, 16).padding(.bottom, 16)
                     }
                     .scrollIndicators(.hidden)
@@ -336,6 +531,19 @@ struct DarbarRosterTab: View {
             }
         }
         .task { if model.employees.isEmpty { await model.loadRoster() } }
+    }
+
+    // Owner-only monthly staffing cost (Σ monthly OR daily×30 per active person).
+    private var costCard: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("MONTHLY STAFFING COST").font(.system(size: 10.5, weight: .heavy)).tracking(0.5).foregroundStyle(HK.textFaint)
+            Text(inrLabel(model.rosterMonthlyCost)).font(.system(size: 26, weight: .heavy, design: .rounded)).foregroundStyle(DarbarView.accent).monospacedDigit()
+            Text("\(model.rosterBrand == "all" ? "all outlets" : model.rosterBrand) · \(model.rosterFiltered.count) staff · full attendance, before OT\(model.rosterMissingPay > 0 ? " · \(model.rosterMissingPay) missing salary" : "")")
+                .font(.system(size: 11)).foregroundStyle(HK.textDim)
+        }
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+        .background(DarbarView.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: HK.radius))
+        .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(DarbarView.accent.opacity(0.4), lineWidth: 1))
     }
 }
 

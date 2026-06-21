@@ -43,15 +43,46 @@ actor DarbarClient {
     }
     func listAdvances(month: String, token: String) async throws -> [AdvanceRow] {
         let d = try await get("/api/hr-payroll", ["action": "list-advances", "month": month], token)
-        return (try decoder.decode(AdvancesListResponse.self, from: d)).rows ?? []
+        let r = try decoder.decode(AdvancesListResponse.self, from: d)
+        return r.advances ?? r.rows ?? []
+    }
+    func monthAttendance(month: String, token: String) async throws -> [MonthAttendanceRow] {
+        let d = try await get("/api/darbar", ["action": "month-attendance", "month": month], token)
+        return (try decoder.decode(MonthAttendanceResponse.self, from: d)).rows ?? []
+    }
+    func monthBoard(month: String, token: String) async throws -> [MonthBoardRow] {
+        let d = try await get("/api/darbar", ["action": "month-board", "month": month], token)
+        return (try decoder.decode(MonthBoardResponse.self, from: d)).rows ?? []
+    }
+    func photoMeta(pin: String?, id: Int?, token: String) async throws -> PhotoMeta {
+        var q: [String: String] = ["action": "photo-meta"]
+        if let pin, !pin.isEmpty { q["pin"] = pin } else if let id { q["id"] = String(id) }
+        return try decoder.decode(PhotoMeta.self, from: try await get("/api/darbar", q, token))
     }
 
-    // MARK: writes — execution (each is an owner-approved action, fired from a confirmed tap)
+    // MARK: writes — execution (each is an owner-approved action, fired from a CONFIRMED tap)
+
+    // Record a payment. mode=settle adds source/reason/notes (1:1 with the PWA doPay).
+    // Returns the receipt status (ok / no_phone / failed) so the toast can be honest.
+    @discardableResult
     func recordAdvance(employeeId: Int, amount: Double, paidVia: String, payPeriod: String,
-                       phone: String, token: String) async throws {
-        _ = try await send(path: "/api/hr-payroll", query: ["action": "record-advance"], method: "POST",
-            body: ["employee_id": employeeId, "amount": amount, "advance_date": Self.todayIST(),
-                   "paid_via": paidVia, "confirmed_phone": phone, "pay_period": payPeriod], token: token)
+                       phone: String, note: String?, settlement: Bool, token: String) async throws -> ReceiptResult? {
+        var body: [String: Any] = ["employee_id": employeeId, "amount": amount,
+            "advance_date": Self.todayIST(), "paid_via": paidVia,
+            "confirmed_phone": phone, "pay_period": payPeriod]
+        if settlement {
+            body["source"] = "settlement"; body["reason"] = "salary settlement"
+            body["notes"] = (note?.isEmpty == false) ? note! : "Settlement \(payPeriod)"
+        } else {
+            body["reason"] = (note?.isEmpty == false) ? note! : NSNull()
+        }
+        let data = try await send(path: "/api/hr-payroll", query: ["action": "record-advance"],
+                                  method: "POST", body: body, token: token)
+        return try? decoder.decode(RecordAdvanceResponse.self, from: data).receipt
+    }
+    func pullAttendance(pin: String?, from: String, to: String, token: String) async throws {
+        _ = try await send(path: "/api/hr-admin", query: [:], method: "POST",
+            body: ["action": "pull-attendance", "pin": pin ?? "", "from": from, "to": to], token: token)
     }
     func updateAdvance(id: Int, amount: Double, payPeriod: String, paidVia: String, token: String) async throws {
         _ = try await send(path: "/api/hr-payroll", query: ["action": "update-advance"], method: "POST",
@@ -83,9 +114,13 @@ actor DarbarClient {
         _ = try await send(path: "/api/darbar", query: ["action": "mark-leave"], method: "POST",
             body: ["employee_id": employeeId, "start_date": start, "end_date": end, "leave_type": type], token: token)
     }
-    func onboard(pin: String, name: String, brand: String, token: String) async throws {
-        _ = try await send(path: "/api/darbar", query: ["action": "onboard"], method: "POST",
-            body: ["pin": pin, "name": name, "brand_label": brand], token: token)
+    func onboard(pin: String, name: String, brand: String, payType: String, wage: Double?,
+                 phone: String?, token: String) async throws {
+        var body: [String: Any] = ["pin": pin, "name": name, "brand": brand, "pay_type": payType]
+        body["monthly_salary"] = (payType == "Monthly") ? (wage.map { $0 as Any } ?? NSNull()) : NSNull()
+        body["daily_rate"] = (payType == "Contract") ? (wage.map { $0 as Any } ?? NSNull()) : NSNull()
+        body["phone"] = (phone?.isEmpty == false) ? phone! : NSNull()
+        _ = try await send(path: "/api/darbar", query: ["action": "onboard"], method: "POST", body: body, token: token)
     }
     func dismissGhost(pin: String, token: String) async throws {
         _ = try await send(path: "/api/darbar", query: ["action": "dismiss-ghost"], method: "POST",

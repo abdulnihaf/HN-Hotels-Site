@@ -131,7 +131,7 @@ struct DarbarEmployee: Codable, Identifiable, Hashable {
 
 // MARK: - Pay: advances list  (GET /api/hr-payroll?action=list-advances&month=)
 
-struct AdvancesListResponse: Codable { var rows: [AdvanceRow]? }
+struct AdvancesListResponse: Codable { var advances: [AdvanceRow]?; var rows: [AdvanceRow]? }
 
 struct AdvanceRow: Codable, Identifiable, Hashable {
     var id: Int
@@ -140,6 +140,7 @@ struct AdvanceRow: Codable, Identifiable, Hashable {
     var amount: Double?
     var paidVia: String?
     var reason: String?
+    var source: String?
     var receiptStatus: String?
     var payPeriod: String?
     var employeeName: String?
@@ -147,7 +148,7 @@ struct AdvanceRow: Codable, Identifiable, Hashable {
     var brandLabel: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, amount, reason
+        case id, amount, reason, source
         case employeeId = "employee_id"
         case advanceDate = "advance_date"
         case paidVia = "paid_via"
@@ -158,39 +159,68 @@ struct AdvanceRow: Codable, Identifiable, Hashable {
         case brandLabel = "brand_label"
     }
     var who: String { (employeeKnownAs?.isEmpty == false ? employeeKnownAs : employeeName) ?? "—" }
+    var isSettlement: Bool { source == "settlement" }
 }
 
 // MARK: - Settle context  (GET /api/hr-payroll?action=settle-context&employee_id=&month=)
 
 struct SettleContext: Codable, Hashable {
     var ok: Bool?
+    var error: String?
     var employee: SettleEmployee?
     var month: String?
     var attendance: SettleAttendance?
     var advances: SettleAdvances?
+    var settlements: SettleAdvances?
     var remainingHint: Double?
     enum CodingKeys: String, CodingKey {
-        case ok, employee, month, attendance, advances
+        case ok, error, employee, month, attendance, advances, settlements
         case remainingHint = "remaining_hint"
     }
 }
 
 struct SettleEmployee: Codable, Hashable {
     var id: Int?
+    var pin: String?
     var name, brand, payType: String?
     var monthlySalary, dailyRate: Double?
-    var phone, payLane: String?
+    var phone, payLane, startDate: String?
+    var presenceConfirmed, trackAttendance, isActive: Int?
     enum CodingKeys: String, CodingKey {
-        case id, name, brand, phone
+        case id, pin, name, brand, phone
         case payType = "pay_type"
         case monthlySalary = "monthly_salary"
         case dailyRate = "daily_rate"
         case payLane = "pay_lane"
+        case startDate = "start_date"
+        case presenceConfirmed = "presence_confirmed"
+        case trackAttendance = "track_attendance"
+        case isActive = "is_active"
+    }
+    var salaryLabel: String {
+        if let m = monthlySalary, m > 0 { return "₹\(Int(m))/mo" }
+        if let d = dailyRate, d > 0 { return "₹\(Int(d))/day" }
+        return "—"
     }
 }
 
 struct SettleAttendance: Codable, Hashable {
     var present, irregular, absent, off, pending, recorded: Int?
+    var days: [SettleDay]?
+}
+
+// One calendar cell in the settle-context attendance grid (PWA attGridHTML).
+struct SettleDay: Codable, Hashable, Identifiable {
+    var date: String?
+    var status: String?
+    var punchCount: Int?
+    var totalHours: Double?
+    var id: String { date ?? UUID().uuidString }
+    enum CodingKeys: String, CodingKey {
+        case date, status
+        case punchCount = "punch_count"
+        case totalHours = "total_hours"
+    }
 }
 
 struct SettleAdvances: Codable, Hashable {
@@ -242,6 +272,89 @@ struct AttendanceRow: Codable, Identifiable, Hashable {
     var isAbsent: Bool { (punchCount ?? 0) == 0 && status?.lowercased() != "off" }
 }
 
+// MARK: - Month attendance  (GET /api/darbar?action=month-attendance&month=)
+// Flat rows: one per (employee, day). The view groups them into per-person dot strips.
+
+struct MonthAttendanceResponse: Codable { var rows: [MonthAttendanceRow]? }
+
+struct MonthAttendanceRow: Codable, Hashable {
+    var id: Int?
+    var name: String?
+    var brand: String?
+    var date: String?
+    var status: String?
+    var punchCount: Int?
+    var totalHours: Double?
+    enum CodingKeys: String, CodingKey {
+        case id, name, brand, date, status
+        case punchCount = "punch_count"
+        case totalHours = "total_hours"
+    }
+}
+
+// One person's full-month dot strip (derived from the flat rows, PWA renderAttendMonth).
+struct MonthPerson: Identifiable, Hashable {
+    let id: Int
+    let name: String
+    let brand: String?
+    var byDate: [String: MonthAttendanceRow]
+    var worked = 0, errs = 0, absent = 0
+}
+
+// MARK: - Month board  (GET /api/darbar?action=month-board&month=)
+
+struct MonthBoardResponse: Codable { var month: String?; var rows: [MonthBoardRow]? }
+
+struct MonthBoardRow: Codable, Identifiable, Hashable {
+    var id: Int
+    var pin: String?
+    var name: String?
+    var brand: String?
+    var isActive: Int?
+    var payLane: String?
+    var dailyRate, monthlySalary: Double?
+    var daysWorked, daysError: Int?
+    var advances, settled: Double?
+    var startDate: String?
+    var presenceConfirmed, trackAttendance: Int?
+    var payType: String?
+    enum CodingKeys: String, CodingKey {
+        case id, pin, name, brand
+        case isActive = "is_active"
+        case payLane = "pay_lane"
+        case dailyRate = "daily_rate"
+        case monthlySalary = "monthly_salary"
+        case daysWorked = "days_worked"
+        case daysError = "days_error"
+        case advances, settled
+        case startDate = "start_date"
+        case presenceConfirmed = "presence_confirmed"
+        case trackAttendance = "track_attendance"
+        case payType = "pay_type"
+    }
+}
+
+// MARK: - Record-advance receipt  (POST /api/hr-payroll?action=record-advance → {receipt})
+
+struct RecordAdvanceResponse: Codable { var receipt: ReceiptResult? }
+
+struct ReceiptResult: Codable, Hashable {
+    var ok: Bool?
+    var reason: String?
+    var attempted: Bool?
+    // PWA receiptToast: ok → "receipt sent"; no_phone / not attempted → "no number on file";
+    // else → "recorded, receipt didn't send".
+    func toastSuffix() -> String {
+        if ok == true { return " · receipt sent" }
+        if reason == "no_phone" || attempted == false { return " · no number on file, no receipt" }
+        return " · recorded, receipt didn’t send"
+    }
+}
+
+// MARK: - Photo meta  (GET /api/darbar?action=photo-meta)
+
+struct PhotoMeta: Codable, Hashable { var count: Int?; var latest: String? }
+
 // MARK: - error
 
 enum DarbarError: LocalizedError {
@@ -254,6 +367,87 @@ enum DarbarError: LocalizedError {
         case .server(let m): return m
         }
     }
+}
+
+// MARK: - Rough-band estimator (1:1 port of the PWA estBand, owner rules 2026-06-12)
+// Always a RANGE, never a verdict. The owner's typed number is the only truth; this is
+// a guide. Returns lo/hi/flag, or nil with a `why` when the person isn't estimable.
+
+struct EstBand: Hashable { var lo: Double?; var hi: Double?; var flag: String?; var why: String? }
+
+func darbarEstBand(payType: String?, monthlySalary: Double?, dailyRate: Double?,
+                   daysWorked: Int, startDate: String?, presenceConfirmed: Int?,
+                   trackAttendance: Int?, isActive: Int?, payLane: String?, month: String) -> EstBand {
+    if isActive == 0 { return EstBand(why: "left") }
+    if payLane == "daily" { return EstBand(why: "daily lane") }
+    let sal = monthlySalary ?? 0, rate = dailyRate ?? 0, dw = daysWorked
+    let parts = month.split(separator: "-").compactMap { Int($0) }
+    guard parts.count == 2 else { return EstBand(why: "no rate") }
+    let y = parts[0], m = parts[1]
+    let mdays = daysInMonth(y: y, m: m)
+    var startDay = 1
+    if let sd = startDate, sd.count >= 10, String(sd.prefix(7)) == month, let d = Int(sd.dropFirst(8).prefix(2)) { startDay = d }
+    let win = max(1, mdays - startDay + 1)
+    let conf = presenceConfirmed == 1
+    func flagFor() -> String? {
+        if conf && Double(dw) < Double(win) * 0.5 { return "not punching" }
+        if Double(dw) < Double(win) * 0.5 { return "punches thin" }
+        if startDay > 1 { return "joined \(startDay)/\(m)" }
+        return nil
+    }
+    if (payType ?? "").lowercased() == "monthly" && sal > 0 {
+        if trackAttendance != 0 && dw == 0 && !conf { return EstBand(why: "no punches") }
+        let v = (sal * Double(win) / Double(mdays)).rounded()
+        return EstBand(lo: v, hi: v, flag: flagFor())
+    }
+    if rate > 0 {
+        if trackAttendance == 0 && !conf { return EstBand(why: "untracked") }
+        let lo = Double(dw) * rate
+        let hi = max(lo, min(sal > 0 ? sal : rate * Double(win), rate * Double(win)))
+        return EstBand(lo: lo, hi: hi, flag: flagFor())
+    }
+    return EstBand(why: "no rate")
+}
+
+func darbarLeftBand(_ e: EstBand, given: Double) -> String {
+    guard let lo = e.lo, let hi = e.hi else { return "" }
+    let l1 = max(0, lo - given), l2 = max(0, hi - given)
+    return l1 == l2 ? "≈ \(inrLabel(l1))" : "≈ \(inrLabel(l1)) – \(inrLabel(l2))"
+}
+
+func daysInMonth(y: Int, m: Int) -> Int {
+    var c = DateComponents(); c.year = y; c.month = m
+    var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+    if let d = cal.date(from: c), let r = cal.range(of: .day, in: .month, for: d) { return r.count }
+    return 30
+}
+
+// Active settlement month (PWA activeSettlementMonth): 1st–10th clears the previous month.
+func activeSettlementMonth() -> String {
+    var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+    let now = Date()
+    var y = cal.component(.year, from: now), m = cal.component(.month, from: now)
+    if cal.component(.day, from: now) <= 10 { m -= 1; if m < 1 { m = 12; y -= 1 } }
+    return "\(y)-" + String(format: "%02d", m)
+}
+
+func shiftMonth(_ ym: String, by delta: Int) -> String {
+    let parts = ym.split(separator: "-").compactMap { Int($0) }
+    guard parts.count == 2 else { return ym }
+    var y = parts[0], m = parts[1] + delta
+    while m < 1 { m += 12; y -= 1 }
+    while m > 12 { m -= 12; y += 1 }
+    return "\(y)-" + String(format: "%02d", m)
+}
+
+func monthLabel(_ ym: String) -> String {
+    let parts = ym.split(separator: "-").compactMap { Int($0) }
+    guard parts.count == 2 else { return ym }
+    var c = DateComponents(); c.year = parts[0]; c.month = parts[1]; c.day = 1
+    var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+    let f = DateFormatter(); f.dateFormat = "LLLL yyyy"; f.locale = Locale(identifier: "en_IN")
+    f.timeZone = TimeZone(identifier: "Asia/Kolkata")
+    return cal.date(from: c).map { f.string(from: $0) } ?? ym
 }
 
 // Closed payment-method set (PWA PAY_VIA) — the only values paid_via may take.

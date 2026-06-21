@@ -27,7 +27,7 @@ struct DarbarView: View {
             toast
         }
         .task { await model.bootstrap() }
-        .sheet(item: $sheet) { s in DarbarSheetHost(sheet: s, model: model).presentationDragIndicator(.visible) }
+        .sheet(item: $sheet) { s in DarbarSheetHost(sheet: s, model: model, sheetBinding: $sheet).presentationDragIndicator(.visible) }
     }
 
     @ViewBuilder private var toast: some View {
@@ -52,8 +52,11 @@ enum DarbarSheet: Identifiable {
     case exit(id: Int, name: String)
     case leave(id: Int, name: String)
     case onboard(pin: String, name: String)
-    case settle(id: Int, name: String)
+    case settle(id: Int, name: String, mode: String)
     case editAdvance(AdvanceRow)
+    case salaryOverride(id: Int, name: String)
+    case monthBoard
+    case account
 
     var id: String {
         switch self {
@@ -62,8 +65,11 @@ enum DarbarSheet: Identifiable {
         case .exit(let i, _): return "exit-\(i)"
         case .leave(let i, _): return "leave-\(i)"
         case .onboard(let p, _): return "onb-\(p)"
-        case .settle(let i, _): return "settle-\(i)"
+        case .settle(let i, _, let m): return "settle-\(m)-\(i)"
         case .editAdvance(let r): return "edit-\(r.id)"
+        case .salaryOverride(let i, _): return "override-\(i)"
+        case .monthBoard: return "board"
+        case .account: return "account"
         }
     }
 }
@@ -71,33 +77,46 @@ enum DarbarSheet: Identifiable {
 struct DarbarSheetHost: View {
     let sheet: DarbarSheet
     @ObservedObject var model: DarbarAppModel
+    @Binding var sheetBinding: DarbarSheet?
     var body: some View {
         switch sheet {
-        case .advance(let e):           PayAdvanceSheet(model: model, preset: e)
-        case .setPay(let id, let n):    SetPaySheet(model: model, id: id, name: n)
-        case .exit(let id, let n):      MarkExitSheet(model: model, id: id, name: n)
-        case .leave(let id, let n):     MarkLeaveSheet(model: model, id: id, name: n)
-        case .onboard(let p, let n):    OnboardSheet(model: model, pin: p, deviceName: n)
-        case .settle(let id, let n):    SettleSheet(model: model, id: id, name: n)
-        case .editAdvance(let r):       EditAdvanceSheet(model: model, row: r)
+        case .advance(let e):              PayAdvanceSheet(model: model, preset: e)
+        case .setPay(let id, let n):       SetPaySheet(model: model, id: id, name: n)
+        case .exit(let id, let n):         MarkExitSheet(model: model, id: id, name: n)
+        case .leave(let id, let n):        MarkLeaveSheet(model: model, id: id, name: n)
+        case .onboard(let p, let n):       OnboardSheet(model: model, pin: p, deviceName: n)
+        case .settle(let id, let n, let m):SettleSheet(model: model, id: id, name: n, mode: m, sheet: $sheetBinding)
+        case .editAdvance(let r):          EditAdvanceSheet(model: model, row: r)
+        case .salaryOverride(let id, let n):SalaryOverrideSheet(model: model, id: id, name: n)
+        case .monthBoard:                  MonthBoardSheet(model: model, sheet: $sheetBinding)
+        case .account:                     AccountSheet(model: model)
         }
     }
 }
 
 // MARK: - shared bits
 
-struct DarbarScreen<Content: View>: View {
+struct DarbarScreen<Content: View, Trailing: View>: View {
     let title: String
     let subtitle: String
+    @ViewBuilder var trailing: () -> Trailing
     @ViewBuilder var content: () -> Content
     var body: some View {
         ZStack {
             HK.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                ChamberHeader(title: title, subtitle: subtitle, accent: DarbarView.accent)
+                ZStack(alignment: .trailing) {
+                    ChamberHeader(title: title, subtitle: subtitle, accent: DarbarView.accent)
+                    trailing().padding(.trailing, 40)   // sit left of the kit's accent dot
+                }
                 content()
             }
         }
+    }
+}
+extension DarbarScreen where Trailing == EmptyView {
+    init(title: String, subtitle: String, @ViewBuilder content: @escaping () -> Content) {
+        self.init(title: title, subtitle: subtitle, trailing: { EmptyView() }, content: content)
     }
 }
 
