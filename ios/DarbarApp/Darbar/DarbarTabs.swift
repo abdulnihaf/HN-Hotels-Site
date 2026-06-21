@@ -10,7 +10,8 @@ struct DarbarTodayTab: View {
     private let accent = DarbarView.accent
 
     var body: some View {
-        DarbarScreen(title: "Darbar", subtitle: model.todayStatus, trailing: {
+        DarbarScreen(title: "Darbar", subtitle: model.todayStatus, dateSuffix: model.todayDate,
+                     subtitleDanger: model.todayDeviceSilent, trailing: {
             Button { sheet = .account } label: {
                 Image(systemName: "gearshape.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(HK.textDim)
             }.buttonStyle(.plain)
@@ -18,8 +19,8 @@ struct DarbarTodayTab: View {
             ScrollView {
                 VStack(spacing: 12) {
                     hero
-                    sectionLabel("THE COURT", trailing: model.exceptionCount > 0 ? "\(model.exceptionCount) to handle" : "all clear",
-                                 trailingColor: model.exceptionCount > 0 ? accent : HK.ready)
+                    sectionLabel("THE COURT", trailing: model.exceptionCount > 0 ? "\(model.exceptionCount) TO HANDLE" : "ALL CLEAR",
+                                 trailingColor: model.exceptionCount > 0 ? DK.gold : DK.green)
                     if model.exceptions.isEmpty {
                         emptyCourt
                     } else {
@@ -40,10 +41,11 @@ struct DarbarTodayTab: View {
 
     private var hero: some View {
         let s = model.stats
+        // PWA hero colours: present→green, working→blue, absent→red, expected→neutral.
         return HStack(spacing: 8) {
-            statTile("Present", s?.present, HK.ready)
-            statTile("Working", s?.missingPunch, accent)
-            statTile("Absent", add(s?.absent, s?.inProgress), HK.error)
+            statTile("Present", s?.present, DK.green)
+            statTile("Working", s?.missingPunch, DK.blue)
+            statTile("Absent", add(s?.absent, s?.inProgress), DK.red)
             statTile("Expected", s?.expected, HK.text)
         }
     }
@@ -60,7 +62,7 @@ struct DarbarTodayTab: View {
     }
     private var emptyCourt: some View {
         VStack(spacing: 10) {
-            Image(systemName: "checkmark.seal.fill").font(.system(size: 34)).foregroundStyle(HK.ready)
+            Image(systemName: "checkmark.seal.fill").font(.system(size: 34)).foregroundStyle(DK.green)
             Text("The court is quiet").font(.system(size: 16, weight: .semibold)).foregroundStyle(HK.text)
             Text("Nothing needs you.").font(.system(size: 13)).foregroundStyle(HK.textDim)
         }.frame(maxWidth: .infinity).padding(.vertical, 44)
@@ -86,19 +88,20 @@ struct CourtCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 Rectangle().fill(rail).frame(width: 3, height: 38).clipShape(Capsule())
                 DarbarFace(pin: ex.photoPin, id: ex.photoId, name: ex.displayName, token: token, size: 44)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(ex.displayName).font(.system(size: 15.5, weight: .bold)).foregroundStyle(HK.text).lineLimit(1)
-                        darbarBrandChip(ex.brand)
+                        nameLine
                         Spacer(minLength: 2)
-                        Text(pill.0).font(.system(size: 9, weight: .heavy))
-                            .foregroundStyle(pill.1).padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(pill.1.opacity(0.16), in: Capsule())
+                        if let p = pill {
+                            Text(p.0).font(.system(size: 9, weight: .heavy))
+                                .foregroundStyle(p.1).padding(.horizontal, 7).padding(.vertical, 3)
+                                .background(p.1.opacity(0.16), in: Capsule())
+                        }
                     }
-                    Text(evidence).font(.system(size: 12.5)).foregroundStyle(HK.textDim).fixedSize(horizontal: false, vertical: true)
+                    evidence.font(.system(size: 12.5)).foregroundStyle(HK.textDim).fixedSize(horizontal: false, vertical: true)
                 }
             }
             if !actions.isEmpty {
@@ -120,6 +123,27 @@ struct CourtCard: View {
     }
 
     private var drillable: Bool { ["chronic", "chronic_missed", "never_punched", "pay_missing", "departed"].contains(ex.type ?? "") }
+
+    // Name line. Ghost rows lead with the device name + a purple "PIN N · no roster" pill,
+    // exactly like the PWA; all other types show name + brand chip.
+    @ViewBuilder private var nameLine: some View {
+        if ex.type == "ghost" {
+            if let dn = ex.deviceName, !dn.isEmpty {
+                Text(dn).font(.system(size: 15.5, weight: .bold)).foregroundStyle(HK.text).lineLimit(1)
+                Text("PIN \(ex.pin ?? "?") · NO ROSTER").font(.system(size: 9, weight: .heavy)).tracking(0.3)
+                    .foregroundStyle(DK.purple).padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(DK.purpleSoft, in: Capsule())
+            } else {
+                Text("Unknown — PIN \(ex.pin ?? "?")").font(.system(size: 15.5, weight: .bold)).foregroundStyle(HK.text).lineLimit(1)
+                Text("GHOST").font(.system(size: 9, weight: .heavy)).tracking(0.3)
+                    .foregroundStyle(DK.purple).padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(DK.purpleSoft, in: Capsule())
+            }
+        } else {
+            Text(ex.displayName).font(.system(size: 15.5, weight: .bold)).foregroundStyle(HK.text).lineLimit(1)
+            darbarBrandChip(ex.brand)
+        }
+    }
 
     // (label, style, action). dismissGhost is confirm-gated; the rest open a sheet.
     private var actions: [(String, ActStyle, () -> Void)] {
@@ -144,37 +168,64 @@ struct CourtCard: View {
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(a.1 == .ghost ? HK.line : .clear, lineWidth: 1))
         }.buttonStyle(.plain)
     }
-    private func fg(_ s: ActStyle) -> Color { switch s { case .primary: return .black; case .danger: return HK.error; case .dark: return HK.text; case .ghost: return HK.textDim } }
-    private func bg(_ s: ActStyle) -> Color { switch s { case .primary: return accent; case .danger: return HK.error.opacity(0.16); case .dark: return HK.cardHi; case .ghost: return .clear } }
+    // PWA: .btn.primary = gold fill / dark text · .btn.danger = red-soft / red · .btn.dark = grey · ghost = outline.
+    private func fg(_ s: ActStyle) -> Color { switch s { case .primary: return DK.goldText; case .danger: return DK.red; case .dark: return HK.text; case .ghost: return HK.textDim } }
+    private func bg(_ s: ActStyle) -> Color { switch s { case .primary: return DK.gold; case .danger: return DK.redSoft; case .dark: return HK.cardHi; case .ghost: return .clear } }
 
     private var rail: Color {
-        switch ex.type { case "ghost": return accent; case "chronic_missed", "chronic": return HK.running
-        case "pay_missing", "departed": return HK.error; default: return HK.idle }
+        switch ex.type { case "ghost": return DK.purple; case "chronic_missed", "chronic": return DK.yellow
+        case "pay_missing", "departed": return DK.red; default: return DK.mute }
     }
-    private var pill: (String, Color) {
+    // Status pill on the right (ghost has its pill on the name line instead → nil here).
+    private var pill: (String, Color)? {
         switch ex.type {
-        case "ghost": return ("no roster", accent)
-        case "chronic_missed", "chronic": return ("chronic", HK.running)
-        case "pay_missing": return ("pay not set", HK.error)
-        case "never_punched": return ("no punches", HK.idle)
-        case "departed": return (ex.tier == "certain" ? "gone 21d+" : ex.tier == "strong" ? "14d+" : "7d+", HK.error)
-        default: return (ex.type ?? "exception", HK.idle)
+        case "ghost": return nil
+        case "chronic_missed", "chronic": return ("chronic", DK.yellow)
+        case "pay_missing": return ("pay not set", DK.gold)
+        case "never_punched": return ("no punches", DK.blue)
+        case "departed": return (ex.tier == "certain" ? "gone 21d+" : ex.tier == "strong" ? "14d+" : "7d+",
+                                 ex.tier == "certain" ? DK.red : ex.tier == "strong" ? DK.yellow : DK.mute)
+        default: return (ex.type ?? "exception", DK.mute)
         }
     }
-    private var evidence: String {
+    // Type-specific evidence — multi-line / multi-colour, 1:1 with the PWA cardFor() copy.
+    @ViewBuilder private var evidence: some View {
         switch ex.type {
         case "ghost":
-            var b: [String] = [ex.pin.map { "PIN \($0) · no roster match" } ?? "no roster match"]
-            if let p = ex.punches, let d = ex.days { b.append("\(p) punches over \(d) days") }
-            if let s = ex.shape { b.append(s) }
-            b.append(ex.active == true ? "working now" : (ex.daysSilent.map { "last seen \($0)d ago" } ?? ""))
-            return b.filter { !$0.isEmpty }.joined(separator: " · ")
-        case "chronic_missed", "chronic": return "Forgot a punch on \(ex.oddDays ?? 0) of the last 7 days — needs a word, not another SMS."
-        case "pay_missing": return "No pay set — money facts are held for them until you set it."
-        case "never_punched": return "On roster (PIN \(ex.pin ?? "?")) but has never punched."
-        case "departed": return "Silent \(ex.daysSilent ?? 0)d · still on payroll."
-        default: return "Exception: \(ex.type ?? "unknown")"
+            VStack(alignment: .leading, spacing: 1) {
+                (
+                    (ex.deviceName.map { Text("device says ").foregroundColor(HK.textDim) + Text($0).foregroundColor(HK.text).bold() + Text(" · ").foregroundColor(HK.textDim) } ?? Text(""))
+                    + Text("\(ex.punches ?? 0)").foregroundColor(HK.text).bold() + Text(" punches over ").foregroundColor(HK.textDim)
+                    + Text("\(ex.days ?? 0)").foregroundColor(HK.text).bold() + Text(" days").foregroundColor(HK.textDim)
+                    + (ex.shape.map { Text(" · \($0)").foregroundColor(HK.textDim) } ?? Text(""))
+                )
+                if ex.active == true {
+                    Text("working now").foregroundColor(DK.green).bold()
+                } else if let s = ex.daysSilent {
+                    Text("last seen \(s)d ago").foregroundColor(HK.textDim)
+                }
+            }
+        case "chronic_missed", "chronic":
+            Text("Forgot a punch on \(ex.oddDays ?? 0) of the last 7 days — needs a word, not another SMS.")
+        case "pay_missing":
+            Text("No pay set — the system can't show money facts for them. Their settlement line is held until you set it.")
+        case "never_punched":
+            Text("On roster (PIN \(ex.pin ?? "?")) but has never punched — enrolled on the device, or not really working?")
+        case "departed":
+            VStack(alignment: .leading, spacing: 1) {
+                (Text("Silent ").foregroundColor(HK.textDim) + Text("\(ex.daysSilent ?? 0)d").foregroundColor(HK.text).bold()
+                 + Text(" · still on payroll").foregroundColor(HK.textDim)
+                 + (payLabel.map { Text(" at ").foregroundColor(HK.textDim) + Text($0).foregroundColor(HK.text).bold() } ?? Text("")))
+                Text("last punch \(ex.lastPunch.map { String($0.prefix(10)) } ?? "never")").foregroundColor(HK.textDim)
+            }
+        default:
+            Text("Exception: \(ex.type ?? "unknown")")
         }
+    }
+    private var payLabel: String? {
+        if let m = ex.monthlySalary, m > 0 { return inrLabel(m) + "/mo" }
+        if let d = ex.dailyRate, d > 0 { return inrLabel(d) + "/day" }
+        return nil
     }
 }
 
@@ -219,10 +270,10 @@ struct DarbarAttendanceTab: View {
         let absent = states.filter { $0.kind == "absent" }.count
         let off = states.filter { $0.kind == "off" }.count
         return HStack(spacing: 8) {
-            filterTile("Present", present, HK.ready, "present")
-            filterTile("⚠ Fix", incomplete, HK.running, "incomplete")
-            filterTile("Absent", absent, HK.error, "absent")
-            filterTile("Off", off, HK.textDim, "off")
+            filterTile("Present", present, DK.green, "present")
+            filterTile("⚠ Fix", incomplete, DK.yellow, "incomplete")
+            filterTile("Absent", absent, DK.red, "absent")
+            filterTile("Off", off, DK.purple, "off")
         }.padding(.horizontal, 16)
     }
     private func filterTile(_ l: String, _ v: Int, _ tint: Color, _ key: String) -> some View {
@@ -246,7 +297,7 @@ struct DarbarAttendanceTab: View {
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                 }
                 ForEach(model.attendFiltered) { row in
-                    AttendRowCard(row: row, isLiveDay: model.attendLive, model: model)
+                    AttendRowCard(row: row, isLiveDay: model.attendLive, token: model.photoToken, model: model)
                         // PWA attRowTap: a day-row opens that person's month settle sheet (fin-gated).
                         // Month = the attendance day's month, matching loadPayCtx('settle', id, slice(0,7)).
                         .contentShape(Rectangle())
@@ -285,6 +336,7 @@ struct DarbarAttendanceTab: View {
         .refreshable { await model.loadMonthAttendance() }
     }
 
+    // PWA .dstep order: ‹ / date / › / Today / Month — all neutral (--e2 bg, --text), none gold.
     private var dateStepper: some View {
         HStack(spacing: 8) {
             stepBtn("chevron.left") { shift(-1) }
@@ -292,14 +344,14 @@ struct DarbarAttendanceTab: View {
                 .font(.system(size: 14, weight: .semibold)).foregroundStyle(HK.text)
                 .frame(maxWidth: .infinity).padding(.vertical, 9).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
             stepBtn("chevron.right") { shift(1) }
+            Button("Today") { model.attendDate = DarbarClient.bizDayIST() }
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(HK.text)
+                .padding(.horizontal, 11).padding(.vertical, 9).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
             Button(model.attMode == "month" ? "Day" : "Month") {
                 model.attMode = model.attMode == "month" ? "day" : "month"
             }
-            .font(.system(size: 13, weight: .semibold)).foregroundStyle(accent)
+            .font(.system(size: 13, weight: .semibold)).foregroundStyle(HK.text)
             .padding(.horizontal, 11).padding(.vertical, 9).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
-            Button("Today") { model.attendDate = DarbarClient.bizDayIST() }
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(accent)
-                .padding(.horizontal, 11).padding(.vertical, 9).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
         }.padding(.horizontal, 16)
     }
     private func stepBtn(_ icon: String, _ act: @escaping () -> Void) -> some View {
@@ -342,9 +394,9 @@ struct MonthStripRow: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
-                Text("\(p.worked)w").font(.system(size: 11, weight: .bold)).foregroundStyle(HK.ready)
-                if p.errs > 0 { Text("\(p.errs)!").font(.system(size: 10.5, weight: .bold)).foregroundStyle(HK.running) }
-                Text("\(p.absent)a").font(.system(size: 10.5, weight: .bold)).foregroundStyle(HK.error)
+                Text("\(p.worked)w").font(.system(size: 11, weight: .bold)).foregroundStyle(DK.green)
+                if p.errs > 0 { Text("\(p.errs)!").font(.system(size: 10.5, weight: .bold)).foregroundStyle(DK.yellow) }
+                Text("\(p.absent)a").font(.system(size: 10.5, weight: .bold)).foregroundStyle(DK.red)
             }
         }
         .padding(11).background(HK.card, in: RoundedRectangle(cornerRadius: 12))
@@ -369,14 +421,15 @@ struct MonthStripRow: View {
         let st = r.status?.lowercased()
         if st == "week_off" || st == "leave" { return purple }
         let pc = r.punchCount ?? 0
-        if pc == 0 { return HK.error }
-        return pc % 2 == 1 ? HK.running : HK.ready
+        if pc == 0 { return DK.red }
+        return pc % 2 == 1 ? DK.yellow : DK.green
     }
 }
 
 struct AttendRowCard: View {
     let row: AttendanceRow
     let isLiveDay: Bool
+    let token: String?
     @ObservedObject var model: DarbarAppModel
     private var st: AttendanceRow.AttState { row.attState(isLiveDay: isLiveDay) }
     // Fix button only when there's a real missing punch on a CLOSED day (PWA: present && incomplete).
@@ -384,40 +437,63 @@ struct AttendRowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Circle().fill(dotColor).frame(width: 9, height: 9)
+                // PWA renders a circular CAMS-face photo (id+pin), initials fallback.
+                DarbarFace(pin: row.pin, id: row.employeeId ?? row.id, name: row.displayName, token: token, size: 38)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
-                        Text(row.displayName).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(HK.text)
+                        Circle().fill(dotColor).frame(width: 8, height: 8)
+                        // legal name + nickname in grey parens, exactly like the PWA
+                        darbarName(row.name, nick: row.knownAs, size: 14.5).lineLimit(1)
                         darbarBrandChip(row.brandLabel)
                     }
-                    Text("\(row.jobName ?? "") · \(sessionLine)").font(.system(size: 12)).foregroundStyle(HK.textDim).lineLimit(1)
+                    if let j = row.jobName, !j.isEmpty {
+                        Text(j).font(.system(size: 12)).foregroundStyle(HK.textDim).lineLimit(1)
+                    }
+                    sessionLine
                 }
-                Spacer()
+                Spacer(minLength: 4)
                 Text(st.label).font(.system(size: 9.5, weight: .heavy)).foregroundStyle(dotColor)
                     .padding(.horizontal, 7).padding(.vertical, 3).background(dotColor.opacity(0.16), in: Capsule())
             }
             if showFix {
                 Button { Task { await model.fixPunch(employeeId: row.employeeId ?? row.id, date: model.attendDate) } } label: {
-                    Text("Fix — impute missing punch").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.black)
-                        .frame(maxWidth: .infinity).padding(.vertical, 8).background(DarbarView.accent, in: RoundedRectangle(cornerRadius: 9))
+                    Text("Fix — impute missing punch").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(DK.goldText)
+                        .frame(maxWidth: .infinity).padding(.vertical, 8).background(DK.gold, in: RoundedRectangle(cornerRadius: 9))
                 }.buttonStyle(.plain)
             }
         }
         .padding(12).background(HK.card, in: RoundedRectangle(cornerRadius: HK.radius))
         .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(HK.line, lineWidth: 1))
     }
-    private var sessionLine: String {
-        let i = (row.firstInAt?.suffix(8).prefix(5)).map(String.init) ?? "—"
-        let o = (row.lastOutAt?.suffix(8).prefix(5)).map(String.init) ?? (st.working ? "open" : "—")
-        return "\(i) → \(o)"
+    // PWA sessionLine: 0 punches → grey "no punches"; otherwise "HH:MM → HH:MM" with
+    // "open" in blue when there's no out-punch, plus hours + tap-count.
+    @ViewBuilder private var sessionLine: some View {
+        if (row.punchCount ?? 0) == 0 {
+            Text("no punches").font(.system(size: 12)).foregroundStyle(DK.mute)
+        } else {
+            let i = hm(row.firstInAt) ?? "—"
+            let taps = row.punchCount ?? 0
+            let hrs = (row.totalHours ?? 0) > 0 ? String(format: " · %.1fh", row.totalHours ?? 0) : ""
+            let tapStr = " · \(taps) tap\(taps > 1 ? "s" : "")"
+            (Text("\(i) → ").font(.system(size: 12)).foregroundColor(HK.textDim)
+             + (row.lastOutAt != nil
+                ? Text(hm(row.lastOutAt) ?? "—").font(.system(size: 12)).foregroundColor(HK.textDim)
+                : Text("open").font(.system(size: 12)).foregroundColor(DK.blue))
+             + Text("\(hrs)\(tapStr)").font(.system(size: 12)).foregroundColor(HK.textDim))
+                .lineLimit(1)
+        }
+    }
+    private func hm(_ s: String?) -> String? {
+        guard let s, s.count >= 16 else { return nil }
+        return String(s.dropFirst(11).prefix(5))   // "yyyy-MM-ddTHH:MM" → HH:MM
     }
     // PWA dot/pill colours: working→blue, present→green, incomplete→yellow, absent→red, off→purple.
     private var dotColor: Color {
-        if st.working { return DarbarView.accent }
+        if st.working { return DK.blue }
         switch st.kind {
-        case "present": return st.incomplete ? HK.running : HK.ready
-        case "absent": return HK.error
-        default: return Color(hex: 0xA78BFA)   // off
+        case "present": return st.incomplete ? DK.yellow : DK.green
+        case "absent": return DK.red
+        default: return DK.purple   // off
         }
     }
 }
@@ -430,19 +506,21 @@ struct DarbarPayTab: View {
     private let accent = DarbarView.accent
 
     var body: some View {
-        DarbarScreen(title: "Pay", subtitle: model.loadingPay ? "Loading payments…" : "\(model.payPeople.count) paid · \(inrLabel(model.payTotal)) this month", trailing: {
+        // PWA subtitle is the static tagline, not a stat line.
+        DarbarScreen(title: "Pay", subtitle: "Settle or advance — anyone, any day", trailing: {
             Button { sheet = .advance(nil) } label: {
                 Image(systemName: "plus.circle.fill").font(.system(size: 19, weight: .semibold)).foregroundStyle(accent)
             }.buttonStyle(.plain)
         }) {
             VStack(spacing: 10) {
+                // PWA control order: month banner → brand chips → Settle/Pay-advance → Month board → section.
                 settleBanner
-                actionsRow
                 DarbarBrandSeg(sel: $model.payBrand)
+                actionsRow
                 ScrollView {
                     LazyVStack(spacing: 9) {
                         if !model.payPeople.isEmpty || model.loadingPay {
-                            sectionLabel("PAID THIS MONTH", trailing: inrLabel(model.payTotal), trailingColor: accent).padding(.horizontal, 12)
+                            sectionLabel("PAYMENTS THIS MONTH", trailing: monthLabel(model.payMonth).uppercased(), trailingColor: accent).padding(.horizontal, 12)
                         }
                         ForEach(model.payPeople) { p in
                             PayPersonCard(p: p).onTapGesture { sheet = .settle(id: p.id, name: p.name, mode: "settle") }
@@ -459,28 +537,38 @@ struct DarbarPayTab: View {
         .task { await model.loadPay(); if model.employees.isEmpty { await model.loadRoster() } }
     }
 
-    // Month navigator + active-period hint (PWA settleBanner).
+    // Month navigator + active-period hint (PWA settleBanner). Arrows are outlined ghost
+    // buttons (rounded-square chrome); the month label is white (the gold "JUNE 2026" lives
+    // in the section header, not here).
     private var settleBanner: some View {
-        HStack {
-            Button { model.changePayMonth(-1) } label: { Text("◄").font(.system(size: 18, weight: .bold)).foregroundStyle(accent).frame(width: 48) }.buttonStyle(.plain)
+        HStack(spacing: 10) {
+            monthNavBtn("◄") { model.changePayMonth(-1) }
             VStack(spacing: 2) {
-                Text(monthLabel(model.payMonth)).font(.system(size: 16, weight: .heavy)).foregroundStyle(HK.text)
+                Text(monthLabel(model.payMonth)).font(.system(size: 17, weight: .heavy)).foregroundStyle(HK.text)
                 Text(model.isActiveSettlementMonth ? "Salary period being cleared now — paid by the 10th" : "Browsing — ◄ ► to change month")
                     .font(.system(size: 10.5)).foregroundStyle(HK.textDim).lineLimit(1).minimumScaleFactor(0.7)
             }.frame(maxWidth: .infinity)
-            Button { model.changePayMonth(1) } label: { Text("►").font(.system(size: 18, weight: .bold)).foregroundStyle(accent).frame(width: 48) }.buttonStyle(.plain)
+            monthNavBtn("►") { model.changePayMonth(1) }
         }
-        .padding(.vertical, 10).padding(.horizontal, 6)
+        .padding(.vertical, 10).padding(.horizontal, 10)
         .background(HK.card, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(HK.line, lineWidth: 1))
         .padding(.horizontal, 16)
+    }
+    private func monthNavBtn(_ s: String, _ act: @escaping () -> Void) -> some View {
+        Button(action: act) {
+            Text(s).font(.system(size: 16, weight: .bold)).foregroundStyle(HK.text)
+                .frame(width: 48, height: 38)
+                .background(HK.cardHi, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(HK.line, lineWidth: 1))
+        }.buttonStyle(.plain)
     }
 
     private var actionsRow: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 Button { sheet = .advance(nil) } label: {
-                    Text("Settle a person").font(.system(size: 14, weight: .bold)).foregroundStyle(.black)
+                    Text("Settle a person").font(.system(size: 14, weight: .bold)).foregroundStyle(DK.goldText)
                         .frame(maxWidth: .infinity).padding(.vertical, 12).background(accent, in: RoundedRectangle(cornerRadius: 11))
                 }.buttonStyle(.plain)
                 Button { sheet = .advance(nil) } label: {
@@ -509,14 +597,16 @@ struct PayPersonCard: View {
                     Text(p.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(HK.text).lineLimit(1)
                     darbarBrandChip(p.brand)
                     if p.settled {
-                        Text("✓ Settled").font(.system(size: 8.5, weight: .heavy)).foregroundStyle(HK.ready)
-                            .padding(.horizontal, 6).padding(.vertical, 2).background(HK.ready.opacity(0.16), in: Capsule())
+                        // PWA: green "✓ SETTLED" pill (uppercased by .pill CSS).
+                        Text("✓ SETTLED").font(.system(size: 8.5, weight: .heavy)).foregroundStyle(DK.green)
+                            .padding(.horizontal, 6).padding(.vertical, 2).background(DK.greenSoft, in: Capsule())
                     } else {
-                        Text("advance only").font(.system(size: 8.5, weight: .heavy)).foregroundStyle(DarbarView.accent)
-                            .padding(.horizontal, 6).padding(.vertical, 2).background(DarbarView.accent.opacity(0.16), in: Capsule())
+                        // PWA: gold "ADVANCE ONLY" pill (uppercased by .pill CSS).
+                        Text("ADVANCE ONLY").font(.system(size: 8.5, weight: .heavy)).foregroundStyle(DK.gold)
+                            .padding(.horizontal, 6).padding(.vertical, 2).background(DK.goldSoft, in: Capsule())
                     }
                 }
-                Text(breakdown).font(.system(size: 12)).foregroundStyle(HK.textDim)
+                breakdown.font(.system(size: 12))
             }
             Spacer()
             Text(inrLabel(p.total)).font(.system(size: 16, weight: .heavy, design: .rounded)).foregroundStyle(HK.text).monospacedDigit()
@@ -525,11 +615,15 @@ struct PayPersonCard: View {
         .padding(13).background(HK.card, in: RoundedRectangle(cornerRadius: HK.radius))
         .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(HK.line, lineWidth: 1))
     }
-    private var breakdown: String {
+    // "advance ₹X + settlement ₹Y · month complete · tap for the trail" — settled rows include
+    // the "· month complete" segment; "tap for the trail" is gold. 1:1 with the PWA.
+    private var breakdown: Text {
         var parts: [String] = []
         if p.advTotal > 0 { parts.append("advance \(inrLabel(p.advTotal))") }
         if p.setTotal > 0 { parts.append("settlement \(inrLabel(p.setTotal))") }
-        return (parts.isEmpty ? "—" : parts.joined(separator: " + ")) + " · tap for the trail"
+        let amounts = parts.isEmpty ? "—" : parts.joined(separator: " + ")
+        let mid = p.settled ? "\(amounts) · month complete · " : "\(amounts) · "
+        return Text(mid).foregroundColor(HK.textDim) + Text("tap for the trail").foregroundColor(DK.gold)
     }
 }
 
@@ -539,7 +633,11 @@ struct DarbarRosterTab: View {
     @ObservedObject var model: DarbarAppModel
     @Binding var sheet: DarbarSheet?
     var body: some View {
-        DarbarScreen(title: "Roster", subtitle: "\(model.rosterFiltered.count) serving · tap a person for their month") {
+        DarbarScreen(title: "Roster", subtitle: "\(model.rosterFiltered.count) serving · tap a person for their month", trailing: {
+            Button { Task { await model.loadRoster() } } label: {
+                Image(systemName: "arrow.clockwise").font(.system(size: 16, weight: .bold)).foregroundStyle(HK.textDim)
+            }.buttonStyle(.plain)
+        }) {
             VStack(spacing: 10) {
                 DarbarBrandSeg(sel: $model.rosterBrand)
                 if model.loadingRoster && model.employees.isEmpty {
@@ -567,16 +665,23 @@ struct DarbarRosterTab: View {
     }
 
     // Owner-only monthly staffing cost (Σ monthly OR daily×30 per active person).
+    // PWA: sentence-case title with the gold amount inline on the RIGHT, then a descriptor line
+    // where "N missing salary" is its own red token.
     private var costCard: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("MONTHLY STAFFING COST").font(.system(size: 10.5, weight: .heavy)).tracking(0.5).foregroundStyle(HK.textFaint)
-            Text(inrLabel(model.rosterMonthlyCost)).font(.system(size: 26, weight: .heavy, design: .rounded)).foregroundStyle(DarbarView.accent).monospacedDigit()
-            Text("\(model.rosterBrand == "all" ? "all outlets" : model.rosterBrand) · \(model.rosterFiltered.count) staff · full attendance, before OT\(model.rosterMissingPay > 0 ? " · \(model.rosterMissingPay) missing salary" : "")")
-                .font(.system(size: 11)).foregroundStyle(HK.textDim)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Monthly staffing cost").font(.system(size: 15, weight: .bold)).foregroundStyle(HK.text)
+                Spacer()
+                Text(inrLabel(model.rosterMonthlyCost)).font(.system(size: 19, weight: .heavy, design: .rounded)).foregroundStyle(DK.gold).monospacedDigit()
+            }
+            (
+                Text("\(model.rosterBrand == "all" ? "all outlets" : model.rosterBrand) · \(model.rosterFiltered.count) staff · full attendance, before OT").foregroundColor(HK.textDim)
+                + (model.rosterMissingPay > 0 ? Text(" · \(model.rosterMissingPay) missing salary").foregroundColor(DK.red) : Text(""))
+            ).font(.system(size: 11))
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(DarbarView.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: HK.radius))
-        .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(DarbarView.accent.opacity(0.4), lineWidth: 1))
+        .background(HK.card, in: RoundedRectangle(cornerRadius: HK.radius))
+        .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(DK.goldSoft, lineWidth: 1))
     }
 }
 
@@ -589,13 +694,13 @@ struct RosterRow: View {
                 HStack(spacing: 6) {
                     Text(e.displayName).font(.system(size: 15, weight: .semibold)).foregroundStyle(HK.text)
                     darbarBrandChip(e.brandLabel)
-                    if e.pin == nil { Text("no pin").font(.system(size: 9, weight: .heavy)).foregroundStyle(HK.running)
-                        .padding(.horizontal, 6).padding(.vertical, 2).background(HK.running.opacity(0.16), in: Capsule()) }
+                    if e.pin == nil { Text("no pin").font(.system(size: 9, weight: .heavy)).foregroundStyle(DK.yellow)
+                        .padding(.horizontal, 6).padding(.vertical, 2).background(DK.yellowSoft, in: Capsule()) }
                 }
                 Text("\(e.jobName ?? "") \(e.pin.map { "· PIN \($0)" } ?? "") · \(e.payType ?? "")").font(.system(size: 12)).foregroundStyle(HK.textDim).lineLimit(1)
             }
             Spacer()
-            if fin { Text(e.payLabel).font(.system(size: 13, weight: .bold)).foregroundStyle(e.hasPay ? HK.text : HK.running).monospacedDigit() }
+            if fin { Text(e.payLabel).font(.system(size: 13, weight: .bold)).foregroundStyle(e.hasPay ? HK.text : DK.yellow).monospacedDigit() }
         }
         .padding(12).background(HK.card, in: RoundedRectangle(cornerRadius: HK.radius))
         .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(HK.line, lineWidth: 1))

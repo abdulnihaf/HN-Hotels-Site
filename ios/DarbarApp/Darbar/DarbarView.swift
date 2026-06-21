@@ -2,11 +2,12 @@ import SwiftUI
 
 // Darbar — "the Court". FULLY NATIVE port of the deployed PWA: four tabs (Today / Attendance / Pay /
 // Roster) with the real execution — pay advance, settle, set-pay, mark-exit, on-leave, onboard,
-// dismiss-ghost, fix-punch — all wired to the live endpoints. Accent 0x5B86C9 is the only per-chamber
-// colour; everything else is the shared HK kit. Read-glance first, one-tap to act, honest states.
+// dismiss-ghost, fix-punch — all wired to the live endpoints. Accent is the PWA's GOLD (--gold #D4A24C),
+// matched 1:1 to the deployed web app; everything else is the shared HK kit. Read-glance first,
+// one-tap to act, honest states.
 struct DarbarView: View {
     @StateObject private var model = DarbarAppModel()
-    static let accent = Color(hex: 0x5B86C9)
+    static let accent = DK.gold
     private var accent: Color { Self.accent }
     @State private var tab = 0
     @State private var sheet: DarbarSheet?
@@ -16,6 +17,7 @@ struct DarbarView: View {
             TabView(selection: $tab) {
                 DarbarTodayTab(model: model, sheet: $sheet).tag(0)
                     .tabItem { Label("Today", systemImage: "house.fill") }
+                    .badge(model.exceptionCount)            // red "N to handle" count on Today (PWA todayDot)
                 DarbarAttendanceTab(model: model, sheet: $sheet).tag(1)
                     .tabItem { Label("Attendance", systemImage: "calendar") }
                 DarbarPayTab(model: model, sheet: $sheet).tag(2)
@@ -23,7 +25,7 @@ struct DarbarView: View {
                 DarbarRosterTab(model: model, sheet: $sheet).tag(3)
                     .tabItem { Label("Roster", systemImage: "person.3.fill") }
             }
-            .tint(accent)
+            .tint(accent)                                  // active tab = gold (PWA .tab.on)
             toast
         }
         .task { await model.bootstrap() }
@@ -99,6 +101,8 @@ struct DarbarSheetHost: View {
 struct DarbarScreen<Content: View, Trailing: View>: View {
     let title: String
     let subtitle: String
+    var dateSuffix: String = ""
+    var subtitleDanger: Bool = false
     @ViewBuilder var trailing: () -> Trailing
     @ViewBuilder var content: () -> Content
     var body: some View {
@@ -106,7 +110,8 @@ struct DarbarScreen<Content: View, Trailing: View>: View {
             HK.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 ZStack(alignment: .trailing) {
-                    ChamberHeader(title: title, subtitle: subtitle, accent: DarbarView.accent)
+                    ChamberHeader(title: title, subtitle: subtitle, accent: DarbarView.accent,
+                                  dateSuffix: dateSuffix, subtitleDanger: subtitleDanger)
                     trailing().padding(.trailing, 40)   // sit left of the kit's accent dot
                 }
                 content()
@@ -115,21 +120,26 @@ struct DarbarScreen<Content: View, Trailing: View>: View {
     }
 }
 extension DarbarScreen where Trailing == EmptyView {
-    init(title: String, subtitle: String, @ViewBuilder content: @escaping () -> Content) {
-        self.init(title: title, subtitle: subtitle, trailing: { EmptyView() }, content: content)
+    init(title: String, subtitle: String, dateSuffix: String = "", subtitleDanger: Bool = false,
+         @ViewBuilder content: @escaping () -> Content) {
+        self.init(title: title, subtitle: subtitle, dateSuffix: dateSuffix, subtitleDanger: subtitleDanger,
+                  trailing: { EmptyView() }, content: content)
     }
 }
 
-func darbarBrandChip(_ b: String?, accent: Color = DarbarView.accent) -> some View {
+// Brand badge — PWA color-codes per brand (.pill.he=purple, .pill.nch=green, .pill.hq=blue).
+func darbarBrandChip(_ b: String?) -> some View {
     Group {
         if let b, !b.isEmpty {
+            let c = DK.brandColor(b)
             Text(b.uppercased()).font(.system(size: 9, weight: .heavy)).tracking(0.3)
-                .foregroundStyle(accent).padding(.horizontal, 6).padding(.vertical, 2)
-                .background(accent.opacity(0.16), in: Capsule())
+                .foregroundStyle(c).padding(.horizontal, 6).padding(.vertical, 2)
+                .background(c.opacity(0.16), in: Capsule())
         }
     }
 }
 
+// Active filter chip = subtle grey pill (--e3 bg, --text), NOT gold — matches PWA .seg button.on.
 struct DarbarBrandSeg: View {
     @Binding var sel: String
     var body: some View {
@@ -138,9 +148,10 @@ struct DarbarBrandSeg: View {
                 let on = sel == b
                 Text(b == "all" ? "All" : b)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(on ? .black : HK.textDim)
+                    .foregroundStyle(on ? HK.text : DK.dim)
                     .frame(maxWidth: .infinity).padding(.vertical, 7)
-                    .background(on ? DarbarView.accent : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                    .background(on ? DK.segOn : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                    .shadow(color: on ? .black.opacity(0.4) : .clear, radius: 1, y: 1)
                     .onTapGesture { sel = b }
             }
         }
@@ -161,18 +172,29 @@ struct DarbarFace: View {
             } else { initials }
         }
         .frame(width: size, height: size).clipShape(Circle())
-        .overlay(Circle().stroke(DarbarView.accent.opacity(0.4), lineWidth: 1.4))
+        .overlay(Circle().stroke(HK.line, lineWidth: 1))
     }
     private var initials: some View {
         ZStack {
-            Circle().fill(DarbarView.accent.opacity(0.18))
-            Text(initialsText).font(.system(size: size * 0.34, weight: .heavy, design: .rounded)).foregroundStyle(DarbarView.accent)
+            Circle().fill(DK.gold.opacity(0.16))
+            Text(initialsText).font(.system(size: size * 0.34, weight: .heavy, design: .rounded)).foregroundStyle(DK.gold)
         }
     }
     private var initialsText: String {
         let p = name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
         return p.isEmpty ? "?" : p.uppercased()
     }
+}
+
+// Legal name + nickname in grey parens, exactly like the PWA attendance row:
+//   known_as && known_as !== name  ->  "Abdul Sabir Khan (Sabir Khan)"  else  "name"
+func darbarName(_ legal: String?, nick: String?, size: CGFloat = 14.5, weight: Font.Weight = .semibold) -> Text {
+    let name = legal ?? "—"
+    var t = Text(name).font(.system(size: size, weight: weight)).foregroundColor(HK.text)
+    if let n = nick, !n.isEmpty, n != name {
+        t = t + Text(" (\(n))").font(.system(size: size, weight: weight)).foregroundColor(DK.mute)
+    }
+    return t
 }
 
 func inrLabel(_ v: Double?) -> String {

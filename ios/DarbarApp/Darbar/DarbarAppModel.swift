@@ -150,7 +150,7 @@ final class DarbarAppModel: ObservableObject {
         loadingToday = true; defer { loadingToday = false }
         do {
             let h = try await DarbarClient.shared.home(token: t)
-            home = h; todayStatus = liveStatus(h)
+            home = h; todayStatus = liveStatus(h); todayDate = Self.dayShort(h.businessDay)
         } catch DarbarError.unauthorized { await reauth(); if let t2 = mintedToken { home = try? await DarbarClient.shared.home(token: t2) } }
         catch { todayStatus = "Source unreachable" }
     }
@@ -310,13 +310,32 @@ final class DarbarAppModel: ObservableObject {
         }
     }
 
+    // PWA fmtDayShort: "yyyy-MM-dd" → "Sun, 21 Jun" (weekday short · day · month short).
+    static func dayShort(_ d: String?) -> String {
+        guard let d, d.count >= 10 else { return "" }
+        let i = DateFormatter(); i.dateFormat = "yyyy-MM-dd"; i.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        let o = DateFormatter(); o.dateFormat = "EEE, d MMM"; o.timeZone = TimeZone(identifier: "Asia/Kolkata"); o.locale = Locale(identifier: "en_IN")
+        return i.date(from: String(d.prefix(10))).map { o.string(from: $0) } ?? ""
+    }
+
+    // True when the status carries the device-silent warning (the PWA renders it RED).
+    var todayDeviceSilent = false
+    // PWA day-date next to the "Darbar" title (e.g. "Sun, 21 Jun").
+    var todayDate = ""
+
     private func liveStatus(_ h: DarbarHome) -> String {
         let present = h.stats?.present ?? 0
-        guard let hh = h.health else { return "\(present) present" }
+        guard let hh = h.health else { todayDeviceSilent = false; return "\(present) present" }
         if hh.camsOk == true {
-            if let a = hh.camsLastPunchAgeMin { return a > 90 ? "\(present) present · last punch \(a)m" : "\(present) present · device live (\(a)m)" }
+            todayDeviceSilent = false
+            if let a = hh.camsLastPunchAgeMin {
+                return a > 90 ? "\(present) present · last punch \(a)m · normal lull"
+                              : "\(present) present · device live (\(a)m ago)"
+            }
             return "\(present) present · device live"
         }
+        todayDeviceSilent = true
+        if let a = hh.camsLastPunchAgeMin { return "\(present) present · device silent \(a)m — check it" }
         return "\(present) present · device silent — check it"
     }
 }

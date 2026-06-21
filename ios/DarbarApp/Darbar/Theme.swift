@@ -30,6 +30,37 @@ enum HK {
     static let radiusSm: CGFloat = 12
 }
 
+// Darbar PWA palette — the deployed web app (darbar.hnhotels.in) is the source of truth.
+// These mirror its CSS custom properties exactly so the native screens are 1:1.
+enum DK {
+    static let gold      = Color(hex: 0xD4A24C)   // --gold  (primary accent)
+    static let goldSoft  = Color(hex: 0xD4A24C).opacity(0.16)
+    static let goldText  = Color(hex: 0x1A1206)   // dark text on a gold fill (--btn.primary color)
+    static let green     = Color(hex: 0x37D399)   // --green (working now / present)
+    static let greenSoft = Color(hex: 0x37D399).opacity(0.14)
+    static let red       = Color(hex: 0xFF5C5C)   // --red   (silent/absent/destructive)
+    static let redSoft   = Color(hex: 0xFF5C5C).opacity(0.14)
+    static let yellow    = Color(hex: 0xFBBF24)   // --yellow (chronic / 14d+)
+    static let yellowSoft = Color(hex: 0xFBBF24).opacity(0.15)
+    static let purple    = Color(hex: 0xA78BFA)   // --purple (HE / no-roster / off)
+    static let purpleSoft = Color(hex: 0xA78BFA).opacity(0.15)
+    static let blue      = Color(hex: 0x5E9EFF)   // --blue   (HQ / open / never-punched)
+    static let blueSoft  = Color(hex: 0x5E9EFF).opacity(0.14)
+    static let dim       = Color(hex: 0x9A9AA3)   // --dim
+    static let mute      = Color(hex: 0x5C5C66)   // --mute (no-punches / 7d+)
+    static let segOn     = Color(hex: 0x24242F)   // --e3 (active seg/chip subtle grey, NOT gold)
+
+    // Brand badge colors (PWA: .pill.he=purple .pill.nch=green .pill.hq=blue)
+    static func brandColor(_ b: String?) -> Color {
+        switch (b ?? "").uppercased() {
+        case "HE": return purple
+        case "NCH": return green
+        case "HQ": return blue
+        default: return mute
+        }
+    }
+}
+
 extension Color {
     init(hex: UInt, alpha: Double = 1) {
         self.init(.sRGB,
