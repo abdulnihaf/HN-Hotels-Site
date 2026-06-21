@@ -1,5 +1,8 @@
 import Foundation
 import Combine
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // Sauda chamber model. ONE shared Diwan token (minted from the seeded PIN — NO per-chamber gate).
 // Read-only: loads each tab's live data on demand, honest loading/empty/error states, never a fake
@@ -52,6 +55,25 @@ final class SaudaAppModel: ObservableObject {
     @Published var histSearch: String = ""           // Purchase-day trail search
     @Published var histBrand: String = "all"         // all | HE | NCH (Purchase-day brand chips)
     @Published var diarySearch: String = ""          // Vendor-diary trail search
+    @Published var buySearch: String = ""             // Buy-list item filter (PWA #buySearch)
+    @Published var payStatus: String = "all"          // all | ready | needsbill | khata | manual (To-pay status chips)
+    @Published var hpSearch: String = ""              // Hyperpure mandi filter (PWA filter mandi items…)
+    @Published var hpTicked: Set<String> = []         // Hyperpure 3-state tick-off (added) keyed by item_key
+    @Published var setSearch: String = ""             // Settings filter items / vendors
+    @Published var setChip: String = "all"            // all | novendor | noprice | confirm (Settings data chips)
+    func toggleHpTick(_ key: String) { if hpTicked.contains(key) { hpTicked.remove(key) } else { hpTicked.insert(key) } }
+
+    // header subtitle: "Nihaf · Sun, 21 Jun" (PWA identity line). User name from the seeded PIN.
+    var userName: String { "Nihaf" }
+    var headerDate: String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        f.locale = Locale(identifier: "en_IN")
+        f.dateFormat = "EEE, d MMM"
+        return f.string(from: Date())
+    }
+    var headerSubtitle: String { "\(userName) · \(headerDate)" }
 
     // ── mutation status (honest, never a fake success) ──
     @Published var busy = false
@@ -100,6 +122,15 @@ final class SaudaAppModel: ObservableObject {
 
     func refresh() async { await load(tab, force: true) }
 
+    // header power icon — drop the chamber token (the owner-pin stays in the keychain for the Diwan).
+    func signOut() {
+        token = nil
+        KeychainStore.clear("sauda-token")
+        loaded.removeAll()
+        locked = true
+        statusLine = "Signed out — unlock from the Diwan home"
+    }
+
     func switchTo(_ t: Tab) {
         tab = t
         if !loaded.contains(t) { Task { await load(t, force: false) } }
@@ -144,6 +175,34 @@ final class SaudaAppModel: ObservableObject {
     }
 
     func reloadPurchaseDay() { loaded.remove(.purchaseDay); Task { await load(.purchaseDay, force: true) } }
+
+    // Purchase-day date stepper (PWA ‹/› + Today/Tomorrow)
+    func shiftPurchaseDate(_ days: Int) {
+        if let d = cal.date(byAdding: .day, value: days, to: purchaseDate) { purchaseDate = d; reloadPurchaseDay() }
+    }
+    func setPurchaseYMD(_ ymd: String) {
+        if let d = Self.ymd.date(from: ymd) { purchaseDate = d; reloadPurchaseDay() }
+    }
+    // relative-day label e.g. "Tomorrow · Mon 22 Jun" / "Today · …" / "Wed · 19 Jun"
+    var purchaseRelativeLabel: String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian); f.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        f.locale = Locale(identifier: "en_IN"); f.dateFormat = "EEE, d MMM"
+        let dateStr = f.string(from: purchaseDate)
+        if purchaseYMD == ymdIST(0) { return "Today · \(dateStr)" }
+        if purchaseYMD == ymdIST(1) { return "Tomorrow · \(dateStr)" }
+        if purchaseYMD == ymdIST(-1) { return "Yesterday · \(dateStr)" }
+        return dateStr
+    }
+
+    // A4 purchase PDF — the export is generated client-side in the deployed PWA (window.print on an
+    // A4-landscape HTML view). Native opens that Purchase-day web view so the owner prints/saves it.
+    func openPurchasePdf() {
+        guard let url = URL(string: "https://sauda.hnhotels.in/ops/sauda/") else { return }
+        #if canImport(UIKit)
+        UIApplication.shared.open(url)
+        #endif
+    }
 
     // MARK: honest status line per active tab
     private func updateStatus() {

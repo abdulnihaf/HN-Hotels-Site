@@ -4,6 +4,37 @@ import Foundation
 // functions/api/sauda.js responses (mapped live 2026-06-20). Money is PAISE (Int) → ÷100 at display.
 // Decode leniently (optionals) — modelled from the REAL payloads, not an interpretation.
 
+// Canonical fulfilment/pay → human labels (mirror FULFILMENT_LABEL / PAY_LABEL in
+// functions/api/sauda.js + _lib/sauda-vendors.js). The settings endpoint sends raw tokens;
+// the catalog flagged 'per'/'deliver' fragments leaking into the Place/diary UI.
+enum SaudaLabels {
+    static let fulfilmentMap: [String: String] = [
+        "deliver": "delivers", "collect": "collect", "standing": "standing",
+        "porter": "porter", "bus": "intercity",
+    ]
+    static let payMap: [String: String] = [
+        "per": "pay per order", "khata_roll": "khata", "khata_periodic": "khata (weekly)",
+    ]
+    static func fulfilment(_ raw: String?) -> String {
+        let k = (raw ?? "").trimmingCharacters(in: .whitespaces)
+        guard !k.isEmpty else { return "" }
+        return fulfilmentMap[k] ?? k
+    }
+    static func pay(_ raw: String?) -> String {
+        let k = (raw ?? "").trimmingCharacters(in: .whitespaces)
+        guard !k.isEmpty else { return "" }
+        return payMap[k] ?? k.replacingOccurrences(of: "khata_", with: "khata ")
+    }
+    // platform badge tint per source (PWA .src-badge tones)
+    static func sourceLabel(_ s: String?) -> String {
+        let m: [String: String] = ["hyperpure": "Hyperpure", "zepto": "Zepto", "blinkit": "Blinkit",
+                                   "instamart": "Instamart", "bigbasket": "BigBasket", "jiomart": "JioMart",
+                                   "amazon": "Amazon", "flipkart": "Flipkart"]
+        let k = (s ?? "").lowercased()
+        return m[k] ?? (s ?? "").capitalized
+    }
+}
+
 // qty arrives as a String ("3", ".5") OR a number (20, 0.5) across lines — accept both.
 struct AnyQty: Codable, Hashable {
     let text: String
@@ -178,12 +209,42 @@ struct SaudaCompareItem: Codable, Hashable, Identifiable {
     var unit: String?
     var your_pack: String?
     var your_paise: Int?
+    var your_price_paise: Int?     // buy-list alias (PWA reads your_price_paise then price_paise)
+    var price_paise: Int?          // buy-list price fallback
+    var pack_label: String?        // buy-list pack fallback
+    var vendor_name: String?       // buy-list vendor line (server may omit → falls back to source)
+    var vendor: String?
+    var default_vendor_name: String?
     var your_unit_paise: Int?
     var sources: [SaudaCompareSource]?
     var cheapest_source: String?
     var beats_baseline: Bool?
     var save_unit_paise: Int?
     var id: String { item_key ?? label ?? UUID().uuidString }
+
+    // the photo for this item = the cheapest source's image (PWA: best=sources[0])
+    var photoURL: String? {
+        let u = sources?.first?.image ?? ""
+        return u.isEmpty ? nil : u
+    }
+    // buy-list "usual ₹…" vs "price to confirm" (PWA renderBuy)
+    var buyPricePaise: Int {
+        if (your_price_paise ?? 0) > 0 { return your_price_paise! }
+        if (your_paise ?? 0) > 0 { return your_paise! }
+        return price_paise ?? 0
+    }
+    var buyVendor: String {
+        for v in [vendor_name, vendor, default_vendor_name, sources?.first?.source] {
+            if let s = v, !s.isEmpty { return s }
+        }
+        return "source pending"
+    }
+    var buyPack: String {
+        for v in [your_pack, pack_label, unit] { if let s = v, !s.isEmpty { return s } }
+        return "unit pending"
+    }
+    // true when the item's best online price beats the usual (drives the red "Low Price" ribbon)
+    var lowPrice: Bool { beats_baseline == true }
 }
 struct SaudaCompareSource: Codable, Hashable {
     var source: String?
@@ -285,6 +346,15 @@ struct SaudaHpItem: Codable, Hashable, Identifiable {
     var save_unit_paise: Int?
     var no_compare_reason: String?
     var id: String { item_key ?? label ?? name ?? UUID().uuidString }
+    var photoURL: String? { (image?.isEmpty == false) ? image : nil }
+    // red "Low Price" ribbon when this mandi item is cheaper than the usual price (PWA badge)
+    var lowPrice: Bool { verified == true && verdict == "cheaper" }
+    // jump-to-Hyperpure search URL (PWA hpOpenUrl)
+    var openURL: URL? {
+        let q = (name ?? label ?? "").trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty, let e = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+        return URL(string: "https://www.hyperpure.com/in/search/\(e)?query=\(e)")
+    }
 }
 
 // ── settings: the item + vendor master ──
@@ -342,6 +412,10 @@ struct SaudaSettingsVendor: Codable, Hashable, Identifiable {
     var payRail: String?
     var id: String { vendor_key ?? name ?? UUID().uuidString }
     var primaryVpa: String? { vpas?.first ?? (vpa_json?.isEmpty == false ? vpa_json : nil) }
+    // human labels (server FULFILMENT_LABEL / PAY_LABEL in functions/api/sauda.js) — the catalog
+    // flagged raw 'per'/'deliver' tokens leaking into the UI; render the full words instead.
+    var fulfilmentText: String { SaudaLabels.fulfilment(fulfilment) }
+    var payText: String { SaudaLabels.pay(pay) }
     var needsFill: Bool {
         let noPhone = (phone ?? "").count < 7
         let noRail = (primaryVpa ?? "").isEmpty && !(bank?.valid ?? false)
