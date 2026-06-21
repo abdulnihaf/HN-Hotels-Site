@@ -25,11 +25,11 @@ xcrun simctl boot "$PUD" 2>/dev/null || true
 xcrun simctl bootstatus "$PUD" -b >/dev/null 2>&1 || true
 echo "device: $DEVICE_NAME ($PUD)"
 
-build_install () { # dir scheme bundle dd
+build_install () { # dir  scheme(=project)  product  dd
   ( cd "$1" && xcodegen generate >/dev/null 2>&1
     xcodebuild -project "$2.xcodeproj" -scheme "$2" -sdk iphonesimulator -configuration Debug \
       -destination "id=$PUD" -derivedDataPath "$4" CODE_SIGNING_ALLOWED=NO build >/dev/null 2>&1 )
-  local app; app="$(find "$4/Build/Products" -name "$2.app" -path '*iphonesimulator*' | head -1)"
+  local app; app="$(find "$4/Build/Products" -name "$3.app" -path '*iphonesimulator*' | head -1)"
   xcrun simctl install "$PUD" "$app"
 }
 shot () { # bundle  out.png  ENV...   (ENV passed as KEY=VAL pairs)
@@ -43,7 +43,7 @@ shot () { # bundle  out.png  ENV...   (ENV passed as KEY=VAL pairs)
 
 # 2. SAUDA — 8 tabs (HUKUM_SAUDA_TAB rawValue; SAUDA_UNLOCK bypasses the PIN gate)
 mkdir -p "$OUT/native/sauda"
-build_install "$SAUDA_DIR" Sauda com.hnhotels.sauda "$DDROOT/DD-sauda-cat"
+build_install "$SAUDA_DIR" SaudaApp Sauda "$DDROOT/DD-sauda-cat"
 SB=com.hnhotels.sauda; SO="$OUT/native/sauda"
 shot $SB "$SO/01-buylist.png"     SAUDA_UNLOCK=1 HUKUM_SAUDA_TAB=buy
 shot $SB "$SO/02-place.png"       SAUDA_UNLOCK=1 HUKUM_SAUDA_TAB=place
@@ -56,7 +56,7 @@ shot $SB "$SO/08-settings.png"    SAUDA_UNLOCK=1 HUKUM_SAUDA_TAB=settings
 
 # 3. DARBAR — 4 tabs (DARBAR_TAB index 0..3; DARBAR_UNLOCK bypasses the PIN gate)
 mkdir -p "$OUT/native/darbar"
-build_install "$DARBAR_DIR" Darbar com.hnhotels.darbar "$DDROOT/DD-darbar-cat"
+build_install "$DARBAR_DIR" DarbarApp Darbar "$DDROOT/DD-darbar-cat"
 DB=com.hnhotels.darbar; DO="$OUT/native/darbar"
 shot $DB "$DO/01-today.png"      DARBAR_UNLOCK=1 DARBAR_TAB=0
 shot $DB "$DO/02-attendance.png" DARBAR_UNLOCK=1 DARBAR_TAB=1
