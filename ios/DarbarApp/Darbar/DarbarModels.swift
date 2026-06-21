@@ -266,10 +266,37 @@ struct AttendanceRow: Codable, Identifiable, Hashable {
     }
 
     var displayName: String { (knownAs?.isEmpty == false ? knownAs : name) ?? (pin.map { "PIN \($0)" } ?? "—") }
-    // Owner's rule: any tap = present; 0 = absent; single/odd punch = present-but-missing.
-    var working: Bool { (lastOutAt == nil) && (punchCount ?? 0) > 0 }
-    var missingPunch: Bool { (isSinglePunch ?? 0) == 1 || ((punchCount ?? 0) % 2 == 1) }
-    var isAbsent: Bool { (punchCount ?? 0) == 0 && status?.lowercased() != "off" }
+
+    // 1:1 port of the PWA attState (app.js 395–409). Owner's canonical rule:
+    //   ANY tap = present; 0 taps = absent; an ODD punch count = a punch missing —
+    //   BUT on the still-OPEN business day (closes 4am) an odd count just means
+    //   MID-SHIFT (working or on break), never an error, never a Fix button.
+    //   Errors only exist on CLOSED days. 0 taps on the open day = "not in yet".
+    // `isLiveDay` MUST be threaded in by the caller = (attendDate == bizDayIST()).
+    struct AttState {
+        let kind: String        // present | absent | off
+        let incomplete: Bool    // present but a punch missing (the ones to fix)
+        let working: Bool       // odd-on-open-day → mid-shift
+        let label: String
+    }
+    func attState(isLiveDay: Bool) -> AttState {
+        let st = status?.lowercased()
+        if st == "week_off" || st == "leave" {
+            return AttState(kind: "off", incomplete: false, working: false,
+                            label: st == "leave" ? "LEAVE" : "WEEK OFF")
+        }
+        let pc = punchCount ?? 0
+        if pc >= 1 {
+            let odd = pc % 2 == 1
+            if isLiveDay && odd {
+                return AttState(kind: "present", incomplete: false, working: true, label: "WORKING")
+            }
+            return AttState(kind: "present", incomplete: odd, working: false,
+                            label: odd ? (pc == 1 ? "IN — NO OUT" : "MISSING PUNCH") : "PRESENT")
+        }
+        return AttState(kind: "absent", incomplete: false, working: false,
+                        label: isLiveDay ? "NOT IN YET" : "ABSENT")
+    }
 }
 
 // MARK: - Month attendance  (GET /api/darbar?action=month-attendance&month=)

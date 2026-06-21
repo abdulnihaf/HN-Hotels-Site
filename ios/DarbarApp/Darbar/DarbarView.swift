@@ -16,7 +16,7 @@ struct DarbarView: View {
             TabView(selection: $tab) {
                 DarbarTodayTab(model: model, sheet: $sheet).tag(0)
                     .tabItem { Label("Today", systemImage: "house.fill") }
-                DarbarAttendanceTab(model: model).tag(1)
+                DarbarAttendanceTab(model: model, sheet: $sheet).tag(1)
                     .tabItem { Label("Attendance", systemImage: "calendar") }
                 DarbarPayTab(model: model, sheet: $sheet).tag(2)
                     .tabItem { Label("Pay", systemImage: "indianrupeesign.circle.fill") }

@@ -49,27 +49,32 @@ final class DarbarAppModel: ObservableObject {
     var exceptionCount: Int { home?.exceptionCount ?? exceptions.count }
     var stats: DarbarStats? { home?.stats }
 
+    // TRUE only while the selected attendance day is the still-open business day.
+    // Threaded into every attendance state calc so odd-on-open = WORKING, not an error.
+    var attendLive: Bool { attendDate == DarbarClient.bizDayIST() }
+
     var attendFiltered: [AttendanceRow] {
+        let live = attendLive
         var rows = attendBrand == "all" ? attendRows : attendRows.filter { $0.brandLabel == attendBrand }
         if let f = attendFilter {
             rows = rows.filter { r in
+                let st = r.attState(isLiveDay: live)
                 switch f {
-                case "present": return !r.isAbsent && !r.missingPunch && (r.status?.lowercased() != "off")
-                case "incomplete": return r.missingPunch && !r.working
-                case "absent": return r.isAbsent
-                case "off": return r.status?.lowercased() == "off"
+                case "present": return st.kind == "present"
+                case "incomplete": return st.kind == "present" && st.incomplete
+                case "absent": return st.kind == "absent"
+                case "off": return st.kind == "off"
                 default: return true
                 }
             }
         }
-        // Incomplete first (need fix), then present, absent, off — PWA ordering.
-        return rows.sorted { a, b in attendRank(a) < attendRank(b) }
+        // Incomplete first (need fix), then present, absent, off — PWA ordering (app.js order()).
+        return rows.sorted { a, b in attendRank(a, live: live) < attendRank(b, live: live) }
     }
-    private func attendRank(_ r: AttendanceRow) -> Int {
-        if r.status?.lowercased() == "off" { return 3 }
-        if r.isAbsent { return 2 }
-        if r.missingPunch && !r.working { return 0 }
-        return 1
+    private func attendRank(_ r: AttendanceRow, live: Bool) -> Int {
+        let st = r.attState(isLiveDay: live)
+        if st.kind == "present" { return st.incomplete ? 0 : 1 }
+        return st.kind == "absent" ? 2 : 3
     }
     // Pay list: GROUPED BY PERSON (the PWA shows the month's total per person, not raw rows).
     struct PayPerson: Identifiable, Hashable { let id: Int; let name: String; let brand: String?; var advTotal: Double; var setTotal: Double

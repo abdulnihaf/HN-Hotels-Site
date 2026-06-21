@@ -182,6 +182,7 @@ struct CourtCard: View {
 
 struct DarbarAttendanceTab: View {
     @ObservedObject var model: DarbarAppModel
+    @Binding var sheet: DarbarSheet?
     private let accent = DarbarView.accent
 
     var body: some View {
@@ -207,12 +208,16 @@ struct DarbarAttendanceTab: View {
     }
 
     // DAY: four clickable stat cards that filter the list (tap again clears).
+    // Counts mirror the PWA renderAttend tally — present (incl. working+incomplete),
+    // ⚠ Fix = present-but-incomplete (never on the open day), absent, off.
     private var dayStats: some View {
+        let live = model.attendLive
         let rows = model.attendBrand == "all" ? model.attendRows : model.attendRows.filter { $0.brandLabel == model.attendBrand }
-        let present = rows.filter { !$0.isAbsent && !$0.missingPunch && $0.status?.lowercased() != "off" }.count
-        let incomplete = rows.filter { $0.missingPunch && !$0.working }.count
-        let absent = rows.filter { $0.isAbsent }.count
-        let off = rows.filter { $0.status?.lowercased() == "off" }.count
+        let states = rows.map { $0.attState(isLiveDay: live) }
+        let present = states.filter { $0.kind == "present" }.count
+        let incomplete = states.filter { $0.kind == "present" && $0.incomplete }.count
+        let absent = states.filter { $0.kind == "absent" }.count
+        let off = states.filter { $0.kind == "off" }.count
         return HStack(spacing: 8) {
             filterTile("Present", present, HK.ready, "present")
             filterTile("⚠ Fix", incomplete, HK.running, "incomplete")
@@ -240,7 +245,16 @@ struct DarbarAttendanceTab: View {
                     Text("Showing \(f) — tap the card again to clear").font(.system(size: 11.5)).foregroundStyle(accent)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                 }
-                ForEach(model.attendFiltered) { AttendRowCard(row: $0, model: model) }
+                ForEach(model.attendFiltered) { row in
+                    AttendRowCard(row: row, isLiveDay: model.attendLive, model: model)
+                        // PWA attRowTap: a day-row opens that person's month settle sheet (fin-gated).
+                        // Month = the attendance day's month, matching loadPayCtx('settle', id, slice(0,7)).
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            guard model.fin else { return }
+                            sheet = .settle(id: row.employeeId ?? row.id, name: row.displayName, mode: "settle")
+                        }
+                }
                 if model.attendFiltered.isEmpty {
                     Text("No punches for this day.").font(.system(size: 14)).foregroundStyle(HK.textFaint).padding(.top, 40)
                 }
@@ -253,7 +267,15 @@ struct DarbarAttendanceTab: View {
     private var monthList: some View {
         ScrollView {
             LazyVStack(spacing: 9) {
-                ForEach(model.monthPeople) { MonthStripRow(p: $0, month: String(model.attendDate.prefix(7)), token: model.photoToken) }
+                ForEach(model.monthPeople) { p in
+                    MonthStripRow(p: p, month: String(model.attendDate.prefix(7)), token: model.photoToken)
+                        // PWA rosterTap: a month-strip row opens that person's settle sheet (fin-gated).
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            guard model.fin else { return }
+                            sheet = .settle(id: p.id, name: p.name, mode: "settle")
+                        }
+                }
                 if model.monthPeople.isEmpty {
                     Text("No attendance recorded this month.").font(.system(size: 14)).foregroundStyle(HK.textFaint).padding(.top, 40)
                 }
@@ -354,7 +376,11 @@ struct MonthStripRow: View {
 
 struct AttendRowCard: View {
     let row: AttendanceRow
+    let isLiveDay: Bool
     @ObservedObject var model: DarbarAppModel
+    private var st: AttendanceRow.AttState { row.attState(isLiveDay: isLiveDay) }
+    // Fix button only when there's a real missing punch on a CLOSED day (PWA: present && incomplete).
+    private var showFix: Bool { st.kind == "present" && st.incomplete }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
@@ -367,10 +393,10 @@ struct AttendRowCard: View {
                     Text("\(row.jobName ?? "") · \(sessionLine)").font(.system(size: 12)).foregroundStyle(HK.textDim).lineLimit(1)
                 }
                 Spacer()
-                Text(stateLabel).font(.system(size: 9.5, weight: .heavy)).foregroundStyle(dotColor)
+                Text(st.label).font(.system(size: 9.5, weight: .heavy)).foregroundStyle(dotColor)
                     .padding(.horizontal, 7).padding(.vertical, 3).background(dotColor.opacity(0.16), in: Capsule())
             }
-            if row.missingPunch && !row.working {
+            if showFix {
                 Button { Task { await model.fixPunch(employeeId: row.employeeId ?? row.id, date: model.attendDate) } } label: {
                     Text("Fix — impute missing punch").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.black)
                         .frame(maxWidth: .infinity).padding(.vertical, 8).background(DarbarView.accent, in: RoundedRectangle(cornerRadius: 9))
@@ -382,11 +408,18 @@ struct AttendRowCard: View {
     }
     private var sessionLine: String {
         let i = (row.firstInAt?.suffix(8).prefix(5)).map(String.init) ?? "—"
-        let o = (row.lastOutAt?.suffix(8).prefix(5)).map(String.init) ?? (row.working ? "in" : "—")
+        let o = (row.lastOutAt?.suffix(8).prefix(5)).map(String.init) ?? (st.working ? "open" : "—")
         return "\(i) → \(o)"
     }
-    private var dotColor: Color { row.working ? DarbarView.accent : row.isAbsent ? HK.error : row.missingPunch ? HK.running : HK.ready }
-    private var stateLabel: String { row.working ? "WORKING" : row.isAbsent ? "ABSENT" : row.missingPunch ? "MISSING PUNCH" : "PRESENT" }
+    // PWA dot/pill colours: working→blue, present→green, incomplete→yellow, absent→red, off→purple.
+    private var dotColor: Color {
+        if st.working { return DarbarView.accent }
+        switch st.kind {
+        case "present": return st.incomplete ? HK.running : HK.ready
+        case "absent": return HK.error
+        default: return Color(hex: 0xA78BFA)   // off
+        }
+    }
 }
 
 // MARK: - Pay

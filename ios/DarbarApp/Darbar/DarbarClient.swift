@@ -106,7 +106,8 @@ actor DarbarClient {
     }
     func markExit(employeeId: Int, reason: String?, fnf: Double?, token: String) async throws {
         var body: [String: Any] = ["employee_id": employeeId]
-        body["reason"] = reason ?? ""
+        // PWA sends reason: null when empty (not ""). Match it.
+        body["reason"] = (reason?.isEmpty == false) ? reason! : NSNull()
         if let fnf { body["fnf_amount"] = fnf }
         _ = try await send(path: "/api/darbar", query: ["action": "mark-exit"], method: "POST", body: body, token: token)
     }
