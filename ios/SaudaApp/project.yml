@@ -21,7 +21,7 @@ targets:
         CFBundleDisplayName: Sauda
         CFBundleIconName: AppIcon
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "3"
+        CFBundleVersion: "4"
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: "Unlock Sauda with Face ID instead of typing your PIN."
         NSLocalNetworkUsageDescription: "Sauda connects to HN services on your private network."
@@ -53,7 +53,7 @@ targets:
         CFBundleDisplayName: Sauda
         CFBundleIconName: AppIcon
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "3"
+        CFBundleVersion: "4"
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.hnhotels.sauda   # MUST equal the iOS app bundle id
         ITSAppUsesNonExemptEncryption: false
