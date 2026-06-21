@@ -1,12 +1,19 @@
 import SwiftUI
 
-// Sauda — the daily-buying chamber. FAITHFUL native port of the deployed PWA's 8 tabs
-// (Buy list · Place · Purchase day · To pay · Vendor diary · Hyperpure · Compare · Settings).
-// READ-ONLY: place / pay / decode / save controls are rendered but inert — the coordinator wires
-// those behind the owner's tap. Accent = sauda gold 0xD4A24C. Composes only from the shared kit.
+// Sauda — the daily-buying chamber. FULL native 1:1 port of the deployed PWA (app-v62.js): all 8 tabs
+// AND every interaction — buy basket + requisition, place (fires vendor WhatsApp), decode (paste→Claude→
+// review→save-po), to-pay (request-pay / mark-paid / receipt kg / receipt rates), vendor diary direct
+// invoice+payment, and the item/vendor master editors. MONEY / OUTWARD-SEND / IRREVERSIBLE actions go
+// behind an owner-CONFIRM dialog — mirroring the PWA's own confirms + the owner-approve rule. Money is
+// PAISE (Int) ÷100 at display. Accent = sauda gold 0xD4A24C. Composes only from the shared kit.
 struct SaudaView: View {
     @StateObject private var model = SaudaAppModel()
     private let accent = Color(hex: 0xD4A24C)
+
+    // sheet routing
+    @State private var sheet: SaudaSheet?
+    // confirm dialogs
+    @State private var confirm: SaudaConfirm?
 
     var body: some View {
         ZStack {
@@ -19,19 +26,38 @@ struct SaudaView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) { tabContent }
-                            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 20)
+                            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 90)
                     }
                     .scrollIndicators(.hidden)
                     .refreshable { await model.refresh() }
                 }
             }
+            // sticky action bar (Buy list / Place) + toast
+            VStack(spacing: 0) {
+                Spacer()
+                stickyBar.transition(.move(edge: .bottom))
+            }
+            if let t = model.toast { toastView(t) }
         }
         .task { await model.bootstrap() }
         .navigationTitle("Sauda")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $sheet) { s in sheetContent(s) }
+        .confirmationDialog(confirm?.title ?? "", isPresented: confirmBinding, titleVisibility: .visible) {
+            if let c = confirm {
+                Button(c.cta, role: c.destructive ? .destructive : nil) { Task { await c.action() } }
+                Button("Cancel", role: .cancel) {}
+            }
+        } message: { Text(confirm?.message ?? "") }
+        .onChange(of: model.showDecodeReview) { show in if show { sheet = .decodeReview } }
     }
 
-    // MARK: tab strip (§10 capsule bar — active = accent fill + black text; inactive = card + dim)
+    private var confirmBinding: Binding<Bool> {
+        Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } })
+    }
+    private func ask(_ c: SaudaConfirm) { confirm = c }
+
+    // MARK: tab strip
     private var tabStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -75,10 +101,14 @@ struct SaudaView: View {
     // ════════════════════════════ 1 · BUY LIST ════════════════════════════
     private var buyList: some View {
         Group {
-            inertBanner("Paste a WhatsApp order", system: "doc.on.clipboard",
-                        note: "Decode is owner-approve — it opens from the Hukum unlock.")
+            Button { sheet = .paste } label: {
+                actionBanner("Paste a WhatsApp order", system: "doc.on.clipboard",
+                             note: "Paste the staff dump or a screenshot — Claude cleans it into a PO.")
+            }.buttonStyle(.plain)
             HStack(spacing: 8) {
-                inertChip("For today", on: true); inertChip("For tomorrow", on: false); Spacer()
+                segChip("For today", on: model.buyWhen == "today") { model.buyWhen = "today" }
+                segChip("For tomorrow", on: model.buyWhen == "tomorrow") { model.buyWhen = "tomorrow" }
+                Spacer()
             }
             if let items = model.compare?.items, !items.isEmpty {
                 sectionLabel("WHAT TO BUY")
@@ -87,7 +117,9 @@ struct SaudaView: View {
         }
     }
     private func buyRow(_ it: SaudaCompareItem) -> some View {
-        card {
+        let key = it.item_key ?? ""
+        let qty = model.buyQty[key] ?? 0
+        return card {
             HStack(spacing: 12) {
                 monogram(it.label)
                 VStack(alignment: .leading, spacing: 3) {
@@ -95,10 +127,10 @@ struct SaudaView: View {
                     Text(usual(it)).body13()
                 }
                 Spacer()
-                let ready = (it.your_paise ?? 0) > 0
-                Text(ready ? "ready" : "price missing")
-                    .font(.system(size: 11, weight: .heavy))
-                    .foregroundStyle(ready ? HK.ready : HK.running)
+                qtyStepper(qty: qty,
+                           dec: { model.bumpBuy(key, -1) },
+                           inc: { model.bumpBuy(key, 1) },
+                           add: { model.setBuyQty(key, 1) })
             }
         }
     }
@@ -112,15 +144,47 @@ struct SaudaView: View {
     private var place: some View {
         Group {
             HStack(spacing: 8) {
-                inertChip("Both", on: true); inertChip("HE", on: false); inertChip("NCH", on: false); Spacer()
+                segChip("Both", on: model.brand == "both") { model.brand = "both" }
+                segChip("HE", on: model.brand == "HE") { model.brand = "HE" }
+                segChip("NCH", on: model.brand == "NCH") { model.brand = "NCH" }
+                Spacer()
             }
-            inertField("Add an item…  (carrot, oil, coke)", system: "magnifyingglass")
+            // place date
+            card {
+                HStack {
+                    Text("Place for").rowTitle()
+                    Spacer()
+                    segChip("Today", on: model.placeDate == model.ymdIST(0) || model.placeDate.isEmpty) { model.placeDate = model.ymdIST(0) }
+                    segChip("Tomorrow", on: model.placeDate == model.ymdIST(1)) { model.placeDate = model.ymdIST(1) }
+                }
+            }
+            Button { sheet = .addPlaceItem } label: {
+                actionField("Add an item…  (carrot, oil, coke)", system: "magnifyingglass")
+            }.buttonStyle(.plain)
+
+            if !model.placeOrder.isEmpty {
+                sectionLabel("ORDER TO PLACE · \(model.placeOrder.count) item\(model.placeOrder.count == 1 ? "" : "s")")
+                ForEach(model.placeOrder) { ln in placeStagedRow(ln) }
+            }
+
             sectionLabel("CHOOSE A VENDOR")
             if let vs = model.settings?.vendors, !vs.isEmpty {
                 ForEach(vs) { v in placeVendorRow(v) }
-                inertBanner("Place order", system: "paperplane.fill",
-                            note: "Placing fires the vendor WhatsApp — opens from the Hukum unlock.")
             } else { stateNote(model.statusLine) }
+        }
+    }
+    private func placeStagedRow(_ ln: SaudaPlaceLine) -> some View {
+        card {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) { Text(ln.item).rowTitle(); brandChip(ln.brand) }
+                    Text("\(ln.qty) \(ln.unit) · \(vendorName(ln.vendorKey))").body13()
+                }
+                Spacer()
+                Button { model.removePlaceLine(ln.id) } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 19)).foregroundStyle(HK.textFaint)
+                }.buttonStyle(.plain)
+            }
         }
     }
     private func placeVendorRow(_ v: SaudaSettingsVendor) -> some View {
@@ -143,7 +207,6 @@ struct SaudaView: View {
                     Text("\(n)").font(.system(size: 12, weight: .heavy)).foregroundStyle(.black)
                         .padding(.horizontal, 8).padding(.vertical, 3).background(accent, in: Capsule())
                 }
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(HK.textFaint)
             }
         }
     }
@@ -173,10 +236,17 @@ struct SaudaView: View {
     private var toPay: some View {
         Group {
             if let orders = model.payQueue?.orders, !orders.isEmpty {
-                let needs = orders.filter { $0.needsBill }
-                let ready = orders.filter { !$0.needsBill && ($0.pay ?? "") != "khata_roll" && ($0.payRail ?? "") != "manual" }
-                let khata = orders.filter { !$0.needsBill && ($0.pay ?? "") == "khata_roll" }
-                let manual = orders.filter { !$0.needsBill && ($0.pay ?? "") != "khata_roll" && ($0.payRail ?? "") == "manual" }
+                let filtered = orders.filter { matchesPayFilter($0) }
+                HStack(spacing: 8) {
+                    segChip("All", on: model.payBrand == "all") { model.payBrand = "all" }
+                    segChip("HE", on: model.payBrand == "HE") { model.payBrand = "HE" }
+                    segChip("NCH", on: model.payBrand == "NCH") { model.payBrand = "NCH" }
+                    Spacer()
+                }
+                let needs = filtered.filter { $0.needsBill }
+                let ready = filtered.filter { !$0.needsBill && ($0.pay ?? "") != "khata_roll" && ($0.payRail ?? "") != "manual" }
+                let khata = filtered.filter { !$0.needsBill && ($0.pay ?? "") == "khata_roll" }
+                let manual = filtered.filter { !$0.needsBill && ($0.pay ?? "") != "khata_roll" && ($0.payRail ?? "") == "manual" }
                 payGroup("Needs bill / rates", needs, HK.running)
                 payGroup("Ready to pay", ready, HK.ready)
                 payGroup("Khata / rolling bill", khata, accent)
@@ -185,6 +255,11 @@ struct SaudaView: View {
                 emptyOrLoading(model.payQueue == nil, "Nothing waiting for payment.")
             }
         }
+    }
+    private func matchesPayFilter(_ o: SaudaOrder) -> Bool {
+        guard model.payBrand != "all" else { return true }
+        let b = (o.brand ?? "").lowercased()
+        return b == model.payBrand.lowercased() || b == "both"
     }
     @ViewBuilder private func payGroup(_ title: String, _ orders: [SaudaOrder], _ col: Color) -> some View {
         if !orders.isEmpty {
@@ -229,15 +304,49 @@ struct SaudaView: View {
                     }
                 }
                 if o.itemCount > 8 { Text("+ \(o.itemCount - 8) more").font(.system(size: 11)).foregroundStyle(HK.textFaint) }
-                if !showStatus {
-                    HStack(spacing: 10) {
-                        inertSmall(o.vpa?.isEmpty == false ? "Pay" : (o.bank?.valid == true ? "Bank details" : "No rail"))
-                        inertSmall(o.vpa?.isEmpty == false ? "Mark paid" : "Record paid")
-                        Spacer()
-                    }.padding(.top, 2)
-                }
+                if !showStatus { payActions(o) }
             }
         }
+    }
+    @ViewBuilder private func payActions(_ o: SaudaOrder) -> some View {
+        let needsBill = o.needsBill
+        HStack(spacing: 10) {
+            if needsBill {
+                // receipt / rate entry — no money gate
+                actionSmall(o.lines.contains { $0.item?.lowercased().contains("chicken") == true } ? "Record kg / rate" : "Record received", tone: HK.running) {
+                    sheet = .receipt(o)
+                }
+            } else {
+                // pay (UPI sheet) or bank/manual record
+                if (o.vpa ?? "").isEmpty == false {
+                    actionSmall("Pay", tone: accent) { sheet = .pay(o) }
+                    actionSmall("Mark paid", tone: HK.ready) {
+                        confirmMarkPaid(o, method: "upi")
+                    }
+                } else if o.bank?.valid == true {
+                    actionSmall("Bank details", tone: HK.textDim) { sheet = .manualPay(o) }
+                    actionSmall("Record paid", tone: HK.ready) {
+                        confirmMarkPaid(o, method: "bank_transfer")
+                    }
+                } else {
+                    actionSmall("Record paid", tone: HK.ready) {
+                        confirmMarkPaid(o, method: "manual_bank")
+                    }
+                }
+            }
+            Spacer()
+        }.padding(.top, 2)
+    }
+    private func confirmMarkPaid(_ o: SaudaOrder, method: String) {
+        let ids = o.ids ?? []
+        let amt = o.pay_amount_paise ?? 0
+        ask(SaudaConfirm(
+            title: "Mark paid — \(o.vendor_name ?? "vendor")",
+            message: "Record \(SaudaFmt.rupee(Double(amt)/100)) as paid (\(payMethodLabel(method))). This writes to the vendor ledger.",
+            cta: "Mark paid",
+            destructive: false,
+            action: { await model.markPaid(ids: ids, amountPaise: amt, method: method) }
+        ))
     }
 
     // ════════════════════════════ 5 · VENDOR DIARY ════════════════════════════
@@ -250,28 +359,32 @@ struct SaudaView: View {
     }
     private func vendorLedgerCard(_ v: SaudaLedgerVendor) -> some View {
         card {
-            DisclosureGroup {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 14) {
-                        meta("billed", SaudaFmt.rupee(v.billedRupees))
-                        meta("paid", SaudaFmt.rupee(v.paidRupees))
-                        meta("orders", "\(v.order_count ?? 0)")
+            VStack(alignment: .leading, spacing: 0) {
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 14) {
+                            meta("billed", SaudaFmt.rupee(v.billedRupees))
+                            meta("paid", SaudaFmt.rupee(v.paidRupees))
+                            meta("orders", "\(v.order_count ?? 0)")
+                        }.padding(.top, 6)
+                        ForEach(v.trail ?? []) { t in trailRow(t) }
+                        if (v.trail ?? []).isEmpty { Text("No orders in the last 30 days.").body13() }
                     }.padding(.top, 6)
-                    ForEach(v.trail ?? []) { t in trailRow(t) }
-                    if (v.trail ?? []).isEmpty { Text("No orders in the last 30 days.").body13() }
-                }.padding(.top, 6)
-            } label: {
-                HStack(spacing: 8) {
-                    monogram(v.vendor_name)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(v.vendor_name ?? v.vendorKey ?? "—").rowTitle()
-                        Text(v.bankLabel?.isEmpty == false ? v.bankLabel! : (v.vpa?.isEmpty == false ? v.vpa! : "manual only")).body13().lineLimit(1)
+                } label: {
+                    HStack(spacing: 8) {
+                        monogram(v.vendor_name)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(v.vendor_name ?? v.vendorKey ?? "—").rowTitle()
+                            Text(v.bankLabel?.isEmpty == false ? v.bankLabel! : (v.vpa?.isEmpty == false ? v.vpa! : "manual only")).body13().lineLimit(1)
+                        }
+                        Spacer()
+                        Text(v.isDue ? SaudaFmt.rupee(v.outstandingRupees) : "clear")
+                            .font(.system(size: 14, weight: .heavy)).foregroundStyle(v.isDue ? HK.running : HK.ready)
                     }
-                    Spacer()
-                    Text(v.isDue ? SaudaFmt.rupee(v.outstandingRupees) : "clear")
-                        .font(.system(size: 14, weight: .heavy)).foregroundStyle(v.isDue ? HK.running : HK.ready)
-                }
-            }.tint(accent)
+                }.tint(accent)
+                actionSmall("Invoice + payment", tone: accent) { sheet = .directPay(v) }
+                    .padding(.top, 8)
+            }
         }
     }
     private func trailRow(_ t: SaudaTrailEntry) -> some View {
@@ -341,7 +454,7 @@ struct SaudaView: View {
                         Text("\(SaudaFmt.rupee(Double(it.unit_price_paise!)/100))/\(it.unit ?? "u")").font(.system(size: 13, weight: .heavy)).foregroundStyle(HK.text)
                     }
                     if let pk = it.pack, !pk.isEmpty { Text(pk).font(.system(size: 10)).foregroundStyle(HK.textFaint) }
-                    inertSmall("Open ↗")
+                    if let u = it.image, !u.isEmpty, let url = URL(string: u) { Link("Open ↗", destination: url).font(.system(size: 12, weight: .heavy)).foregroundStyle(accent) }
                 }
             }
         }
@@ -403,16 +516,24 @@ struct SaudaView: View {
                 Text("Items").tag(0); Text("Vendors").tag(1)
             }.pickerStyle(.segmented).tint(accent)
             if model.settingsSeg == 0 {
+                Button { sheet = .editItem(nil) } label: { actionField("+ Add an item to the master", system: "plus") }
+                    .buttonStyle(.plain)
                 if let items = model.settings?.items, !items.isEmpty {
                     let priced = items.filter { $0.hasPrice }.count
                     sectionLabel("\(priced) PRICED · \(items.count - priced) TO FILL · \(items.filter { $0.isLive }.count) LIVE")
-                    ForEach(items) { settingsItemRow($0) }
+                    ForEach(items) { it in
+                        Button { sheet = .editItem(it) } label: { settingsItemRow(it) }.buttonStyle(.plain)
+                    }
                 } else { stateNote(model.statusLine) }
             } else {
+                Button { sheet = .editVendor(nil) } label: { actionField("+ Add a vendor", system: "plus") }
+                    .buttonStyle(.plain)
                 if let vs = model.settings?.vendors, !vs.isEmpty {
                     let fill = vs.filter { $0.needsFill }.count
                     sectionLabel("\(vs.count) VENDORS · \(fill) TO FILL")
-                    ForEach(vs) { settingsVendorRow($0) }
+                    ForEach(vs) { v in
+                        Button { sheet = .editVendor(v) } label: { settingsVendorRow(v) }.buttonStyle(.plain)
+                    }
                 } else { stateNote(model.statusLine) }
             }
         }
@@ -437,13 +558,14 @@ struct SaudaView: View {
                 } else {
                     Text("needs price").font(.system(size: 11, weight: .heavy)).foregroundStyle(HK.running)
                 }
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(HK.textFaint)
             }
         }
     }
     private func settingsItemSub(_ it: SaudaItem) -> String {
         var parts: [String] = []
         if let u = it.unit, !u.isEmpty { parts.append(u) }
-        parts.append(it.hasVendor ? (it.default_vendor ?? "") : "no vendor")
+        parts.append(it.hasVendor ? vendorName(it.default_vendor ?? "") : "no vendor")
         if (it.form ?? "") == "defined", let p = it.pack_label, !p.isEmpty { parts.append(p) }
         if it.isFlagged, let n = it.note, !n.isEmpty { parts.append("confirm: \(n)") }
         return parts.joined(separator: " · ")
@@ -456,6 +578,7 @@ struct SaudaView: View {
                     brandChip(v.brand)
                     Spacer()
                     if v.needsFill { Text("to fill").font(.system(size: 11, weight: .heavy)).foregroundStyle(HK.running) }
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(HK.textFaint)
                 }
                 Text(settingsVendorSub(v)).body13()
                 HStack(spacing: 6) {
@@ -474,8 +597,84 @@ struct SaudaView: View {
         return parts.joined(separator: " · ")
     }
 
-    // ════════════════════════════ shared bits (composed from kit tokens) ════════════════════════════
-    private func card<Content: View>(@ViewBuilder _ c: () -> Content) -> some View {
+    // ════════════════════════════ STICKY BARS (Buy list send · Place) ════════════════════════════
+    @ViewBuilder private var stickyBar: some View {
+        if model.tab == .buy {
+            let keys = model.buyKeys()
+            if !keys.isEmpty {
+                stickyButton("Send \(model.buyWhen == "tomorrow" ? "tomorrow" : "today")’s list · \(keys.count) item\(keys.count == 1 ? "" : "s")") {
+                    ask(SaudaConfirm(
+                        title: "Send buy list",
+                        message: "Send \(keys.count) item\(keys.count == 1 ? "" : "s") for \(model.buyWhen) — Sauda finds the cheapest source.",
+                        cta: "Send list", destructive: false,
+                        action: { await model.sendRequisition() }))
+                }
+            }
+        } else if model.tab == .place {
+            if !model.placeOrder.isEmpty {
+                let total = model.placeOrder.reduce(0) { $0 + (Double($1.qty) ?? 0) * Double($1.price_paise) }
+                stickyButton("Place \(model.placeOrder.count) item\(model.placeOrder.count == 1 ? "" : "s")\(total > 0 ? " · \(SaudaFmt.rupee(total/100))" : "")") {
+                    let blanks = model.placeOrder.filter { $0.qty.trimmingCharacters(in: .whitespaces).isEmpty }.count
+                    ask(SaudaConfirm(
+                        title: "Place order",
+                        message: "Placing fires the vendor WhatsApp for \(model.placeOrder.count) item\(model.placeOrder.count == 1 ? "" : "s") under \(model.placeDate.isEmpty ? model.defaultPurchaseDate : model.placeDate).\(blanks > 0 ? " \(blanks) line(s) have no qty — vendor will fill." : "")",
+                        cta: "Place order", destructive: false,
+                        action: { await model.placeStaged() }))
+                }
+            } else if !model.buyQty.isEmpty {
+                stickyButton("Stage \(model.buyKeys().count) from buy basket") { model.stagePlaceFromBasket() }
+            }
+        }
+    }
+    private func stickyButton(_ title: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Spacer()
+                if model.busy { ProgressView().tint(.black) } else { Text(title).font(.system(size: 16, weight: .heavy)) }
+                Spacer()
+            }
+            .foregroundStyle(.black).padding(.vertical, 16)
+            .background(accent, in: RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain).disabled(model.busy)
+        .padding(.horizontal, 16).padding(.bottom, 18)
+    }
+
+    // ════════════════════════════ SHEETS ════════════════════════════
+    @ViewBuilder private func sheetContent(_ s: SaudaSheet) -> some View {
+        switch s {
+        case .paste:            PasteSheet(model: model, accent: accent) { sheet = nil }
+        case .decodeReview:     DecodeReviewSheet(model: model, accent: accent) { sheet = nil; model.showDecodeReview = false }
+        case .addPlaceItem:     AddPlaceItemSheet(model: model, accent: accent) { sheet = nil }
+        case .pay(let o):       PaySheet(order: o, model: model, accent: accent) { sheet = nil }
+        case .manualPay(let o): ManualPaySheet(order: o, model: model, accent: accent) { sheet = nil }
+        case .receipt(let o):   ReceiptSheet(order: o, model: model, accent: accent) { sheet = nil }
+        case .directPay(let v): DirectPaySheet(vendor: v, model: model, accent: accent) { sheet = nil }
+        case .editItem(let it): EditItemSheet(item: it, model: model, accent: accent) { sheet = nil }
+        case .editVendor(let v): EditVendorSheet(vendor: v, model: model, accent: accent) { sheet = nil }
+        }
+    }
+
+    // ════════════════════════════ TOAST ════════════════════════════
+    private func toastView(_ t: SaudaToast) -> some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 8) {
+                Image(systemName: t.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(t.ok ? HK.ready : HK.error)
+                Text(t.text).font(.system(size: 14, weight: .semibold)).foregroundStyle(HK.text).lineLimit(2)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .background(HK.cardHi, in: Capsule())
+            .overlay(Capsule().stroke(HK.line, lineWidth: 1))
+            .padding(.bottom, 100)
+        }
+        .transition(.opacity)
+        .onAppear { Task { try? await Task.sleep(nanoseconds: 2_600_000_000); model.toast = nil } }
+    }
+
+    // ════════════════════════════ shared bits ════════════════════════════
+    func card<Content: View>(@ViewBuilder _ c: () -> Content) -> some View {
         c().padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(HK.card, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(HK.line, lineWidth: 1))
@@ -488,7 +687,6 @@ struct SaudaView: View {
         Text(t).font(.system(size: 14)).foregroundStyle(HK.textFaint)
             .frame(maxWidth: .infinity, alignment: .center).padding(.top, 44)
     }
-    // honest, distinct states: nil+refreshing = Loading… · nil+stopped = the error (statusLine) · loaded-empty = sentence
     @ViewBuilder private func emptyOrLoading(_ isNil: Bool, _ empty: String) -> some View {
         if isNil { stateNote(model.isRefreshing ? "Loading…" : model.statusLine) }
         else { stateNote(empty) }
@@ -522,46 +720,96 @@ struct SaudaView: View {
             Text(label.uppercased()).font(.system(size: 9, weight: .heavy)).foregroundStyle(HK.textFaint)
         }
     }
-    // inert affordances — visible, disabled (mutations are owner-approve, wired by the coordinator)
-    private func inertBanner(_ title: String, system: String, note: String) -> some View {
+    private func vendorName(_ key: String) -> String {
+        if key.isEmpty { return "no vendor" }
+        return model.settings?.vendors?.first { $0.vendor_key == key }?.name ?? key
+    }
+
+    // live affordances
+    private func actionBanner(_ title: String, system: String, note: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Image(systemName: system).font(.system(size: 15, weight: .semibold)).foregroundStyle(accent)
                 Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(HK.text)
                 Spacer()
-                Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(HK.textFaint)
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(HK.textFaint)
             }
             Text(note).font(.system(size: 11)).foregroundStyle(HK.textFaint)
         }
         .padding(13).frame(maxWidth: .infinity, alignment: .leading)
         .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(accent.opacity(0.3), lineWidth: 1))
-        .opacity(0.85)
     }
-    private func inertChip(_ t: String, on: Bool) -> some View {
-        Text(t).font(.system(size: 12, weight: .heavy)).foregroundStyle(on ? .black : HK.textDim)
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(on ? accent : HK.card, in: Capsule())
-            .overlay(Capsule().stroke(on ? .clear : HK.line, lineWidth: 1))
-            .opacity(0.9)
+    private func segChip(_ t: String, on: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(t).font(.system(size: 12, weight: .heavy)).foregroundStyle(on ? .black : HK.textDim)
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(on ? accent : HK.card, in: Capsule())
+                .overlay(Capsule().stroke(on ? .clear : HK.line, lineWidth: 1))
+        }.buttonStyle(.plain)
     }
-    private func inertField(_ placeholder: String, system: String) -> some View {
+    private func actionField(_ placeholder: String, system: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: system).font(.system(size: 13)).foregroundStyle(HK.textFaint)
-            Text(placeholder).font(.system(size: 14)).foregroundStyle(HK.textFaint)
+            Image(systemName: system).font(.system(size: 13)).foregroundStyle(accent)
+            Text(placeholder).font(.system(size: 14)).foregroundStyle(HK.textDim)
             Spacer()
-        }.padding(12).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 12)).opacity(0.8)
+        }.padding(12).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 12))
     }
-    private func inertSmall(_ t: String) -> some View {
-        Text(t).font(.system(size: 12, weight: .heavy)).foregroundStyle(HK.textDim)
-            .padding(.horizontal, 11).padding(.vertical, 7)
-            .background(HK.bgElev, in: Capsule()).opacity(0.8)
+    private func actionSmall(_ t: String, tone: Color, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(t).font(.system(size: 12, weight: .heavy)).foregroundStyle(tone)
+                .padding(.horizontal, 11).padding(.vertical, 7)
+                .background(tone.opacity(0.14), in: Capsule())
+        }.buttonStyle(.plain).disabled(model.busy)
+    }
+    private func qtyStepper(qty: Double, dec: @escaping () -> Void, inc: @escaping () -> Void, add: @escaping () -> Void) -> some View {
+        Group {
+            if qty <= 0 {
+                Button(action: add) {
+                    Text("Add").font(.system(size: 12, weight: .heavy)).foregroundStyle(.black)
+                        .padding(.horizontal, 13).padding(.vertical, 7).background(accent, in: Capsule())
+                }.buttonStyle(.plain)
+            } else {
+                HStack(spacing: 10) {
+                    Button(action: dec) { Image(systemName: "minus.circle.fill").font(.system(size: 22)).foregroundStyle(HK.textDim) }.buttonStyle(.plain)
+                    Text(qty.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(qty)) : String(qty))
+                        .font(.system(size: 15, weight: .heavy, design: .rounded)).foregroundStyle(HK.text).frame(minWidth: 26)
+                    Button(action: inc) { Image(systemName: "plus.circle.fill").font(.system(size: 22)).foregroundStyle(accent) }.buttonStyle(.plain)
+                }
+            }
+        }
     }
     private func payLabel(_ p: String) -> String { p.replacingOccurrences(of: "khata_", with: "khata ") }
+    private func payMethodLabel(_ m: String) -> String {
+        switch m { case "upi": return "UPI"; case "bank_transfer": return "bank transfer"; case "cash": return "cash"; default: return "manual" }
+    }
+}
+
+// ════════════════════════════ sheet + confirm routing types ════════════════════════════
+enum SaudaSheet: Identifiable {
+    case paste, decodeReview, addPlaceItem
+    case pay(SaudaOrder), manualPay(SaudaOrder), receipt(SaudaOrder)
+    case directPay(SaudaLedgerVendor)
+    case editItem(SaudaItem?), editVendor(SaudaSettingsVendor?)
+    var id: String {
+        switch self {
+        case .paste: return "paste"; case .decodeReview: return "decode"; case .addPlaceItem: return "addItem"
+        case .pay(let o): return "pay-\(o.id)"; case .manualPay(let o): return "manual-\(o.id)"; case .receipt(let o): return "receipt-\(o.id)"
+        case .directPay(let v): return "direct-\(v.id)"
+        case .editItem(let it): return "edititem-\(it?.id ?? "new")"; case .editVendor(let v): return "editvendor-\(v?.id ?? "new")"
+        }
+    }
+}
+struct SaudaConfirm {
+    let title: String
+    let message: String
+    let cta: String
+    let destructive: Bool
+    let action: () async -> Void
 }
 
 // Text style helpers (§10 type scale)
-private extension Text {
+extension Text {
     func rowTitle() -> some View { self.font(.system(size: 15, weight: .semibold)).foregroundStyle(HK.text).lineLimit(1) }
     func body13() -> some View { self.font(.system(size: 13)).foregroundStyle(HK.textDim).lineLimit(2) }
 }

@@ -299,3 +299,84 @@ struct SaudaSettingsVendor: Codable, Hashable, Identifiable {
 
 // auth handshake response
 struct SaudaAuthResponse: Codable { var token: String?; var ok: Bool?; var error: String? }
+
+// ════════════════════════════ MUTATION request / response models ════════════════════════════
+// Mirror the deployed PWA's payloads + the `j` bodies it reads back. All optional → lenient decode.
+
+struct SaudaReqItem { var item_key: String; var qty: Double }
+
+// A staged line in the Place tab (mirrors S.order rows). qty is a String like the PWA (can be blank).
+struct SaudaPlaceLine: Identifiable, Hashable {
+    var item: String
+    var item_code: String
+    var qty: String
+    var unit: String
+    var vendorKey: String
+    var brand: String
+    var price_paise: Int
+    var id: String { item_code.isEmpty ? item : item_code }
+}
+
+// Honest toast (the PWA's toast(msg, 'ok'|'err')) surfaced over the View.
+struct SaudaToast: Identifiable, Equatable { let id = UUID(); let text: String; let ok: Bool }
+
+// Shared response for the simple mutations (place/requisition/pay/receipt/prices/vendor-event/settings-item).
+struct SaudaMutationResponse: Codable {
+    var ok: Bool?
+    var error: String?
+    var detail: String?
+    // place
+    var placed: Int?
+    var duplicates: Int?
+    var for_date: String?
+    // requisition / save-po
+    var count: Int?
+    var items: Int?
+    var orders: Int?
+    // mark-paid
+    var reconciled: Bool?
+    var bank_ref: String?
+    // vendor-event
+    var events: [SaudaEventResult]?
+}
+struct SaudaEventResult: Codable { var event_type: String?; var reconciled: Bool? }
+
+// decode → review
+struct SaudaDecodeResponse: Codable {
+    var ok: Bool?
+    var error: String?
+    var detail: String?
+    var orders: [SaudaDecodeOrder]?
+    var notes: [String]?
+}
+struct SaudaDecodeOrder: Codable, Hashable, Identifiable {
+    var brand: String?
+    var sender: String?
+    var items: [SaudaDecodeItem]?
+    var id: String { (brand ?? "") + (sender ?? "") + String(items?.count ?? 0) }
+}
+struct SaudaDecodeItem: Codable, Hashable, Identifiable {
+    var raw: String?
+    var item: String?
+    var qty: AnyQty?
+    var unit: String?
+    var category: String?
+    var flag: String?
+    var id = UUID()
+    enum CodingKeys: String, CodingKey { case raw, item, qty, unit, category, flag }
+}
+
+struct SaudaSavePoResponse: Codable {
+    var ok: Bool?
+    var error: String?
+    var for_date: String?
+    var orders: Int?
+    var items: Int?
+}
+
+// settings-vendor returns the new vendor_key (needed for "add vendor then add item")
+struct SaudaSettingsVendorResponse: Codable {
+    var ok: Bool?
+    var error: String?
+    var vendor_key: String?
+}
