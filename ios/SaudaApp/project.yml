@@ -19,6 +19,9 @@ targets:
       path: Sauda/Info.plist
       properties:
         CFBundleDisplayName: Sauda
+        CFBundleIconName: AppIcon
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "2"
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: "Unlock Sauda with Face ID instead of typing your PIN."
         NSLocalNetworkUsageDescription: "Sauda connects to HN services on your private network."
