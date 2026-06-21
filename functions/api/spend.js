@@ -2209,295 +2209,99 @@ export async function onRequest(context) {
     // any existing record-creation path.
     // ─────────────────────────────────────────────────────────────────────
     if (action === 'purchase-ledger') {
-      if (!apiKey) return json({ success: false, error: 'Odoo API key not configured' }, 500);
+      // REWIRED 2026-06-21: the purchase ledger reads the CANONICAL Sauda store
+      // (sauda_purchase, D1) — NOT the dead finance Odoo (odoo.hnhotels.in) and NOT
+      // buy_lines (the legacy Buy Board), so a purchase is never double-counted.
+      // Pure read-only consumer; no schema change to the Sauda lifecycle write path.
       const pin = url.searchParams.get('pin');
       const user = resolveUser(pin);
       if (!user) return json({ success: false, error: 'Invalid PIN' }, 401);
-      // 'cashier' added so outlet "Pay open PO" tile can list POs for that brand
       const LEDGER_ROLES = ['admin', 'cfo', 'purchase', 'gm', 'asstmgr', 'cashier'];
       if (!LEDGER_ROLES.includes(user.role)) {
         return json({ success: false, error: `Access denied for role ${user.role}` }, 403);
       }
+      if (!DB) return json({ success: false, error: 'D1 not configured' }, 500);
 
       const from = url.searchParams.get('from') || new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
       const to   = url.searchParams.get('to')   || new Date().toISOString().slice(0, 10);
       const brandFilter = (url.searchParams.get('brand') || 'ALL').toUpperCase();
-      const companyId = brandFilter !== 'ALL' ? BRAND_COMPANY[brandFilter] : null;
 
-      // Step 1 — resolve RM + Capex category descendants (for hr.expense filter)
-      const parentCats = await odoo(apiKey, 'product.category', 'search_read',
-        [[['name', 'in', ['01 · Raw Materials', '14 · One-Time Capex']]]],
-        { fields: ['id', 'name'] });
-      let rmCapexCatIds = [];
-      if (parentCats.length) {
-        const childCats = await odoo(apiKey, 'product.category', 'search_read',
-          [[['id', 'child_of', parentCats.map(c => c.id)]]],
-          { fields: ['id'], limit: 500 });
-        rmCapexCatIds = childCats.map(c => c.id);
+      // Brand scoping mirrors the outlet rule: HE view = HE + both; NCH view = NCH + both.
+      let brandClause = '';
+      if (brandFilter === 'HE')       brandClause = "AND lower(brand) IN ('he','both')";
+      else if (brandFilter === 'NCH') brandClause = "AND lower(brand) IN ('nch','both')";
+      else if (brandFilter === 'HQ')  brandClause = "AND lower(brand) IN ('hq','both')";
+
+      // CANCELLED/VOID are not purchases; pay_timing='online' = Hyperpure placeholders
+      // (orphan rows every other surface filters out). Both excluded so the ledger is clean.
+      let saudaRows = [];
+      try {
+        const res = await DB.prepare(
+          `SELECT id, brand, vendor_id, vendor_name, for_date, fulfilment, pay_timing,
+                  items_json, expected_amount_paise, pay_amount_paise, status,
+                  ordered_at, ordered_by, has_bill, has_goods,
+                  received_at, received_by, paid_at, pay_method, bank_ref, reconciled_at
+             FROM sauda_purchase
+            WHERE for_date BETWEEN ? AND ?
+              AND status NOT IN ('CANCELLED','VOID')
+              AND (pay_timing IS NULL OR pay_timing != 'online')
+              ${brandClause}
+            ORDER BY for_date DESC, id DESC`
+        ).bind(from, to).all();
+        saudaRows = res?.results || [];
+      } catch (e) {
+        return json({ success: false, error: 'sauda_purchase read failed: ' + e.message }, 500);
       }
 
-      // Step 2 — parallel fetch PO, RM/Capex expenses, bills
-      const poFilter = [['date_order', '>=', from + ' 00:00:00'], ['date_order', '<=', to + ' 23:59:59']];
-      if (companyId) poFilter.push(['company_id', '=', companyId]);
-
-      const expFilter = [['date', '>=', from], ['date', '<=', to]];
-      if (companyId) expFilter.push(['company_id', '=', companyId]);
-      if (rmCapexCatIds.length) expFilter.push(['product_id.categ_id', 'in', rmCapexCatIds]);
-      else expFilter.push(['id', '=', -1]); // no categories → return empty
-
-      const billFilter = [['move_type', '=', 'in_invoice'], ['invoice_date', '>=', from], ['invoice_date', '<=', to]];
-      if (companyId) billFilter.push(['company_id', '=', companyId]);
-
-      const [pos, expenses, bills] = await Promise.all([
-        // purchase.order: `notes` field was removed in Odoo 17+. Field list kept minimal.
-        odoo(apiKey, 'purchase.order', 'search_read', [poFilter],
-          { fields: ['id', 'name', 'partner_id', 'company_id', 'date_order', 'amount_total',
-                     'state', 'order_line', 'x_recorded_by_user_id'],
-            order: 'date_order desc', limit: 500 }),
-        odoo(apiKey, 'hr.expense', 'search_read', [expFilter],
-          { fields: ['id', 'name', 'date', 'total_amount', 'product_id', 'company_id',
-                     'x_pool', 'x_location', 'x_submitted_by_pin', 'x_recorded_by_user_id'],
-            order: 'date desc', limit: 500 }),
-        // account.move: narration is standard but might be renamed — tolerate missing.
-        odoo(apiKey, 'account.move', 'search_read', [billFilter],
-          { fields: ['id', 'name', 'ref', 'invoice_date', 'partner_id', 'company_id',
-                     'amount_total', 'payment_state', 'invoice_origin', 'x_recorded_by_user_id'],
-            order: 'invoice_date desc', limit: 500 }),
-      ]);
-
-      // Step 3a — batched Odoo attachment counts (covers bills uploaded outside this UI)
-      const countAtt = async (resModel, ids) => {
-        if (!ids.length) return {};
-        const atts = await odoo(apiKey, 'ir.attachment', 'search_read',
-          [[['res_model', '=', resModel], ['res_id', 'in', ids]]],
-          { fields: ['res_id'], limit: 5000 });
-        const counts = {};
-        atts.forEach(a => { counts[a.res_id] = (counts[a.res_id] || 0) + 1; });
-        return counts;
+      const brandLabel = (b) => { b = String(b || '').toLowerCase(); return b === 'he' ? 'HE' : b === 'nch' ? 'NCH' : b === 'hq' ? 'HQ' : 'BOTH'; };
+      const summariseItems = (raw) => {
+        let items = []; try { items = JSON.parse(raw || '[]'); } catch (_) {}
+        const n = items.length;
+        if (!n) return '—';
+        const names = items.slice(0, 2).map(i => i.item || i.name || i.sku).filter(Boolean).join(', ');
+        return names ? `${names}${n > 2 ? ` +${n - 2} more` : ''} · ${n} item${n === 1 ? '' : 's'}` : `${n} item${n === 1 ? '' : 's'}`;
       };
-      const [poAtts, expAtts, billAtts] = await Promise.all([
-        countAtt('purchase.order', pos.map(p => p.id)),
-        countAtt('hr.expense',    expenses.map(e => e.id)),
-        countAtt('account.move',  bills.map(b => b.id)),
-      ]);
 
-      // Step 3b — D1 bill registry (files we've tracked, with Drive URLs).
-      // IMPORTANT: D1 caps prepared-statement parameters around 100, so an
-      // `entry_odoo_id IN (?,?,...)` with hundreds of ids fails silently and
-      // leaves d1Atts empty (producing the "attachments in Odoo not tracked
-      // here" fallback even when they ARE tracked). Fix: single range-scan
-      // query over bill_attachments filtered by entry_date, then group
-      // client-side by (kind, odoo_id).
-      const d1Atts = {};
-      if (DB) {
-        try {
-          const res = await DB.prepare(`
-            SELECT id, entry_kind, entry_odoo_id, odoo_attachment_id,
-                   drive_file_id, drive_view_url, drive_folder_path,
-                   filename, file_size_kb, uploaded_by_pin, uploaded_by_name, uploaded_at
-            FROM bill_attachments
-            WHERE entry_date BETWEEN ? AND ?
-            ORDER BY uploaded_at DESC
-          `).bind(from, to).all();
-          for (const row of res?.results || []) {
-            const key = `${row.entry_kind}-${row.entry_odoo_id}`;
-            if (!d1Atts[key]) d1Atts[key] = [];
-            d1Atts[key].push({
-              id: row.id,
-              odoo_attachment_id: row.odoo_attachment_id,
-              drive_file_id: row.drive_file_id,
-              drive_url: row.drive_view_url,
-              drive_path: row.drive_folder_path,
-              filename: row.filename,
-              size_kb: row.file_size_kb,
-              uploaded_by: row.uploaded_by_name,
-              uploaded_by_pin: row.uploaded_by_pin,
-              uploaded_at: row.uploaded_at,
-            });
-          }
-        } catch (e) { console.error('D1 bill_attachments fetch fail:', e.message); }
-      }
-
-      // Step 3c — D1 chicken daily ledger projection.
-      // Chicken entry is intentionally not pushed into Odoo. Its own capture
-      // table is the source of truth; this endpoint is the unified read layer.
-      let chickenLedger = [];
-      if (DB && (brandFilter === 'ALL' || brandFilter === 'HE')) {
-        try {
-          const chickenRes = await DB.prepare(`
-            SELECT id, business_date, brand, cut,
-                   purchased_kg, delivered_kg, daily_rate_paise,
-                   price_per_kg_paise, cost_paise,
-                   price_entered_by_pin, price_entered_at,
-                   bill_attachment_url, updated_at
-              FROM chicken_daily_ledger
-             WHERE brand = 'HE'
-               AND business_date BETWEEN ? AND ?
-             ORDER BY business_date DESC, cut ASC
-          `).bind(from, to).all();
-          chickenLedger = chickenRes?.results || [];
-        } catch (e) {
-          console.error('D1 chicken_daily_ledger fetch fail:', e.message);
-        }
-      }
-
-      // Phase 4 — load PO lifecycle (received_at, received_by) from D1 once
-      // and merge into PO rows below. Pure read; no behaviour change for
-      // non-PO rows.
-      const lifecycleMap = {};
-      if (DB && pos.length) {
-        try {
-          const poIdsForLifecycle = pos.map(p => p.id);
-          const lcRes = await DB.prepare(
-            `SELECT odoo_po_id, received_at, received_by_name
-               FROM po_lifecycle
-              WHERE odoo_po_id IN (${poIdsForLifecycle.map(() => '?').join(',')})`
-          ).bind(...poIdsForLifecycle).all().catch(() => ({ results: [] }));
-          for (const r of (lcRes.results || [])) {
-            lifecycleMap[r.odoo_po_id] = { received_at: r.received_at, received_by: r.received_by_name };
-          }
-        } catch (_) { /* soft-fail */ }
-      }
-
-      // Step 4 — normalize to unified row shape
-      const companyToBrand = { 1: 'HQ', 2: 'HE', 3: 'NCH' };
-      const toRow = (kind, base, attMap) => {
-        const tracked = d1Atts[`${kind}-${base.odoo_id}`] || [];
-        const odooCount = attMap[base.odoo_id] || 0;
-        // Show total of what we know: tracked files (with Drive URLs) + any
-        // Odoo-side attachments we didn't record (uploaded via Odoo UI).
-        // The UI uses `attachments` array for the list; count for the badge.
-        const trackedCount = tracked.length;
-        const externalInOdoo = Math.max(0, odooCount - trackedCount);
+      const rows = saudaRows.map(r => {
+        const amtPaise = (r.pay_amount_paise && r.pay_amount_paise > 0) ? r.pay_amount_paise : (r.expected_amount_paise || 0);
         return {
-          kind, odoo_id: base.odoo_id, date: base.date,
-          vendor: base.vendor,
-          item_or_ref: base.item_or_ref,
-          brand: companyToBrand[base.company_id] || '?',
-          amount: base.amount,
-          state: base.state,
-          has_attachment: trackedCount > 0 || odooCount > 0,
-          attachment_count: Math.max(trackedCount, odooCount),
-          attachments: tracked,                // detailed list with Drive URLs
-          odoo_only_count: externalInOdoo,     // files in Odoo not tracked here
-          recorded_by_user_id: base.recorded_by_user_id || null,
-          recorded_by_name:    base.recorded_by_name    || null,
-          recorded_by_pin:     base.recorded_by_pin     || null,
-          notes: base.notes || '',
-          bill_ref: base.bill_ref || '',
+          kind: 'PO',
+          odoo_id: `sauda-${r.id}`,
+          source: 'sauda_purchase',
+          source_id: r.id,
+          date: r.for_date,
+          vendor: { id: r.vendor_id || null, name: r.vendor_name || '—' },
+          item_or_ref: summariseItems(r.items_json),
+          brand: brandLabel(r.brand),
+          amount: amtPaise / 100,
+          state: String(r.status || 'ORDERED'),
+          has_attachment: !!r.has_bill,
+          attachment_count: r.has_bill ? 1 : 0,
+          attachments: [],
+          odoo_only_count: 0,
+          recorded_by_user_id: null,
+          recorded_by_name: r.ordered_by || null,
+          recorded_by_pin: null,
+          notes: '',
+          bill_ref: r.bank_ref || '',
+          received_at: r.received_at || null,
+          received_by: r.received_by || null,
+          paid_at: r.paid_at || null,
+          pay_method: r.pay_method || null,
+          reconciled: !!r.reconciled_at,
+          can_upload_bill: false,
+          can_edit_notes: false,
         };
-      };
-      const cutLabel = (cut) => String(cut || '')
-        .replace(/[_-]+/g, ' ')
-        .replace(/\b\w/g, ch => ch.toUpperCase()) || 'Chicken';
-      const kgText = (value) => {
-        const n = Number(value || 0);
-        return n > 0 ? `${Math.round(n * 100) / 100} kg` : '—';
-      };
-
-      const rows = [
-        ...pos.map(p => {
-          const row = toRow('PO', {
-            odoo_id: p.id,
-            date: (p.date_order || '').slice(0, 10),
-            vendor: p.partner_id ? { id: p.partner_id[0], name: p.partner_id[1] } : null,
-            item_or_ref: `${p.name || 'PO'} · ${p.order_line?.length || 0} item${p.order_line?.length === 1 ? '' : 's'}`,
-            company_id: p.company_id?.[0],
-            amount: p.amount_total || 0,
-            state: p.state,
-            recorded_by_user_id: p.x_recorded_by_user_id?.[0] || null,
-            recorded_by_name:    p.x_recorded_by_user_id?.[1] || null,
-          }, poAtts);
-          row.odoo_name = p.name;  // explicit (was already in item_or_ref but UI wants standalone)
-          // Phase 4: lifecycle overlay
-          const lc = lifecycleMap[p.id];
-          if (lc) { row.received_at = lc.received_at; row.received_by = lc.received_by; }
-          return row;
-        }),
-        ...expenses.map(e => toRow('Expense', {
-          odoo_id: e.id,
-          date: e.date || '',
-          vendor: null,
-          item_or_ref: e.name || e.product_id?.[1] || 'Expense',
-          company_id: e.company_id?.[0],
-          amount: e.total_amount || 0,
-          state: e.x_pool === 'capex' ? 'capex' : 'opex',
-          recorded_by_user_id: e.x_recorded_by_user_id?.[0] || null,
-          recorded_by_name:    e.x_recorded_by_user_id?.[1] || null,
-          recorded_by_pin:     e.x_submitted_by_pin || null,
-          notes: e.name || '',  // hr.expense uses `name` as description
-        }, expAtts)),
-        ...bills.map(b => toRow('Bill', {
-          odoo_id: b.id,
-          date: b.invoice_date || '',
-          vendor: b.partner_id ? { id: b.partner_id[0], name: b.partner_id[1] } : null,
-          item_or_ref: b.ref || b.name || 'Bill',
-          company_id: b.company_id?.[0],
-          amount: b.amount_total || 0,
-          state: b.payment_state || 'not_paid',
-          recorded_by_user_id: b.x_recorded_by_user_id?.[0] || null,
-          recorded_by_name:    b.x_recorded_by_user_id?.[1] || null,
-          bill_ref: b.ref || '',
-          // narration for Bill goes to Odoo chatter — not inline editable in this v1
-        }, billAtts)),
-        ...chickenLedger.map(c => {
-          const dailyRate = c.daily_rate_paise ? Math.round(c.daily_rate_paise / 100) : null;
-          const effectiveRate = c.price_per_kg_paise ? Math.round(c.price_per_kg_paise / 100) : null;
-          const amount = c.cost_paise ? c.cost_paise / 100 : 0;
-          const billUrl = c.bill_attachment_url || null;
-          const itemBits = [
-            `MN Chicken · ${cutLabel(c.cut)}`,
-            `delivered ${kgText(c.delivered_kg)}`,
-            `yielded ${kgText(c.purchased_kg)}`,
-            dailyRate ? `rate ₹${dailyRate}/kg` : null,
-            effectiveRate ? `effective ₹${effectiveRate}/kg` : null,
-          ].filter(Boolean);
-          return {
-            kind: 'Chicken',
-            odoo_id: `chicken-${c.id}`,
-            source: 'chicken_daily_ledger',
-            source_id: c.id,
-            date: c.business_date,
-            vendor: { id: 33, name: 'MN Broilers' },
-            item_or_ref: itemBits.join(' · '),
-            brand: c.brand || 'HE',
-            amount,
-            state: c.cost_paise ? 'priced' : 'pending',
-            has_attachment: !!billUrl,
-            attachment_count: billUrl ? 1 : 0,
-            attachments: billUrl ? [{
-              id: null,
-              drive_url: billUrl,
-              filename: `MN chicken bill · ${c.business_date}`,
-              uploaded_by: resolveUser(c.price_entered_by_pin)?.name || null,
-              uploaded_by_pin: c.price_entered_by_pin || null,
-              uploaded_at: c.price_entered_at || c.updated_at || null,
-            }] : [],
-            odoo_only_count: 0,
-            recorded_by_user_id: null,
-            recorded_by_name: resolveUser(c.price_entered_by_pin)?.name || null,
-            recorded_by_pin: c.price_entered_by_pin || null,
-            notes: 'Captured in chicken-price-entry. D1 source row, not an Odoo record.',
-            bill_ref: '',
-            can_upload_bill: false,
-            can_edit_notes: false,
-          };
-        }),
-      ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      });
 
       const totals = {
         count: rows.length,
         amount: rows.reduce((s, r) => s + (r.amount || 0), 0),
         missing_bill_count: rows.filter(r => !r.has_attachment).length,
         with_bill_count:    rows.filter(r =>  r.has_attachment).length,
-        by_kind: {
-          PO:      rows.filter(r => r.kind === 'PO').length,
-          Expense: rows.filter(r => r.kind === 'Expense').length,
-          Bill:    rows.filter(r => r.kind === 'Bill').length,
-          Chicken: rows.filter(r => r.kind === 'Chicken').length,
-        },
+        by_kind: { PO: rows.length, Expense: 0, Bill: 0, Chicken: 0 },
       };
-      return json({ success: true, rows, totals, from, to, brand: brandFilter });
+      return json({ success: true, rows, totals, from, to, brand: brandFilter, source: 'sauda_purchase' });
     }
 
     // ─────────────────────────────────────────────────────────────────────
