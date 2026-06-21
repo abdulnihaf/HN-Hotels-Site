@@ -338,18 +338,29 @@ const PAYMENT_METHODS = [
 
 // ━━━ Odoo JSON-RPC helper ━━━
 async function odoo(apiKey, model, method, args = [], kwargs = {}) {
-  const r = await fetch(ODOO_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0', method: 'call',
-      params: { service: 'object', method: 'execute_kw',
-                args: [ODOO_DB, ODOO_UID, apiKey, model, method, args, kwargs] },
-    }),
-  });
-  const d = await r.json();
-  if (d.error) throw new Error(d.error.data?.message || d.error.message || 'Odoo error');
-  return d.result;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 22000);
+  try {
+    const r = await fetch(ODOO_URL, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', method: 'call',
+        params: { service: 'object', method: 'execute_kw',
+                  args: [ODOO_DB, ODOO_UID, apiKey, model, method, args, kwargs] },
+      }),
+    });
+    if (!r.ok) throw new Error(`Odoo HTTP ${r.status}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error.data?.message || d.error.message || 'Odoo error');
+    return d.result;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Odoo unreachable (timed out) — server may be down');
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 function visibleCats(user) {
