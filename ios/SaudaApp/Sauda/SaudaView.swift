@@ -162,53 +162,141 @@ struct SaudaView: View {
                 actionField("Add an item…  (carrot, oil, coke)", system: "magnifyingglass")
             }.buttonStyle(.plain)
 
+            // ── staged order, grouped per vendor (PWA renderOrder) ──
             if !model.placeOrder.isEmpty {
-                sectionLabel("ORDER TO PLACE · \(model.placeOrder.count) item\(model.placeOrder.count == 1 ? "" : "s")")
-                ForEach(model.placeOrder) { ln in placeStagedRow(ln) }
+                ForEach(placeVendorGroups, id: \.0) { key, lines in
+                    placeBasket(vendorKey: key, lines: lines)
+                }
             }
 
-            sectionLabel("CHOOSE A VENDOR")
-            if let vs = model.settings?.vendors, !vs.isEmpty {
+            sectionLabel("CHOOSE A VENDOR — ADD EVERYTHING YOU’RE BUYING FROM THEM")
+            if let vs = brandFilteredVendors, !vs.isEmpty {
                 ForEach(vs) { v in placeVendorRow(v) }
             } else { stateNote(model.statusLine) }
         }
     }
-    private func placeStagedRow(_ ln: SaudaPlaceLine) -> some View {
+    // group staged lines by vendorKey, preserving first-seen order (PWA Object.keys(groups))
+    private var placeVendorGroups: [(String, [SaudaPlaceLine])] {
+        var order: [String] = []
+        var map: [String: [SaudaPlaceLine]] = [:]
+        for l in model.placeOrder {
+            if map[l.vendorKey] == nil { order.append(l.vendorKey) }
+            map[l.vendorKey, default: []].append(l)
+        }
+        return order.map { ($0, map[$0] ?? []) }
+    }
+    private var brandFilteredVendors: [SaudaSettingsVendor]? {
+        guard let vs = model.settings?.vendors else { return nil }
+        let f = vs.filter { v in
+            guard model.brand != "both" else { return true }
+            let b = (v.brand ?? "").lowercased()
+            return b.isEmpty || b == "both" || b == model.brand.lowercased()
+        }
+        return f.isEmpty ? nil : f
+    }
+    // one vendor basket: header tags + khata banner + editable lines + subtotal (PWA .basket)
+    @ViewBuilder private func placeBasket(vendorKey: String, lines: [SaudaPlaceLine]) -> some View {
+        let v = model.settings?.vendors?.first { $0.vendor_key == vendorKey }
+        let sub = lines.reduce(0.0) { $0 + $1.lineRupees }
+        let isKhata = (v?.pay ?? "") == "khata_roll"
         card {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) { Text(ln.item).rowTitle(); brandChip(ln.brand) }
-                    Text("\(ln.qty) \(ln.unit) · \(vendorName(ln.vendorKey))").body13()
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Text(v?.name ?? (vendorKey == "unassigned" ? "Unassigned" : vendorKey)).rowTitle()
+                    if let f = v?.fulfilment, !f.isEmpty { tag(f) }
+                    if let p = v?.pay, !p.isEmpty { tag(payLabel(p)) }
+                    Spacer()
                 }
-                Spacer()
-                Button { model.removePlaceLine(ln.id) } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 19)).foregroundStyle(HK.textFaint)
-                }.buttonStyle(.plain)
+                if isKhata { khataBanner }
+                ForEach(lines) { ln in placeStagedRow(ln) }
+                HStack {
+                    Spacer()
+                    Text("basket ").font(.system(size: 12, weight: .heavy)).foregroundStyle(HK.textFaint)
+                    + Text(SaudaFmt.rupee(sub)).font(.system(size: 13, weight: .heavy)).foregroundStyle(HK.text)
+                }
             }
         }
     }
-    private func placeVendorRow(_ v: SaudaSettingsVendor) -> some View {
-        let n = model.settings?.items?.filter { $0.default_vendor == v.vendor_key }.count ?? 0
-        return card {
-            HStack(spacing: 12) {
-                monogram(v.name)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(v.name ?? v.vendor_key ?? "—").rowTitle()
-                        brandChip(v.brand)
-                    }
-                    HStack(spacing: 6) {
-                        if let f = v.fulfilment, !f.isEmpty { tag(f) }
-                        if let p = v.pay, !p.isEmpty { tag(payLabel(p)) }
-                    }
+    private var khataBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 12, weight: .bold)).foregroundStyle(accent)
+            Text("On this trip, clear yesterday’s bill. Today’s items are paid tomorrow.")
+                .font(.system(size: 11.5, weight: .medium)).foregroundStyle(HK.textDim)
+            Spacer()
+        }.padding(10).background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+    }
+    // editable staged line: calc note + Qty field + ₹rate field + remove (PWA .line)
+    private func placeStagedRow(_ ln: SaudaPlaceLine) -> some View {
+        let qBind = Binding<String>(get: { model.placeOrder.first { $0.seq == ln.seq }?.qty ?? "" },
+                                    set: { model.setPlaceQty(ln.seq, $0) })
+        let pBind = Binding<String>(get: { model.placeOrder.first { $0.seq == ln.seq }?.price ?? "" },
+                                    set: { model.setPlacePrice(ln.seq, $0) })
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Text(ln.item).font(.system(size: 14, weight: .semibold)).foregroundStyle(HK.text)
+                if ln.brand != "both" { brandChip(ln.brand) }
+                Spacer()
+                Button { model.removePlaceLine(ln.seq) } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(HK.textFaint)
+                }.buttonStyle(.plain)
+            }
+            Text(placeCalc(ln)).font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ln.qtyNumber > 0 && (Double(ln.price) ?? 0) > 0 ? HK.ready : HK.running)
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Text("Qty").font(.system(size: 10, weight: .heavy)).foregroundStyle(HK.textFaint)
+                    TextField("qty", text: qBind)
+                        .font(.system(size: 14)).keyboardType(.decimalPad).frame(width: 56)
+                        .padding(7).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 9))
+                    Text(ln.unit).font(.system(size: 11)).foregroundStyle(HK.textFaint)
                 }
                 Spacer()
-                if n > 0 {
-                    Text("\(n)").font(.system(size: 12, weight: .heavy)).foregroundStyle(.black)
-                        .padding(.horizontal, 8).padding(.vertical, 3).background(accent, in: Capsule())
+                HStack(spacing: 4) {
+                    Text("₹\(ln.unit.isEmpty ? "" : "/\(ln.unit)")\(ln.live ? " · live" : "")").font(.system(size: 10, weight: .heavy)).foregroundStyle(HK.textFaint)
+                    TextField(ln.live ? "today’s rate" : "rate", text: pBind)
+                        .font(.system(size: 14)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 72)
+                        .padding(7).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 9))
                 }
             }
         }
+        .padding(11).background(HK.bgElev.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(HK.line, lineWidth: 1))
+    }
+    private func placeCalc(_ ln: SaudaPlaceLine) -> String {
+        let qn = ln.qtyNumber, pr = Double(ln.price) ?? 0
+        let u = ln.unit.isEmpty ? "unit" : ln.unit
+        if qn > 0 && pr > 0 {
+            return "\(ln.qty) \(u) × \(SaudaFmt.rupee(pr))/\(u) = \(SaudaFmt.rupee(qn * pr))\(ln.live ? " · live rate" : "")"
+        }
+        if qn > 0 { return "\(ln.qty) \(u) × rate pending\(ln.live ? " · live rate" : "")" }
+        return "enter quantity and rate"
+    }
+    private func placeVendorRow(_ v: SaudaSettingsVendor) -> some View {
+        let staged = model.placeOrder.filter { $0.vendorKey == v.vendor_key }.count
+        return Button { sheet = .vendorCompose(v) } label: {
+            card {
+                HStack(spacing: 12) {
+                    monogram(v.name)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(v.name ?? v.vendor_key ?? "—").rowTitle()
+                            brandChip(v.brand)
+                        }
+                        HStack(spacing: 6) {
+                            if let f = v.fulfilment, !f.isEmpty { tag(f) }
+                            if let p = v.pay, !p.isEmpty { tag(payLabel(p)) }
+                        }
+                    }
+                    Spacer()
+                    if staged > 0 {
+                        Text("\(staged)").font(.system(size: 12, weight: .heavy)).foregroundStyle(.black)
+                            .padding(.horizontal, 8).padding(.vertical, 3).background(accent, in: Capsule())
+                    } else {
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(HK.textFaint)
+                    }
+                }
+            }
+        }.buttonStyle(.plain)
     }
 
     // ════════════════════════════ 3 · PURCHASE DAY ════════════════════════════
@@ -223,11 +311,135 @@ struct SaudaView: View {
                         .onChange(of: model.purchaseDate) { _ in model.reloadPurchaseDay() }
                 }
             }
-            if let orders = model.purchaseDay?.orders, !orders.isEmpty {
-                sectionLabel("VENDOR PURCHASES")
-                ForEach(orders) { o in orderCard(o, showStatus: true) }
+            // search + brand chips (PWA histSearch + histBrandChips)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(accent)
+                TextField("Search this day’s orders…", text: $model.histSearch)
+                    .font(.system(size: 14)).foregroundStyle(HK.text).autocorrectionDisabled()
+            }.padding(11).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 12))
+            HStack(spacing: 8) {
+                segChip("All", on: model.histBrand == "all") { model.histBrand = "all" }
+                segChip("HE", on: model.histBrand == "HE") { model.histBrand = "HE" }
+                segChip("NCH", on: model.histBrand == "NCH") { model.histBrand = "NCH" }
+                Spacer()
+            }
+            let po = filteredPo
+            let placed = filteredPlaced
+            if let pd = model.purchaseDay, (pd.po_orders?.isEmpty == false || pd.placed_orders?.isEmpty == false) {
+                purchaseDaySummary(pd.summary)
+                if po.isEmpty && placed.isEmpty {
+                    stateNote("No order matches this search/filter for \(model.purchaseYMD).")
+                }
+                if !po.isEmpty {
+                    sectionLabel("PURCHASE INPUTS · \(po.count)")
+                    ForEach(po) { o in poInputCard(o) }
+                }
+                if !placed.isEmpty {
+                    sectionLabel("VENDOR ORDERS PLACED · \(placed.count)")
+                    ForEach(placed) { o in placedOrderCard(o) }
+                }
             } else {
                 emptyOrLoading(model.purchaseDay == nil, "No purchase orders for \(model.purchaseYMD) yet. Use Buy list or Place to create one.")
+            }
+        }
+    }
+    private func brandPass(_ brand: String?) -> Bool {
+        guard model.histBrand != "all" else { return true }
+        let b = (brand ?? "").lowercased()
+        return b == model.histBrand.lowercased() || b == "both" || b.isEmpty
+    }
+    private var filteredPo: [SaudaPoOrder] {
+        let q = model.histSearch.trimmingCharacters(in: .whitespaces).lowercased()
+        return (model.purchaseDay?.po_orders ?? []).filter { o in
+            guard brandPass(o.brand) else { return false }
+            guard !q.isEmpty else { return true }
+            let hay = ([o.sender, o.brand].compactMap { $0 } + (o.items ?? []).flatMap { [$0.item, $0.ref] .compactMap { $0 } }).joined(separator: " ").lowercased()
+            return hay.contains(q)
+        }
+    }
+    private var filteredPlaced: [SaudaPlacedOrder] {
+        let q = model.histSearch.trimmingCharacters(in: .whitespaces).lowercased()
+        return (model.purchaseDay?.placed_orders ?? []).filter { o in
+            guard brandPass(o.brand) else { return false }
+            guard !q.isEmpty else { return true }
+            let hay = ([o.vendor_name, o.brand, o.status].compactMap { $0 } + (o.items ?? []).compactMap { $0.item }).joined(separator: " ").lowercased()
+            return hay.contains(q)
+        }
+    }
+    private func purchaseDaySummary(_ s: SaudaPurchaseDaySummary?) -> some View {
+        HStack(spacing: 0) {
+            summaryBox("\(s?.po_items ?? 0)", "items entered")
+            summaryBox("\(s?.placed_orders ?? 0)", "vendor purchases")
+            summaryBox(SaudaFmt.rupee(Double(s?.expected_amount_paise ?? 0)/100), "placed bill")
+        }
+    }
+    private func summaryBox(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.system(size: 16, weight: .heavy, design: .rounded)).foregroundStyle(HK.text)
+            Text(label).font(.system(size: 9, weight: .heavy)).foregroundStyle(HK.textFaint)
+        }.frame(maxWidth: .infinity).padding(.vertical, 11)
+            .background(HK.card, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(HK.line, lineWidth: 1))
+    }
+    // decoded purchase INPUT card — lines carry the "from <raw>" truth note (PWA renderPoCard)
+    private func poInputCard(_ o: SaudaPoOrder) -> some View {
+        card {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    brandChip(o.brand)
+                    if let s = o.sender, !s.isEmpty {
+                        Text(s).font(.system(size: 10, weight: .heavy)).foregroundStyle(accent)
+                            .padding(.horizontal, 6).padding(.vertical, 2).background(accent.opacity(0.16), in: Capsule())
+                    }
+                    Spacer()
+                    Text("\((o.items ?? []).count) item\((o.items ?? []).count == 1 ? "" : "s")").font(.system(size: 11)).foregroundStyle(HK.textFaint)
+                }
+                ForEach(o.items ?? []) { ln in
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack {
+                            Text(ln.item ?? "—").font(.system(size: 13)).foregroundStyle(HK.textDim).lineLimit(1)
+                            Spacer()
+                            Text(ln.qtyDisplay).font(.system(size: 12)).foregroundStyle(HK.textFaint)
+                        }
+                        if let raw = ln.raw, !raw.isEmpty, raw.lowercased() != (ln.item ?? "").lowercased() {
+                            Text("from \(raw)").font(.system(size: 10)).foregroundStyle(HK.textFaint).italic()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private func placedOrderCard(_ o: SaudaPlacedOrder) -> some View {
+        card {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 8) {
+                    Text(o.vendor_name ?? o.vendorKey ?? "—").rowTitle()
+                    brandChip(o.brand)
+                    Spacer()
+                    if (o.expected_amount_paise ?? 0) > 0 {
+                        Text(SaudaFmt.rupee(o.amountRupees)).font(.system(size: 17, weight: .heavy, design: .rounded)).foregroundStyle(HK.text)
+                    }
+                }
+                HStack(spacing: 6) {
+                    if let f = o.fulfilmentLabel ?? o.fulfilment, !f.isEmpty { tag(f) }
+                    if let p = o.payLabel ?? o.pay_timing, !p.isEmpty { tag(p) }
+                    if let st = o.status, !st.isEmpty { Text(st).font(.system(size: 10, weight: .heavy)).foregroundStyle(HK.textFaint) }
+                    Spacer()
+                }
+                ForEach((o.items ?? []).prefix(8)) { ln in
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack {
+                            Text(ln.item ?? "—").font(.system(size: 13)).foregroundStyle(HK.textDim).lineLimit(1)
+                            Spacer()
+                            Text(ln.qtyDisplay).font(.system(size: 12)).foregroundStyle(HK.textFaint)
+                            if ln.linePaise > 0 { Text(SaudaFmt.rupee(Double(ln.linePaise)/100)).font(.system(size: 12, weight: .semibold)).foregroundStyle(HK.textDim) }
+                        }
+                        if let raw = ln.raw, !raw.isEmpty, raw.lowercased() != (ln.item ?? "").lowercased() {
+                            Text("from \(raw)").font(.system(size: 10)).foregroundStyle(HK.textFaint).italic()
+                        }
+                    }
+                }
+                if (o.items ?? []).count > 8 { Text("+ \((o.items ?? []).count - 8) more").font(.system(size: 11)).foregroundStyle(HK.textFaint) }
             }
         }
     }
@@ -353,8 +565,24 @@ struct SaudaView: View {
     private var vendorDiary: some View {
         Group {
             if let vs = model.ledger?.vendors, !vs.isEmpty {
-                ForEach(vs) { v in vendorLedgerCard(v) }
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(accent)
+                    TextField("Search vendors / bills…", text: $model.diarySearch)
+                        .font(.system(size: 14)).foregroundStyle(HK.text).autocorrectionDisabled()
+                }.padding(11).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 12))
+                let filtered = filteredDiary(vs)
+                if filtered.isEmpty { stateNote("No vendor matches “\(model.diarySearch)”.") }
+                else { ForEach(filtered) { v in vendorLedgerCard(v) } }
             } else { emptyOrLoading(model.ledger == nil, "No vendor diary yet. Place an order or save an invoice and it appears here.") }
+        }
+    }
+    private func filteredDiary(_ vs: [SaudaLedgerVendor]) -> [SaudaLedgerVendor] {
+        let q = model.diarySearch.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return vs }
+        return vs.filter { v in
+            let trailHay = (v.trail ?? []).flatMap { [$0.for_date, $0.status, $0.method, $0.bank_ref].compactMap { $0 } }.joined(separator: " ")
+            let hay = ([v.vendor_name, v.cat, v.vpa, v.bankLabel].compactMap { $0 }.joined(separator: " ") + " " + trailHay).lowercased()
+            return hay.contains(q)
         }
     }
     private func vendorLedgerCard(_ v: SaudaLedgerVendor) -> some View {
@@ -612,17 +840,24 @@ struct SaudaView: View {
             }
         } else if model.tab == .place {
             if !model.placeOrder.isEmpty {
-                let total = model.placeOrder.reduce(0) { $0 + (Double($1.qty) ?? 0) * Double($1.price_paise) }
-                stickyButton("Place \(model.placeOrder.count) item\(model.placeOrder.count == 1 ? "" : "s")\(total > 0 ? " · \(SaudaFmt.rupee(total/100))" : "")") {
+                // PWA updatePlaceBtn: count vendors + sum qty×rate; label shows ₹total when any rate set.
+                let vendorCount = Set(model.placeOrder.map { $0.vendorKey }).count
+                let total = model.placeOrder.reduce(0.0) { $0 + $1.lineRupees }
+                let label = total > 0
+                    ? "Place \(vendorCount) order\(vendorCount == 1 ? "" : "s") · \(SaudaFmt.rupee(total))"
+                    : "Place \(vendorCount) order\(vendorCount == 1 ? "" : "s") · \(model.placeOrder.count) item\(model.placeOrder.count == 1 ? "" : "s")"
+                stickyButton(label) {
                     let blanks = model.placeOrder.filter { $0.qty.trimmingCharacters(in: .whitespaces).isEmpty }.count
+                    let noRate = model.placeOrder.filter { $0.pricePaise <= 0 }.count
+                    var msg = "Placing fires the vendor WhatsApp for \(model.placeOrder.count) item\(model.placeOrder.count == 1 ? "" : "s") under \(model.placeDate.isEmpty ? model.defaultPurchaseDate : model.placeDate)."
+                    if blanks > 0 { msg += " \(blanks) line(s) have no qty — vendor will fill." }
+                    if noRate > 0 { msg += " \(noRate) line(s) have no rate (₹0) — vendor will fill the rate." }
                     ask(SaudaConfirm(
                         title: "Place order",
-                        message: "Placing fires the vendor WhatsApp for \(model.placeOrder.count) item\(model.placeOrder.count == 1 ? "" : "s") under \(model.placeDate.isEmpty ? model.defaultPurchaseDate : model.placeDate).\(blanks > 0 ? " \(blanks) line(s) have no qty — vendor will fill." : "")",
+                        message: msg,
                         cta: "Place order", destructive: false,
                         action: { await model.placeStaged() }))
                 }
-            } else if !model.buyQty.isEmpty {
-                stickyButton("Stage \(model.buyKeys().count) from buy basket") { model.stagePlaceFromBasket() }
             }
         }
     }
@@ -646,6 +881,7 @@ struct SaudaView: View {
         case .paste:            PasteSheet(model: model, accent: accent) { sheet = nil }
         case .decodeReview:     DecodeReviewSheet(model: model, accent: accent) { sheet = nil; model.showDecodeReview = false }
         case .addPlaceItem:     AddPlaceItemSheet(model: model, accent: accent) { sheet = nil }
+        case .vendorCompose(let v): VendorComposeSheet(vendor: v, model: model, accent: accent) { sheet = nil }
         case .pay(let o):       PaySheet(order: o, model: model, accent: accent) { sheet = nil }
         case .manualPay(let o): ManualPaySheet(order: o, model: model, accent: accent) { sheet = nil }
         case .receipt(let o):   ReceiptSheet(order: o, model: model, accent: accent) { sheet = nil }
@@ -788,12 +1024,14 @@ struct SaudaView: View {
 // ════════════════════════════ sheet + confirm routing types ════════════════════════════
 enum SaudaSheet: Identifiable {
     case paste, decodeReview, addPlaceItem
+    case vendorCompose(SaudaSettingsVendor)
     case pay(SaudaOrder), manualPay(SaudaOrder), receipt(SaudaOrder)
     case directPay(SaudaLedgerVendor)
     case editItem(SaudaItem?), editVendor(SaudaSettingsVendor?)
     var id: String {
         switch self {
         case .paste: return "paste"; case .decodeReview: return "decode"; case .addPlaceItem: return "addItem"
+        case .vendorCompose(let v): return "vcompose-\(v.id)"
         case .pay(let o): return "pay-\(o.id)"; case .manualPay(let o): return "manual-\(o.id)"; case .receipt(let o): return "receipt-\(o.id)"
         case .directPay(let v): return "direct-\(v.id)"
         case .editItem(let it): return "edititem-\(it?.id ?? "new")"; case .editVendor(let v): return "editvendor-\(v?.id ?? "new")"

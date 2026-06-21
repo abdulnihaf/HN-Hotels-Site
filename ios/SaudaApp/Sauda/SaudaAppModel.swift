@@ -33,7 +33,7 @@ final class SaudaAppModel: ObservableObject {
     @Published var compare: SaudaCompare?            // Buy list + Compare
     @Published var settings: SaudaSettings?          // Place + Settings master
     @Published var payQueue: SaudaOpen?              // To pay (today's open orders)
-    @Published var purchaseDay: SaudaOpen?           // Purchase day (picked date)
+    @Published var purchaseDay: SaudaPurchaseDay?    // Purchase day (picked date): PO inputs + placed
     @Published var ledger: SaudaVendorLedger?        // Vendor diary
     @Published var hyperpure: SaudaHyperpure?        // Hyperpure feed
 
@@ -46,8 +46,12 @@ final class SaudaAppModel: ObservableObject {
     @Published var brand: String = "both"            // both | HE | NCH  (Place add-item filter)
     @Published var placeOrder: [SaudaPlaceLine] = [] // staged lines for the Place tab
     @Published var placeDate: String = ""            // for_date the Place batch goes under
+    private var placeSeq: Int = 0                     // monotonic line id (PWA's S.seq)
     @Published var paySearch: String = ""            // To-pay filter text
     @Published var payBrand: String = "all"          // all | HE | NCH
+    @Published var histSearch: String = ""           // Purchase-day trail search
+    @Published var histBrand: String = "all"         // all | HE | NCH (Purchase-day brand chips)
+    @Published var diarySearch: String = ""          // Vendor-diary trail search
 
     // ── mutation status (honest, never a fake success) ──
     @Published var busy = false
@@ -131,7 +135,7 @@ final class SaudaAppModel: ObservableObject {
         case .pay:
             payQueue = try await SaudaClient.shared.open(forDate: nil, token: token)
         case .purchaseDay:
-            purchaseDay = try await SaudaClient.shared.open(forDate: purchaseYMD, token: token)
+            purchaseDay = try await SaudaClient.shared.purchaseDay(forDate: purchaseYMD, token: token)
         case .vendors:
             ledger = try await SaudaClient.shared.vendorLedger(token: token)
         case .hyperpure:
@@ -162,9 +166,11 @@ final class SaudaAppModel: ObservableObject {
             let total = o.reduce(0) { $0 + ($1.pay_amount_paise ?? 0) }
             statusLine = o.isEmpty ? "Nothing waiting for payment" : "\(o.count) payable · \(SaudaFmt.rupee(Double(total)/100))"
         case .purchaseDay:
-            let o = purchaseDay?.orders ?? []
-            let total = o.reduce(0) { $0 + ($1.pay_amount_paise ?? 0) }
-            statusLine = o.isEmpty ? "No orders for this day" : "\(o.count) vendor purchases · \(SaudaFmt.rupee(Double(total)/100))"
+            let placed = purchaseDay?.placed_orders ?? []
+            let po = purchaseDay?.po_orders ?? []
+            let total = purchaseDay?.summary?.expected_amount_paise ?? placed.reduce(0) { $0 + ($1.expected_amount_paise ?? 0) }
+            if placed.isEmpty && po.isEmpty { statusLine = "No orders for this day" }
+            else { statusLine = "\(placed.count) vendor purchase\(placed.count == 1 ? "" : "s") · \(po.count) input\(po.count == 1 ? "" : "s") · \(SaudaFmt.rupee(Double(total)/100))" }
         case .vendors:
             let v = ledger?.vendors ?? []
             let due = v.reduce(0) { $0 + ($1.outstanding_paise ?? 0) }
@@ -223,31 +229,56 @@ final class SaudaAppModel: ObservableObject {
     }
 
     // ════════════════════════════ PLACE · place ════════════════════════════
-    // Build the staged lines from the buy basket + settings (item → vendor/price), grouped per vendor.
-    func stagePlaceFromBasket() {
-        guard let items = settings?.items else { return }
-        if placeDate.isEmpty { placeDate = defaultPurchaseDate }
-        var lines: [SaudaPlaceLine] = []
-        for (key, qty) in buyQty where qty > 0 {
-            guard let it = items.first(where: { $0.item_code == key }) else { continue }
-            lines.append(SaudaPlaceLine(item: it.label ?? key, item_code: it.item_code ?? key,
-                                        qty: trimQty(qty), unit: it.unit ?? "",
-                                        vendorKey: it.default_vendor ?? "", brand: it.brand ?? brand,
-                                        price_paise: it.price_paise ?? 0))
-        }
-        placeOrder = lines
+    // Staging mirrors the PWA's addLine/vSetQty: a line is pushed with a NEW seq id, qty blank ("")
+    // and price seeded from the item master in RUPEES (editable). The SAME item can stage under two
+    // vendors. NO bridge from the buy basket exists in the PWA — the owner builds the order here.
+    private func priceRupeesSeed(_ paise: Int?) -> String {
+        guard let p = paise, p > 0 else { return "" }
+        let r = Double(p) / 100
+        return r.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(r)) : String(r)
     }
+    // add from the master search (PWA addLine) — uses the item's default vendor + seeded price.
     func addPlaceLine(_ it: SaudaItem) {
         if placeDate.isEmpty { placeDate = defaultPurchaseDate }
-        if let i = placeOrder.firstIndex(where: { $0.item_code == (it.item_code ?? it.label) }) {
-            placeOrder[i].qty = trimQty((Double(placeOrder[i].qty) ?? 0) + 1)
-        } else {
-            placeOrder.append(SaudaPlaceLine(item: it.label ?? "", item_code: it.item_code ?? it.label ?? "",
-                                             qty: "1", unit: it.unit ?? "", vendorKey: it.default_vendor ?? "",
-                                             brand: it.brand ?? brand, price_paise: it.price_paise ?? 0))
-        }
+        placeSeq += 1
+        placeOrder.append(SaudaPlaceLine(
+            seq: placeSeq, item: it.label ?? "", item_code: it.item_code ?? it.label ?? "",
+            qty: "", price: priceRupeesSeed(it.price_paise), unit: it.unit ?? "",
+            vendorKey: it.default_vendor ?? "unassigned", brand: it.brand ?? brand, live: it.isLive))
     }
-    func removePlaceLine(_ id: String) { placeOrder.removeAll { $0.id == id } }
+    // vendor-first composer (PWA vSetQty): set qty for an item UNDER a specific vendor; 0 → remove.
+    func setVendorQty(vendorKey: String, item: SaudaItem, qty: Double) {
+        if placeDate.isEmpty { placeDate = defaultPurchaseDate }
+        let name = (item.label ?? "").lowercased()
+        let idx = placeOrder.firstIndex { $0.vendorKey == vendorKey && $0.item.lowercased() == name }
+        if qty > 0 {
+            if let i = idx { placeOrder[i].qty = trimQty(qty) }
+            else {
+                placeSeq += 1
+                placeOrder.append(SaudaPlaceLine(
+                    seq: placeSeq, item: item.label ?? "", item_code: item.item_code ?? item.label ?? "",
+                    qty: trimQty(qty), price: priceRupeesSeed(item.price_paise), unit: item.unit ?? "",
+                    vendorKey: vendorKey, brand: item.brand ?? brand, live: item.isLive))
+            }
+        } else if let i = idx { placeOrder.remove(at: i) }
+    }
+    // add a free-text item not in the master, under a vendor (PWA vNewAdd).
+    func addVendorFreeItem(vendorKey: String, name: String) {
+        let nm = name.trimmingCharacters(in: .whitespaces); guard !nm.isEmpty else { return }
+        if placeDate.isEmpty { placeDate = defaultPurchaseDate }
+        if placeOrder.contains(where: { $0.vendorKey == vendorKey && $0.item.lowercased() == nm.lowercased() }) { return }
+        placeSeq += 1
+        placeOrder.append(SaudaPlaceLine(
+            seq: placeSeq, item: nm, item_code: "", qty: "1", price: "", unit: "",
+            vendorKey: vendorKey, brand: brand, live: false))
+    }
+    func vendorLineQty(vendorKey: String, itemName: String) -> Double {
+        let n = itemName.lowercased()
+        return placeOrder.first { $0.vendorKey == vendorKey && $0.item.lowercased() == n }?.qtyNumber ?? 0
+    }
+    func setPlaceQty(_ seq: Int, _ v: String) { if let i = placeOrder.firstIndex(where: { $0.seq == seq }) { placeOrder[i].qty = v } }
+    func setPlacePrice(_ seq: Int, _ v: String) { if let i = placeOrder.firstIndex(where: { $0.seq == seq }) { placeOrder[i].price = v } }
+    func removePlaceLine(_ seq: Int) { placeOrder.removeAll { $0.seq == seq } }
     private func trimQty(_ d: Double) -> String { d.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(d)) : String(d) }
 
     func placeStaged() async {
@@ -256,7 +287,7 @@ final class SaudaAppModel: ObservableObject {
         let lines: [[String: Any]] = placeOrder.map { l in
             ["item": l.item, "sku": l.item_code.isEmpty ? l.item : l.item_code,
              "qty": l.qty, "unit": l.unit, "vendorKey": l.vendorKey, "brand": l.brand,
-             "price_paise": l.price_paise]
+             "price_paise": l.pricePaise]
         }
         await runMutation { [weak self] token in
             guard let self else { return }

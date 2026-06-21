@@ -44,6 +44,8 @@ struct SaudaLine: Codable, Hashable, Identifiable {
     var bill_unit: String?
     var direct: Bool?
     var ref: String?
+    var raw: String?               // decode source phrase — the "from <raw>" truth note (sauda_po / placed)
+    var category: String?
 
     var id: String { "\(order_id ?? 0)-\(line_idx ?? 0)-\(item ?? "")" }
 
@@ -114,6 +116,56 @@ struct SaudaOrder: Codable, Hashable, Identifiable {
     var needsBill: Bool {
         lines.contains { ($0.price_paise ?? 0) <= 0 && ($0.cost_paise ?? 0) <= 0 && !($0.qty?.isBlank ?? true) }
     }
+}
+
+// ── purchase-day: the saved-PO inputs (decode trail) + placed vendor orders for a business day ──
+// Mirrors the PWA's `purchase-day&for_date=` response (po_orders + placed_orders + summary), which
+// is RICHER than `open`: it carries the decoded purchase INPUTS with their raw "from …" truth notes.
+struct SaudaPurchaseDay: Codable, Hashable {
+    var ok: Bool?
+    var for_date: String?
+    var po_orders: [SaudaPoOrder]?
+    var placed_orders: [SaudaPlacedOrder]?
+    var summary: SaudaPurchaseDaySummary?
+}
+struct SaudaPurchaseDaySummary: Codable, Hashable {
+    var po_orders: Int?
+    var po_items: Int?
+    var placed_orders: Int?
+    var placed_items: Int?
+    var expected_amount_paise: Int?
+}
+// a decoded purchase INPUT (from sauda_po) — items carry `raw` for the "from <raw>" truth note
+struct SaudaPoOrder: Codable, Hashable, Identifiable {
+    var id: Int?
+    var brand: String?
+    var for_date: String?
+    var need_by: String?
+    var sender: String?
+    var source: String?
+    var by_user: String?
+    var created_at: String?
+    var items: [SaudaLine]?
+    var idStr: String { "po-\(id ?? 0)" }
+}
+// a placed vendor order (from sauda_purchase) for the picked day
+struct SaudaPlacedOrder: Codable, Hashable, Identifiable {
+    var id: Int?
+    var brand: String?
+    var vendor_name: String?
+    var vendorKey: String?
+    var fulfilment: String?
+    var fulfilmentLabel: String?
+    var pay_timing: String?
+    var payLabel: String?
+    var for_date: String?
+    var status: String?
+    var expected_amount_paise: Int?
+    var ordered_by: String?
+    var ordered_at: String?
+    var items: [SaudaLine]?
+    var idStr: String { "placed-\(id ?? 0)" }
+    var amountRupees: Double { Double(expected_amount_paise ?? 0) / 100 }
 }
 
 // ── compare: your price vs every platform ──
@@ -305,16 +357,30 @@ struct SaudaAuthResponse: Codable { var token: String?; var ok: Bool?; var error
 
 struct SaudaReqItem { var item_key: String; var qty: Double }
 
-// A staged line in the Place tab (mirrors S.order rows). qty is a String like the PWA (can be blank).
+// A staged line in the Place tab (mirrors S.order rows 1:1). qty AND price are editable Strings
+// like the PWA (qty can be blank; price is rupees-as-typed, → paise only at place time). `seq` is
+// the stable per-line id (PWA's ++S.seq) so the SAME item can be staged under two vendors. `live`
+// marks a live-rate item (no fixed price) so the rate field shows the right placeholder + tag.
 struct SaudaPlaceLine: Identifiable, Hashable {
+    var seq: Int
     var item: String
     var item_code: String
-    var qty: String
+    var qty: String           // free-text qty, e.g. "3", ".5", "" (vendor fills)
+    var price: String         // free-text RUPEES/unit, e.g. "180" — "" while rate pending
     var unit: String
     var vendorKey: String
     var brand: String
-    var price_paise: Int
-    var id: String { item_code.isEmpty ? item : item_code }
+    var live: Bool
+    var id: Int { seq }
+    // rupees → paise at the boundary, exactly like the PWA's Math.round((parseFloat(l.price)||0)*100)
+    var pricePaise: Int { Int(((Double(price) ?? 0) * 100).rounded()) }
+    // numeric qty parsed leniently (first number token) for the line/basket subtotal — PWA parity
+    var qtyNumber: Double {
+        let s = qty.trimmingCharacters(in: .whitespaces)
+        guard let m = s.range(of: "[0-9.]+", options: .regularExpression) else { return 0 }
+        return Double(s[m]) ?? 0
+    }
+    var lineRupees: Double { qtyNumber * (Double(price) ?? 0) }
 }
 
 // Honest toast (the PWA's toast(msg, 'ok'|'err')) surfaced over the View.

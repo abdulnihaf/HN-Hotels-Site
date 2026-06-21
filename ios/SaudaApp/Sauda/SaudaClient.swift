@@ -34,6 +34,10 @@ actor SaudaClient {
         if let d = forDate, !d.isEmpty { q["for_date"] = d }
         return try await get("open", query: q, token: token)
     }
+    // GET ?action=purchase-day&for_date= — saved-PO inputs + placed vendor orders + summary for a day.
+    func purchaseDay(forDate: String, token: String) async throws -> SaudaPurchaseDay {
+        try await get("purchase-day", query: ["for_date": forDate], token: token)
+    }
     func compare(token: String) async throws -> SaudaCompare {
         try await get("compare", token: token)
     }

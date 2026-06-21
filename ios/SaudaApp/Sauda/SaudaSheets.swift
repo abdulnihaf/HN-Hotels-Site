@@ -190,6 +190,95 @@ struct AddPlaceItemSheet: View {
     }
 }
 
+// ════════════════════════════ VENDOR COMPOSER (Place tab — add all this vendor's items) ════════════════════════════
+// 1:1 port of the PWA openVendorSheet: search this vendor's items, tap +/step qty, add a free-text
+// item not listed, khata banner. Items are the master items whose default_vendor is this vendor.
+struct VendorComposeSheet: View {
+    let vendor: SaudaSettingsVendor
+    @ObservedObject var model: SaudaAppModel
+    let accent: Color
+    let onClose: () -> Void
+    @State private var q = ""
+    @State private var newName = ""
+
+    private var vendorKey: String { vendor.vendor_key ?? "" }
+    private var isKhata: Bool { (vendor.pay ?? "") == "khata_roll" }
+
+    var body: some View {
+        SheetScaffold(title: vendor.name ?? "Vendor", accent: accent, onClose: onClose) {
+            Text("\(vendor.fulfilment ?? "deliver") · \(payText(vendor.pay)) — tap the items you need today.")
+                .font(.system(size: 12)).foregroundStyle(HK.textFaint)
+            SheetField(label: "Search this vendor’s items", text: $q, placeholder: "Search items…")
+            if isKhata {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 12, weight: .bold)).foregroundStyle(accent)
+                    Text("On the trip, clear yesterday’s bill. Today’s items are paid tomorrow.")
+                        .font(.system(size: 11.5, weight: .medium)).foregroundStyle(HK.textDim)
+                    Spacer()
+                }.padding(10).background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            }
+            if filtered.isEmpty {
+                Text("No saved items for this vendor — add one below.").font(.system(size: 13)).foregroundStyle(HK.textFaint)
+            } else {
+                ForEach(filtered) { it in vendorItemRow(it) }
+            }
+            // add a free-text item not in the master (PWA vNew)
+            HStack(spacing: 8) {
+                TextField("Add an item not listed…", text: $newName)
+                    .font(.system(size: 14)).foregroundStyle(HK.text).autocorrectionDisabled()
+                    .padding(10).background(HK.bgElev, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(HK.line, lineWidth: 1))
+                Button {
+                    model.addVendorFreeItem(vendorKey: vendorKey, name: newName); newName = ""
+                } label: {
+                    Text("Add").font(.system(size: 13, weight: .heavy)).foregroundStyle(.black)
+                        .padding(.horizontal, 14).padding(.vertical, 11).background(accent, in: RoundedRectangle(cornerRadius: 10))
+                }.buttonStyle(.plain)
+            }
+            sheetPrimary("Done", accent: accent) { onClose() }
+        }
+    }
+    private var filtered: [SaudaItem] {
+        let items = (model.settings?.items ?? []).filter { ($0.default_vendor ?? "") == vendorKey }
+        let brandOk = items.filter { it in
+            guard model.brand != "both" else { return true }
+            let b = (it.brand ?? "").lowercased()
+            return b.isEmpty || b == "both" || b == model.brand.lowercased()
+        }
+        let qq = q.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !qq.isEmpty else { return brandOk }
+        return brandOk.filter { (($0.label ?? "") + " " + ($0.aliases?.joined(separator: " ") ?? "")).lowercased().contains(qq) }
+    }
+    private func vendorItemRow(_ it: SaudaItem) -> some View {
+        let qty = model.vendorLineQty(vendorKey: vendorKey, itemName: it.label ?? "")
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(it.label ?? it.item_code ?? "—").font(.system(size: 14, weight: .semibold)).foregroundStyle(HK.text)
+                if let u = it.unit, !u.isEmpty { Text(u).font(.system(size: 11)).foregroundStyle(HK.textFaint) }
+            }
+            Spacer()
+            if qty > 0 {
+                HStack(spacing: 10) {
+                    Button { model.setVendorQty(vendorKey: vendorKey, item: it, qty: max(0, ((qty - 1) * 100).rounded() / 100)) } label: {
+                        Image(systemName: "minus.circle.fill").font(.system(size: 22)).foregroundStyle(HK.textDim)
+                    }.buttonStyle(.plain)
+                    Text(qty.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(qty)) : String(qty))
+                        .font(.system(size: 15, weight: .heavy, design: .rounded)).foregroundStyle(HK.text).frame(minWidth: 24)
+                    Button { model.setVendorQty(vendorKey: vendorKey, item: it, qty: ((qty + 1) * 100).rounded() / 100) } label: {
+                        Image(systemName: "plus.circle.fill").font(.system(size: 22)).foregroundStyle(accent)
+                    }.buttonStyle(.plain)
+                }
+            } else {
+                Button { model.setVendorQty(vendorKey: vendorKey, item: it, qty: 1) } label: {
+                    Image(systemName: "plus.circle.fill").font(.system(size: 24)).foregroundStyle(accent)
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(12).background(HK.card, in: RoundedRectangle(cornerRadius: 12))
+    }
+    private func payText(_ p: String?) -> String { (p ?? "per").replacingOccurrences(of: "khata_", with: "khata ") }
+}
+
 // ════════════════════════════ PAY (UPI) ════════════════════════════
 struct PaySheet: View {
     let order: SaudaOrder
@@ -451,6 +540,7 @@ struct EditItemSheet: View {
     @State private var vendorKey = ""
     @State private var form = "loose"
     @State private var packLabel = ""
+    @State private var category = ""
 
     var body: some View {
         SheetScaffold(title: item == nil ? "Add an item" : "Edit \(item?.label ?? "item")", accent: accent, onClose: onClose) {
@@ -462,6 +552,7 @@ struct EditItemSheet: View {
             }
             if form == "defined" { SheetField(label: "Pack", text: $packLabel, placeholder: "500 g") }
             SheetField(label: "Unit", text: $unit, placeholder: "kg / pc / ltr")
+            SheetField(label: "Category", text: $category, placeholder: "vegetables / dairy / packaging")
             Toggle(isOn: $live) { Text("Live price (no fixed rate)").font(.system(size: 14, weight: .semibold)).foregroundStyle(HK.textDim) }.tint(accent)
             if !live { SheetField(label: "Price ₹", text: $price, placeholder: "0", keyboard: .decimalPad) }
             brandRow
@@ -472,7 +563,8 @@ struct EditItemSheet: View {
                 var fields: [String: Any] = [
                     "item_code": item?.item_code ?? "NEW", "label": label, "form": form,
                     "unit": unit, "brand": brand, "default_vendor": vendorKey,
-                    "price_paise": live ? 0 : p, "price_mode": (live || p == 0) ? "live" : "fixed"
+                    "price_paise": live ? 0 : p, "price_mode": (live || p == 0) ? "live" : "fixed",
+                    "category": category
                 ]
                 if form == "defined" { fields["pack_label"] = packLabel }
                 Task { await model.saveItem(fields); onClose() }
@@ -510,6 +602,7 @@ struct EditItemSheet: View {
         guard let it = item else { return }
         label = it.label ?? ""; unit = it.unit ?? ""; brand = it.brand ?? "both"
         vendorKey = it.default_vendor ?? ""; form = it.form ?? "loose"; packLabel = it.pack_label ?? ""
+        category = it.category ?? ""
         live = it.isLive
         if it.hasPrice && !it.isLive { price = String(Int(it.priceRupees)) }
     }
