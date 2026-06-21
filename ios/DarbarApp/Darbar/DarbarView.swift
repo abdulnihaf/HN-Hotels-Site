@@ -9,8 +9,14 @@ struct DarbarView: View {
     @StateObject private var model = DarbarAppModel()
     static let accent = DK.gold
     private var accent: Color { Self.accent }
-    @State private var tab = 0
+    @State private var tab = Self.initialTab
     @State private var sheet: DarbarSheet?
+
+    // catalog/sim hook: launch straight into a tab (no effect in production)
+    static var initialTab: Int {
+        if let t = ProcessInfo.processInfo.environment["DARBAR_TAB"], let i = Int(t) { return i }
+        return 0
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
