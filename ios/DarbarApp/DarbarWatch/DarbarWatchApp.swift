@@ -84,7 +84,8 @@ actor DarbarWatchClient {
     }
 }
 
-let DACCENT = Color(red: 0x5B/255.0, green: 0x86/255.0, blue: 0xC9/255.0)
+// Darbar accent = the web app's gold #D4A24C (matches the phone app; was blue 0x5B86C9).
+let DACCENT = Color(red: 0xD4/255.0, green: 0xA2/255.0, blue: 0x4C/255.0)
 
 // ── root: paged glances (Today / Attendance / Health); Today opens the Court ──
 struct DarbarRoot: View {
