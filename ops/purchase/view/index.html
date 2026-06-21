@@ -598,7 +598,8 @@ async function load() {
     </td></tr>`;
 
   const r = await fetch(`${API}?action=purchase-ledger&pin=${PIN}&from=${from}&to=${to}&brand=${brand}`)
-    .then(x => x.json()).catch(e => ({ success: false, error: e.message }));
+    .then(x => x.ok ? x.json() : Promise.resolve({ success: false, error: `Odoo unavailable (${x.status}) — ledger temporarily inaccessible` }))
+    .catch(() => ({ success: false, error: 'Odoo unavailable — ledger temporarily inaccessible' }));
 
   STATE.isLoading = false;
   if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.style.opacity = ''; }

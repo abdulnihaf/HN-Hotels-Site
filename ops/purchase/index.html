@@ -715,7 +715,9 @@ async function loadPastEntries() {
     const today = _istYmdMinus(0);
     const fromDate = _istYmdMinus(HIST_DAYS - 1);
     const url = `${API}?action=purchase-ledger&pin=${PIN}&from=${fromDate}&to=${today}&brand=${HIST_BRAND}`;
-    const r = await fetch(url).then(x => x.json()).catch(e => ({ success: false, error: e.message }));
+    const r = await fetch(url)
+      .then(x => x.ok ? x.json() : Promise.resolve({ success: false, error: `Odoo unavailable (${x.status}) — past entries temporarily inaccessible` }))
+      .catch(() => ({ success: false, error: 'Odoo unavailable — past entries temporarily inaccessible' }));
     if (!r?.success) {
       list.innerHTML = `<div class="mute">Could not load: ${esc(r?.error || 'unknown')}</div>`;
       return;
