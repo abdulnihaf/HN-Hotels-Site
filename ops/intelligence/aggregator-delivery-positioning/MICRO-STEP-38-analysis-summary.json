@@ -1,0 +1,170 @@
+{
+  "pos_products": 170,
+  "swiggy_central_items": 3216,
+  "zomato_rank_items": 183,
+  "zomato_current_menu_rows": 202,
+  "full_table": "ops/intelligence/aggregator-delivery-positioning/MICRO-STEP-38-pos-sku-volume-price-map.csv",
+  "new_sku_table": "ops/intelligence/aggregator-delivery-positioning/MICRO-STEP-38-new-sku-opportunities.csv",
+  "top_20": [
+    {
+      "rank": 1,
+      "sku": "Chicken Boneless Biryani",
+      "score": 100.0,
+      "suggested_pay_price": 369,
+      "swiggy_match": "chicken boneless biryani",
+      "zomato_match": "chicken boneless biryani"
+    },
+    {
+      "rank": 2,
+      "sku": "Chicken Biryani",
+      "score": 70.0,
+      "suggested_pay_price": 329,
+      "swiggy_match": "chicken biryani",
+      "zomato_match": "chicken biryani"
+    },
+    {
+      "rank": 3,
+      "sku": "Ghee Rice",
+      "score": 62.76,
+      "suggested_pay_price": 129,
+      "swiggy_match": "ghee rice",
+      "zomato_match": "ghee rice"
+    },
+    {
+      "rank": 4,
+      "sku": "Chicken Fried Rice",
+      "score": 62.39,
+      "suggested_pay_price": 179,
+      "swiggy_match": "chicken fried rice",
+      "zomato_match": "chicken fried rice"
+    },
+    {
+      "rank": 5,
+      "sku": "Mutton Biryani",
+      "score": 58.03,
+      "suggested_pay_price": 429,
+      "swiggy_match": "mutton biryani",
+      "zomato_match": "mutton biryani"
+    },
+    {
+      "rank": 6,
+      "sku": "Chicken Kabab",
+      "score": 57.5,
+      "suggested_pay_price": 229,
+      "swiggy_match": "chicken kabab",
+      "zomato_match": "chicken kabab"
+    },
+    {
+      "rank": 7,
+      "sku": "Kerala Paratha",
+      "score": 51.12,
+      "suggested_pay_price": 39,
+      "swiggy_match": "kerala parotta",
+      "zomato_match": "kerala parotta"
+    },
+    {
+      "rank": 8,
+      "sku": "Kalmi Kabab",
+      "score": 49.8,
+      "suggested_pay_price": 269,
+      "swiggy_match": "kalmi kabab (4 pieces)",
+      "zomato_match": "kalmi kabab"
+    },
+    {
+      "rank": 9,
+      "sku": "Butter Naan",
+      "score": 48.31,
+      "suggested_pay_price": 69,
+      "swiggy_match": "butter naan",
+      "zomato_match": "butter naan"
+    },
+    {
+      "rank": 10,
+      "sku": "Roomali Roti",
+      "score": 48.14,
+      "suggested_pay_price": 29,
+      "swiggy_match": "rumali roti",
+      "zomato_match": "rumali roti"
+    },
+    {
+      "rank": 11,
+      "sku": "Paneer Butter Masala",
+      "score": 47.36,
+      "suggested_pay_price": 269,
+      "swiggy_match": "paneer butter masala",
+      "zomato_match": "paneer butter masala"
+    },
+    {
+      "rank": 12,
+      "sku": "Tandoori Chicken",
+      "score": 45.81,
+      "suggested_pay_price": 199,
+      "swiggy_match": "tandoori chicken",
+      "zomato_match": "tandoori chicken"
+    },
+    {
+      "rank": 13,
+      "sku": "Butter Chicken",
+      "score": 43.42,
+      "suggested_pay_price": 249,
+      "swiggy_match": "butter chicken",
+      "zomato_match": "butter chicken"
+    },
+    {
+      "rank": 14,
+      "sku": "Chicken Roll",
+      "score": 42.61,
+      "suggested_pay_price": 129,
+      "swiggy_match": "chicken roll",
+      "zomato_match": "chicken roll"
+    },
+    {
+      "rank": 15,
+      "sku": "Tandoori Chicken Masala",
+      "score": 42.43,
+      "suggested_pay_price": 199,
+      "swiggy_match": "chicken tandoori masala",
+      "zomato_match": "tandoori chicken"
+    },
+    {
+      "rank": 16,
+      "sku": "Chicken Noodles",
+      "score": 41.9,
+      "suggested_pay_price": 189,
+      "swiggy_match": "chicken noodles",
+      "zomato_match": "chicken noodles"
+    },
+    {
+      "rank": 17,
+      "sku": "Chicken Kathi Roll",
+      "score": 41.07,
+      "suggested_pay_price": 129,
+      "swiggy_match": "chicken roll",
+      "zomato_match": "chicken roll"
+    },
+    {
+      "rank": 18,
+      "sku": "Chicken Zinger Roll",
+      "score": 40.66,
+      "suggested_pay_price": 129,
+      "swiggy_match": "chicken roll",
+      "zomato_match": "chicken roll"
+    },
+    {
+      "rank": 19,
+      "sku": "Chicken 65",
+      "score": 37.79,
+      "suggested_pay_price": 349,
+      "swiggy_match": "chicken 65",
+      "zomato_match": "chicken 65"
+    },
+    {
+      "rank": 20,
+      "sku": "Chicken Tikka Masala",
+      "score": 37.4,
+      "suggested_pay_price": 349,
+      "swiggy_match": "chicken tikka masala",
+      "zomato_match": "chicken tikka"
+    }
+  ]
+}
