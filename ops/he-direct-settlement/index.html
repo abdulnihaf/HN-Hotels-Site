@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HE Direct Settlement</title>
+  <link rel="stylesheet" href="/assets/ops-ui.css">
+  <style>
+    :root { color-scheme: dark; --bg:#0f1117; --panel:#161a23; --line:#262c38; --ink:#f3f4f6; --muted:#9ca3af; --brand:#f59e0b; --ok:#22c55e; --bad:#ef4444; --warn:#f97316; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    a { color:inherit; }
+    .wrap { max-width:1180px; margin:0 auto; padding:18px; }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:16px; }
+    .title { font-size:22px; font-weight:800; letter-spacing:0; margin:0; }
+    .sub { color:var(--muted); font-size:13px; margin-top:3px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .grid { display:grid; gap:12px; }
+    .grid-2 { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+    .controls { display:grid; grid-template-columns:140px 180px 1fr auto; gap:10px; align-items:end; }
+    label { display:block; color:var(--muted); font-size:12px; font-weight:700; margin-bottom:6px; }
+    input, textarea, select { width:100%; min-height:44px; background:#0d1017; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:10px 11px; font-size:15px; }
+    input[type=number] { text-align:right; font-variant-numeric:tabular-nums; }
+    textarea { min-height:80px; resize:vertical; }
+    button { min-height:44px; border:0; border-radius:8px; padding:10px 14px; font-weight:800; cursor:pointer; }
+    .btn { background:var(--brand); color:#111827; }
+    .btn.secondary { background:#232936; color:var(--ink); border:1px solid var(--line); }
+    .btn:disabled { opacity:.45; cursor:not-allowed; }
+    .seg { display:flex; background:#0d1017; border:1px solid var(--line); border-radius:8px; padding:3px; }
+    .seg button { flex:1; min-height:38px; background:transparent; color:var(--muted); }
+    .seg button.active { background:#2b210f; color:#fbbf24; }
+    .kpis { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; margin:12px 0; }
+    .kpi { background:#0d1017; border:1px solid var(--line); border-radius:8px; padding:12px; }
+    .kpi .v { font-size:22px; font-weight:900; font-variant-numeric:tabular-nums; }
+    .kpi .l { color:var(--muted); font-size:12px; margin-top:3px; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; }
+    table { width:100%; border-collapse:collapse; min-width:980px; }
+    th, td { border-bottom:1px solid var(--line); padding:10px; text-align:left; vertical-align:middle; font-size:13px; }
+    th { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; background:#11151e; position:sticky; top:0; }
+    tr:last-child td { border-bottom:0; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .item { font-weight:800; }
+    .vendor { color:var(--muted); font-size:12px; margin-top:2px; }
+    .pill { display:inline-flex; align-items:center; min-height:24px; padding:3px 8px; border-radius:999px; font-size:11px; font-weight:800; background:#232936; color:var(--muted); }
+    .ok { color:#86efac; }
+    .bad { color:#fca5a5; }
+    .warn { color:#fdba74; }
+    .hidden { display:none !important; }
+    .pin { min-height:calc(100vh - 36px); display:flex; align-items:center; justify-content:center; }
+    .pin-card { width:min(340px, 100%); }
+    .pin-card input { text-align:center; font-size:24px; letter-spacing:.4em; font-weight:900; }
+    .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#111827; border:1px solid var(--line); border-radius:8px; padding:10px 14px; font-size:13px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+    .due-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+    @media (max-width: 760px) {
+      .wrap { padding:12px; }
+      .top { align-items:flex-start; flex-direction:column; }
+      .controls { grid-template-columns:1fr; }
+      .grid-2, .grid-3, .kpis, .due-grid { grid-template-columns:1fr; }
+      .title { font-size:19px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="pinGate" class="wrap pin">
+    <div class="panel pin-card">
+      <h1 class="title">HE Direct Settlement</h1>
+      <p class="sub">Hamza Express direct 1:1 stock control</p>
+      <div style="margin-top:18px">
+        <label for="pinInput">PIN</label>
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="----">
+      </div>
+      <button id="unlockBtn" class="btn" style="width:100%; margin-top:12px">Unlock</button>
+      <div id="pinError" class="sub bad" style="min-height:18px; margin-top:8px"></div>
+    </div>
+  </div>
+
+  <main id="app" class="wrap hidden">
+    <div class="top">
+      <div>
+        <h1 class="title">HE Direct Settlement</h1>
+        <div class="sub" id="userLine">Hamza Express</div>
+      </div>
+      <div style="display:flex; gap:8px">
+        <a class="btn secondary" href="/ops/purchase/" style="text-decoration:none; display:inline-flex; align-items:center">Purchase</a>
+        <button class="btn secondary" id="refreshBtn">Refresh</button>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="controls">
+        <div>
+          <label>Mode</label>
+          <div class="seg">
+            <button id="modeBootstrap" type="button">Bootstrap</button>
+            <button id="modeEod" type="button" class="active">EOD</button>
+          </div>
+        </div>
+        <div>
+          <label for="businessDate">Business Date</label>
+          <input id="businessDate" type="date">
+        </div>
+        <div>
+          <label for="notes">Notes</label>
+          <input id="notes" type="text" placeholder="Optional">
+        </div>
+        <button id="saveBtn" class="btn">Save</button>
+      </div>
+      <div class="sub" id="windowLine" style="margin-top:10px"></div>
+    </section>
+
+    <section class="kpis">
+      <div class="kpi"><div class="v" id="kpiItems">0</div><div class="l">Tracked items</div></div>
+      <div class="kpi"><div class="v" id="kpiPurchased">0</div><div class="l">Purchased today</div></div>
+      <div class="kpi"><div class="v" id="kpiVariance">0</div><div class="l">Net discrepancy units</div></div>
+      <div class="kpi"><div class="v" id="kpiValue">Rs 0</div><div class="l">Discrepancy value</div></div>
+    </section>
+
+    <section id="duesPanel" class="panel" style="margin-bottom:12px">
+      <div class="top" style="margin-bottom:10px">
+        <div>
+          <div class="item">Bootstrap vendor due balances</div>
+          <div class="sub">HE direct vendors only. Ganga Bakery is excluded from this HE flow.</div>
+        </div>
+      </div>
+      <div id="duesGrid" class="due-grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="top" style="margin-bottom:10px">
+        <div>
+          <div class="item" id="tableTitle">EOD counts</div>
+          <div class="sub" id="sourceLine">Loading source status</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:210px">Item</th>
+              <th class="num">Opening</th>
+              <th class="num">Purchased</th>
+              <th class="num">Sold/issued</th>
+              <th class="num">Closing count</th>
+              <th class="num">Expected</th>
+              <th class="num">Gap</th>
+              <th class="num">Value</th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:12px">
+      <div class="item">Recent sessions</div>
+      <div id="sessionsList" class="sub" style="margin-top:8px">Loading</div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    const API = '/api/he-direct-settlement';
+    const state = { pin: '', user: null, mode: 'eod', items: [], vendors: [] };
+
+    const $ = id => document.getElementById(id);
+    const today = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+    $('businessDate').value = today;
+
+    $('pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') verifyPin(); });
+    $('unlockBtn').addEventListener('click', verifyPin);
+    $('refreshBtn').addEventListener('click', loadSummary);
+    $('saveBtn').addEventListener('click', saveSettlement);
+    $('businessDate').addEventListener('change', loadSummary);
+    $('modeBootstrap').addEventListener('click', () => setMode('bootstrap'));
+    $('modeEod').addEventListener('click', () => setMode('eod'));
+
+    async function verifyPin() {
+      const pin = $('pinInput').value.trim();
+      if (pin.length !== 4) return;
+      $('pinError').textContent = '';
+      const res = await fetch(`${API}?action=verify-pin&pin=${encodeURIComponent(pin)}`).then(r => r.json()).catch(() => null);
+      if (!res?.success) {
+        $('pinError').textContent = res?.error || 'Invalid PIN';
+        $('pinInput').value = '';
+        return;
+      }
+      state.pin = pin;
+      state.user = res.user;
+      $('pinGate').classList.add('hidden');
+      $('app').classList.remove('hidden');
+      $('userLine').textContent = `${res.user.name} - Hamza Express`;
+      await loadSummary();
+      await loadSessions();
+    }
+
+    function setMode(mode) {
+      state.mode = mode;
+      $('modeBootstrap').classList.toggle('active', mode === 'bootstrap');
+      $('modeEod').classList.toggle('active', mode === 'eod');
+      $('duesPanel').classList.toggle('hidden', mode !== 'bootstrap');
+      $('tableTitle').textContent = mode === 'bootstrap' ? 'Bootstrap counts' : 'EOD counts';
+      loadSummary();
+    }
+
+    async function loadSummary() {
+      if (!state.pin) return;
+      setBusy(true);
+      const qs = new URLSearchParams({
+        action: 'summary',
+        pin: state.pin,
+        business_date: $('businessDate').value,
+        settlement_type: state.mode,
+      });
+      const res = await fetch(`${API}?${qs}`).then(r => r.json()).catch(e => ({ success:false, error:e.message }));
+      setBusy(false);
+      if (!res.success) return showToast(res.error || 'Load failed');
+      state.items = res.items || [];
+      state.vendors = res.vendors || [];
+      $('windowLine').textContent = `HE business day: ${res.business_window_ist.from} to ${res.business_window_ist.to} IST`;
+      $('sourceLine').textContent = `Purchases: ${res.purchase_status || 'unknown'} - Sales: ${res.sales_status || 'unknown'} - ${res.sales_note || ''}`;
+      renderDues();
+      renderItems();
+      renderKpis();
+    }
+
+    function renderDues() {
+      $('duesGrid').innerHTML = state.vendors.map(v => `
+        <div>
+          <label>${esc(v.name)} due, Rs</label>
+          <input type="number" step="0.01" min="0" data-due="${esc(v.key)}" value="${((v.due_balance_paise || 0) / 100).toFixed(2)}">
+        </div>
+      `).join('');
+    }
+
+    function renderItems() {
+      const bootstrap = state.mode === 'bootstrap';
+      $('itemsBody').innerHTML = state.items.map(item => {
+        const gap = item.discrepancy_units;
+        const gapClass = gap == null || gap === 0 ? 'ok' : gap < 0 ? 'bad' : 'warn';
+        return `
+          <tr data-item="${esc(item.key)}">
+            <td>
+              <div class="item">${esc(item.label)}</div>
+              <div class="vendor">${esc(item.vendor_name)} - ${esc(item.unit)}</div>
+            </td>
+            <td class="num"><input type="number" step="0.001" data-field="opening_units" value="${inputNum(item.opening_units)}" ${bootstrap ? '' : ''}></td>
+            <td class="num"><span class="pill">${bootstrap ? '0' : num(item.purchased_units)}</span></td>
+            <td class="num"><input type="number" step="0.001" data-field="sold_units" value="${bootstrap ? '0' : inputNum(item.sold_units)}" ${bootstrap ? 'disabled' : ''}></td>
+            <td class="num"><input type="number" step="0.001" data-field="closing_units" value="${item.closing_units == null ? '' : inputNum(item.closing_units)}"></td>
+            <td class="num" data-calc="expected">${num(item.expected_closing_units)}</td>
+            <td class="num ${gapClass}" data-calc="gap">${gap == null ? '-' : num(gap)}</td>
+            <td class="num ${gapClass}" data-calc="value">${gap == null ? '-' : money(item.discrepancy_value_paise || 0)}</td>
+          </tr>
+        `;
+      }).join('');
+      document.querySelectorAll('#itemsBody input').forEach(input => input.addEventListener('input', recalc));
+      recalc();
+    }
+
+    function recalc() {
+      let purchasedTotal = 0;
+      let gapTotal = 0;
+      let valueTotal = 0;
+      for (const row of document.querySelectorAll('#itemsBody tr')) {
+        const key = row.dataset.item;
+        const item = state.items.find(x => x.key === key);
+        const opening = readRowNumber(row, 'opening_units');
+        const purchased = state.mode === 'bootstrap' ? 0 : Number(item.purchased_units || 0);
+        const sold = state.mode === 'bootstrap' ? 0 : readRowNumber(row, 'sold_units');
+        const closingRaw = row.querySelector('[data-field="closing_units"]').value;
+        const closing = closingRaw === '' ? null : Number(closingRaw);
+        const expected = state.mode === 'bootstrap' ? (closing == null ? opening : closing) : round(opening + purchased - sold);
+        const gap = state.mode === 'bootstrap' ? (closing == null ? null : 0) : (closing == null ? null : round(closing - expected));
+        const value = gap == null ? 0 : Math.round(gap * Number(item.latest_unit_cost_paise || item.fallback_unit_cost_paise || 0));
+        row.querySelector('[data-calc="expected"]').textContent = num(expected);
+        const gapCell = row.querySelector('[data-calc="gap"]');
+        const valCell = row.querySelector('[data-calc="value"]');
+        gapCell.textContent = gap == null ? '-' : num(gap);
+        valCell.textContent = gap == null ? '-' : money(value);
+        gapCell.className = `num ${gap == null || gap === 0 ? 'ok' : gap < 0 ? 'bad' : 'warn'}`;
+        valCell.className = gapCell.className;
+        purchasedTotal += purchased;
+        if (gap != null) gapTotal += gap;
+        valueTotal += value;
+      }
+      $('kpiItems').textContent = state.items.length;
+      $('kpiPurchased').textContent = num(purchasedTotal);
+      $('kpiVariance').textContent = num(round(gapTotal));
+      $('kpiValue').textContent = money(valueTotal);
+    }
+
+    async function saveSettlement() {
+      if (!state.pin) return;
+      const items = [...document.querySelectorAll('#itemsBody tr')].map(row => ({
+        item_key: row.dataset.item,
+        opening_units: readRowNumber(row, 'opening_units'),
+        sold_units: readRowNumber(row, 'sold_units'),
+        closing_units: readRowNumber(row, 'closing_units'),
+      }));
+      const vendor_dues = [...document.querySelectorAll('[data-due]')].map(input => ({
+        vendor_key: input.dataset.due,
+        due_balance_rupees: Number(input.value || 0),
+      }));
+      setBusy(true);
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save-settlement',
+          pin: state.pin,
+          business_date: $('businessDate').value,
+          settlement_type: state.mode,
+          notes: $('notes').value.trim(),
+          items,
+          vendor_dues: state.mode === 'bootstrap' ? vendor_dues : [],
+        }),
+      }).then(r => r.json()).catch(e => ({ success:false, error:e.message }));
+      setBusy(false);
+      if (!res.success) return showToast(res.error || 'Save failed');
+      showToast('Saved');
+      await loadSummary();
+      await loadSessions();
+    }
+
+    async function loadSessions() {
+      if (!state.pin) return;
+      const res = await fetch(`${API}?action=sessions&pin=${encodeURIComponent(state.pin)}`).then(r => r.json()).catch(() => null);
+      if (!res?.success || !res.sessions?.length) {
+        $('sessionsList').textContent = 'No sessions yet';
+        return;
+      }
+      $('sessionsList').innerHTML = res.sessions.map(s =>
+        `<div>${esc(s.business_date)} - ${esc(s.settlement_type)} - ${esc(s.actor_name)} - ${esc(s.created_at)}</div>`
+      ).join('');
+    }
+
+    function readRowNumber(row, field) {
+      const input = row.querySelector(`[data-field="${field}"]`);
+      return Number(input?.value || 0);
+    }
+
+    function setBusy(on) {
+      $('saveBtn').disabled = on;
+      $('refreshBtn').disabled = on;
+    }
+
+    function showToast(text) {
+      $('toast').textContent = text;
+      $('toast').classList.remove('hidden');
+      setTimeout(() => $('toast').classList.add('hidden'), 2600);
+    }
+
+    function round(n) { return Math.round((Number(n) || 0) * 1000) / 1000; }
+    function num(n) { return Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 }); }
+    function inputNum(n) { return Number(n || 0).toFixed(3).replace(/\.?0+$/, ''); }
+    function money(paise) {
+      const sign = paise < 0 ? '-' : '';
+      return `${sign}Rs ${Math.abs(Math.round(paise || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+    }
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+  </script>
+</body>
+</html>
