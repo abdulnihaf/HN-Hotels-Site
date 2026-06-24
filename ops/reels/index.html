@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c14">
+<title>HN Reels Approval Desk</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/assets/ops-ui.css">
+<style>
+  :root {
+    --he-brown: #4a2418;
+    --he-brown-2: #2d160f;
+    --he-gold: #c89445;
+    --he-cream: #f0dec0;
+    --ink: #f8efe3;
+    --ok-soft: rgba(16,185,129,0.16);
+    --warn-soft: rgba(245,158,11,0.16);
+    --bad-soft: rgba(239,68,68,0.16);
+  }
+  body {
+    min-height: 100vh;
+    background:
+      linear-gradient(180deg, rgba(74,36,24,0.34), rgba(12,12,20,0.12) 38%, rgba(12,12,20,1)),
+      var(--bg);
+  }
+  .wrap { max-width: 1500px; margin: 0 auto; padding: 16px 14px 72px; }
+  .topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .eyebrow {
+    color: var(--he-gold);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 3px;
+  }
+  .titleblock h1 { font-size: 25px; line-height: 1.12; font-weight: 800; margin-bottom: 3px; }
+  .titleblock .sub { max-width: 760px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .summary {
+    border: 1px solid var(--border);
+    background: rgba(22,22,31,0.84);
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 78px;
+  }
+  .summary .value { font-size: 22px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .summary .label {
+    margin-top: 6px;
+    color: var(--text-dim);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.45px;
+    font-weight: 800;
+  }
+  .reel-card {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    border: 1px solid var(--border-strong);
+    background: rgba(22,22,31,0.88);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .video-shell {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    min-width: 0;
+  }
+  .video-frame {
+    background: #050509;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 420px;
+    width: 100%;
+    justify-self: center;
+  }
+  video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    background: #050509;
+  }
+  .strip {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: block;
+    background: #07070b;
+  }
+  .info-stack { display: grid; gap: 10px; min-width: 0; }
+  .card-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .card-title h2 { font-size: 20px; line-height: 1.2; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .badge-pass { background: var(--ok-soft); color: #34d399; }
+  .badge-gap { background: var(--warn-soft); color: #fbbf24; }
+  .badge-worker { background: rgba(200,148,69,0.16); color: #e7bc73; }
+  .section {
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.025);
+    border-radius: 8px;
+    padding: 11px;
+  }
+  .section h3 { margin-bottom: 7px; }
+  .kv-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  .kv {
+    display: grid;
+    grid-template-columns: 112px 1fr;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .kv .k { color: var(--text-mute); font-weight: 800; text-transform: uppercase; font-size: 10px; letter-spacing: 0.35px; }
+  .checks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .check {
+    min-height: 46px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 10px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .check .state { border-radius: 999px; padding: 3px 7px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.35px; }
+  .check.pass .state { background: var(--ok-soft); color: #34d399; }
+  .check.gap .state { background: var(--warn-soft); color: #fbbf24; }
+  .decision-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .decision {
+    min-height: 46px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .decision:hover { border-color: rgba(200,148,69,0.7); }
+  .decision.active { background: var(--he-gold); color: #160d08; border-color: var(--he-gold); }
+  .panel-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .panel {
+    border: 1px solid var(--border);
+    background: rgba(22,22,31,0.78);
+    border-radius: 8px;
+    padding: 13px;
+  }
+  .panel h2 { font-size: 16px; margin-bottom: 8px; }
+  .campaign-list { display: grid; gap: 8px; }
+  .campaign {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    background: rgba(255,255,255,0.025);
+  }
+  .campaign-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 7px;
+  }
+  .campaign-name { font-size: 13px; font-weight: 800; }
+  .campaign-role { color: var(--text-dim); font-size: 12px; }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .metric {
+    border-radius: 8px;
+    background: rgba(255,255,255,0.03);
+    padding: 8px;
+  }
+  .metric .m-value { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .metric .m-label { color: var(--text-mute); font-size: 10px; text-transform: uppercase; letter-spacing: 0.35px; }
+  .shot-list {
+    display: grid;
+    gap: 7px;
+    counter-reset: shots;
+  }
+  .shot {
+    counter-increment: shots;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-height: 44px;
+    padding: 9px 10px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    background: rgba(255,255,255,0.025);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .shot::before {
+    content: counter(shots);
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(200,148,69,0.17);
+    color: var(--he-gold);
+    font-size: 11px;
+    flex: 0 0 auto;
+  }
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(18px + var(--safe-bottom));
+    transform: translateX(-50%);
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    display: none;
+    z-index: 20;
+  }
+  .decision-note {
+    min-height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    padding: 10px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .micro { color: var(--text-mute); font-size: 11px; line-height: 1.35; }
+  @media (min-width: 760px) {
+    .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .checks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .decision-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .panel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @media (min-width: 1080px) {
+    .reel-card { grid-template-columns: minmax(320px, 440px) 1fr; align-items: start; }
+    .panel-toolchain { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="topbar">
+    <div class="titleblock">
+      <div class="eyebrow">HN Marketing / HE Reels</div>
+      <h1>Reel Approval Desk</h1>
+      <div class="sub">Meta ad-grade reel control surface: strategy, proof, render, QA, owner decision.</div>
+    </div>
+    <div class="actions">
+      <a class="btn btn-ghost" href="/ops/marketing-control/">Marketing Control</a>
+      <button id="copy-all" class="btn btn-primary">Copy Packet</button>
+    </div>
+  </div>
+
+  <section id="summary" class="summary-grid" aria-label="Reel execution summary"></section>
+  <section id="queue" class="grid" aria-label="Approval queue"></section>
+  <section id="panels" class="panel-grid" aria-label="Intelligence panels"></section>
+</main>
+<div id="toast" class="toast"></div>
+
+<script>
+const STATE_URL = './state.json';
+const decisionLabels = {
+  approve: 'Approve',
+  change_text: 'Change text',
+  change_food_shot: 'Change food shot',
+  make_raw: 'Make raw',
+  make_premium: 'Make premium',
+  reject: 'Reject'
+};
+let STATE = null;
+let decisions = JSON.parse(localStorage.getItem('hn.reels.decisions.v1') || '{}');
+
+function money(value) {
+  return `Rs ${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+}
+
+function toast(text) {
+  const el = document.getElementById('toast');
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { el.style.display = 'none'; }, 1800);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    const area = document.createElement('textarea');
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+  toast('Copied');
+}
+
+function saveDecision(reelId, action) {
+  decisions[reelId] = {
+    action,
+    label: decisionLabels[action] || action,
+    at: new Date().toISOString()
+  };
+  localStorage.setItem('hn.reels.decisions.v1', JSON.stringify(decisions));
+  renderQueue();
+}
+
+function packet() {
+  const queue = STATE.approval_queue.map(reel => ({
+    id: reel.id,
+    title: reel.title,
+    status: reel.status,
+    current_role: reel.current_role,
+    decision: decisions[reel.id] || null,
+    meta_contract: reel.meta_contract,
+    qa: reel.qa
+  }));
+  return JSON.stringify({
+    surface: STATE.surface,
+    generated_at_ist: STATE.generated_at_ist,
+    decisions: queue,
+    next_template: STATE.next_template,
+    toolchain: STATE.toolchain
+  }, null, 2);
+}
+
+function renderSummary() {
+  const reel = STATE.approval_queue[0];
+  const best = STATE.meta_learning.campaigns.find(item => item.role === 'Best June adset');
+  const summary = [
+    ['1', 'Reel ready'],
+    [money(best.cpc_rs), 'Best CPC signal'],
+    [best.ctr, 'Best CTR signal'],
+    [STATE.toolchain.rtx_worker.gpu.replace('NVIDIA GeForce ', ''), 'RTX worker']
+  ];
+  document.getElementById('summary').innerHTML = summary.map(([value, label]) => `
+    <div class="summary">
+      <div class="value">${value}</div>
+      <div class="label">${label}</div>
+    </div>
+  `).join('');
+}
+
+function renderQueue() {
+  const queue = document.getElementById('queue');
+  queue.innerHTML = STATE.approval_queue.map(reel => {
+    const decision = decisions[reel.id];
+    return `
+      <article class="reel-card">
+        <div class="video-shell">
+          <div class="video-frame">
+            <video src="${reel.video}" controls playsinline preload="metadata" poster="${reel.poster}"></video>
+          </div>
+          <div>
+            <h3>Rendered V1 strip</h3>
+            <img class="strip" src="${reel.frame_strip}" alt="QISSA rendered frame strip">
+          </div>
+          <div>
+            <h3>Winning first-video pattern</h3>
+            <img class="strip" src="${reel.comparison_strip}" alt="First Meta video frame strip">
+          </div>
+        </div>
+        <div class="info-stack">
+          <div class="card-title">
+            <div>
+              <h2>${reel.title}</h2>
+              <div class="sub">${reel.strategic_read}</div>
+            </div>
+            <div class="badges">
+              <span class="badge badge-pass">QA pass</span>
+              <span class="badge badge-worker">RTX</span>
+              <span class="badge badge-gap">Not parent</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Meta Contract</h3>
+            <div class="kv-grid">
+              <div class="kv"><div class="k">Stage</div><div>${reel.meta_contract.funnel_stage}</div></div>
+              <div class="kv"><div class="k">Audience</div><div>${reel.meta_contract.audience}</div></div>
+              <div class="kv"><div class="k">Objective</div><div>${reel.meta_contract.objective}</div></div>
+              <div class="kv"><div class="k">CTA</div><div>${reel.meta_contract.cta}</div></div>
+              <div class="kv"><div class="k">Pool</div><div>${reel.meta_contract.feeds_next_pool}</div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Proof Contract</h3>
+            <div class="kv-grid">
+              <div class="kv"><div class="k">Location</div><div>${reel.proof_contract.location_proof}</div></div>
+              <div class="kv"><div class="k">Brand</div><div>${reel.proof_contract.brand_proof}</div></div>
+              <div class="kv"><div class="k">Food</div><div>${reel.proof_contract.food_proof}</div></div>
+              <div class="kv"><div class="k">Comfort</div><div>${reel.proof_contract.comfort_proof}</div></div>
+              <div class="kv"><div class="k">Action</div><div>${reel.proof_contract.action_proof}</div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>QA</h3>
+            <div class="checks">
+              ${reel.qa.map(check => `
+                <div class="check ${check.state}">
+                  <span>${check.label}</span>
+                  <span class="state">${check.state}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Owner Decision</h3>
+            <div class="decision-row">
+              ${reel.owner_actions.map(action => `
+                <button class="decision ${decision?.action === action ? 'active' : ''}" data-reel="${reel.id}" data-action="${action}">
+                  ${decisionLabels[action] || action}
+                </button>
+              `).join('')}
+            </div>
+            <div class="decision-note" style="margin-top:8px;">
+              ${decision ? `Selected: ${decision.label}` : 'No owner decision selected yet.'}
+            </div>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function renderCampaigns() {
+  const campaigns = STATE.meta_learning.campaigns;
+  return `
+    <div class="panel">
+      <h2>Meta Learning</h2>
+      <div class="sub" style="margin-bottom:10px;">${STATE.meta_learning.direction}</div>
+      <div class="campaign-list">
+        ${campaigns.map(item => `
+          <div class="campaign">
+            <div class="campaign-head">
+              <div>
+                <div class="campaign-name">${item.name}</div>
+                <div class="campaign-role">${item.role}</div>
+              </div>
+              <span class="badge badge-neutral">${item.campaign_id}</span>
+            </div>
+            <div class="metrics">
+              <div class="metric"><div class="m-value">${money(item.spend_rs)}</div><div class="m-label">Spend</div></div>
+              <div class="metric"><div class="m-value">${Number(item.link_clicks || 0).toLocaleString('en-IN')}</div><div class="m-label">Clicks</div></div>
+              <div class="metric"><div class="m-value">${item.ctr}</div><div class="m-label">CTR</div></div>
+              <div class="metric"><div class="m-value">${money(item.cpc_rs)}</div><div class="m-label">CPC</div></div>
+            </div>
+            <div class="micro" style="margin-top:8px;">${item.read}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderNextTemplate() {
+  const next = STATE.next_template;
+  return `
+    <div class="panel">
+      <h2>${next.title}</h2>
+      <div class="sub" style="margin-bottom:10px;">${next.why}</div>
+      <div class="shot-list">
+        ${next.shot_order.map(shot => `<div class="shot">${shot}</div>`).join('')}
+      </div>
+      <div class="section" style="margin-top:10px;">
+        <h3>Minimum Contract</h3>
+        <div class="kv-grid">
+          <div class="kv"><div class="k">Duration</div><div>${next.minimum_contract.duration_window_sec} sec</div></div>
+          <div class="kv"><div class="k">First 2 sec</div><div>${next.minimum_contract.first_2_sec}</div></div>
+          <div class="kv"><div class="k">CTA</div><div>${next.minimum_contract.cta}</div></div>
+          <div class="kv"><div class="k">No render if</div><div>${next.minimum_contract.no_render_if_missing.join(', ')}</div></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderToolchain() {
+  const worker = STATE.toolchain.rtx_worker;
+  const laptop = STATE.toolchain.laptop;
+  return `
+    <div class="panel panel-toolchain">
+      <h2>Render Stack</h2>
+      <div class="metrics">
+        <div class="metric"><div class="m-value">${worker.gpu.replace('NVIDIA GeForce ', '')}</div><div class="m-label">GPU</div></div>
+        <div class="metric"><div class="m-value">${worker.vram}</div><div class="m-label">VRAM</div></div>
+        <div class="metric"><div class="m-value">${worker.remotion}</div><div class="m-label">Worker Remotion</div></div>
+        <div class="metric"><div class="m-value">${laptop.remotion}</div><div class="m-label">Local Remotion</div></div>
+      </div>
+      <div class="section" style="margin-top:10px;">
+        <h3>Capability</h3>
+        <div class="kv-grid">
+          <div class="kv"><div class="k">Worker</div><div>${worker.host} - ${worker.role}</div></div>
+          <div class="kv"><div class="k">NVENC</div><div>${worker.nvenc.join(', ')}</div></div>
+          <div class="kv"><div class="k">Browser</div><div>${worker.remotion_browser}</div></div>
+          <div class="kv"><div class="k">Tools</div><div>${STATE.toolchain.open_source_tools.join(', ')}</div></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPanels() {
+  document.getElementById('panels').innerHTML = renderCampaigns() + renderNextTemplate() + renderToolchain();
+}
+
+function render() {
+  renderSummary();
+  renderQueue();
+  renderPanels();
+}
+
+document.addEventListener('click', event => {
+  const decision = event.target.closest('[data-reel][data-action]');
+  if (decision) {
+    saveDecision(decision.dataset.reel, decision.dataset.action);
+    return;
+  }
+  if (event.target.closest('#copy-all')) copyText(packet());
+});
+
+fetch(`${STATE_URL}?v=${Date.now()}`, { cache: 'no-store' })
+  .then(response => {
+    if (!response.ok) throw new Error(`state ${response.status}`);
+    return response.json();
+  })
+  .then(data => {
+    STATE = data;
+    render();
+  })
+  .catch(err => {
+    document.getElementById('queue').innerHTML = `
+      <article class="reel-card">
+        <div class="section">
+          <h2>Reel desk unavailable</h2>
+          <div class="sub">${err.message}</div>
+        </div>
+      </article>
+    `;
+  });
+</script>
+</body>
+</html>

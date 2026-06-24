@@ -1,0 +1,209 @@
+{
+  "version": "reels-approval-v1",
+  "generated_at_ist": "2026-06-17T13:50:00+05:30",
+  "surface": {
+    "title": "Reel Approval Desk",
+    "brand_scope": "HE first, NCH ready later",
+    "purpose": "Owner-facing decision desk for Meta ad-grade reels.",
+    "principle": "No reel renders without Meta job, proof, brand, CTA, and QA contracts."
+  },
+  "toolchain": {
+    "status": "ready",
+    "laptop": {
+      "video_engine_path": "/Users/nihaf/Documents/Tech/he-video-engine",
+      "remotion": "4.0.445",
+      "ffmpeg": "8.1",
+      "node_modules": "present",
+      "role": "local Remotion design and motion-graphics source"
+    },
+    "rtx_worker": {
+      "host": "hn-rtx-worker",
+      "gpu": "NVIDIA GeForce RTX 3060",
+      "vram": "12288 MiB",
+      "driver": "595.71.05",
+      "node": "v22.22.1",
+      "npm_route": "corepack npm 11.17.0",
+      "ffmpeg": "8.0.1",
+      "nvenc": ["h264_nvenc", "hevc_nvenc", "av1_nvenc"],
+      "remotion": "4.0.445",
+      "remotion_browser": "Chrome Headless Shell downloaded and compositions listed",
+      "role": "GPU/NVENC render and batch output"
+    },
+    "open_source_tools": [
+      "Remotion",
+      "React",
+      "TypeScript",
+      "FFmpeg",
+      "NVENC",
+      "Python",
+      "Node.js",
+      "Chrome Headless Shell"
+    ],
+    "guardrails": [
+      "No packages installed into HN-Hotels-Site",
+      "Render dependencies live in he-video-engine and hn-rtx-worker video workspace",
+      "Final Meta upload remains under 5 MB",
+      "No wrong-food render allowed"
+    ]
+  },
+  "meta_learning": {
+    "source": "Live production API read on 2026-06-17",
+    "best_current_signal": "Jun local-food HKP 2km adset",
+    "direction": "Build cold local classifier reels before scaling narrow dish reels.",
+    "campaigns": [
+      {
+        "name": "HE_B1_HAMZA_LOYALIST_MAPS_500D_20260517",
+        "campaign_id": "120246002668360505",
+        "role": "First winning broad local classifier",
+        "spend_rs": 3701.32,
+        "impressions": 217465,
+        "reach": 163090,
+        "link_clicks": 6473,
+        "landing_page_views": 3190,
+        "ctr": "3.566%",
+        "cpc_rs": 0.477,
+        "cpm_rs": 17.02,
+        "video_95pct": 7638,
+        "read": "Worked because it showed place, old Hamza memory, Express format, seating, food, parcel, brand, and directions."
+      },
+      {
+        "name": "HE_VIDEO_DIRECTIONS_20260606_7D_Traffic",
+        "campaign_id": "120247496782260505",
+        "role": "Current June directions video test",
+        "spend_rs": 4392.02,
+        "impressions": 66731,
+        "reach": 37508,
+        "link_clicks": 2861,
+        "landing_page_views": 1862,
+        "ctr": "4.989%",
+        "cpc_rs": 1.319,
+        "cpm_rs": 65.82,
+        "read": "Broad local food adset won. Narrow warm dinner and late adsets were costlier."
+      },
+      {
+        "name": "03_LocalFoodVideo_5PM_1AM_HKP2KM_RestaurantsFood_800",
+        "campaign_id": "120247496782260505",
+        "role": "Best June adset",
+        "spend_rs": 799.35,
+        "impressions": 37796,
+        "reach": 34881,
+        "link_clicks": 2120,
+        "landing_page_views": 1419,
+        "ctr": "6.212%",
+        "cpc_rs": 0.34,
+        "cpm_rs": 21.15,
+        "read": "This is the strongest proof that local-food classifier reels should be parent templates."
+      },
+      {
+        "name": "HE_RT_STATIC_FOOTFALL_300D_20260519_TO_0607",
+        "campaign_id": "120246050386040505",
+        "role": "Static footfall retargeting",
+        "spend_rs": 492.6,
+        "impressions": 43917,
+        "reach": 36228,
+        "link_clicks": 523,
+        "landing_page_views": 191,
+        "ctr": "1.530%",
+        "cpc_rs": 0.733,
+        "cpm_rs": 11.22,
+        "read": "Cheap impressions but weaker click intent than the local food video path."
+      },
+      {
+        "name": "HE_RT_NOOFFER_20260606_7D_Traffic_Directions",
+        "campaign_id": "120247452543650505",
+        "role": "No-offer warm retargeting",
+        "spend_rs": 123.52,
+        "impressions": 1063,
+        "reach": 611,
+        "link_clicks": 11,
+        "landing_page_views": 7,
+        "ctr": "1.223%",
+        "cpc_rs": 9.502,
+        "cpm_rs": 116.2,
+        "read": "Bad pattern. Warm retargeting without strong fresh proof gets expensive."
+      }
+    ]
+  },
+  "approval_queue": [
+    {
+      "id": "qissa-he-tandoori-tikka-v3",
+      "brand": "HE",
+      "status": "ready_for_owner_review",
+      "template_family": "QISSA",
+      "title": "Tandoori Tikka Meta V3",
+      "current_role": "Food conviction child reel",
+      "strategic_read": "Technically safe and brand-safe, but not the master cold classifier template.",
+      "video": "/ops/reels/assets/qissa-he-tandoori-tikka-v3-rtx.mp4",
+      "poster": "/ops/reels/assets/qissa-he-tandoori-tikka-v3-poster.jpg",
+      "frame_strip": "/ops/reels/assets/qissa-he-tandoori-tikka-v3-frames.jpg",
+      "comparison_strip": "/ops/reels/assets/first-meta-video-frames.jpg",
+      "duration_sec": 11.1,
+      "file_size_mb": 4.13,
+      "format": "1080x1920 H.264/AAC",
+      "encoder": "h264_nvenc",
+      "meta_contract": {
+        "funnel_stage": "warm_food_conviction",
+        "audience": "Nearby food explorers around dinner window in Shivajinagar",
+        "objective": "Landing page view / directions intent",
+        "destination": "https://hamzaexpress.in/directions/",
+        "cta": "Tap Get Directions",
+        "utm_content": "qissa_tandoori_tikka_v3",
+        "feeds_next_pool": "Video viewers and directions visitors"
+      },
+      "proof_contract": {
+        "location_proof": "final storefront",
+        "brand_proof": "exact HE mark and Hamza Express lockup",
+        "food_proof": "Tandoori Chicken and Chicken Tikka exact clips",
+        "comfort_proof": "not present",
+        "action_proof": "Get Directions CTA",
+        "blocked_terms": [
+          "Ghee Rice",
+          "Butter Chicken",
+          "Mutton Biryani",
+          "Chicken Biryani",
+          "Irani Chai",
+          "Haleem"
+        ]
+      },
+      "qa": [
+        {"label": "Wrong food", "state": "pass"},
+        {"label": "CTA", "state": "pass"},
+        {"label": "Transitions", "state": "pass"},
+        {"label": "Brand spine", "state": "pass"},
+        {"label": "Exact marks", "state": "pass"},
+        {"label": "Meta size", "state": "pass"},
+        {"label": "Cold classifier job", "state": "gap"}
+      ],
+      "owner_actions": [
+        "approve",
+        "change_text",
+        "change_food_shot",
+        "make_raw",
+        "make_premium",
+        "reject"
+      ]
+    }
+  ],
+  "next_template": {
+    "id": "he-cold-local-classifier-v1",
+    "title": "HE Cold Local Classifier V1",
+    "priority": "next_build",
+    "why": "This is the repeatable parent template for Meta acquisition.",
+    "shot_order": [
+      "HKP/Shivajinagar place proof",
+      "Old Hamza / 1918 memory",
+      "Hamza Express format reset",
+      "Seating and comfort",
+      "Exact food proof",
+      "Parcel or takeaway proof",
+      "Final directions CTA"
+    ],
+    "minimum_contract": {
+      "duration_window_sec": "24-31",
+      "first_2_sec": "location or storefront proof",
+      "must_include": ["place", "brand", "food", "comfort", "action"],
+      "cta": "Get Directions",
+      "no_render_if_missing": ["location proof", "brand proof", "exact food proof", "CTA"]
+    }
+  }
+}
