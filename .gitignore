@@ -23,5 +23,16 @@ hn-asset*.xlsx
 # Claude Code worktrees and local-scratch
 .claude/worktrees/
 .claude/settings.local.json
+_context/
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache.v4/
 _context/Marketing_Execution_Terminals_2026-05-24/
 _context/Packaging_Design_Codex_2026-05-24/
+.aider*
+ios/HNHukumControl/build/
+ios/HNHukumControl/*.xcodeproj/
+.hukum-uploads/
+ios/HNHukumControl/HukumWatch/HukumWatchConfig.swift
+ios/WealthApp/*.xcodeproj/
+ios/WealthApp/Wealth/Secrets.swift

@@ -602,7 +602,26 @@ function login() {
 }
 
 async function tryAutoLogin() {
-  try { const j = await loadAll(); if (!j.error) showApp(j); } catch {}
+  // Optimistic unlock: skip the gate immediately on return visits.
+  // execute_view takes 3-8s; blocking on it causes a visible gate flash every time.
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  try {
+    const j = await loadAll();
+    if (j.error) {
+      // Auth rejected — re-gate
+      document.getElementById('gate').style.display = '';
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('gateErr').textContent = j.error;
+      DASHBOARD_KEY = '';
+      localStorage.removeItem(STORE_KEY);
+      return;
+    }
+    showApp(j);
+  } catch (e) {
+    // Network error — don't re-gate; app shell stays visible, data loads when reconnected
+    console.warn('tryAutoLogin network error:', e);
+  }
 }
 
 async function loadAll() {
