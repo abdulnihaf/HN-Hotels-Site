@@ -58,6 +58,7 @@ export async function onRequest(context) {
       case 'trail_day':    return Response.json(await getTrailDay(db, url), { headers });
       case 'five_lights':  return Response.json(await getFiveLights(db, url), { headers });
       case 'research_depth': return Response.json(await getResearchDepth(db), { headers });
+      case 'analysed_universe': return Response.json(await getAnalysedUniverse(db, url), { headers });
       case 'preopen':      return Response.json(await getPreopen(db), { headers });
       case 'intraday':     return Response.json(await getIntraday(db, url), { headers });
       case 'extremes':     return Response.json(await getExtremes(db), { headers });
@@ -341,6 +342,50 @@ async function computeFiveLights(db, symbols) {
     out[sym] = [l1, marketLight, l3, l4, l5];
   }
   return out;
+}
+
+// ANALYSED UNIVERSE — the full liquid set the backtest uses (the "1,291 stocks"),
+// ranked liquidity-first with today's gap-ups flagged. This IS the Stocks tab + the
+// browsable depth trail, and every row carries a price (the small-cap no-price gap is gone).
+async function getAnalysedUniverse(db, url) {
+  const cutoff = new Date(Date.now() + 5.5 * 3600000 - 50 * 86400000).toISOString().slice(0, 10);
+  const cfg = await db.prepare(`SELECT gap_min_pct FROM wealth_strategy_config WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`).first().catch(() => null);
+  const gapMin = cfg?.gap_min_pct || 3.0;
+  const rows = (await db.prepare(`
+    WITH liq AS (
+      SELECT symbol, AVG(CAST(volume AS REAL)*close_paise/100.0/1e7) tcr, COUNT(*) d, MAX(trade_date) ld
+      FROM equity_eod WHERE exchange='NSE' AND trade_date >= ? AND volume>0 AND (series IS NULL OR series='EQ')
+      GROUP BY symbol HAVING d >= 20 AND tcr >= 5
+    )
+    SELECT l.symbol, l.tcr, l.ld, e.close_paise, e.prev_close_paise
+    FROM liq l JOIN equity_eod e ON e.symbol=l.symbol AND e.exchange='NSE' AND e.trade_date=l.ld
+    ORDER BY l.tcr DESC
+  `).bind(cutoff).all().catch(() => ({ results: [] }))).results || [];
+  const pre = (await db.prepare(`
+    SELECT p.symbol, p.iep_change_pct FROM preopen_snapshot p
+    JOIN (SELECT symbol, MAX(ts) m FROM preopen_snapshot WHERE ts > ? GROUP BY symbol) x ON p.symbol=x.symbol AND p.ts=x.m
+  `).bind(Date.now() - 18 * 3600000).all().catch(() => ({ results: [] }))).results || [];
+  const gapBy = {}; for (const r of pre) gapBy[r.symbol] = r.iep_change_pct;
+  const stocks = rows.map(r => {
+    const gap = gapBy[r.symbol];
+    const chg = r.prev_close_paise ? +((r.close_paise / r.prev_close_paise - 1) * 100).toFixed(2) : null;
+    return {
+      symbol: r.symbol,
+      turnover_cr: Math.round(r.tcr),
+      last_close_rupees: r.close_paise ? +(r.close_paise / 100).toFixed(2) : null,
+      prev_close_rupees: r.prev_close_paise ? +(r.prev_close_paise / 100).toFixed(2) : null,
+      change_pct: chg,
+      gap_pct: gap != null ? +gap.toFixed(2) : null,
+      gap_candidate: gap != null && gap >= gapMin,
+    };
+  });
+  const gappers = stocks.filter(s => s.gap_candidate).sort((a, b) => (b.gap_pct || 0) - (a.gap_pct || 0));
+  const rest = stocks.filter(s => !s.gap_candidate);
+  return {
+    ok: true, count: stocks.length, gap_candidates: gappers.length,
+    gap_threshold_pct: gapMin, as_of: rows[0]?.ld || null,
+    stocks: [...gappers, ...rest],
+  };
 }
 
 // RESEARCH DEPTH — what's under the hood, for the owner to SEE the depth + learn.
