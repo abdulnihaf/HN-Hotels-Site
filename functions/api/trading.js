@@ -119,6 +119,8 @@ export async function onRequest(context) {
       case 'ops_audit_today':    return Response.json(await getOpsAuditToday(db, url), { headers });
       case 'todays_watchlist':   return Response.json(await getTodaysWatchlist(db, url), { headers });
       case 'auto_trader_state':  return Response.json(await getAutoTraderState(db), { headers });
+      case 'live_positions':     return Response.json(await getLivePositions(db), { headers });
+      case 'chain_health':       return Response.json(await getChainHealth(db, env), { headers });
       case 'trader_timeline':    return Response.json(await getTraderTimeline(db, url), { headers });
       case 'intelligence_audit': return Response.json(await getIntelligenceAudit(db), { headers });
       case 'system_health':      return Response.json(await getSystemHealth(db), { headers });
@@ -145,6 +147,70 @@ export async function onRequest(context) {
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { status: 500, headers });
   }
+}
+
+// ─────────────────────────────────────────────────────────
+// Live broker positions (latest reconcile snapshot) — the app's track + square-off view.
+async function getLivePositions(db) {
+  const latest = await db.prepare(`SELECT MAX(snapshot_at) m FROM kite_positions_live`).first().catch(() => null);
+  if (!latest?.m) return { ok: true, positions: [], count: 0, snapshot_at: null, note: 'no positions reconciled yet' };
+  const rows = (await db.prepare(
+    `SELECT * FROM kite_positions_live WHERE snapshot_at = ? AND quantity != 0 ORDER BY ABS(pnl_paise) DESC`
+  ).bind(latest.m).all().catch(() => ({ results: [] }))).results || [];
+  const positions = rows.map(r => ({
+    symbol: r.tradingsymbol, exchange: r.exchange, product: r.product, qty: r.quantity,
+    avg_price_paise: r.avg_price_paise, last_price_paise: r.last_price_paise,
+    pnl_paise: r.pnl_paise, unrealised_paise: r.unrealised_paise, realised_paise: r.realised_paise,
+    pnl_pct: r.avg_price_paise ? +(((r.last_price_paise - r.avg_price_paise) / r.avg_price_paise) * 100 * (r.quantity >= 0 ? 1 : -1)).toFixed(2) : null,
+  }));
+  const totalPnl = positions.reduce((s, p) => s + (p.pnl_paise || 0), 0);
+  return {
+    ok: true, positions, count: positions.length, total_pnl_paise: totalPnl,
+    snapshot_at: latest.m, snapshot_age_min: Math.round((Date.now() - latest.m) / 60000),
+  };
+}
+
+// Chain-health self-monitor — ONE escalation surface for the whole wealth chain
+// (box loop → 09:40 engine → feeds → Kite → crons). Detects staleness/failure and
+// surfaces one actionable item each. Never hands the owner a silent break.
+async function getChainHealth(db, env) {
+  const now = Date.now();
+  const istToday = new Date(now + 5.5 * 3600000).toISOString().slice(0, 10);
+  const mins = (ts) => ts ? Math.round((now - ts) / 60000) : null;
+  const checks = [];
+  const add = (name, status, detail, action) => checks.push({ name, status, detail, action: action || null });
+
+  const cfg = await db.prepare(`SELECT verdict, oos_expectancy_pct, config_date, published_at, universe_syms FROM wealth_strategy_config WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`).first().catch(() => null);
+  if (!cfg) add('box_loop', 'critical', 'no tuned config published yet', 'Run the RTX nightly loop (hn-wealth-daily.timer)');
+  else {
+    const ageH = (now - cfg.published_at) / 3600000;
+    add('box_loop', ageH > 30 ? 'warn' : 'ok', `config ${cfg.config_date}: ${cfg.verdict} (~${cfg.oos_expectancy_pct}%/trade, ${cfg.universe_syms} syms), ${ageH.toFixed(0)}h old`, ageH > 30 ? 'RTX nightly loop may have missed — check hn-wealth-daily.timer' : null);
+  }
+
+  const v = await db.prepare(`SELECT decision, strategy_mode FROM daily_verdicts WHERE trade_date=? AND verdict_type='morning' ORDER BY composed_at DESC LIMIT 1`).bind(istToday).first().catch(() => null);
+  add('engine_940', v ? 'ok' : 'warn', v ? `today: ${v.decision} (${v.strategy_mode})` : 'no morning verdict yet today', v ? null : 'Compose fires at 09:40 IST');
+
+  const pre = await db.prepare(`SELECT MAX(ts) m FROM preopen_snapshot`).first().catch(() => null);
+  const preAge = mins(pre?.m);
+  add('preopen_feed', preAge == null ? 'critical' : preAge > 26 * 60 ? 'warn' : 'ok', preAge == null ? 'no pre-open data' : `${preAge} min old`, (preAge != null && preAge > 26 * 60) ? 'wealth-price-core pre-open cron may be down' : null);
+
+  const tok = await db.prepare(`SELECT user_name, expires_at FROM kite_tokens WHERE is_active=1 ORDER BY obtained_at DESC LIMIT 1`).first().catch(() => null);
+  const tokMin = tok ? Math.round((tok.expires_at - now) / 60000) : null;
+  add('kite_token', !tok ? 'critical' : tokMin < 0 ? 'critical' : tokMin < 60 ? 'warn' : 'ok', !tok ? 'not connected' : tokMin < 0 ? 'expired' : `${tok.user_name}, ${tokMin} min left`, (!tok || tokMin < 0) ? 'Reconnect Kite at /wealth/auth/login' : null);
+
+  const cr = await db.prepare(`SELECT SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) failed, COUNT(*) total FROM cron_run_log WHERE started_at > ?`).bind(now - 86400000).first().catch(() => null);
+  add('crons_24h', (cr?.failed || 0) > 5 ? 'warn' : 'ok', `${cr?.failed || 0} failed / ${cr?.total || 0} runs (24h)`, (cr?.failed || 0) > 5 ? 'Check action=system_health for the failing cron' : null);
+
+  const pos = await db.prepare(`SELECT MAX(snapshot_at) m FROM kite_positions_live`).first().catch(() => null);
+  if (pos?.m) {
+    const posAge = mins(pos.m);
+    add('positions', posAge > 10 ? 'warn' : 'ok', `last reconciled ${posAge} min ago`, posAge > 10 ? 'Pull to refresh (reconcile_positions)' : null);
+  }
+
+  const rank = { critical: 0, warn: 1, ok: 2 };
+  const overall = checks.reduce((w, c) => rank[c.status] < rank[w] ? c.status : w, 'ok');
+  const actions = checks.filter(c => c.action).map(c => ({ name: c.name, status: c.status, action: c.action }));
+  return { ok: true, overall, checks, actions, checked_at: now };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -5894,25 +5960,29 @@ async function getVerdictToday(db, env) {
   const enrichedPicks = [];
   for (const p of picksArr) {
     if (!p?.symbol) continue;
-    // Compute share count + capital math from weight + live entry estimate
-    let entryEstimatePaise = null;
-    try {
-      const r = await db.prepare(`
-        SELECT close_paise FROM equity_eod WHERE symbol = ?
-        ORDER BY trade_date DESC LIMIT 1
-      `).bind(p.symbol).first();
-      entryEstimatePaise = r?.close_paise || null;
-    } catch {}
+    // GAP ENGINE picks carry their OWN exact plan (entry from the 09:40 live quote/IEP,
+    // pre-sized qty + exact stop/target in paise). Use it verbatim — the EOD close is
+    // stale for a stock that gapped today. Legacy picks recompute from the EOD close.
+    let entryEstimatePaise = p.entry_estimate_paise || null;
+    if (!entryEstimatePaise) {
+      try {
+        const r = await db.prepare(`
+          SELECT close_paise FROM equity_eod WHERE symbol = ?
+          ORDER BY trade_date DESC LIMIT 1
+        `).bind(p.symbol).first();
+        entryEstimatePaise = r?.close_paise || null;
+      } catch {}
+    }
 
     const weightPct = p.weight_pct || 30;
-    const capitalPaise = Math.round(portfolioCapital * weightPct / 100);
-    const qty = entryEstimatePaise ? Math.floor(capitalPaise / entryEstimatePaise) : null;
+    const capitalPaise = p.capital_deployed_paise || Math.round(portfolioCapital * weightPct / 100);
+    const qty = (p.qty != null) ? p.qty : (entryEstimatePaise ? Math.floor(capitalPaise / entryEstimatePaise) : null);
     const stopPct = p.stop_pct || 1.0;
     const targetPct = p.target_pct || 3.0;
-    const stopPaise = entryEstimatePaise ? Math.round(entryEstimatePaise * (1 - stopPct/100)) : null;
-    const targetPaise = entryEstimatePaise ? Math.round(entryEstimatePaise * (1 + targetPct/100)) : null;
-    const maxLossPaise = qty && entryEstimatePaise && stopPaise ? (entryEstimatePaise - stopPaise) * qty : null;
-    const maxGainPaise = qty && entryEstimatePaise && targetPaise ? (targetPaise - entryEstimatePaise) * qty : null;
+    const stopPaise = p.stop_paise || (entryEstimatePaise ? Math.round(entryEstimatePaise * (1 - stopPct/100)) : null);
+    const targetPaise = p.target_paise || (entryEstimatePaise ? Math.round(entryEstimatePaise * (1 + targetPct/100)) : null);
+    const maxLossPaise = (p.max_loss_paise != null) ? p.max_loss_paise : (qty && entryEstimatePaise && stopPaise ? (entryEstimatePaise - stopPaise) * qty : null);
+    const maxGainPaise = (p.max_gain_at_target_paise != null) ? p.max_gain_at_target_paise : (qty && entryEstimatePaise && targetPaise ? (targetPaise - entryEstimatePaise) * qty : null);
 
     // Attach historical stats from intraday_suitability for UI display
     const hist = histBySymbol[p.symbol] || {};
