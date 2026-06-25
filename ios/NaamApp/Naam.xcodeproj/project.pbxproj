@@ -168,7 +168,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_FILE = Sources/Info.plist;
-				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.naam;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.naam;
 				PRODUCT_NAME = Naam;
 			};
 			name = Debug;
@@ -178,7 +178,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_FILE = Sources/Info.plist;
-				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.naam;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.naam;
 				PRODUCT_NAME = Naam;
 			};
 			name = Release;
