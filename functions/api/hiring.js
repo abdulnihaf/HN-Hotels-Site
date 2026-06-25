@@ -36,12 +36,30 @@ function json(data, status = 200) {
   });
 }
 
+// ─── Brand-aware WABA config for hiring (additive; default 'he' → zero regression) ──────────────────
+function getHiringWabaConfig(env, brand = 'he') {
+  const b = String(brand || 'he').toLowerCase();
+  if (b === 'nch') {
+    return {
+      phoneId: env.WA_NCH_PHONE_ID,
+      token: env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+      wabaId: env.WA_NCH_WABA_ID,
+    };
+  }
+  return {
+    phoneId: env.WA_HE_PHONE_ID || env.WA_PHONE_ID,
+    token: env.WA_HE_TOKEN || env.WA_ACCESS_TOKEN,
+    wabaId: env.WA_HE_WABA_ID || env.WABA_ID,
+  };
+}
+
 // ─── Helper: call Meta Graph API (generic) ──────────────────
-async function metaGraphAPI(env, path, method = "GET", body = null) {
+async function metaGraphAPI(env, path, method = "GET", body = null, brand = 'he') {
+  const cfg = getHiringWabaConfig(env, brand);
   const opts = {
     method,
     headers: {
-      Authorization: `Bearer ${env.WA_ACCESS_TOKEN}`,
+      Authorization: `Bearer ${cfg.token}`,
       "Content-Type": "application/json",
     },
   };
@@ -51,17 +69,20 @@ async function metaGraphAPI(env, path, method = "GET", body = null) {
 }
 
 // ─── Helper: get WABA ID from Phone ID ──────────────────────
-async function getWabaId(env) {
-  if (env.WABA_ID) return env.WABA_ID;
-  const data = await metaGraphAPI(env, `${env.WA_PHONE_ID}?fields=whatsapp_business_account`);
+async function getWabaId(env, brand = 'he') {
+  const cfg = getHiringWabaConfig(env, brand);
+  if (cfg.wabaId) return cfg.wabaId;
+  if (!cfg.phoneId) return null;
+  const data = await metaGraphAPI(env, `${cfg.phoneId}?fields=whatsapp_business_account`, 'GET', null, brand);
   return data.whatsapp_business_account?.id || null;
 }
 
 // ─── Helper: get App ID from access token ────────────────────
-async function getAppId(env) {
+async function getAppId(env, brand = 'he') {
+  const cfg = getHiringWabaConfig(env, brand);
   const data = await fetch(
-    `https://graph.facebook.com/v21.0/debug_token?input_token=${env.WA_ACCESS_TOKEN}`,
-    { headers: { Authorization: `Bearer ${env.WA_ACCESS_TOKEN}` } }
+    `https://graph.facebook.com/v21.0/debug_token?input_token=${cfg.token}`,
+    { headers: { Authorization: `Bearer ${cfg.token}` } }
   );
   const result = await data.json();
   return result.data?.app_id || null;
@@ -69,7 +90,8 @@ async function getAppId(env) {
 
 // ─── Helper: Upload image to Meta via Resumable Upload API ───
 // Returns the upload handle (h) for use in template header_handle
-async function uploadImageToMeta(env, imageUrl) {
+async function uploadImageToMeta(env, imageUrl, brand = 'he') {
+  const cfg = getHiringWabaConfig(env, brand);
   // Step 1: Fetch the image from the public URL
   const imgResp = await fetch(imageUrl);
   if (!imgResp.ok) throw new Error(`Failed to fetch image: ${imgResp.status} ${imgResp.statusText}`);
@@ -94,7 +116,7 @@ async function uploadImageToMeta(env, imageUrl) {
   console.log(`[uploadImage] Fetched ${fileName}: ${fileSize} bytes, type: ${contentType}`);
 
   // Step 2: Get app ID for the upload session
-  const appId = await getAppId(env);
+  const appId = await getAppId(env, brand);
   if (!appId) throw new Error("Could not determine App ID from access token");
 
   // Step 3: Create upload session
@@ -103,7 +125,7 @@ async function uploadImageToMeta(env, imageUrl) {
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.WA_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${cfg.token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -126,7 +148,7 @@ async function uploadImageToMeta(env, imageUrl) {
     {
       method: "POST",
       headers: {
-        Authorization: `OAuth ${env.WA_ACCESS_TOKEN}`,
+        Authorization: `OAuth ${cfg.token}`,
         file_offset: "0",
         "Content-Type": "application/octet-stream",
       },
@@ -151,13 +173,14 @@ async function getTemplateMediaUrl(db, templateName) {
 }
 
 // ─── Helper: send a WhatsApp message ────────────────────────
-async function sendWhatsApp(env, to, payload) {
+async function sendWhatsApp(env, to, payload, brand = 'he') {
+  const cfg = getHiringWabaConfig(env, brand);
   const resp = await fetch(
-    `https://graph.facebook.com/v21.0/${env.WA_PHONE_ID}/messages`,
+    `https://graph.facebook.com/v21.0/${cfg.phoneId}/messages`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.WA_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${cfg.token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ messaging_product: "whatsapp", to, ...payload }),
@@ -605,9 +628,13 @@ async function handleGet(url, env) {
   // ── Inbox: list conversations with latest message ──
   if (action === "inbox") {
     const status = url.searchParams.get("status") || "all";
+    const scope = url.searchParams.get("scope") || "all";
     const page = parseInt(url.searchParams.get("page") || "1");
     const limit = 30;
     const offset = (page - 1) * limit;
+
+    // Hiring scope: only conversations linked to a hiring campaign (drops customer noise)
+    const hiringScope = scope === "hiring";
 
     // Get unique phone conversations with latest message
     let query = `
@@ -622,6 +649,7 @@ async function handleGet(url, env) {
         m.candidate_name as msg_candidate_name,
         cam.name as campaign_name,
         cam.role as campaign_role,
+        cam.brand as campaign_brand,
         (SELECT COUNT(*) FROM conversations c2 WHERE c2.phone = c.phone AND c2.status = 'unread' AND c2.direction = 'inbound') as unread_count,
         (SELECT COUNT(*) FROM conversations c3 WHERE c3.phone = c.phone) as total_messages
       FROM conversations c
@@ -632,6 +660,9 @@ async function handleGet(url, env) {
       )`;
 
     const params = [];
+    if (hiringScope) {
+      query += ` AND c.campaign_id IS NOT NULL AND cam.category = 'hiring'`;
+    }
     if (status === "unread") {
       query += ` AND (SELECT COUNT(*) FROM conversations c5 WHERE c5.phone = c.phone AND c5.status = 'unread' AND c5.direction = 'inbound') > 0`;
     } else if (status === "replied") {
@@ -643,18 +674,20 @@ async function handleGet(url, env) {
 
     const rows = await db.prepare(query).bind(...params).all();
 
-    // Total conversations count
-    const countResult = await db
-      .prepare(`SELECT COUNT(DISTINCT phone) as total FROM conversations`)
-      .first();
+    // Total conversations count (scoped)
+    let countSql = `SELECT COUNT(DISTINCT c.phone) as total FROM conversations c LEFT JOIN campaigns cam ON cam.id = c.campaign_id WHERE 1=1`;
+    if (hiringScope) countSql += ` AND c.campaign_id IS NOT NULL AND cam.category = 'hiring'`;
+    const countResult = await db.prepare(countSql).first();
 
     return json({
+      scope: scope,
       conversations: rows.results.map((r) => ({
         phone: r.phone,
         candidate_name: r.candidate_name || r.msg_candidate_name || "",
         campaign_id: r.campaign_id,
         campaign_name: r.campaign_name || "",
         campaign_role: r.campaign_role || "",
+        campaign_brand: r.campaign_brand || "",
         last_message: r.last_message || "",
         last_direction: r.last_direction,
         last_message_at: r.last_message_at,
@@ -721,14 +754,15 @@ async function handleGet(url, env) {
   // ── List WhatsApp Templates from Meta ──
   if (action === "templates") {
     try {
-      const wabaId = await getWabaId(env);
-      if (!wabaId) return json({ error: "WABA_ID not found. Set WABA_ID secret or ensure WA_PHONE_ID is valid." }, 500);
+      const brand = url.searchParams.get("brand") || 'he';
+      const wabaId = await getWabaId(env, brand);
+      if (!wabaId) return json({ error: `WABA_ID not found for brand ${brand}. Set WABA_ID secret or ensure WA_PHONE_ID is valid.` }, 500);
       const nameFilter = url.searchParams.get("name");
       let path = `${wabaId}/message_templates?limit=100&fields=name,status,category,language,components,id,quality_score,rejected_reason`;
       if (nameFilter) path += `&name=${encodeURIComponent(nameFilter)}`;
-      const data = await metaGraphAPI(env, path);
-      if (data.error) return json({ error: data.error.message, meta_error: data.error }, 400);
-      return json({ templates: data.data || [], paging: data.paging });
+      const data = await metaGraphAPI(env, path, 'GET', null, brand);
+      if (data.error) return json({ error: data.error.message, meta_error: data.error, brand }, 400);
+      return json({ templates: data.data || [], paging: data.paging, brand });
     } catch (e) {
       return json({ error: e.message }, 500);
     }
@@ -737,20 +771,22 @@ async function handleGet(url, env) {
   // ── Debug: Check token permissions & WABA config ──
   if (action === "debug_token") {
     try {
-      const wabaId = await getWabaId(env);
-      const phoneId = env.WA_PHONE_ID;
-      const hasWabaIdSecret = !!env.WABA_ID;
+      const brand = url.searchParams.get("brand") || 'he';
+      const cfg = getHiringWabaConfig(env, brand);
+      const wabaId = await getWabaId(env, brand);
+      const phoneId = cfg.phoneId;
+      const hasWabaIdSecret = !!cfg.wabaId;
 
       // Check token info via debug_token endpoint
       const tokenCheck = await fetch(
-        `https://graph.facebook.com/v21.0/debug_token?input_token=${env.WA_ACCESS_TOKEN}`,
-        { headers: { Authorization: `Bearer ${env.WA_ACCESS_TOKEN}` } }
+        `https://graph.facebook.com/v21.0/debug_token?input_token=${cfg.token}`,
+        { headers: { Authorization: `Bearer ${cfg.token}` } }
       );
       const tokenData = await tokenCheck.json();
 
       // Try fetching WABA info
       const wabaInfo = wabaId
-        ? await metaGraphAPI(env, `${wabaId}?fields=id,name,account_review_status,message_template_namespace,on_behalf_of_business_info`)
+        ? await metaGraphAPI(env, `${wabaId}?fields=id,name,account_review_status,message_template_namespace,on_behalf_of_business_info`, 'GET', null, brand)
         : null;
 
       // Try a minimal text-only template creation (dry run — we'll use a throwaway name)
@@ -761,15 +797,16 @@ async function handleGet(url, env) {
         components: [{ type: "BODY", text: "Debug test — please ignore." }],
       };
       const testResult = wabaId
-        ? await metaGraphAPI(env, `${wabaId}/message_templates`, "POST", testPayload)
+        ? await metaGraphAPI(env, `${wabaId}/message_templates`, "POST", testPayload, brand)
         : { error: "No WABA ID" };
 
       // If test template was created, delete it immediately
       if (testResult.id) {
-        await metaGraphAPI(env, `${wabaId}/message_templates?name=${testPayload.name}`, "DELETE");
+        await metaGraphAPI(env, `${wabaId}/message_templates?name=${testPayload.name}`, "DELETE", null, brand);
       }
 
       return json({
+        brand,
         waba_id: wabaId,
         waba_id_from_secret: hasWabaIdSecret,
         phone_id: phoneId,
@@ -890,7 +927,12 @@ async function handlePost(request, env) {
 
   // ── Create Campaign ──
   if (action === "create_campaign") {
-    const { name, template_name, role, salary, campaign_type, brand, category, source, city, state, batch, variable_mapping, audience } = body;
+    const { name, template_name, role, role_key, salary, campaign_type, brand, category, source, city, state, batch, variable_mapping, audience, commission, package: packageText, poster_url, exclude_staff } = body;
+
+    // Normalize brand canonically ('he' | 'nch') while preserving legacy default
+    const brandCanon = (brand && ['he', 'nch'].includes(String(brand).toLowerCase()))
+      ? String(brand).toLowerCase()
+      : (brand || 'he');
 
     // Store variable_mapping as JSON string if provided
     const variableMappingJson = variable_mapping && variable_mapping.length > 0 ? JSON.stringify(variable_mapping) : null;
@@ -898,18 +940,22 @@ async function handlePost(request, env) {
     // Create the campaign record
     const result = await db
       .prepare(
-        `INSERT INTO campaigns (name, template_name, role, salary, campaign_type, brand, category, variable_mapping)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO campaigns (name, template_name, role, role_key, salary, campaign_type, brand, category, variable_mapping, commission, package, poster_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         name,
         template_name,
         role,
+        role_key || role || "",
         salary || "",
         campaign_type || "personalized",
-        brand || "Hamza Express",
+        brandCanon,
         category || "hiring",
-        variableMappingJson
+        variableMappingJson,
+        commission || "",
+        packageText || "",
+        poster_url || ""
       )
       .run();
 
@@ -951,6 +997,10 @@ async function handlePost(request, env) {
         candidateQuery += ` AND upload_batch = ?`;
         candidateParams.push(batch);
       }
+      // NEVER message current staff (Darbar roster exclusion)
+      if (exclude_staff) {
+        candidateQuery += ` AND phone NOT IN (SELECT phone FROM hr_employees WHERE is_active = 1 AND phone IS NOT NULL AND phone <> '')`;
+      }
 
       const candidates = await db.prepare(candidateQuery).bind(...candidateParams).all();
       const rows = candidates.results || [];
@@ -968,9 +1018,11 @@ async function handlePost(request, env) {
         const msgBatch = rows.map((c) => {
           let params;
           if (mapping && mapping.length > 0) {
-            // Use explicit variable mapping
+            // Use explicit variable mapping (new flexible template vars: role, package, commission)
             params = mapping.map(col => {
-              if (col === 'role') return c.he_role || role || '';
+              if (col === 'role') return role || c.he_role || '';
+              if (col === 'package') return packageText || c.he_salary || salary || '';
+              if (col === 'commission') return commission || '';
               if (col === 'salary') return c.he_salary || salary || '';
               return c[col] || '';
             });
@@ -1206,12 +1258,6 @@ async function handlePost(request, env) {
   // ── Send batch of messages ──
   if (action === "send_batch") {
     const { campaign_id, batch_size = 20 } = body;
-    const WA_TOKEN = env.WA_ACCESS_TOKEN;
-    const WA_PHONE_ID = env.WA_PHONE_ID;
-
-    if (!WA_TOKEN || !WA_PHONE_ID) {
-      return json({ error: "WhatsApp credentials not configured" }, 500);
-    }
 
     const campaign = await db
       .prepare(`SELECT * FROM campaigns WHERE id = ?`)
@@ -1219,6 +1265,13 @@ async function handlePost(request, env) {
       .first();
 
     if (!campaign) return json({ error: "Campaign not found" }, 404);
+
+    const campaignBrand = (campaign && campaign.brand) || 'he';
+    const cfg = getHiringWabaConfig(env, campaignBrand);
+
+    if (!cfg.token || !cfg.phoneId) {
+      return json({ error: `WhatsApp credentials not configured for brand ${campaignBrand}` }, 500);
+    }
 
     if (campaign.status === "draft" || campaign.status === "paused") {
       await db
@@ -1250,11 +1303,14 @@ async function handlePost(request, env) {
     let tplComponents = null;
     let tplLanguage = "en";
     try {
-      const wabaId = await getWabaId(env);
+      const wabaId = await getWabaId(env, campaignBrand);
       if (wabaId) {
         const tplData = await metaGraphAPI(
           env,
-          `${wabaId}/message_templates?name=${encodeURIComponent(campaign.template_name)}&fields=name,status,language,components`
+          `${wabaId}/message_templates?name=${encodeURIComponent(campaign.template_name)}&fields=name,status,language,components`,
+          'GET',
+          null,
+          campaignBrand
         );
         const approved = (tplData.data || []).find(
           (t) => t.status === "APPROVED" && t.name === campaign.template_name
@@ -1286,11 +1342,11 @@ async function handlePost(request, env) {
       }
     }
 
-    // Resolve per-template media: D1 URL first, then fallback to env.WA_MEDIA_ID
+    // Resolve per-campaign / per-template media: campaign.poster_url first, then D1, then WA_MEDIA_ID fallback
     const needsMedia = headerComp && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format);
     let templateMediaUrl = null;
     if (needsMedia) {
-      templateMediaUrl = await getTemplateMediaUrl(db, campaign.template_name);
+      templateMediaUrl = campaign.poster_url || await getTemplateMediaUrl(db, campaign.template_name);
       if (!templateMediaUrl && !env.WA_MEDIA_ID) {
         return json({
           error: `Template "${campaign.template_name}" has a ${headerComp.format} header but no image URL is set and WA_MEDIA_ID fallback is not configured. Set an image URL in Templates or configure WA_MEDIA_ID.`,
@@ -1312,7 +1368,7 @@ async function handlePost(request, env) {
           if (["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format)) {
             const mediaType = headerComp.format.toLowerCase();
             if (templateMediaUrl) {
-              // Per-template URL from D1 — use link format
+              // Per-campaign / per-template URL — use link format
               components.push({
                 type: "header",
                 parameters: [{ type: mediaType, [mediaType]: { link: templateMediaUrl } }],
@@ -1386,7 +1442,7 @@ async function handlePost(request, env) {
             language: { code: tplLanguage },
             components: components.length > 0 ? components : undefined,
           },
-        });
+        }, campaignBrand);
 
         if (result.messages && result.messages[0]) {
           await db
@@ -1486,24 +1542,35 @@ async function handlePost(request, env) {
 
   // ── Send reply to candidate ──
   if (action === "reply") {
-    const { phone, text } = body;
+    const { phone, text, brand } = body;
     if (!phone || !text) {
       return json({ error: "phone and text required" }, 400);
     }
 
     const normalizedPhone = normalizePhone(phone);
-    const WA_TOKEN = env.WA_ACCESS_TOKEN;
-    const WA_PHONE_ID = env.WA_PHONE_ID;
 
-    if (!WA_TOKEN || !WA_PHONE_ID) {
-      return json({ error: "WhatsApp credentials not configured" }, 500);
+    // Find related campaign for this phone to pick the right brand sender
+    const lastMsg = await db
+      .prepare(
+        `SELECT m.campaign_id, m.candidate_name, c.brand
+         FROM messages m
+         LEFT JOIN campaigns c ON c.id = m.campaign_id
+         WHERE m.phone = ? ORDER BY m.id DESC LIMIT 1`
+      )
+      .bind(normalizedPhone)
+      .first();
+
+    const replyBrand = brand || lastMsg?.brand || 'he';
+    const cfg = getHiringWabaConfig(env, replyBrand);
+    if (!cfg.token || !cfg.phoneId) {
+      return json({ error: `WhatsApp credentials not configured for brand ${replyBrand}` }, 500);
     }
 
     // Send via WhatsApp API (free-form text within 24hr window)
     const result = await sendWhatsApp(env, `91${normalizedPhone}`, {
       type: "text",
       text: { body: text },
-    });
+    }, replyBrand);
 
     const wamid = result.messages?.[0]?.id || "";
     const success = !!wamid;
@@ -1516,14 +1583,6 @@ async function handlePost(request, env) {
       });
     }
 
-    // Find related campaign for this phone
-    const msg = await db
-      .prepare(
-        `SELECT campaign_id, candidate_name FROM messages WHERE phone = ? ORDER BY id DESC LIMIT 1`
-      )
-      .bind(normalizedPhone)
-      .first();
-
     // Insert outbound conversation record
     await db
       .prepare(
@@ -1532,9 +1591,9 @@ async function handlePost(request, env) {
       )
       .bind(
         normalizedPhone,
-        msg?.campaign_id || null,
+        lastMsg?.campaign_id || null,
         null,
-        msg?.candidate_name || "",
+        lastMsg?.candidate_name || "",
         text,
         wamid
       )
@@ -1562,8 +1621,9 @@ async function handlePost(request, env) {
   // ── Create WhatsApp Template via Meta API ──
   if (action === "create_template") {
     try {
-      const wabaId = await getWabaId(env);
-      if (!wabaId) return json({ error: "WABA_ID not found" }, 500);
+      const brand = body.brand || 'he';
+      const wabaId = await getWabaId(env, brand);
+      if (!wabaId) return json({ error: `WABA_ID not found for brand ${brand}` }, 500);
 
       const { name, language, category, components } = body;
       if (!name || !components) return json({ error: "name and components required" }, 400);
@@ -1574,7 +1634,7 @@ async function handlePost(request, env) {
         if (c.type === "HEADER" && c.format === "IMAGE" && c.example?.header_url) {
           const imageUrl = c.example.header_url[0];
           console.log("[create_template] Uploading header image:", imageUrl);
-          const handle = await uploadImageToMeta(env, imageUrl);
+          const handle = await uploadImageToMeta(env, imageUrl, brand);
           console.log("[create_template] Got handle:", handle.substring(0, 50) + "...");
           fixedComponents.push({
             type: "HEADER",
@@ -1593,9 +1653,9 @@ async function handlePost(request, env) {
         components: fixedComponents,
       };
 
-      console.log("[create_template] WABA:", wabaId, "Payload keys:", Object.keys(payload));
+      console.log("[create_template] WABA:", wabaId, "brand:", brand, "Payload keys:", Object.keys(payload));
 
-      const result = await metaGraphAPI(env, `${wabaId}/message_templates`, "POST", payload);
+      const result = await metaGraphAPI(env, `${wabaId}/message_templates`, "POST", payload, brand);
 
       console.log("[create_template] Meta response:", JSON.stringify(result));
 
@@ -1637,11 +1697,12 @@ async function handlePost(request, env) {
   // ── Delete WhatsApp Template via Meta API ──
   if (action === "delete_template") {
     try {
-      const wabaId = await getWabaId(env);
-      if (!wabaId) return json({ error: "WABA_ID not found" }, 500);
+      const brand = body.brand || 'he';
+      const wabaId = await getWabaId(env, brand);
+      if (!wabaId) return json({ error: `WABA_ID not found for brand ${brand}` }, 500);
       const { name } = body;
       if (!name) return json({ error: "template name required" }, 400);
-      const result = await metaGraphAPI(env, `${wabaId}/message_templates?name=${encodeURIComponent(name)}`, "DELETE");
+      const result = await metaGraphAPI(env, `${wabaId}/message_templates?name=${encodeURIComponent(name)}`, "DELETE", null, brand);
       if (result.error) return json({ success: false, error: result.error.message }, 400);
       return json({ success: true });
     } catch (e) {
@@ -1652,16 +1713,20 @@ async function handlePost(request, env) {
   // ── Test WhatsApp Template — send single message ──
   if (action === "test_template") {
     try {
-      const { phone, template_name, params } = body;
+      const { phone, template_name, params, brand, poster_url } = body;
       if (!phone || !/^\d{10}$/.test(phone)) return json({ error: "Valid 10-digit phone required" }, 400);
       if (!template_name) return json({ error: "template_name required" }, 400);
 
+      const testBrand = brand || 'he';
       // Fetch template structure from Meta
-      const wabaId = await getWabaId(env);
-      if (!wabaId) return json({ error: "WABA_ID not found" }, 500);
+      const wabaId = await getWabaId(env, testBrand);
+      if (!wabaId) return json({ error: `WABA_ID not found for brand ${testBrand}` }, 500);
       const tplData = await metaGraphAPI(
         env,
-        `${wabaId}/message_templates?name=${encodeURIComponent(template_name)}&fields=name,status,language,components`
+        `${wabaId}/message_templates?name=${encodeURIComponent(template_name)}&fields=name,status,language,components`,
+        'GET',
+        null,
+        testBrand
       );
       const approved = (tplData.data || []).find(
         (t) => t.status === "APPROVED" && t.name === template_name
@@ -1678,10 +1743,10 @@ async function handlePost(request, env) {
       const userParams = params || [];
       const components = [];
 
-      // Resolve per-template media
+      // Resolve per-template / per-test media
       let testMediaUrl = null;
       if (headerComp && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComp.format)) {
-        testMediaUrl = await getTemplateMediaUrl(db, template_name);
+        testMediaUrl = poster_url || await getTemplateMediaUrl(db, template_name);
       }
 
       // Header
@@ -1753,7 +1818,7 @@ async function handlePost(request, env) {
           language: { code: tplLanguage },
           components: components.length > 0 ? components : undefined,
         },
-      });
+      }, testBrand);
 
       if (result.error) return json({ success: false, error: result.error.message, meta_error: result.error }, 400);
       return json({ success: true, response: result });
@@ -1767,16 +1832,17 @@ async function handlePost(request, env) {
     try {
       const { file_length, file_type } = body;
       if (!file_length || !file_type) return json({ error: "file_length and file_type required" }, 400);
+      const brand = body.brand || 'he';
       // Get app ID from WABA
-      const wabaId = await getWabaId(env);
-      if (!wabaId) return json({ error: "WABA_ID not found" }, 500);
-      const appData = await metaGraphAPI(env, `${wabaId}?fields=on_behalf_of_business_info,owner_business_info`);
+      const wabaId = await getWabaId(env, brand);
+      if (!wabaId) return json({ error: `WABA_ID not found for brand ${brand}` }, 500);
+      const appData = await metaGraphAPI(env, `${wabaId}?fields=on_behalf_of_business_info,owner_business_info`, 'GET', null, brand);
       const appId = env.META_APP_ID || appData.id;
       const result = await metaGraphAPI(env, `${appId}/uploads`, "POST", {
         file_length,
         file_type,
         file_name: (body.file_name || "template-header.jpg").replace(/[\\/<@%]/g, "_"),
-      });
+      }, brand);
       if (result.error) return json({ success: false, error: result.error.message }, 400);
       return json({ success: true, upload_session_id: result.id });
     } catch (e) {

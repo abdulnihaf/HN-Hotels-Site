@@ -1,0 +1,250 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		162276F644A5CD97258269BC /* DarbarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE9D3521B28FC3F04E78947 /* DarbarModels.swift */; };
+		33C154F6DFAFF5D9550BE7CF /* DiwanAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49F5E70923F62460E7BF9628 /* DiwanAuth.swift */; };
+		39D1974AB4442F10A3925C7D /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDBEEAEF77C932BCB79F589 /* App.swift */; };
+		463A8C98E1D58351D9EE5BBE /* Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6957C24790474D02A033F583 /* Client.swift */; };
+		6F265882CD4BE708382D2C30 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ADB46AD68B7E249E7EF91A7 /* HomeView.swift */; };
+		8EE877A07D1049C4E16B7724 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4C216DE0A5C1C2C9C9782F50 /* Assets.xcassets */; };
+		8F5E80475713F119B3F9536F /* DarbarHiringTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96432803BBFD3E475D1C9978 /* DarbarHiringTab.swift */; };
+		91236DAFF718A2AD3232A305 /* DarbarAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39609051605941E6881B521E /* DarbarAppModel.swift */; };
+		9B8807D024586B1345055FB3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131CE1C91FB07E2D1386956F /* ContentView.swift */; };
+		A1654A25304DB889BAD8D51C /* ChamberKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4598E5CC7BC187258DA1D5 /* ChamberKit.swift */; };
+		B0E4D1A68B77A5F729F44C4B /* DarbarClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B90E88C588C2BDA0C82846 /* DarbarClient.swift */; };
+		C4E3BF1EF52B7E1BB2F577FB /* DarbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94ECDEEA3C9C8F4BEC3D89E6 /* DarbarView.swift */; };
+		E3A2353B369CA4F25E17CE19 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D2123826DE5D4210DFBE414 /* Theme.swift */; };
+		E66454EFCD3E93D38AF0AA74 /* DarbarTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = C915C661E419FF662EC279CB /* DarbarTabs.swift */; };
+		F972BD35E8C10321A5726AF1 /* DarbarSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500C24F85AF19D882C7990F8 /* DarbarSheets.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0D2123826DE5D4210DFBE414 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		131CE1C91FB07E2D1386956F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1ADB46AD68B7E249E7EF91A7 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		39609051605941E6881B521E /* DarbarAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarAppModel.swift; sourceTree = "<group>"; };
+		49F5E70923F62460E7BF9628 /* DiwanAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiwanAuth.swift; sourceTree = "<group>"; };
+		4C216DE0A5C1C2C9C9782F50 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		500C24F85AF19D882C7990F8 /* DarbarSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarSheets.swift; sourceTree = "<group>"; };
+		5064DD31825B5500110283E6 /* Darbar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Darbar.entitlements; sourceTree = "<group>"; };
+		6957C24790474D02A033F583 /* Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Client.swift; sourceTree = "<group>"; };
+		94ECDEEA3C9C8F4BEC3D89E6 /* DarbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarView.swift; sourceTree = "<group>"; };
+		96432803BBFD3E475D1C9978 /* DarbarHiringTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarHiringTab.swift; sourceTree = "<group>"; };
+		9D4598E5CC7BC187258DA1D5 /* ChamberKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChamberKit.swift; sourceTree = "<group>"; };
+		A3B90E88C588C2BDA0C82846 /* DarbarClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarClient.swift; sourceTree = "<group>"; };
+		ABE9D3521B28FC3F04E78947 /* DarbarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarModels.swift; sourceTree = "<group>"; };
+		B88AC9B7FE9E5CBDB5B97A89 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C915C661E419FF662EC279CB /* DarbarTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarTabs.swift; sourceTree = "<group>"; };
+		CF4C62225B4F082490A6225A /* DarbarApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DarbarApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCDBEEAEF77C932BCB79F589 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1AA1D8ABB8BFCB813EE0780F = {
+			isa = PBXGroup;
+			children = (
+				EF462EAEEA214AF8B352848D /* Darbar */,
+				B33D5B05A3DBC8B787730154 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B33D5B05A3DBC8B787730154 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CF4C62225B4F082490A6225A /* DarbarApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EF462EAEEA214AF8B352848D /* Darbar */ = {
+			isa = PBXGroup;
+			children = (
+				DCDBEEAEF77C932BCB79F589 /* App.swift */,
+				4C216DE0A5C1C2C9C9782F50 /* Assets.xcassets */,
+				9D4598E5CC7BC187258DA1D5 /* ChamberKit.swift */,
+				6957C24790474D02A033F583 /* Client.swift */,
+				131CE1C91FB07E2D1386956F /* ContentView.swift */,
+				5064DD31825B5500110283E6 /* Darbar.entitlements */,
+				39609051605941E6881B521E /* DarbarAppModel.swift */,
+				A3B90E88C588C2BDA0C82846 /* DarbarClient.swift */,
+				96432803BBFD3E475D1C9978 /* DarbarHiringTab.swift */,
+				ABE9D3521B28FC3F04E78947 /* DarbarModels.swift */,
+				500C24F85AF19D882C7990F8 /* DarbarSheets.swift */,
+				C915C661E419FF662EC279CB /* DarbarTabs.swift */,
+				94ECDEEA3C9C8F4BEC3D89E6 /* DarbarView.swift */,
+				49F5E70923F62460E7BF9628 /* DiwanAuth.swift */,
+				1ADB46AD68B7E249E7EF91A7 /* HomeView.swift */,
+				B88AC9B7FE9E5CBDB5B97A89 /* Info.plist */,
+				0D2123826DE5D4210DFBE414 /* Theme.swift */,
+			);
+			path = Darbar;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		94B29E414B807774732A71DC /* DarbarApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 34C7CFE5E50C17D9AEFC8C5C /* Build configuration list for PBXNativeTarget "DarbarApp" */;
+			buildPhases = (
+				DF1AD505B636272AF9F72075 /* Sources */,
+				CFC762FE3E3E1C20602F1FD4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DarbarApp;
+			packageProductDependencies = (
+			);
+			productName = DarbarApp;
+			productReference = CF4C62225B4F082490A6225A /* DarbarApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B923005DFD8564A74B2C4060 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					94B29E414B807774732A71DC = {
+						DevelopmentTeam = FZ58DQ52QS;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 0CC1A1083AB27FDE08B801CF /* Build configuration list for PBXProject "DarbarApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 1AA1D8ABB8BFCB813EE0780F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B33D5B05A3DBC8B787730154 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				94B29E414B807774732A71DC /* DarbarApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CFC762FE3E3E1C20602F1FD4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8EE877A07D1049C4E16B7724 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DF1AD505B636272AF9F72075 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				39D1974AB4442F10A3925C7D /* App.swift in Sources */,
+				A1654A25304DB889BAD8D51C /* ChamberKit.swift in Sources */,
+				463A8C98E1D58351D9EE5BBE /* Client.swift in Sources */,
+				9B8807D024586B1345055FB3 /* ContentView.swift in Sources */,
+				91236DAFF718A2AD3232A305 /* DarbarAppModel.swift in Sources */,
+				B0E4D1A68B77A5F729F44C4B /* DarbarClient.swift in Sources */,
+				8F5E80475713F119B3F9536F /* DarbarHiringTab.swift in Sources */,
+				162276F644A5CD97258269BC /* DarbarModels.swift in Sources */,
+				F972BD35E8C10321A5726AF1 /* DarbarSheets.swift in Sources */,
+				E66454EFCD3E93D38AF0AA74 /* DarbarTabs.swift in Sources */,
+				C4E3BF1EF52B7E1BB2F577FB /* DarbarView.swift in Sources */,
+				33C154F6DFAFF5D9550BE7CF /* DiwanAuth.swift in Sources */,
+				6F265882CD4BE708382D2C30 /* HomeView.swift in Sources */,
+				E3A2353B369CA4F25E17CE19 /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		724E0F523E5E5D792F137334 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Darbar/Darbar.entitlements;
+				INFOPLIST_FILE = Darbar/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.darbar;
+				PRODUCT_NAME = Darbar;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			};
+			name = Debug;
+		};
+		D6B75A96E1C1C104D9405EB2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		EDA3567CBBA0C7D865B2B91A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Darbar/Darbar.entitlements;
+				INFOPLIST_FILE = Darbar/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.darbar;
+				PRODUCT_NAME = Darbar;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			};
+			name = Release;
+		};
+		F917E3AAACE39922EC6020E2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0CC1A1083AB27FDE08B801CF /* Build configuration list for PBXProject "DarbarApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F917E3AAACE39922EC6020E2 /* Debug */,
+				D6B75A96E1C1C104D9405EB2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		34C7CFE5E50C17D9AEFC8C5C /* Build configuration list for PBXNativeTarget "DarbarApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				724E0F523E5E5D792F137334 /* Debug */,
+				EDA3567CBBA0C7D865B2B91A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B923005DFD8564A74B2C4060 /* Project object */;
+}

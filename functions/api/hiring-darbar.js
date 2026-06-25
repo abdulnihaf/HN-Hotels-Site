@@ -96,6 +96,10 @@ export async function onRequest(context) {
       if (action === 'suppliers')       return withCors(await suppliers(db, url), request);
       if (action === 'supplier')        return withCors(await supplierOne(db, url), request);
       if (action === 'exclusion_count') return withCors(await exclusionCount(db), request);
+      if (action === 'roles')           return withCors(await roles(db, url), request);
+      if (action === 'audience_preview')return withCors(await audiencePreview(db, url), request);
+      if (action === 'inbox')           return withCors(await hiringInbox(db, url), request);
+      if (action === 'campaign')        return withCors(await campaignOne(db, url), request);
       return withCors(json({ error: `unknown GET action: ${action}` }, 400), request);
     }
 
@@ -107,6 +111,10 @@ export async function onRequest(context) {
         if (!isAdmin) return withCors(json({ error: 'forbidden — admin only' }, 403), request);
         return withCors(await seedSuppliers(db, body), request);
       }
+      if (action === 'compose')        return withCors(await composeCampaign(db, body, env, request), request);
+      if (action === 'send')           return withCors(await sendCampaign(db, body, env, request), request);
+      if (action === 'reply')          return withCors(await replyToCandidate(db, body, env, request), request);
+      if (action === 'mark_outcome')   return withCors(await markOutcome(db, body), request);
       return withCors(json({ error: `unknown POST action: ${action}` }, 400), request);
     }
 
@@ -276,4 +284,335 @@ async function upsertSupplier(db, s) {
     fields.notes, fields.source
   ).run();
   return { id: res.meta?.last_row_id, action: 'insert' };
+}
+
+// ===========================================================================
+// WhatsApp campaign engine (flow #2) — additive to Phase-1a suppliers
+// ===========================================================================
+
+const STAFF_EXCLUSION_SQL = `phone NOT IN (SELECT phone FROM hr_employees WHERE is_active = 1 AND phone IS NOT NULL AND phone <> '')`;
+
+// GET ?action=roles — scored role registry with live supply + responsiveness
+async function roles(db, url) {
+  const brandFilter = url.searchParams.get('brand') || 'all';
+  const rows = (await db.prepare(
+    `SELECT * FROM hiring_roles WHERE active = 1 ORDER BY always_need DESC, priority_score DESC, label ASC`
+  ).all()).results || [];
+
+  // Supply counts from candidates table by role label
+  const supply = await db.prepare(
+    `SELECT he_role, COUNT(*) n FROM candidates GROUP BY he_role`
+  ).all();
+  const supplyMap = {};
+  for (const r of (supply.results || [])) supplyMap[r.he_role] = r.n;
+
+  // Historical reply rate per role label: (messages with has_reply) / sent
+  const replyStats = await db.prepare(
+    `SELECT m.campaign_id, c.role, COUNT(*) sent, SUM(m.has_reply) replied
+     FROM messages m JOIN campaigns c ON c.id = m.campaign_id
+     WHERE m.status IN ('sent','delivered','read')
+     GROUP BY c.role`
+  ).all().catch(() => ({ results: [] }));
+  const replyMap = {};
+  for (const r of (replyStats.results || [])) {
+    replyMap[r.role] = { sent: r.sent, replied: r.replied, rate: r.sent ? Math.round((r.replied / r.sent) * 1000) / 10 : 0 };
+  }
+
+  const enriched = rows.map(r => {
+    const supplyCount = supplyMap[r.label] || 0;
+    const reply = replyMap[r.label] || { sent: 0, replied: 0, rate: 0 };
+    const channel = channelForRole(r, supplyCount, reply.rate);
+    return {
+      ...r,
+      odoo_job_names: jparse(r.odoo_job_names, []),
+      supply_count: supplyCount,
+      reply_rate: reply.rate,
+      reply_sent: reply.sent,
+      reply_replied: reply.replied,
+      channel,
+    };
+  }).filter(r => brandFilter === 'all' || r.brand === brandFilter || r.brand === 'both');
+
+  const nudges = buildNudges(enriched);
+
+  return json({
+    roles: enriched,
+    nudges,
+    counts: {
+      always_need: enriched.filter(r => r.always_need).length,
+      total: enriched.length,
+    },
+  });
+}
+
+function channelForRole(role, supplyCount, replyRate) {
+  if (role.always_need && supplyCount < 30 && replyRate < 3) return 'suppliers+referral+fb';
+  if (role.always_need && (supplyCount >= 30 || replyRate >= 3)) return 'db+referral';
+  if (!role.always_need && replyRate >= 3) return 'db-on-demand';
+  return 'suppliers+referral';
+}
+
+function buildNudges(roles) {
+  const nudges = [];
+  const thin = roles.filter(r => r.always_need && r.supply_count < 30);
+  if (thin.length) nudges.push(`${thin.map(r => r.label).join(', ')} — thin supply (${thin.map(r => r.supply_count).join('/')}) → use suppliers + referral`);
+  const warm = roles.filter(r => r.reply_rate >= 4 && r.reply_sent >= 20);
+  if (warm.length) nudges.push(`${warm.map(r => r.label).join(', ')} — warm WhatsApp channel`);
+  return nudges;
+}
+
+// GET ?action=audience_preview&role=&brand=&city=
+async function audiencePreview(db, url) {
+  const role = url.searchParams.get('role');
+  const city = url.searchParams.get('city');
+  if (!role) return json({ error: 'role required' }, 400);
+
+  let totalQuery = `SELECT COUNT(*) n FROM candidates WHERE he_role = ?`;
+  let totalParams = [role];
+  if (city) { totalQuery += ` AND city = ?`; totalParams.push(city); }
+  const total = await db.prepare(totalQuery).bind(...totalParams).first();
+
+  let afterQuery = `SELECT COUNT(*) n FROM candidates WHERE he_role = ? AND ${STAFF_EXCLUSION_SQL}`;
+  let afterParams = [role];
+  if (city) { afterQuery += ` AND city = ?`; afterParams.push(city); }
+  const after = await db.prepare(afterQuery).bind(...afterParams).first();
+
+  const exclusion = await db.prepare(
+    `SELECT COUNT(DISTINCT phone) n FROM hr_employees WHERE is_active = 1 AND phone IS NOT NULL AND phone <> ''`
+  ).first();
+
+  return json({
+    role,
+    city: city || null,
+    total_candidates: total?.n || 0,
+    after_exclusion: after?.n || 0,
+    excluded_staff: exclusion?.n || 0,
+  });
+}
+
+// POST ?action=compose {role_key, brand, commission, city?, audience_mode?}
+async function composeCampaign(db, body, env, request) {
+  const roleKey = String(body.role_key || '');
+  const commission = String(body.commission || '');
+  if (!roleKey) return json({ error: 'role_key required' }, 400);
+  if (!commission) return json({ error: 'commission required' }, 400);
+
+  const role = await db.prepare(`SELECT * FROM hiring_roles WHERE role_key = ? AND active = 1`).bind(roleKey).first();
+  if (!role) return json({ error: 'role not found' }, 404);
+
+  let brand = String(body.brand || 'he').toLowerCase();
+  if (role.brand !== 'both' && role.brand !== brand) brand = role.brand;
+
+  const packageText = body.package || role.default_package || '';
+  const posterUrl = body.poster_url || role.poster_url || '';
+  const city = body.city || null;
+  const audienceMode = body.audience_mode || 'available';
+  const today = new Date().toISOString().slice(0, 10);
+  const campaignName = `${brand.toUpperCase()} ${role.label} · ${today}`;
+
+  const variableMapping = JSON.stringify(['role', 'package', 'commission']);
+
+  const campRes = await db.prepare(
+    `INSERT INTO campaigns (name, template_name, role, role_key, salary, campaign_type, brand, category, variable_mapping, commission, package, poster_url, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`
+  ).bind(
+    campaignName,
+    role.template_name,
+    role.label,
+    roleKey,
+    '',
+    'flexible',
+    brand,
+    'hiring',
+    variableMapping,
+    commission,
+    packageText,
+    posterUrl
+  ).run();
+  const campaignId = campRes.meta.last_row_id;
+
+  // Build candidate query, excluding active staff and previously-contacted per audience_mode
+  let candidateQuery = `SELECT * FROM candidates WHERE he_role = ? AND ${STAFF_EXCLUSION_SQL}`;
+  const candidateParams = [role.label];
+  if (city) { candidateQuery += ` AND city = ?`; candidateParams.push(city); }
+  if (audienceMode === 'available') {
+    candidateQuery += ` AND campaign_status = 'none'`;
+  } else if (audienceMode === 'not_this_template') {
+    candidateQuery += ` AND phone NOT IN (
+      SELECT m.phone FROM messages m
+      JOIN campaigns camp ON camp.id = m.campaign_id
+      WHERE camp.template_name = ? AND m.status != 'failed'
+    )`;
+    candidateParams.push(role.template_name);
+  }
+  // Safety cap: never queue more than 500 in one compose
+  candidateQuery += ` ORDER BY has_personalization DESC, id ASC LIMIT 500`;
+
+  const candidates = await db.prepare(candidateQuery).bind(...candidateParams).all();
+  const rows = candidates.results || [];
+
+  if (rows.length > 0) {
+    const msgStmt = db.prepare(
+      `INSERT INTO messages (campaign_id, phone, candidate_name, template_params, status)
+       VALUES (?, ?, ?, ?, 'queued')`
+    );
+    const paramsJson = JSON.stringify([role.label, packageText, commission]);
+    const batch = rows.map(c => msgStmt.bind(campaignId, c.phone, c.name || c.first_name || '', paramsJson));
+    for (let i = 0; i < batch.length; i += 100) await db.batch(batch.slice(i, i + 100));
+
+    await db.prepare(`UPDATE campaigns SET total_candidates = ? WHERE id = ?`).bind(rows.length, campaignId).run();
+    await db.prepare(
+      `UPDATE candidates SET campaign_status = 'queued', last_campaign_id = ? WHERE phone IN (${rows.map(()=>'?').join(',')})`
+    ).bind(campaignId, ...rows.map(c => c.phone)).run();
+  }
+
+  return json({
+    ok: true,
+    campaign_id: campaignId,
+    brand,
+    role_key: roleKey,
+    role_label: role.label,
+    queued: rows.length,
+    commission,
+    package: packageText,
+    poster_url: posterUrl,
+    audience_mode: audienceMode,
+    city: city,
+  });
+}
+
+// POST ?action=send {campaign_id}
+async function sendCampaign(db, body, env, request) {
+  const campaignId = parseInt(body.campaign_id || 0, 10);
+  if (!campaignId) return json({ error: 'campaign_id required' }, 400);
+
+  const campaign = await db.prepare(`SELECT * FROM campaigns WHERE id = ?`).bind(campaignId).first();
+  if (!campaign) return json({ error: 'campaign not found' }, 404);
+
+  // Respect safety cap: send in batches of 20, one call per request. App can poll.
+  const base = new URL(request.url).origin;
+  const resp = await fetch(`${base}/api/hiring`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'send_batch', campaign_id: campaignId, batch_size: 20 }),
+  });
+  const data = await resp.json().catch(() => ({ error: 'invalid upstream response' }));
+  return json({ ...data, campaign_id: campaignId, brand: campaign.brand }, resp.status);
+}
+
+// POST ?action=reply {phone, text, brand?}
+async function replyToCandidate(db, body, env, request) {
+  const phone = normPhone(body.phone);
+  const text = String(body.text || '').trim();
+  if (!phone) return json({ error: 'phone required' }, 400);
+  if (!text) return json({ error: 'text required' }, 400);
+
+  const brand = body.brand || 'he';
+  const base = new URL(request.url).origin;
+  const resp = await fetch(`${base}/api/hiring`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'reply', phone, text, brand }),
+  });
+  const data = await resp.json().catch(() => ({ error: 'invalid upstream response' }));
+  return json(data, resp.status);
+}
+
+// GET ?action=inbox&status=unread|all&scope=hiring
+async function hiringInbox(db, url) {
+  const status = url.searchParams.get('status') || 'all';
+  const page = parseInt(url.searchParams.get('page') || '1', 10);
+  const limit = 30;
+  const offset = (page - 1) * limit;
+
+  let query = `
+    SELECT
+      c.phone,
+      c.candidate_name,
+      c.campaign_id,
+      c.body as last_message,
+      c.direction as last_direction,
+      c.created_at as last_message_at,
+      c.msg_type,
+      cam.name as campaign_name,
+      cam.role as campaign_role,
+      cam.brand as campaign_brand,
+      (SELECT COUNT(*) FROM conversations c2 WHERE c2.phone = c.phone AND c2.status = 'unread' AND c2.direction = 'inbound') as unread_count,
+      (SELECT COUNT(*) FROM conversations c3 WHERE c3.phone = c.phone) as total_messages
+    FROM conversations c
+    LEFT JOIN campaigns cam ON cam.id = c.campaign_id
+    WHERE c.id = (
+      SELECT MAX(c4.id) FROM conversations c4 WHERE c4.phone = c.phone
+    )
+    AND c.campaign_id IS NOT NULL AND cam.category = 'hiring'`;
+
+  const params = [];
+  if (status === 'unread') {
+    query += ` AND (SELECT COUNT(*) FROM conversations c5 WHERE c5.phone = c.phone AND c5.status = 'unread' AND c5.direction = 'inbound') > 0`;
+  }
+  query += ` ORDER BY c.created_at DESC LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
+  const rows = await db.prepare(query).bind(...params).all();
+  const count = await db.prepare(
+    `SELECT COUNT(DISTINCT c.phone) n FROM conversations c
+     LEFT JOIN campaigns cam ON cam.id = c.campaign_id
+     WHERE c.campaign_id IS NOT NULL AND cam.category = 'hiring'`
+  ).first();
+
+  return json({
+    conversations: (rows.results || []).map(r => ({
+      phone: r.phone,
+      candidate_name: r.candidate_name || '',
+      campaign_id: r.campaign_id,
+      campaign_name: r.campaign_name || '',
+      campaign_role: r.campaign_role || '',
+      campaign_brand: r.campaign_brand || '',
+      last_message: r.last_message || '',
+      last_direction: r.last_direction,
+      last_message_at: r.last_message_at,
+      msg_type: r.msg_type,
+      unread_count: r.unread_count || 0,
+      total_messages: r.total_messages || 0,
+    })),
+    total: count?.n || 0,
+    page,
+    pages: Math.ceil((count?.n || 0) / limit),
+  });
+}
+
+// GET ?action=campaign&id=
+async function campaignOne(db, url) {
+  const id = parseInt(url.searchParams.get('id') || '0', 10);
+  if (!id) return json({ error: 'id required' }, 400);
+  const campaign = await db.prepare(`SELECT * FROM campaigns WHERE id = ?`).bind(id).first();
+  if (!campaign) return json({ error: 'not found' }, 404);
+  const counts = await db.prepare(
+    `SELECT
+       COUNT(*) total,
+       SUM(CASE WHEN status IN ('sent','delivered','read') THEN 1 ELSE 0 END) sent,
+       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) failed,
+       SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) queued,
+       SUM(has_reply) replies
+     FROM messages WHERE campaign_id = ?`
+  ).bind(id).first();
+  return json({ campaign, counts });
+}
+
+// POST ?action=mark_outcome {campaign_id, role_key, outcome: joined|not_now|ignored|customer_noise}
+async function markOutcome(db, body) {
+  const campaignId = parseInt(body.campaign_id || 0, 10);
+  const roleKey = String(body.role_key || '');
+  const outcome = String(body.outcome || '');
+  if (!campaignId || !roleKey || !outcome) return json({ error: 'campaign_id, role_key, outcome required' }, 400);
+
+  const col = ['joined', 'not_now', 'ignored', 'customer_noise'].includes(outcome) ? outcome : null;
+  if (!col) return json({ error: 'invalid outcome' }, 400);
+
+  await db.prepare(
+    `INSERT INTO campaign_outcomes (campaign_id, role_key, ${col}) VALUES (?, ?, 1)
+     ON CONFLICT DO NOTHING`
+  ).bind(campaignId, roleKey).run().catch(() => null);
+
+  return json({ ok: true, campaign_id: campaignId, role_key: roleKey, outcome });
 }
