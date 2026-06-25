@@ -1,0 +1,406 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		015D636BBD84CAF5DCB632A9 /* TakhtHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A611DC9B12EBE501BF9425D2 /* TakhtHomeView.swift */; };
+		1AC738FDC403F8BD38A5EB3C /* TakhtApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51121267D986C96606E1BEAE /* TakhtApp.swift */; };
+		6660E3567B69BCC5100FAE54 /* TakhtModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D16400FB761E0259E9A15D8 /* TakhtModels.swift */; };
+		7F41F4F80962C892E8E9F53D /* TakhtWatchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC47A594B670EF416D013CC1 /* TakhtWatchView.swift */; };
+		A6EF6F1716BA8A31990315F2 /* TakhtWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7647AEA8BBA44531CDC7A6F3 /* TakhtWatchApp.swift */; };
+		CD29D06DB4DC7A4C19214697 /* Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5098E8407316BE4873EEBCA /* Extension.swift */; };
+		D1E29B3FB095364FFF5C4620 /* TakhtStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C51229636B3A2996E556209 /* TakhtStore.swift */; };
+		F22F2B1F1F4A9E4E0465AC84 /* TakhtWatch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 04C99FC7B904114D7EBD4A56 /* TakhtWatch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9815EF80C17C51AE62DC1B9C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3491C69BAE3AF0502515CA9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8096575442ABF9EE94478B66;
+			remoteInfo = "TakhtWatch App";
+		};
+		B2F9568C572437E19D676259 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3491C69BAE3AF0502515CA9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8096575442ABF9EE94478B66;
+			remoteInfo = "TakhtWatch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		04D50779909836706487AB4C /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				F22F2B1F1F4A9E4E0465AC84 /* TakhtWatch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		04C99FC7B904114D7EBD4A56 /* TakhtWatch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TakhtWatch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		0761A2DF80B924314DEF5D19 /* TakhtWatchExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TakhtWatchExtension.entitlements; sourceTree = "<group>"; };
+		2D16400FB761E0259E9A15D8 /* TakhtModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtModels.swift; sourceTree = "<group>"; };
+		417A8753F5A39B80D6A8999D /* Takht.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Takht.entitlements; sourceTree = "<group>"; };
+		51121267D986C96606E1BEAE /* TakhtApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtApp.swift; sourceTree = "<group>"; };
+		5285FFA03034A7F4D914C4CF /* TakhtWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TakhtWatch.entitlements; sourceTree = "<group>"; };
+		6D9FA9B66160BCBCAA59CBA3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		7647AEA8BBA44531CDC7A6F3 /* TakhtWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtWatchApp.swift; sourceTree = "<group>"; };
+		7C51229636B3A2996E556209 /* TakhtStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtStore.swift; sourceTree = "<group>"; };
+		95F39B668D424CE4C642E3C1 /* TakhtWatch Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "TakhtWatch Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A611DC9B12EBE501BF9425D2 /* TakhtHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtHomeView.swift; sourceTree = "<group>"; };
+		A8DEE04DF976E2F020EC5C97 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		AC47A594B670EF416D013CC1 /* TakhtWatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtWatchView.swift; sourceTree = "<group>"; };
+		B82587F08A00F8BBF158F610 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D5098E8407316BE4873EEBCA /* Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extension.swift; sourceTree = "<group>"; };
+		E1B108212BF6D11A45666253 /* Takht.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Takht.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		10586AF4D6B84E764F017904 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E1B108212BF6D11A45666253 /* Takht.app */,
+				04C99FC7B904114D7EBD4A56 /* TakhtWatch App.app */,
+				95F39B668D424CE4C642E3C1 /* TakhtWatch Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		132B877D4FCEAD99333CCA30 /* TakhtWatch */ = {
+			isa = PBXGroup;
+			children = (
+				B82587F08A00F8BBF158F610 /* Info.plist */,
+				5285FFA03034A7F4D914C4CF /* TakhtWatch.entitlements */,
+				7647AEA8BBA44531CDC7A6F3 /* TakhtWatchApp.swift */,
+				AC47A594B670EF416D013CC1 /* TakhtWatchView.swift */,
+			);
+			name = TakhtWatch;
+			path = Sources/TakhtWatch;
+			sourceTree = "<group>";
+		};
+		17D52D9D2C4144AFC51B305F = {
+			isa = PBXGroup;
+			children = (
+				4BB8DE2F4B3D0CEC269714EA /* Takht */,
+				132B877D4FCEAD99333CCA30 /* TakhtWatch */,
+				E7950BE1BAB9A4263BC9747D /* TakhtWatchExtension */,
+				10586AF4D6B84E764F017904 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4BB8DE2F4B3D0CEC269714EA /* Takht */ = {
+			isa = PBXGroup;
+			children = (
+				6D9FA9B66160BCBCAA59CBA3 /* Info.plist */,
+				417A8753F5A39B80D6A8999D /* Takht.entitlements */,
+				51121267D986C96606E1BEAE /* TakhtApp.swift */,
+				A611DC9B12EBE501BF9425D2 /* TakhtHomeView.swift */,
+				2D16400FB761E0259E9A15D8 /* TakhtModels.swift */,
+				7C51229636B3A2996E556209 /* TakhtStore.swift */,
+			);
+			name = Takht;
+			path = Sources/Takht;
+			sourceTree = "<group>";
+		};
+		E7950BE1BAB9A4263BC9747D /* TakhtWatchExtension */ = {
+			isa = PBXGroup;
+			children = (
+				D5098E8407316BE4873EEBCA /* Extension.swift */,
+				A8DEE04DF976E2F020EC5C97 /* Info.plist */,
+				0761A2DF80B924314DEF5D19 /* TakhtWatchExtension.entitlements */,
+			);
+			name = TakhtWatchExtension;
+			path = Sources/TakhtWatchExtension;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		34B6FE6C6C067B967E7ABAA9 /* Takht */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1855618FADB5EF7B10646C55 /* Build configuration list for PBXNativeTarget "Takht" */;
+			buildPhases = (
+				1ED3E5FBFDA775A7E998F426 /* Sources */,
+				04D50779909836706487AB4C /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8FF190ED7AE13B43473EF29B /* PBXTargetDependency */,
+			);
+			name = Takht;
+			packageProductDependencies = (
+			);
+			productName = Takht;
+			productReference = E1B108212BF6D11A45666253 /* Takht.app */;
+			productType = "com.apple.product-type.application";
+		};
+		8096575442ABF9EE94478B66 /* TakhtWatch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 161B0561BECC9DE940B90CF8 /* Build configuration list for PBXNativeTarget "TakhtWatch App" */;
+			buildPhases = (
+				C126A1D08A5821FF3650A460 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "TakhtWatch App";
+			packageProductDependencies = (
+			);
+			productName = "TakhtWatch App";
+			productReference = 04C99FC7B904114D7EBD4A56 /* TakhtWatch App.app */;
+			productType = "com.apple.product-type.application.watchapp2";
+		};
+		B7179D88CE6A3E193B79EFA7 /* TakhtWatch Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7187D35C8F8879A39804AADE /* Build configuration list for PBXNativeTarget "TakhtWatch Extension" */;
+			buildPhases = (
+				F160FA107BF2B22BA6C83A3B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0C3213AF0D399A5C4C8C2F20 /* PBXTargetDependency */,
+			);
+			name = "TakhtWatch Extension";
+			packageProductDependencies = (
+			);
+			productName = "TakhtWatch Extension";
+			productReference = 95F39B668D424CE4C642E3C1 /* TakhtWatch Extension.appex */;
+			productType = "com.apple.product-type.watchkit2-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3491C69BAE3AF0502515CA9C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = CC1314C8D68778F3C1B90E0E /* Build configuration list for PBXProject "Takht" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 17D52D9D2C4144AFC51B305F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 10586AF4D6B84E764F017904 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				34B6FE6C6C067B967E7ABAA9 /* Takht */,
+				8096575442ABF9EE94478B66 /* TakhtWatch App */,
+				B7179D88CE6A3E193B79EFA7 /* TakhtWatch Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1ED3E5FBFDA775A7E998F426 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1AC738FDC403F8BD38A5EB3C /* TakhtApp.swift in Sources */,
+				015D636BBD84CAF5DCB632A9 /* TakhtHomeView.swift in Sources */,
+				6660E3567B69BCC5100FAE54 /* TakhtModels.swift in Sources */,
+				D1E29B3FB095364FFF5C4620 /* TakhtStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C126A1D08A5821FF3650A460 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A6EF6F1716BA8A31990315F2 /* TakhtWatchApp.swift in Sources */,
+				7F41F4F80962C892E8E9F53D /* TakhtWatchView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F160FA107BF2B22BA6C83A3B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CD29D06DB4DC7A4C19214697 /* Extension.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0C3213AF0D399A5C4C8C2F20 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8096575442ABF9EE94478B66 /* TakhtWatch App */;
+			targetProxy = B2F9568C572437E19D676259 /* PBXContainerItemProxy */;
+		};
+		8FF190ED7AE13B43473EF29B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8096575442ABF9EE94478B66 /* TakhtWatch App */;
+			targetProxy = 9815EF80C17C51AE62DC1B9C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		064E2AE5291A6C5007A58EA7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		24EA46800BFEA7660D576C96 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/Takht/Takht.entitlements;
+				INFOPLIST_FILE = Sources/Takht/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Takht;
+				INFOPLIST_KEY_CFBundleName = Takht;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = (
+					UIInterfaceOrientationPortrait,
+				);
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = in.hnhotels.takht.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht;
+			};
+			name = Release;
+		};
+		2AD9EA223FA69968642D963D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		3237895EE0B89B004478CF9F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatch/TakhtWatch.entitlements;
+				INFOPLIST_FILE = Sources/TakhtWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Takht Watch";
+				INFOPLIST_KEY_CFBundleName = TakhtWatch;
+				INFOPLIST_KEY_WKWatchOnly = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
+			};
+			name = Release;
+		};
+		502D30CB50A07523A1B616F3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatch/TakhtWatch.entitlements;
+				INFOPLIST_FILE = Sources/TakhtWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Takht Watch";
+				INFOPLIST_KEY_CFBundleName = TakhtWatch;
+				INFOPLIST_KEY_WKWatchOnly = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
+			};
+			name = Debug;
+		};
+		6EE8E5292F1CF3720267F4E6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatchExtension/TakhtWatchExtension.entitlements;
+				INFOPLIST_FILE = Sources/TakhtWatchExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TakhtWatchExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitextension;
+				WK_APP_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
+			};
+			name = Release;
+		};
+		9B26AFD60A37CB2CC74B21A3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/Takht/Takht.entitlements;
+				INFOPLIST_FILE = Sources/Takht/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Takht;
+				INFOPLIST_KEY_CFBundleName = Takht;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = (
+					UIInterfaceOrientationPortrait,
+				);
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = in.hnhotels.takht.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht;
+			};
+			name = Debug;
+		};
+		C45FFBE0D26E847A60FC9EEC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatchExtension/TakhtWatchExtension.entitlements;
+				INFOPLIST_FILE = Sources/TakhtWatchExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TakhtWatchExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitextension;
+				WK_APP_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		161B0561BECC9DE940B90CF8 /* Build configuration list for PBXNativeTarget "TakhtWatch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				502D30CB50A07523A1B616F3 /* Debug */,
+				3237895EE0B89B004478CF9F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1855618FADB5EF7B10646C55 /* Build configuration list for PBXNativeTarget "Takht" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9B26AFD60A37CB2CC74B21A3 /* Debug */,
+				24EA46800BFEA7660D576C96 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7187D35C8F8879A39804AADE /* Build configuration list for PBXNativeTarget "TakhtWatch Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C45FFBE0D26E847A60FC9EEC /* Debug */,
+				6EE8E5292F1CF3720267F4E6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CC1314C8D68778F3C1B90E0E /* Build configuration list for PBXProject "Takht" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				064E2AE5291A6C5007A58EA7 /* Debug */,
+				2AD9EA223FA69968642D963D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 3491C69BAE3AF0502515CA9C /* Project object */;
+}
