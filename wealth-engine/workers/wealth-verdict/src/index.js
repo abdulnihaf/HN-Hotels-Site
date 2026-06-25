@@ -334,6 +334,23 @@ async function composeVerdict(env, opts = {}) {
     if (existing) return { rows: 0, skipped: 'already-composed-today', id: existing.id, carryover: carryoverResult };
   }
 
+  // 1b. ★ GAP-UP EDGE ENGINE (PRIMARY 09:40 PATH) — deterministic scan of today's
+  // actual gap-ups, gated by the nightly-tuned rule the RTX box publishes into
+  // wealth_strategy_config. When a config exists it OWNS the decision (a real TRADE
+  // with exact entry/stop/time-exit, or an HONEST SIT_OUT when the edge is unproven
+  // or nothing clears). The picks are MATH (a coordinate), the LLM only narrates.
+  // This is ADDITIVE: if no config is published yet, or the live scan genuinely can't
+  // run, we fall through to the legacy LLM-selection path below — no regression.
+  try {
+    const stratCfg = await loadStrategyConfig(db);
+    if (stratCfg) {
+      const gap = await runGapEngine(env, db, today, stratCfg, carryoverResult);
+      if (gap) return gap;
+    }
+  } catch (e) {
+    console.warn('[gap-engine] failed, falling back to legacy compose:', e.message);
+  }
+
   // 2. Pull every data layer in parallel
   const [
     latestSig,
@@ -1082,6 +1099,308 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
     attempts,
     cost_paise: result.cost_paise,
     cached: result.cached,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GAP-UP EDGE ENGINE — the self-learning intraday loop's live decision-maker.
+//   nightly: RTX box walk-forward backtest → wealth_strategy_config (the tuned rule)
+//   09:40  : scanGapUp(preopen_snapshot) → point-in-time liquidity gate → exact plan
+//   decision: TRADE (edge proven + setup clears) | SIT_OUT (no edge / no setup) — HONEST
+// The pick is a coordinate (deterministic). The LLM only writes the narrative.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadStrategyConfig(db, strategy = 'gap_up_intraday') {
+  return await db.prepare(
+    `SELECT * FROM wealth_strategy_config WHERE strategy=? AND is_active=1 ORDER BY published_at DESC LIMIT 1`
+  ).bind(strategy).first().catch(() => null);
+}
+
+async function loadUserCfg(db, keys) {
+  const ph = keys.map(() => '?').join(',');
+  const rows = (await db.prepare(
+    `SELECT config_key, config_value FROM user_config WHERE config_key IN (${ph})`
+  ).bind(...keys).all().catch(() => ({ results: [] }))).results || [];
+  const m = {}; for (const r of rows) m[r.config_key] = r.config_value;
+  return m;
+}
+
+// Exclude index/sector ETFs + bond/gold/silver funds — they gap on flows, not catalysts,
+// and are not single-stock intraday setups. Keep real equities only.
+function isTradeableEquity(sym) {
+  if (!sym) return false;
+  const s = sym.toUpperCase();
+  return !/(BEES$|ETF$|IETF$|BETF$|^LIQUID|LIQUID$|ADD$|CASE$|^GOLD|GOLD$|^SILVER|SILVER$|^SETF|^NIFTY|NIFTY1$|^BANKNIFTY|^MON100|^MAFANG|^HNGSNG|^PSUBNK|^CPSEETF|^MID150|^NEXT50|^JUNIOR|^MOM\d|^MIDCAP|^SMALLCAP|^METALI|^PHARMABEES|^AUTOBEES|^MAHKTECH|^HDFCNIFTY|^ICICIB22|^QUADFUTURE|^GROWWGOLD|^GROWWSLVR|^TATAGOLD|^TATSILV|^DECNGOLD|^HDFCGOLD|^HDFCSILVER|^AXISGOLD|^AXISILVER|^SBISILVER|^SBILIQ|^GROWWLIQID|^GROWWPOWER|^LIQGRW)/.test(s);
+}
+
+// Scan today's pre-open snapshot (full universe, captured 09:00-09:08 IST) for gap-ups,
+// then gate by point-in-time trailing-20d liquidity. Returns ranked candidates.
+async function scanGapUp(env, db, cfg, today) {
+  const gapMin = cfg.gap_min_pct || 3.0;
+  const minTurnover = cfg.min_turnover_cr || 10;
+  const dayStartMs = Date.now() - 18 * 3600 * 1000; // scope to today's session
+  const preRows = (await db.prepare(`
+    SELECT p.symbol, p.iep_paise, p.iep_change_pct, p.prev_close_paise, p.total_buy_qty, p.total_sell_qty
+    FROM preopen_snapshot p
+    JOIN (SELECT symbol, MAX(ts) mts FROM preopen_snapshot WHERE ts > ? GROUP BY symbol) m
+      ON p.symbol = m.symbol AND p.ts = m.mts
+    WHERE p.iep_change_pct >= ? AND p.iep_paise > 0
+    ORDER BY p.iep_change_pct DESC
+    LIMIT 80
+  `).bind(dayStartMs, gapMin).all().catch(() => ({ results: [] }))).results || [];
+  const gappers = preRows.filter(r => isTradeableEquity(r.symbol));
+  if (gappers.length === 0) return { candidates: [], scanned: preRows.length, gated: 0, fresh: preRows.length > 0 };
+
+  // point-in-time liquidity: trailing-20d avg turnover (Cr) from equity_eod.
+  // Check ALL gappers (not just the biggest-gap ones — those skew illiquid small-caps);
+  // the liquid survivors are what the tested edge is actually about.
+  const syms = gappers.slice(0, 80).map(r => r.symbol);
+  const ph = syms.map(() => '?').join(',');
+  const liqRows = (await db.prepare(`
+    SELECT symbol, AVG(turnover_cr) liq FROM (
+      SELECT symbol, (CAST(volume AS REAL)*close_paise/100.0/1e7) turnover_cr,
+             ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY trade_date DESC) rn
+      FROM equity_eod WHERE symbol IN (${ph}) AND volume > 0
+    ) WHERE rn <= 20 GROUP BY symbol
+  `).bind(...syms).all().catch(() => ({ results: [] }))).results || [];
+  const liqBy = {}; for (const r of liqRows) liqBy[r.symbol] = r.liq || 0;
+
+  // earnings-in-5d exclusion (overnight gap risk if held — but mainly avoid event whipsaw)
+  const resRows = (await db.prepare(
+    `SELECT DISTINCT symbol FROM results_calendar WHERE result_date BETWEEN ? AND date(?, '+5 days')`
+  ).bind(today, today).all().catch(() => ({ results: [] }))).results || [];
+  const earningsSoon = new Set(resRows.map(r => r.symbol));
+
+  // recent news per gapper (catalyst confirmation tilt)
+  const newsRows = (await db.prepare(
+    `SELECT symbols_tagged, sentiment_score, importance_score FROM news_items WHERE published_at > ? ORDER BY published_at DESC LIMIT 500`
+  ).bind(Date.now() - 36 * 3600 * 1000).all().catch(() => ({ results: [] }))).results || [];
+  const newsBy = {};
+  for (const n of newsRows) {
+    let tags = []; try { tags = JSON.parse(n.symbols_tagged || '[]'); } catch {}
+    for (const t of tags) (newsBy[t] = newsBy[t] || []).push(n);
+  }
+
+  const candidates = [];
+  for (const g of gappers) {
+    const liq = liqBy[g.symbol] || 0;
+    if (liq < minTurnover) continue;
+    if (earningsSoon.has(g.symbol)) continue;
+    const news = newsBy[g.symbol] || [];
+    const catalyst = news.length ? {
+      headlines: news.length,
+      sentiment: +(news.reduce((a, n) => a + (n.sentiment_score || 0), 0) / news.length).toFixed(2),
+      importance: +Math.max(...news.map(n => n.importance_score || 0)).toFixed(2),
+    } : null;
+    candidates.push({
+      symbol: g.symbol,
+      gap_pct: +g.iep_change_pct.toFixed(2),
+      open_paise: g.iep_paise,
+      prev_close_paise: g.prev_close_paise,
+      turnover_cr: +liq.toFixed(1),
+      catalyst,
+      rank_score: g.iep_change_pct * (liq >= 100 ? 1.0 : liq >= 25 ? 0.9 : 0.8) * (catalyst ? 1.15 : 1.0),
+    });
+  }
+  candidates.sort((a, b) => b.rank_score - a.rank_score);
+  return { candidates, scanned: preRows.length, gated: gappers.length, fresh: true };
+}
+
+// Pick top-N with a one-per-sector concentration cap (correlated-drawdown guard).
+async function pickSectorSpread(db, candidates, maxPicks) {
+  if (candidates.length === 0) return [];
+  const syms = candidates.map(c => c.symbol);
+  const ph = syms.map(() => '?').join(',');
+  const secRows = (await db.prepare(
+    `SELECT symbol, sector_bucket FROM sector_classification WHERE symbol IN (${ph})`
+  ).bind(...syms).all().catch(() => ({ results: [] }))).results || [];
+  const secBy = {}; for (const r of secRows) secBy[r.symbol] = r.sector_bucket || 'OTHER';
+  const picks = []; const usedSectors = new Set();
+  for (const c of candidates) {
+    const sec = secBy[c.symbol] || 'OTHER';
+    if (sec !== 'OTHER' && usedSectors.has(sec)) continue; // one per known sector
+    picks.push({ ...c, sector: sec });
+    usedSectors.add(sec);
+    if (picks.length >= maxPicks) break;
+  }
+  return picks;
+}
+
+// Best-effort: refine entry to the live 09:40 LTP (fresher than the 09:08 IEP).
+// Reads through the Pages /api/kite ltp proxy (not IP-gated). Falls back to IEP on any error.
+async function refineEntries(env, picks) {
+  if (!picks.length) return;
+  for (const p of picks) p.entry_estimate_paise = p.open_paise; // default = pre-open IEP
+  try {
+    const base = env.PAGES_BASE || 'https://trade.hnhotels.in';
+    const qs = picks.map(p => `i=NSE:${encodeURIComponent(p.symbol)}`).join('&');
+    const r = await fetch(`${base}/api/kite?action=ltp&${qs}`, {
+      headers: { 'x-api-key': env.DASHBOARD_KEY || env.DASHBOARD_API_KEY || '' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return;
+    const j = await r.json();
+    const data = j?.data || {};
+    for (const p of picks) {
+      const q = data[`NSE:${p.symbol}`];
+      if (q && q.last_price > 0) {
+        p.entry_estimate_paise = Math.round(q.last_price * 100);
+        p.live_quote = true;
+      }
+    }
+  } catch { /* keep IEP entry */ }
+}
+
+// Size each pick to the owner's in-play capital, bounded by max risk-per-trade.
+// Strategy = WIDE stop + TIME exit (backtest-proven: tight stops whipsaw out).
+function sizePicks(picks, cfg, deployablePaise, totalCapPaise, maxRiskPct) {
+  const stopPct = cfg.stop_pct || 3.0;
+  const targetPct = +Math.max(stopPct * 1.6, 4.0).toFixed(1); // informational ceiling; real exit is time
+  const n = picks.length;
+  const weightFrac = 0.90 / n; // 10% cash buffer, even split across picks
+  // risk cap: position capital so a full stop costs <= maxRiskPct% of TOTAL capital
+  const riskCapPaise = maxRiskPct > 0 ? Math.floor(totalCapPaise * (maxRiskPct / stopPct)) : Infinity;
+  const out = [];
+  for (const p of picks) {
+    const entry = p.entry_estimate_paise || p.open_paise;
+    if (!entry || entry <= 0) continue;
+    const capPaise = Math.min(Math.floor(deployablePaise * weightFrac), riskCapPaise);
+    const qty = Math.max(0, Math.floor(capPaise / entry));
+    if (qty < 1) continue;
+    const stopPaise = Math.round(entry * (1 - stopPct / 100));
+    const targetPaise = Math.round(entry * (1 + targetPct / 100));
+    const deployedPaise = qty * entry;
+    out.push({
+      symbol: p.symbol,
+      sector: p.sector || 'OTHER',
+      weight_pct: +(deployedPaise / deployablePaise * 100).toFixed(1),
+      entry_window: '09:40 IST (at scan)',
+      entry_estimate_paise: entry,
+      live_quote: !!p.live_quote,
+      gap_pct: p.gap_pct,
+      turnover_cr: p.turnover_cr,
+      catalyst: p.catalyst,
+      qty,
+      capital_deployed_paise: deployedPaise,
+      stop_pct: stopPct,
+      stop_paise: stopPaise,
+      target_pct: targetPct,
+      target_paise: targetPaise,
+      trail_after_pct: null,
+      trail_pct: null,
+      hard_exit_ist: cfg.exit_time_ist || '14:30',
+      exit_mode: 'time_exit_wide_stop',
+      max_loss_paise: qty * (entry - stopPaise),
+      max_gain_at_target_paise: qty * (targetPaise - entry),
+      rr_ratio: +(targetPct / stopPct).toFixed(2),
+      rationale: `Gapped up ${p.gap_pct}% at open on ₹${p.turnover_cr}Cr liquidity${p.catalyst ? ', news catalyst present' : ''}. Hold to ${cfg.exit_time_ist || '14:30'}, wide ${stopPct}% stop.`,
+    });
+  }
+  return out;
+}
+
+// LLM narration ONLY (picks are fixed). Honest about the edge. Deterministic fallback.
+async function narrateGap(env, today, cfg, decision, picksJson, scan, watch) {
+  const det = decision === 'TRADE'
+    ? `Engine picked ${picksJson.map(p => p.symbol).join(' + ')} — each gapped up at the open on real liquidity. Plan: enter ~09:40, hold to ${cfg.exit_time_ist}, wide ${cfg.stop_pct}% stop (tight stops whipsaw out — the backtest proved that). Honest: the tested edge is ${cfg.verdict === 'ROBUST_EDGE' ? 'confirmed but small' : 'thin'} (~${cfg.oos_expectancy_pct}%/trade out-of-sample) — size small.`
+    : `${scan.gated || 0} stocks gapped up today, but ${cfg.verdict === 'NO_EDGE' ? 'the walk-forward backtest shows no real edge over a random gap pick on this data' : 'none cleared the tuned rule'}. Sitting out is the honest call.${watch.length ? ' Watching: ' + watch.map(w => w.symbol).join(', ') + '.' : ''}`;
+  try {
+    const sys = `You are narrating an ALREADY-DECIDED intraday gap-up verdict for a non-technical owner. The picks and the decision are FIXED — do NOT change, add, or remove anything. Write a 2-3 sentence plain-English narrative (≤70 words). Be HONEST about the edge: it is ${cfg.verdict} with ~${cfg.oos_expectancy_pct}%/trade out-of-sample expectancy (${cfg.folds_positive} folds positive, p=${cfg.oos_p}). Never fake confidence. Output STRICT JSON: {"narrative":"..."}`;
+    const usr = `Decision: ${decision}\nTuned rule: gap≥${cfg.gap_min_pct}%, ${cfg.stop_pct}% stop, exit ${cfg.exit_time_ist}, liquidity≥₹${cfg.min_turnover_cr}Cr.\nPicks: ${JSON.stringify(picksJson.map(p => ({ symbol: p.symbol, gap_pct: p.gap_pct, qty: p.qty, turnover_cr: p.turnover_cr, catalyst: !!p.catalyst })))}\nWatch (if sit-out): ${JSON.stringify(watch)}\nScan: ${scan.scanned} symbols, ${scan.gated} gapped up.`;
+    const r = await callOpus(env, { prompt: usr, system: sys, max_tokens: 220, purpose: 'gap_narrate', worker: WORKER_NAME, cache_key: `gap_narr_${today}_${decision}_${picksJson.map(p => p.symbol).join('_')}`, cache_ttl_ms: 6 * 3600 * 1000 });
+    const p = parseJsonOutput(r.text);
+    if (p && typeof p.narrative === 'string' && p.narrative.length > 10) {
+      return { narrative: p.narrative.slice(0, 600), model: r.model_id, cost_paise: r.cost_paise || 0 };
+    }
+  } catch { /* fall through to deterministic */ }
+  return { narrative: det, model: 'gap_engine_deterministic', cost_paise: 0 };
+}
+
+// Orchestrates the gap engine: scan → size → narrate → persist. Returns a verdict
+// result, or null to fall through to the legacy compose path (no-regression safety net).
+async function runGapEngine(env, db, today, cfg, carryover) {
+  const scan = await scanGapUp(env, db, cfg, today);
+  // If the pre-open feed is empty/stale, we can't run honestly → let legacy path try.
+  if (!scan.fresh) return null;
+
+  const uc = await loadUserCfg(db, ['today_deployable_paise', 'total_capital_paise', 'max_active_positions', 'max_risk_per_trade_pct']);
+  const deployable = parseInt(uc.today_deployable_paise || uc.total_capital_paise || '10000000', 10);
+  const totalCap = parseInt(uc.total_capital_paise || '10000000', 10);
+  const maxRiskPct = parseFloat(uc.max_risk_per_trade_pct || '2.0');
+  const maxPicks = Math.min(cfg.max_picks || 3, parseInt(uc.max_active_positions || '3', 10));
+
+  const tradable = cfg.verdict && cfg.verdict !== 'NO_EDGE';
+  const top = await pickSectorSpread(db, scan.candidates, maxPicks);
+  if (tradable && top.length) await refineEntries(env, top);
+
+  let decision, picksJson = [], headline, watch = [];
+  if (tradable && top.length) {
+    picksJson = sizePicks(top, cfg, deployable, totalCap, maxRiskPct);
+  }
+  if (picksJson.length) {
+    decision = 'TRADE';
+    headline = `${picksJson.map(p => p.symbol).join(' + ')} — gap-up ≥${cfg.gap_min_pct}%, hold to ${cfg.exit_time_ist}, wide ${cfg.stop_pct}% stop`;
+  } else {
+    decision = 'SIT_OUT';
+    watch = scan.candidates.slice(0, 6).map(c => ({ symbol: c.symbol, gap_pct: c.gap_pct, turnover_cr: c.turnover_cr, catalyst: !!c.catalyst }));
+    headline = !tradable
+      ? `SIT OUT — gap-up edge unproven on the tested data (${scan.gated} gappers, but no real edge yet)`
+      : `SIT OUT — ${scan.gated} gappers, none cleared the rule today`;
+  }
+
+  const narr = await narrateGap(env, today, cfg, decision, picksJson, scan, watch);
+
+  await db.prepare(`
+    INSERT INTO daily_verdicts
+      (trade_date, verdict_type, decision, headline, narrative,
+       recommended_symbol, recommended_plan_json, alternatives_json,
+       context_snapshot_json, composed_at, composed_by_model, cost_paise, cached,
+       entry_window, horizon, time_stop_days, pre_event_exit,
+       picks_json, strategy_mode, portfolio_capital_paise)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    today, 'morning', decision,
+    headline.slice(0, 200),
+    (narr.narrative || '').slice(0, 1500),
+    picksJson[0]?.symbol || null,
+    null,
+    JSON.stringify({
+      engine: 'gap_up',
+      edge_verdict: cfg.verdict,
+      oos_expectancy_pct: cfg.oos_expectancy_pct,
+      oos_trades: cfg.oos_trades,
+      folds_positive: cfg.folds_positive,
+      edge_vs_null: cfg.edge_vs_null,
+      watch,
+      risk_flags: [
+        `Edge is ${cfg.verdict} (~${cfg.oos_expectancy_pct}%/trade OOS) — size small, this is honest not hype`,
+        `Daily loss limit ${Math.round((parseFloat(uc.max_risk_per_trade_pct || '2') / 100) * totalCap / 100)} — stop for the day if hit`,
+      ],
+      tier_used: narr.model,
+    }),
+    JSON.stringify({
+      engine: 'gap_up_intraday',
+      config_date: cfg.config_date,
+      tuned_rule: { gap_min_pct: cfg.gap_min_pct, stop_pct: cfg.stop_pct, exit_time_ist: cfg.exit_time_ist, min_turnover_cr: cfg.min_turnover_cr, vol_mult_min: cfg.vol_mult_min },
+      scan: { scanned: scan.scanned, gapped_up: scan.gated, cleared: picksJson.length },
+      deployable_paise: deployable, carryover: carryover ? 'reviewed' : null,
+    }),
+    Date.now(),
+    narr.model,
+    narr.cost_paise || 0,
+    0,
+    '09:40 IST',
+    'intraday', 1, null,
+    JSON.stringify(picksJson),
+    'intraday_gap_up',
+    deployable,
+  ).run();
+
+  return {
+    rows: 1, engine: 'gap_up', decision,
+    picks: picksJson.length, scanned: scan.scanned, gapped_up: scan.gated,
+    edge_verdict: cfg.verdict, oos_expectancy_pct: cfg.oos_expectancy_pct,
+    symbols: picksJson.map(p => p.symbol),
   };
 }
 

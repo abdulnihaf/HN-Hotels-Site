@@ -153,14 +153,23 @@ export async function onRequest(context) {
     if (action === 'reconcile_trades') {
       return Response.json(await reconcileTrades(env, db, kiteHeaders), { headers });
     }
+    if (action === 'reconcile_positions') {
+      return Response.json(await reconcilePositions(env, db, kiteHeaders), { headers });
+    }
     if (action === 'reconcile_all') {
-      const [h, f, o, t] = await Promise.all([
+      const [h, f, o, t, p] = await Promise.all([
         reconcileHoldings(env, db, kiteHeaders),
         reconcileFunds(env, db, kiteHeaders),
         reconcileOrders(env, db, kiteHeaders),
         reconcileTrades(env, db, kiteHeaders),
+        reconcilePositions(env, db, kiteHeaders),
       ]);
-      return Response.json({ holdings: h, funds: f, orders: o, trades: t }, { headers });
+      return Response.json({ holdings: h, funds: f, orders: o, trades: t, positions: p }, { headers });
+    }
+    // Square off a live position (owner one-tap exit) — opposite MARKET order, box-proxied.
+    if (action === 'square_off') {
+      if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
+      return Response.json(await squareOff(env, db, kiteHeaders, await request.json()), { headers });
     }
 
     // ─────────────────────────────────────────────────────
@@ -952,6 +961,63 @@ async function reconcileTrades(env, db, kiteHeaders) {
     written++;
   }
   return { ok: true, trades: written };
+}
+
+// Pull live intraday/positions book → kite_positions_live (track + square-off).
+// Net positions with live P&L. The app reads the latest snapshot; square_off acts on it.
+async function reconcilePositions(env, db, kiteHeaders) {
+  const t0 = Date.now();
+  const r = await fetch(`${KITE_BASE}/portfolio/positions`, { headers: kiteHeaders });
+  const j = await r.json();
+  await logKite(db, '/portfolio/positions', 'GET', r.status, Date.now() - t0, r.ok ? null : (j.message || ''));
+  if (!r.ok || !j.data) return { ok: false, error: j.message || 'No positions data' };
+  const net = j.data.net || [];
+  const now = Date.now();
+  const today = new Date(now + 5.5 * 3600000).toISOString().slice(0, 10);
+  let written = 0;
+  for (const p of net) {
+    await db.prepare(
+      `INSERT INTO kite_positions_live
+        (snapshot_at, trade_date, tradingsymbol, exchange, product, quantity, buy_qty, sell_qty,
+         avg_price_paise, last_price_paise, pnl_paise, m2m_paise, realised_paise, unrealised_paise, raw_json)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      now, today, p.tradingsymbol, p.exchange, p.product,
+      p.quantity || 0, p.buy_quantity || 0, p.sell_quantity || 0,
+      Math.round((p.average_price || 0) * 100), Math.round((p.last_price || 0) * 100),
+      Math.round((p.pnl || 0) * 100), Math.round((p.m2m || 0) * 100),
+      Math.round((p.realised || 0) * 100), Math.round((p.unrealised || 0) * 100),
+      JSON.stringify(p).slice(0, 2000)
+    ).run();
+    written++;
+  }
+  return { ok: true, positions: net.length, written, snapshot_at: now };
+}
+
+// Square off a live position — opposite MARKET order for the net qty (owner one-tap exit).
+// Respects the same block_real_orders gate as a manual buy; routes through the box proxy.
+async function squareOff(env, db, kiteHeaders, body) {
+  const { tradingsymbol, exchange = 'NSE', product = 'MIS' } = body || {};
+  if (!tradingsymbol) return { ok: false, error: 'tradingsymbol required' };
+  let qty = body.quantity;
+  if (!qty) {
+    const r = await fetch(`${KITE_BASE}/portfolio/positions`, { headers: kiteHeaders });
+    const j = await r.json();
+    const pos = ((j.data && j.data.net) || []).find(
+      p => p.tradingsymbol === tradingsymbol && p.product === product && (p.quantity || 0) !== 0
+    );
+    if (!pos) return { ok: false, error: 'no_open_position', tradingsymbol };
+    qty = pos.quantity;
+  }
+  if (!qty || qty === 0) return { ok: false, error: 'no_qty', tradingsymbol };
+  const side = qty > 0 ? 'SELL' : 'BUY';            // opposite of the net position
+  const res = await placeOrder(env, db, kiteHeaders, {
+    exchange, tradingsymbol, transaction_type: side, quantity: Math.abs(qty),
+    product, order_type: 'MARKET', validity: 'DAY', tag: 'HN_WE_SQOFF',
+    bypass_block: body.bypass_block === true,
+  });
+  await reconcilePositions(env, db, kiteHeaders).catch(() => {});
+  return { ok: !res.blocked && !res.error, squared: { tradingsymbol, qty: Math.abs(qty), side }, order: res };
 }
 
 // ─────────────────────────────────────────────────────────
