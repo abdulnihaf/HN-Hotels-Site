@@ -45,6 +45,13 @@ actor TakhtClient {
         return try decoder.decode(TakhtShiftResponse.self, from: data)
     }
 
+    // ── LIVE SLOT BOARD (resolver lives on the identity host, not the brand host) ──
+    func resolver(brand: String) async throws -> TakhtResolverResponse {
+        let data = try await request(base: authBase, path: "/api/takht-resolver",
+                                     query: ["action": "roster", "brand": brand], timeout: 20)
+        return try decoder.decode(TakhtResolverResponse.self, from: data)
+    }
+
     // ── SOLVE FLOW (auth = the person's Darbar PIN) ──
     func openErrors(host: String, pin: String) async throws -> TakhtErrorsResponse {
         let data = try await request(base: host, path: "/api/rectify",

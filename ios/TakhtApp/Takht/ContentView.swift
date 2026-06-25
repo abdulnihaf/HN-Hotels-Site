@@ -115,8 +115,30 @@ struct HomeView: View {
         upiCard
         chaiCard
         sessionCard
+        counterLink
         if canFix { fixLink }
         if canSettle { settleCard }
+    }
+
+    // ── Live slot board — who's attributed at the counter ──
+    private var counterLink: some View {
+        NavigationLink {
+            CounterView(model: model, accent: accent)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "person.2.badge.gearshape.fill").font(.system(size: 14)).foregroundStyle(accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("On the counter").font(.system(size: 14, weight: .semibold)).foregroundStyle(TakhtTheme.text)
+                    Text("Runners RUN01–05 · who's live vs gone")
+                        .font(.system(size: 12)).foregroundStyle(TakhtTheme.textDim)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(TakhtTheme.textFaint)
+            }
+            .padding(13).frame(maxWidth: .infinity, alignment: .leading)
+            .background(TakhtTheme.card, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(TakhtTheme.line, lineWidth: 1))
+        }
     }
 
     // ── The SOLVE flow entry — tap to fix, not just to read ──

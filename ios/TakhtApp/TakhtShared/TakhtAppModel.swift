@@ -24,6 +24,10 @@ final class TakhtAppModel: ObservableObject {
     @Published var fixState: FixLoad = .idle
     @Published var openErrors: [TakhtOpenError] = []
 
+    // ── Live slot board (the counter command view) ──
+    @Published var resolver: TakhtResolverResponse?
+    @Published var resolverLoading = false
+
     private var pollTask: Task<Void, Never>?
     private var pin: String? { TakhtAuth.get() }
 
@@ -127,6 +131,14 @@ final class TakhtAppModel: ObservableObject {
     }
 
     var handTotal: Double { balance?.total ?? 0 }
+
+    // Load the live slot board for the working brand (runners RUN01-05 + live/ghost staff).
+    func loadResolver() async {
+        guard let brand = (workingBrand ?? identity?.brand)?.shortName else { return }
+        resolverLoading = true
+        defer { resolverLoading = false }
+        resolver = try? await TakhtClient.shared.resolver(brand: brand)
+    }
 
     // Load the live open errors for this brand, authed by the person's Darbar PIN.
     func loadErrors() async {
