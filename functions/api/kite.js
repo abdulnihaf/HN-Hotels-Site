@@ -33,6 +33,28 @@
 
 const KITE_BASE = 'https://api.kite.trade';
 
+// ── Static-IP order egress ───────────────────────────────────────────────────
+// Kite requires LIVE orders to arrive from ONE whitelisted IP (a SEBI rule).
+// Cloudflare has no fixed egress IP, so order *mutations* (POST/PUT/DELETE on
+// /orders & /gtt) are routed through a tiny proxy on the RTX box, which has a
+// fixed IP registered in the Kite developer console. Reads stay direct on
+// Cloudflare (Kite doesn't gate them) so they're unaffected if the box is down.
+// Config lives in D1 user_config (kite_order_base, kite_proxy_secret) — set/clear
+// without a redeploy. When kite_order_base is unset, this is a no-op (direct).
+let ORDER_PROXY = null;   // { base, secret } | null  (set per request from D1)
+function routeOrder(url, opts = {}) {
+  if (!ORDER_PROXY || !ORDER_PROXY.base) return [url, opts];
+  const method = (opts.method || 'GET').toUpperCase();
+  const isOrderPath = url.startsWith(KITE_BASE + '/orders') || url.startsWith(KITE_BASE + '/gtt');
+  if (method === 'GET' || !isOrderPath) return [url, opts];     // only mutating order/GTT calls
+  const proxiedUrl = ORDER_PROXY.base + url.slice(KITE_BASE.length);
+  const proxiedOpts = {
+    ...opts,
+    headers: { ...(opts.headers || {}), ...(ORDER_PROXY.secret ? { 'X-Proxy-Secret': ORDER_PROXY.secret } : {}) },
+  };
+  return [proxiedUrl, proxiedOpts];
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -53,6 +75,16 @@ export async function onRequest(context) {
   if (!db) {
     return new Response(JSON.stringify({ error: 'WEALTH_DB binding missing' }), { status: 500, headers });
   }
+
+  // Load the static-IP order-egress config (no-op when unset → direct to Kite).
+  try {
+    const pr = await db.prepare(
+      `SELECT config_key, config_value FROM user_config WHERE config_key IN ('kite_order_base','kite_proxy_secret')`
+    ).all();
+    const m = {};
+    for (const r of (pr.results || [])) m[r.config_key] = r.config_value;
+    ORDER_PROXY = m.kite_order_base ? { base: m.kite_order_base, secret: m.kite_proxy_secret || '' } : null;
+  } catch { ORDER_PROXY = null; }
 
   const action = url.searchParams.get('action') || 'status';
 
@@ -261,11 +293,12 @@ async function placeOrder(env, db, kiteHeaders, body) {
   const variety = body.variety || 'regular';
   const url = `${KITE_BASE}/orders/${variety}`;
   const t0 = Date.now();
-  const res = await fetch(url, {
+  const [pu, po] = routeOrder(url, {
     method: 'POST',
     headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: formData.toString(),
   });
+  const res = await fetch(pu, po);
   const j = await res.json();
   await logKite(db, `/orders/${variety} POST`, 'POST', res.status, Date.now() - t0, res.ok ? null : (j.message || j.error_type));
 
@@ -344,11 +377,12 @@ async function placeGtt(env, db, kiteHeaders, body) {
   });
 
   const t0 = Date.now();
-  const res = await fetch(`${KITE_BASE}/gtt/triggers`, {
+  const [gu, go] = routeOrder(`${KITE_BASE}/gtt/triggers`, {
     method: 'POST',
     headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: formData.toString(),
   });
+  const res = await fetch(gu, go);
   const j = await res.json();
   await logKite(db, `/gtt/triggers POST`, 'POST', res.status, Date.now() - t0, res.ok ? null : (j.message || j.error_type));
 
@@ -362,7 +396,8 @@ async function cancelOrder(db, kiteHeaders, orderId) {
   const variety = 'regular';
   const url = `${KITE_BASE}/orders/${variety}/${encodeURIComponent(orderId)}`;
   const t0 = Date.now();
-  const res = await fetch(url, { method: 'DELETE', headers: kiteHeaders });
+  const [cu, co] = routeOrder(url, { method: 'DELETE', headers: kiteHeaders });
+  const res = await fetch(cu, co);
   const j = await res.json();
   await logKite(db, `/orders/${variety} DELETE`, 'DELETE', res.status, Date.now() - t0, res.ok ? null : (j.message || ''));
   if (!res.ok || j.status !== 'success') {
@@ -374,7 +409,8 @@ async function cancelOrder(db, kiteHeaders, orderId) {
 async function deleteGtt(db, kiteHeaders, gttId) {
   const url = `${KITE_BASE}/gtt/triggers/${encodeURIComponent(gttId)}`;
   const t0 = Date.now();
-  const res = await fetch(url, { method: 'DELETE', headers: kiteHeaders });
+  const [du, dop] = routeOrder(url, { method: 'DELETE', headers: kiteHeaders });
+  const res = await fetch(du, dop);
   const j = await res.json();
   await logKite(db, `/gtt/triggers DELETE`, 'DELETE', res.status, Date.now() - t0, res.ok ? null : (j.message || ''));
   if (!res.ok || j.status !== 'success') {
@@ -394,11 +430,12 @@ async function modifyOrder(db, kiteHeaders, orderId, body) {
 
   const url = `${KITE_BASE}/orders/${variety}/${encodeURIComponent(orderId)}`;
   const t0 = Date.now();
-  const res = await fetch(url, {
+  const [mu, mo] = routeOrder(url, {
     method: 'PUT',
     headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: formData.toString(),
   });
+  const res = await fetch(mu, mo);
   const j = await res.json();
   await logKite(db, `/orders/${variety} PUT`, 'PUT', res.status, Date.now() - t0, res.ok ? null : (j.message || ''));
   if (!res.ok || j.status !== 'success') {
@@ -431,8 +468,9 @@ async function kiteFetch(db, url, opts = {}, attempt = 1) {
 
   const t0 = Date.now();
   let res, body, err;
+  const [fetchUrl, fetchOpts] = routeOrder(url, opts);   // static-IP egress for order mutations
   try {
-    res = await fetch(url, { ...opts, signal: AbortSignal.timeout(15000) });
+    res = await fetch(fetchUrl, { ...fetchOpts, signal: AbortSignal.timeout(15000) });
     try { body = await res.json(); } catch { body = null; }
   } catch (e) {
     err = String(e).slice(0, 300);
