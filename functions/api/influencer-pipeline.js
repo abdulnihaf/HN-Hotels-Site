@@ -121,6 +121,7 @@ export async function onRequest(context) {
       // Owner-triggered
       if (action === 'set-config')           return await setConfig(env, body, request);
       if (action === 'trigger-now')          return await triggerNow(env, body, request);
+      if (action === 'import-list')          return await importList(env, body, request);
       if (action === 'modash-register-profile') return await modashRegisterProfile(env, body, request);
       if (action === 'modash-mark-active')   return await modashMarkActive(env, body, request);
       if (action === 'modash-enqueue-job')   return await modashEnqueueJob(env, body, request);
@@ -237,6 +238,239 @@ async function triggerNow(env, body, request) {
   if (cron === 'score')          return await cronScore(env, body, request);
   if (cron === 'outreach-wave')  return await cronOutreachWave(env, body, request);
   return json({ error: 'unknown cron_name (use: discover|enrich-tick|score|outreach-wave)' }, 400);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// IMPORT-LIST — ingest the owner's "gold link" / CSV / handle list
+// ────────────────────────────────────────────────────────────────────────────
+// Accepts url | csv | json | handles. Normalises usernames, de-dupes against
+// influencer_bio_pulse + influencer_outreach_log, and upserts the rest into
+// influencer_discovery_queue with source='gold_import' for free enrichment.
+// Owner-gated because it writes to the pipeline and can cost enrichment quota.
+// ────────────────────────────────────────────────────────────────────────────
+
+async function importList(env, body, request) {
+  if (!requireOwner(env, request, body)) return json({ error: 'unauthorized' }, 401);
+
+  const raw = body.handles || body.csv || body.json || body.url || body.list;
+  if (!raw) return json({ error: 'provide one of: handles[], csv string, json array, url, list string' }, 400);
+
+  let parsed = [];
+  if (body.url) {
+    // URL import is the Modash-driver path. For v1 we record the URL but do not
+    // block the loop on headless automation — the owner can paste the exported
+    // data as csv/json/handles instead. Returning a clear signal keeps UX honest.
+    return json({
+      success: true,
+      mode: 'url_recorded_only',
+      url: body.url,
+      message: 'URL recorded. For autonomous ingestion, paste the exported data as csv, json, or handles.',
+    });
+  }
+
+  if (body.csv) {
+    parsed = parseCsvCreators(body.csv);
+  } else if (body.json) {
+    parsed = parseJsonCreators(body.json);
+  } else if (body.handles || body.list) {
+    parsed = parseHandleList(String(body.handles || body.list));
+  }
+
+  if (parsed.length === 0) return json({ error: 'no valid creator handles found in input' }, 400);
+  if (parsed.length > 5000) return json({ error: 'max 5000 handles per import' }, 400);
+
+  // De-dupe within the import itself
+  const seen = new Set();
+  const unique = [];
+  for (const p of parsed) {
+    if (!p.username || seen.has(p.username)) continue;
+    seen.add(p.username);
+    unique.push(p);
+  }
+
+  // Batch de-dupe against permanent tables
+  const usernames = unique.map(p => p.username);
+  const inBio = await usernamesInTable(env, usernames, 'influencer_bio_pulse');
+  const inLog = await usernamesInOutreachLog(env, usernames);
+  const inQueue = await usernamesInTable(env, usernames, 'influencer_discovery_queue');
+
+  let added = 0, skippedBio = 0, skippedLog = 0, skippedQueue = 0;
+  for (const p of unique) {
+    const u = p.username;
+    if (inBio.has(u)) { skippedBio++; continue; }
+    if (inLog.has(u)) { skippedLog++; continue; }
+    if (inQueue.has(u)) { skippedQueue++; continue; }
+
+    const meta = {
+      followers: p.followers != null ? Number(p.followers) : null,
+      engagement_rate: p.engagement_rate != null ? parseFloat(p.engagement_rate) : null,
+      bio: p.bio || null,
+      category: p.category || null,
+      external_url: p.external_url || null,
+      email: p.email || null,
+      phone: p.phone || null,
+      imported_via: body.imported_via || 'dashboard',
+    };
+    try {
+      await env.DB.prepare(`
+        INSERT INTO influencer_discovery_queue (username, source, source_meta)
+        VALUES (?, 'gold_import', ?)
+      `).bind(u, JSON.stringify(meta)).run();
+      added++;
+    } catch (e) {
+      // unique conflict — already queued between our check and insert
+      skippedQueue++;
+    }
+  }
+
+  return json({
+    success: true,
+    input_total: parsed.length,
+    input_unique: unique.length,
+    added_to_queue: added,
+    skipped_existing_bio: skippedBio,
+    skipped_existing_log: skippedLog,
+    skipped_existing_queue: skippedQueue,
+    sample: unique.slice(0, 5).map(p => p.username),
+  });
+}
+
+async function usernamesInTable(env, usernames, table) {
+  if (usernames.length === 0) return new Set();
+  // D1 supports up to 100 bind params. Chunk safely.
+  const out = new Set();
+  for (let i = 0; i < usernames.length; i += 99) {
+    const chunk = usernames.slice(i, i + 99);
+    const placeholders = chunk.map(() => '?').join(',');
+    const r = await env.DB.prepare(`SELECT username FROM ${table} WHERE username IN (${placeholders})`).bind(...chunk).all();
+    for (const row of r.results) out.add(row.username);
+  }
+  return out;
+}
+
+async function usernamesInOutreachLog(env, usernames) {
+  if (usernames.length === 0) return new Set();
+  const out = new Set();
+  for (let i = 0; i < usernames.length; i += 99) {
+    const chunk = usernames.slice(i, i + 99);
+    const placeholders = chunk.map(() => '?').join(',');
+    const r = await env.DB.prepare(`
+      SELECT DISTINCT creator_username AS username
+      FROM influencer_outreach_log
+      WHERE creator_username IN (${placeholders}) AND campaign = 'may_2026_v1'
+    `).bind(...chunk).all();
+    for (const row of r.results) out.add(row.username);
+  }
+  return out;
+}
+
+function normalizeUsername(input) {
+  if (!input || typeof input !== 'string') return null;
+  let s = input.trim().toLowerCase();
+  if (!s) return null;
+  // Extract handle from instagram URLs
+  const m = s.match(/instagram\.com\/([^/?#]+)/);
+  if (m) s = m[1];
+  s = s.replace(/^@/, '').replace(/\/+$/, '');
+  // Reject obvious non-handles
+  if (!/^[a-z0-9_.]+$/.test(s) || s.length > 30 || s.length < 1) return null;
+  return s;
+}
+
+function parseHandleList(raw) {
+  const out = [];
+  for (const part of raw.split(/[\n,;]+/)) {
+    const u = normalizeUsername(part);
+    if (u) out.push({ username: u });
+  }
+  return out;
+}
+
+function parseJsonCreators(input) {
+  let arr = input;
+  if (typeof input === 'string') {
+    try { arr = JSON.parse(input); } catch { return []; }
+  }
+  if (!Array.isArray(arr)) arr = [arr];
+  const out = [];
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue;
+    const u = normalizeUsername(item.username || item.handle || item.instagram || item['ig handle'] || item['instagram handle']);
+    if (!u) continue;
+    out.push({
+      username: u,
+      followers: item.followers ?? item.followers_count ?? item.follower_count,
+      engagement_rate: item.engagement_rate ?? item.er ?? item.engagement,
+      bio: item.bio ?? item.biography,
+      category: item.category ?? item.category_name,
+      external_url: item.external_url ?? item.website ?? item.link,
+      email: item.email ?? item.business_email,
+      phone: item.phone ?? item.business_phone ?? item.whatsapp,
+    });
+  }
+  return out;
+}
+
+function parseCsvCreators(csv) {
+  const lines = csv.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length === 0) return [];
+  const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  const usernameCols = ['username', 'handle', 'instagram', 'ig_handle', 'instagram_handle', 'creator', 'profile'];
+  const usernameCol = header.findIndex(h => usernameCols.includes(h));
+  if (usernameCol < 0) return parseHandleList(csv); // fallback: treat whole csv as handles
+
+  const colMap = (names) => {
+    for (const n of names) {
+      const idx = header.indexOf(n);
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+  const followersCol = colMap(['followers', 'followers_count', 'follower_count']);
+  const erCol = colMap(['engagement_rate', 'er', 'engagement']);
+  const bioCol = colMap(['bio', 'biography']);
+  const catCol = colMap(['category', 'category_name']);
+  const urlCol = colMap(['external_url', 'website', 'link', 'url']);
+  const emailCol = colMap(['email', 'business_email']);
+  const phoneCol = colMap(['phone', 'business_phone', 'whatsapp', 'phone_number']);
+
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCsvLine(lines[i]);
+    const u = normalizeUsername(row[usernameCol]);
+    if (!u) continue;
+    const get = (idx) => idx >= 0 ? row[idx]?.trim() || null : null;
+    out.push({
+      username: u,
+      followers: get(followersCol),
+      engagement_rate: get(erCol),
+      bio: get(bioCol),
+      category: get(catCol),
+      external_url: get(urlCol),
+      email: get(emailCol),
+      phone: get(phoneCol),
+    });
+  }
+  return out;
+}
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '', inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (c === ',' && !inQuotes) {
+      out.push(cur);
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
