@@ -32,6 +32,13 @@ binding = "DB"
 database_name = "hn-hiring"
 database_id = "a0107321-790a-4d46-ac3c-a54a676c6bcb"
 
+# HN-OPS — the ONE clean outlet-scoped operations DB (Sauda/Anbar/Takht consolidation).
+# Created via: wrangler d1 create hn-ops. Schema in ops-db/schema.sql.
+[[d1_databases]]
+binding = "OPS_DB"
+database_name = "hn-ops"
+database_id = "308b815f-6899-44d8-bb13-b008e7afbef7"
+
 # Wealth engine D1 — read by /api/trading.js for the /trading dashboard.
 # Created via: wrangler d1 create wealth-engine
 # Replace database_id with output of that command.

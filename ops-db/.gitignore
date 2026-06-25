@@ -1,0 +1,4 @@
+# generated artifacts carry staff PINs + vendor VPAs (operational PII) — never commit.
+# regenerate from live D1 with: python3 ops-db/build_seed.py
+seed.sql
+migrate_18june.sql

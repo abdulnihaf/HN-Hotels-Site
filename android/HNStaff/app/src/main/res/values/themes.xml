@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- HN Hotels maroon — #581810 -->
+    <style name="Theme.HNStaff" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
