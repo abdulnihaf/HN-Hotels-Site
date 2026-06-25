@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0BAFE1B8035AE32EB4C9FEE4 /* NaamDecisionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F208218662A80C6A2937FC62 /* NaamDecisionClient.swift */; };
 		203E6A8EE11B28BC03A29E83 /* NaamLiveModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F131712030294D9CF75372FC /* NaamLiveModel.swift */; };
+		3819AE8C618738A5F1329A9D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0CBBA89C926F5983C7F3E957 /* Assets.xcassets */; };
 		4405F84739A778FB5FAFA6CA /* NaamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E41A0403AAA4A2FB9747A78 /* NaamView.swift */; };
 		5625FAA5EAE7A6D239473BA8 /* NaamLiveClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B4693E873D0FE6742E332C4 /* NaamLiveClient.swift */; };
 		576A7178618ADC373C9D8BB2 /* NaamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 221BF7C13F7A0E121D1FDB10 /* NaamApp.swift */; };
@@ -23,6 +24,7 @@
 
 /* Begin PBXFileReference section */
 		077F4C9463E40DFEC6F6563E /* NaamKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamKit.swift; sourceTree = "<group>"; };
+		0CBBA89C926F5983C7F3E957 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1B03D7F054918D4CEFD9F305 /* NaamMetaGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamMetaGate.swift; sourceTree = "<group>"; };
 		1B4693E873D0FE6742E332C4 /* NaamLiveClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamLiveClient.swift; sourceTree = "<group>"; };
 		1EB664B7B108310881C43B40 /* NaamAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamAppModel.swift; sourceTree = "<group>"; };
@@ -42,6 +44,7 @@
 		3BA8EA908155A10EE150D695 = {
 			isa = PBXGroup;
 			children = (
+				56BE8568E0724576001EE4F4 /* Resources */,
 				480415A6B95C62365D165AFC /* Sources */,
 				D60987730FAFF9F759D7FCBA /* Products */,
 			);
@@ -67,6 +70,14 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		56BE8568E0724576001EE4F4 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0CBBA89C926F5983C7F3E957 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		D60987730FAFF9F759D7FCBA /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -83,6 +94,7 @@
 			buildConfigurationList = BD27FCF38F4B9EE8CF691D9B /* Build configuration list for PBXNativeTarget "Naam" */;
 			buildPhases = (
 				DFFFAD16F281FF5701B7820D /* Sources */,
+				44F09751E66805EBC8E789CD /* Resources */,
 			);
 			buildRules = (
 			);
@@ -127,6 +139,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		44F09751E66805EBC8E789CD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3819AE8C618738A5F1329A9D /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		DFFFAD16F281FF5701B7820D /* Sources */ = {
