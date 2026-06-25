@@ -3,8 +3,9 @@ import Foundation
 // RTX private (Tailscale) is primary; public CF-Access path is fallback when off-network.
 // App server on :8080, host go2rtc streams on :1985.
 enum NazarURL {
-    static let appBase     = "http://100.107.54.16:8080"
-    static let streamBase  = "http://100.107.54.16:1985"  // host go2rtc, H.264/MP4
+    static let appBase     = "http://100.107.54.16:8080"  // nazar_srv: /nz/* API + snapshots
+    static let streamBase  = "http://100.107.54.16:1985"  // host go2rtc: live (WebRTC/MSE/MP4), H.264 NVENC
+    static let rewindBase  = "http://100.107.54.16:1984"  // container go2rtc: rw_live (DVR playback)
     static let publicBase  = "https://nazar.hnhotels.in"
 
     // video=h264 forces the CUDA H.264 producer (proven path in ~/nazar/fs.js).

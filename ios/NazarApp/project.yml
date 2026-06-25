@@ -14,13 +14,17 @@ targets:
     type: application
     platform: iOS
     sources:
-      - Nazar
+      - path: Nazar
+        excludes:
+          - "Web/**"
+      - path: Nazar/Web
+        type: folder
     info:
       path: Nazar/Info.plist
       properties:
         CFBundleDisplayName: Nazar
         CFBundleIconName: AppIcon
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         CFBundleShortVersionString: "1.0"
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: "Unlock Nazar with Face ID instead of typing your PIN."
