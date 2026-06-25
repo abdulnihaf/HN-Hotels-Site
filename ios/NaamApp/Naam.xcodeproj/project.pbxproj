@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0BAFE1B8035AE32EB4C9FEE4 /* NaamDecisionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F208218662A80C6A2937FC62 /* NaamDecisionClient.swift */; };
 		203E6A8EE11B28BC03A29E83 /* NaamLiveModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F131712030294D9CF75372FC /* NaamLiveModel.swift */; };
 		4405F84739A778FB5FAFA6CA /* NaamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E41A0403AAA4A2FB9747A78 /* NaamView.swift */; };
 		5625FAA5EAE7A6D239473BA8 /* NaamLiveClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B4693E873D0FE6742E332C4 /* NaamLiveClient.swift */; };
 		576A7178618ADC373C9D8BB2 /* NaamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 221BF7C13F7A0E121D1FDB10 /* NaamApp.swift */; };
+		5E610C44BFB789CFA3984170 /* NaamMetaGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B03D7F054918D4CEFD9F305 /* NaamMetaGate.swift */; };
 		63C29A5F679D51E7041D307D /* NaamAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EB664B7B108310881C43B40 /* NaamAppModel.swift */; };
 		6E2377AB3BCB11D6051A169D /* NaamModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E4874CEA585D222CFB2C913 /* NaamModels.swift */; };
 		71F83F4DD645B7C8E4A7A2FD /* NaamKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077F4C9463E40DFEC6F6563E /* NaamKit.swift */; };
@@ -21,6 +23,7 @@
 
 /* Begin PBXFileReference section */
 		077F4C9463E40DFEC6F6563E /* NaamKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamKit.swift; sourceTree = "<group>"; };
+		1B03D7F054918D4CEFD9F305 /* NaamMetaGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamMetaGate.swift; sourceTree = "<group>"; };
 		1B4693E873D0FE6742E332C4 /* NaamLiveClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamLiveClient.swift; sourceTree = "<group>"; };
 		1EB664B7B108310881C43B40 /* NaamAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamAppModel.swift; sourceTree = "<group>"; };
 		221BF7C13F7A0E121D1FDB10 /* NaamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamApp.swift; sourceTree = "<group>"; };
@@ -32,6 +35,7 @@
 		6E4874CEA585D222CFB2C913 /* NaamModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamModels.swift; sourceTree = "<group>"; };
 		A143BD86EF40A0538AEAFA62 /* NaamLiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamLiveView.swift; sourceTree = "<group>"; };
 		F131712030294D9CF75372FC /* NaamLiveModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamLiveModel.swift; sourceTree = "<group>"; };
+		F208218662A80C6A2937FC62 /* NaamDecisionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaamDecisionClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -50,11 +54,13 @@
 				221BF7C13F7A0E121D1FDB10 /* NaamApp.swift */,
 				1EB664B7B108310881C43B40 /* NaamAppModel.swift */,
 				5716749621FDEF20D79E79F5 /* NaamClient.swift */,
+				F208218662A80C6A2937FC62 /* NaamDecisionClient.swift */,
 				077F4C9463E40DFEC6F6563E /* NaamKit.swift */,
 				1B4693E873D0FE6742E332C4 /* NaamLiveClient.swift */,
 				F131712030294D9CF75372FC /* NaamLiveModel.swift */,
 				5AE78C012C1DA244BB46E6A6 /* NaamLiveModels.swift */,
 				A143BD86EF40A0538AEAFA62 /* NaamLiveView.swift */,
+				1B03D7F054918D4CEFD9F305 /* NaamMetaGate.swift */,
 				6E4874CEA585D222CFB2C913 /* NaamModels.swift */,
 				5E41A0403AAA4A2FB9747A78 /* NaamView.swift */,
 			);
@@ -130,11 +136,13 @@
 				576A7178618ADC373C9D8BB2 /* NaamApp.swift in Sources */,
 				63C29A5F679D51E7041D307D /* NaamAppModel.swift in Sources */,
 				975A9C36B6CA33F1AB724DB1 /* NaamClient.swift in Sources */,
+				0BAFE1B8035AE32EB4C9FEE4 /* NaamDecisionClient.swift in Sources */,
 				71F83F4DD645B7C8E4A7A2FD /* NaamKit.swift in Sources */,
 				5625FAA5EAE7A6D239473BA8 /* NaamLiveClient.swift in Sources */,
 				203E6A8EE11B28BC03A29E83 /* NaamLiveModel.swift in Sources */,
 				D206AFE4343ED5A93F9F3081 /* NaamLiveModels.swift in Sources */,
 				8E34754217A1AA3021EF4F86 /* NaamLiveView.swift in Sources */,
+				5E610C44BFB789CFA3984170 /* NaamMetaGate.swift in Sources */,
 				6E2377AB3BCB11D6051A169D /* NaamModels.swift in Sources */,
 				4405F84739A778FB5FAFA6CA /* NaamView.swift in Sources */,
 			);

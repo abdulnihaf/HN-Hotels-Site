@@ -19,6 +19,7 @@ struct NaamView: View {
                     VStack(spacing: 12) {
                         spendHero
                         metaCard
+                        NaamMetaGate(ctwa: model.ctwa, periodLabel: model.periodLabel, accent: accent)
                         googleCard
                         gbpCard
                         leadsCard

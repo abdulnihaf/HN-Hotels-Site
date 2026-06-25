@@ -34,6 +34,7 @@ targets:
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         ITSAppUsesNonExemptEncryption: false
+        NSFaceIDUsageDescription: Confirm your marketing decision with Face ID before it is recorded.
 schemes:
   Naam:
     build:
