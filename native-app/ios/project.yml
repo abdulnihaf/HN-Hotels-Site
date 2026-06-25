@@ -9,6 +9,7 @@ settings:
     SWIFT_VERSION: 5.0
     IPHONEOS_DEPLOYMENT_TARGET: 17.0
     WATCHOS_DEPLOYMENT_TARGET: 10.0
+    DEVELOPMENT_TEAM: FZ58DQ52QS
 targets:
   Takht:
     type: application
@@ -19,6 +20,7 @@ targets:
       - path: Resources
     settings:
       base:
+        PRODUCT_NAME: Takht
         PRODUCT_BUNDLE_IDENTIFIER: in.hnhotels.takht
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Takht
@@ -31,42 +33,25 @@ targets:
       path: Sources/Takht/Info.plist
     entitlements:
       path: Sources/Takht/Takht.entitlements
-    dependencies:
-      - target: TakhtWatch App
 
-  TakhtWatch App:
-    type: application.watchapp2
+  # Modern single-target watchOS app (replaces the deprecated watchapp2 + watchkit2-extension pair).
+  TakhtWatch:
+    type: application
     platform: watchOS
     sources:
       - path: Sources/TakhtWatch
+      - path: Sources/Takht/TakhtStore.swift
+      - path: Sources/Takht/TakhtModels.swift
     resources:
       - path: Resources
     settings:
       base:
+        PRODUCT_NAME: TakhtWatch
         PRODUCT_BUNDLE_IDENTIFIER: in.hnhotels.takht.watchkitapp
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        INFOPLIST_KEY_CFBundleDisplayName: Takht Watch
-        INFOPLIST_KEY_CFBundleName: TakhtWatch
-        INFOPLIST_KEY_WKWatchOnly: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Takht
+        INFOPLIST_KEY_WKApplication: YES
     info:
       path: Sources/TakhtWatch/Info.plist
     entitlements:
       path: Sources/TakhtWatch/TakhtWatch.entitlements
-
-  TakhtWatch Extension:
-    type: watchkit2-extension
-    platform: watchOS
-    sources:
-      - path: Sources/TakhtWatchExtension
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: in.hnhotels.takht.watchkitextension
-        INFOPLIST_KEY_CFBundleDisplayName: TakhtWatchExtension
-        WK_APP_BUNDLE_IDENTIFIER: in.hnhotels.takht.watchkitapp
-    info:
-      path: Sources/TakhtWatchExtension/Info.plist
-    entitlements:
-      path: Sources/TakhtWatchExtension/TakhtWatchExtension.entitlements
-    dependencies:
-      - target: TakhtWatch App
-

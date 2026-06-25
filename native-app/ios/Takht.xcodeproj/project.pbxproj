@@ -7,50 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00B483F9388C79354C5301D9 /* TakhtModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D16400FB761E0259E9A15D8 /* TakhtModels.swift */; };
 		015D636BBD84CAF5DCB632A9 /* TakhtHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A611DC9B12EBE501BF9425D2 /* TakhtHomeView.swift */; };
 		1AC738FDC403F8BD38A5EB3C /* TakhtApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51121267D986C96606E1BEAE /* TakhtApp.swift */; };
+		5995B3B2358A4E3D64EB5597 /* TakhtWatchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC47A594B670EF416D013CC1 /* TakhtWatchView.swift */; };
 		6660E3567B69BCC5100FAE54 /* TakhtModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D16400FB761E0259E9A15D8 /* TakhtModels.swift */; };
-		7F41F4F80962C892E8E9F53D /* TakhtWatchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC47A594B670EF416D013CC1 /* TakhtWatchView.swift */; };
-		A6EF6F1716BA8A31990315F2 /* TakhtWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7647AEA8BBA44531CDC7A6F3 /* TakhtWatchApp.swift */; };
-		CD29D06DB4DC7A4C19214697 /* Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5098E8407316BE4873EEBCA /* Extension.swift */; };
+		A79C849449FA728A8525A808 /* TakhtStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C51229636B3A2996E556209 /* TakhtStore.swift */; };
 		D1E29B3FB095364FFF5C4620 /* TakhtStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C51229636B3A2996E556209 /* TakhtStore.swift */; };
-		F22F2B1F1F4A9E4E0465AC84 /* TakhtWatch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 04C99FC7B904114D7EBD4A56 /* TakhtWatch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F7475A9FC27507DF19FBB200 /* TakhtWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7647AEA8BBA44531CDC7A6F3 /* TakhtWatchApp.swift */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		9815EF80C17C51AE62DC1B9C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3491C69BAE3AF0502515CA9C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 8096575442ABF9EE94478B66;
-			remoteInfo = "TakhtWatch App";
-		};
-		B2F9568C572437E19D676259 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3491C69BAE3AF0502515CA9C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 8096575442ABF9EE94478B66;
-			remoteInfo = "TakhtWatch App";
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		04D50779909836706487AB4C /* Embed Watch Content */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
-			dstSubfolderSpec = 16;
-			files = (
-				F22F2B1F1F4A9E4E0465AC84 /* TakhtWatch App.app in Embed Watch Content */,
-			);
-			name = "Embed Watch Content";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
-		04C99FC7B904114D7EBD4A56 /* TakhtWatch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TakhtWatch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		0761A2DF80B924314DEF5D19 /* TakhtWatchExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TakhtWatchExtension.entitlements; sourceTree = "<group>"; };
 		2D16400FB761E0259E9A15D8 /* TakhtModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtModels.swift; sourceTree = "<group>"; };
 		417A8753F5A39B80D6A8999D /* Takht.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Takht.entitlements; sourceTree = "<group>"; };
 		51121267D986C96606E1BEAE /* TakhtApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtApp.swift; sourceTree = "<group>"; };
@@ -58,12 +25,10 @@
 		6D9FA9B66160BCBCAA59CBA3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		7647AEA8BBA44531CDC7A6F3 /* TakhtWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtWatchApp.swift; sourceTree = "<group>"; };
 		7C51229636B3A2996E556209 /* TakhtStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtStore.swift; sourceTree = "<group>"; };
-		95F39B668D424CE4C642E3C1 /* TakhtWatch Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "TakhtWatch Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A611DC9B12EBE501BF9425D2 /* TakhtHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtHomeView.swift; sourceTree = "<group>"; };
-		A8DEE04DF976E2F020EC5C97 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		AC47A594B670EF416D013CC1 /* TakhtWatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TakhtWatchView.swift; sourceTree = "<group>"; };
 		B82587F08A00F8BBF158F610 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		D5098E8407316BE4873EEBCA /* Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extension.swift; sourceTree = "<group>"; };
+		CA331E0661A0B380B289FFAF /* TakhtWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TakhtWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E1B108212BF6D11A45666253 /* Takht.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Takht.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -72,8 +37,7 @@
 			isa = PBXGroup;
 			children = (
 				E1B108212BF6D11A45666253 /* Takht.app */,
-				04C99FC7B904114D7EBD4A56 /* TakhtWatch App.app */,
-				95F39B668D424CE4C642E3C1 /* TakhtWatch Extension.appex */,
+				CA331E0661A0B380B289FFAF /* TakhtWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,7 +59,6 @@
 			children = (
 				4BB8DE2F4B3D0CEC269714EA /* Takht */,
 				132B877D4FCEAD99333CCA30 /* TakhtWatch */,
-				E7950BE1BAB9A4263BC9747D /* TakhtWatchExtension */,
 				10586AF4D6B84E764F017904 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -114,17 +77,6 @@
 			path = Sources/Takht;
 			sourceTree = "<group>";
 		};
-		E7950BE1BAB9A4263BC9747D /* TakhtWatchExtension */ = {
-			isa = PBXGroup;
-			children = (
-				D5098E8407316BE4873EEBCA /* Extension.swift */,
-				A8DEE04DF976E2F020EC5C97 /* Info.plist */,
-				0761A2DF80B924314DEF5D19 /* TakhtWatchExtension.entitlements */,
-			);
-			name = TakhtWatchExtension;
-			path = Sources/TakhtWatchExtension;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -133,12 +85,10 @@
 			buildConfigurationList = 1855618FADB5EF7B10646C55 /* Build configuration list for PBXNativeTarget "Takht" */;
 			buildPhases = (
 				1ED3E5FBFDA775A7E998F426 /* Sources */,
-				04D50779909836706487AB4C /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				8FF190ED7AE13B43473EF29B /* PBXTargetDependency */,
 			);
 			name = Takht;
 			packageProductDependencies = (
@@ -147,40 +97,22 @@
 			productReference = E1B108212BF6D11A45666253 /* Takht.app */;
 			productType = "com.apple.product-type.application";
 		};
-		8096575442ABF9EE94478B66 /* TakhtWatch App */ = {
+		F17355CCF0847428D73BA6F4 /* TakhtWatch */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 161B0561BECC9DE940B90CF8 /* Build configuration list for PBXNativeTarget "TakhtWatch App" */;
+			buildConfigurationList = 5B32C90ADD0AE2C43006EABE /* Build configuration list for PBXNativeTarget "TakhtWatch" */;
 			buildPhases = (
-				C126A1D08A5821FF3650A460 /* Sources */,
+				3DE374C7DE217840363ACC45 /* Sources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = "TakhtWatch App";
+			name = TakhtWatch;
 			packageProductDependencies = (
 			);
-			productName = "TakhtWatch App";
-			productReference = 04C99FC7B904114D7EBD4A56 /* TakhtWatch App.app */;
-			productType = "com.apple.product-type.application.watchapp2";
-		};
-		B7179D88CE6A3E193B79EFA7 /* TakhtWatch Extension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 7187D35C8F8879A39804AADE /* Build configuration list for PBXNativeTarget "TakhtWatch Extension" */;
-			buildPhases = (
-				F160FA107BF2B22BA6C83A3B /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				0C3213AF0D399A5C4C8C2F20 /* PBXTargetDependency */,
-			);
-			name = "TakhtWatch Extension";
-			packageProductDependencies = (
-			);
-			productName = "TakhtWatch Extension";
-			productReference = 95F39B668D424CE4C642E3C1 /* TakhtWatch Extension.appex */;
-			productType = "com.apple.product-type.watchkit2-extension";
+			productName = TakhtWatch;
+			productReference = CA331E0661A0B380B289FFAF /* TakhtWatch.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -191,6 +123,12 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					34B6FE6C6C067B967E7ABAA9 = {
+						DevelopmentTeam = FZ58DQ52QS;
+					};
+					F17355CCF0847428D73BA6F4 = {
+						DevelopmentTeam = FZ58DQ52QS;
+					};
 				};
 			};
 			buildConfigurationList = CC1314C8D68778F3C1B90E0E /* Build configuration list for PBXProject "Takht" */;
@@ -208,8 +146,7 @@
 			projectRoot = "";
 			targets = (
 				34B6FE6C6C067B967E7ABAA9 /* Takht */,
-				8096575442ABF9EE94478B66 /* TakhtWatch App */,
-				B7179D88CE6A3E193B79EFA7 /* TakhtWatch Extension */,
+				F17355CCF0847428D73BA6F4 /* TakhtWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -226,42 +163,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C126A1D08A5821FF3650A460 /* Sources */ = {
+		3DE374C7DE217840363ACC45 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A6EF6F1716BA8A31990315F2 /* TakhtWatchApp.swift in Sources */,
-				7F41F4F80962C892E8E9F53D /* TakhtWatchView.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F160FA107BF2B22BA6C83A3B /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				CD29D06DB4DC7A4C19214697 /* Extension.swift in Sources */,
+				00B483F9388C79354C5301D9 /* TakhtModels.swift in Sources */,
+				A79C849449FA728A8525A808 /* TakhtStore.swift in Sources */,
+				F7475A9FC27507DF19FBB200 /* TakhtWatchApp.swift in Sources */,
+				5995B3B2358A4E3D64EB5597 /* TakhtWatchView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		0C3213AF0D399A5C4C8C2F20 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 8096575442ABF9EE94478B66 /* TakhtWatch App */;
-			targetProxy = B2F9568C572437E19D676259 /* PBXContainerItemProxy */;
-		};
-		8FF190ED7AE13B43473EF29B /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 8096575442ABF9EE94478B66 /* TakhtWatch App */;
-			targetProxy = 9815EF80C17C51AE62DC1B9C /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
 		064E2AE5291A6C5007A58EA7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SWIFT_VERSION = 5.0;
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
@@ -283,54 +202,32 @@
 				);
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = in.hnhotels.takht.watchkitapp;
 				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht;
+				PRODUCT_NAME = Takht;
 			};
 			name = Release;
 		};
 		2AD9EA223FA69968642D963D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SWIFT_VERSION = 5.0;
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Release;
 		};
-		3237895EE0B89B004478CF9F /* Release */ = {
+		492B305B017450A3AD3549A4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatch/TakhtWatch.entitlements;
 				INFOPLIST_FILE = Sources/TakhtWatch/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Takht Watch";
-				INFOPLIST_KEY_CFBundleName = TakhtWatch;
-				INFOPLIST_KEY_WKWatchOnly = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Takht;
+				INFOPLIST_KEY_WKApplication = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
-			};
-			name = Release;
-		};
-		502D30CB50A07523A1B616F3 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatch/TakhtWatch.entitlements;
-				INFOPLIST_FILE = Sources/TakhtWatch/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Takht Watch";
-				INFOPLIST_KEY_CFBundleName = TakhtWatch;
-				INFOPLIST_KEY_WKWatchOnly = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
+				PRODUCT_NAME = TakhtWatch;
 			};
 			name = Debug;
-		};
-		6EE8E5292F1CF3720267F4E6 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatchExtension/TakhtWatchExtension.entitlements;
-				INFOPLIST_FILE = Sources/TakhtWatchExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TakhtWatchExtension;
-				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitextension;
-				WK_APP_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
-			};
-			name = Release;
 		};
 		9B26AFD60A37CB2CC74B21A3 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -347,32 +244,26 @@
 				);
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = in.hnhotels.takht.watchkitapp;
 				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht;
+				PRODUCT_NAME = Takht;
 			};
 			name = Debug;
 		};
-		C45FFBE0D26E847A60FC9EEC /* Debug */ = {
+		B7724D0A9A44EE1B3FBC5382 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatchExtension/TakhtWatchExtension.entitlements;
-				INFOPLIST_FILE = Sources/TakhtWatchExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TakhtWatchExtension;
-				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitextension;
-				WK_APP_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/TakhtWatch/TakhtWatch.entitlements;
+				INFOPLIST_FILE = Sources/TakhtWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Takht;
+				INFOPLIST_KEY_WKApplication = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = in.hnhotels.takht.watchkitapp;
+				PRODUCT_NAME = TakhtWatch;
 			};
-			name = Debug;
+			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		161B0561BECC9DE940B90CF8 /* Build configuration list for PBXNativeTarget "TakhtWatch App" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				502D30CB50A07523A1B616F3 /* Debug */,
-				3237895EE0B89B004478CF9F /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
 		1855618FADB5EF7B10646C55 /* Build configuration list for PBXNativeTarget "Takht" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -382,11 +273,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		7187D35C8F8879A39804AADE /* Build configuration list for PBXNativeTarget "TakhtWatch Extension" */ = {
+		5B32C90ADD0AE2C43006EABE /* Build configuration list for PBXNativeTarget "TakhtWatch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				C45FFBE0D26E847A60FC9EEC /* Debug */,
-				6EE8E5292F1CF3720267F4E6 /* Release */,
+				492B305B017450A3AD3549A4 /* Debug */,
+				B7724D0A9A44EE1B3FBC5382 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
