@@ -22,6 +22,17 @@ compatibility_flags = ["nodejs_compat"]
 # EXOTEL_API_KEY               — Exotel API key (username) ✅ set 2026-05-05
 # EXOTEL_API_TOKEN             — Exotel API token (password) ✅ set 2026-05-05
 # EXOTEL_CALLER_ID             — 09513886363 (existing India mobile on account) ✅ set 2026-05-05
+# NAAM_POST_CRON_TOKEN         — Shared bearer token between Pages /api/naam-post?action=cron and workers/naam-post-cron
+# ANTHROPIC_API_KEY            — Anthropic API key for organic copy generation (/api/naam-post)
+# GEMINI_API_KEY               — Google Gemini image generation key for /api/naam-post
+# HE_META_PAGE_ACCESS_TOKEN / NCH_META_PAGE_ACCESS_TOKEN — Meta page tokens for FB+IG publishing
+# HE_META_PAGE_ID / NCH_META_PAGE_ID                     — Meta page IDs
+# HE_META_IG_ACCOUNT_ID / NCH_META_IG_ACCOUNT_ID         — Instagram business account IDs
+# META_USER_ACCESS_TOKEN                                 — Meta user token for token health checks
+# META_GRAPH_API_VERSION                                 — e.g. v21.0
+# GBP_ACCOUNT_NAME                                       — Google Business Profile account resource name
+# HE_GBP_LOCATION_NAME / NCH_GBP_LOCATION_NAME           — GBP location resource names
+# GBP_CLIENT_ID / GBP_CLIENT_SECRET / GBP_REFRESH_TOKEN  — Google OAuth for GBP posting
 
 [vars]
 # Kite Connect public-ish API key — exposed in Worker env, used by OAuth flow
@@ -30,6 +41,9 @@ KITE_API_KEY = "85yfvys3t9t66l35"
 WA_HE_WABA_ID = "27110385081896362"
 WA_HE_PHONE_ID = "970365416152029"
 WA_PHONE_ID = "970365416152029"
+# Public image URL base for NAAM_CREATIVE. Use the CDN/custom domain if configured,
+# otherwise the Pages function proxy at /api/naam-creative-asset?key= serves objects.
+NAAM_CREATIVE_PUBLIC_URL = "https://hnhotels.in/api/naam-creative-asset?key="
 
 [[d1_databases]]
 binding = "DB"
@@ -60,3 +74,8 @@ id = "1aa1acbca55544e59e428d248b928a67"
 [[r2_buckets]]
 binding = "EVIDENCE"
 bucket_name = "anbar-evidence"
+
+# R2 — Naam organic creative assets (public bucket for IG/GBP image URLs)
+[[r2_buckets]]
+binding = "NAAM_CREATIVE"
+bucket_name = "naam-creative"

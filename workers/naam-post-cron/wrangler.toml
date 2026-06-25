@@ -1,0 +1,14 @@
+name = "naam-post-cron"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Trigger: every 15 minutes.
+[[triggers]]
+crons = ["*/15 * * * *"]
+
+[vars]
+PAGES_URL = "https://hnhotels.in"
+
+# Secrets (set via: wrangler secret put <NAME> --name naam-post-cron)
+# NAAM_POST_CRON_TOKEN — shared bearer token; must match Pages secret NAAM_POST_CRON_TOKEN

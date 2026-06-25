@@ -206,6 +206,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .tb.on{color:var(--naam)}
 .skeleton{opacity:.45;animation:pulse 1.4s infinite}
 @keyframes pulse{50%{opacity:.2}}
+
+/* ── organic post tab ── */
+.post-card{background:var(--e1);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:12px}
+.post-status{display:inline-block;font-size:9px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;padding:3px 7px;border-radius:6px;margin-bottom:8px}
+.ps-idea{background:var(--e3);color:var(--mute)}
+.ps-drafted{background:var(--amber-soft);color:var(--amber)}
+.ps-approved{background:var(--blue);color:#fff}
+.ps-rendering{background:var(--naam-soft);color:var(--naam)}
+.ps-rendered{background:var(--green-soft);color:var(--green)}
+.ps-posted{background:var(--green);color:#04130c}
+.ps-failed{background:var(--red-soft);color:var(--red)}
+.post-title{font-size:15px;font-weight:800;margin-bottom:4px}
+.post-meta{font-size:11px;color:var(--dim);margin-bottom:10px}
+.post-channel{background:var(--e2);border:1px solid var(--line-soft);border-radius:11px;padding:10px;margin-top:8px}
+.post-channel b{font-size:10px;text-transform:uppercase;color:var(--dim)}
+.post-channel p{font-size:12.5px;line-height:1.45;margin-top:4px}
+.post-previews{display:flex;gap:8px;overflow-x:auto;margin-top:10px;padding-bottom:4px}
+.post-previews img{flex:0 0 auto;height:120px;border-radius:10px;background:var(--e2)}
+.post-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.post-form{background:var(--e1);border:1px solid var(--line);border-radius:16px;padding:14px;margin:12px 0}
+.post-form label{display:block;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 4px}
+.post-form input,.post-form textarea{width:100%;background:var(--e2);border:1px solid var(--line);border-radius:11px;padding:10px 12px;color:var(--text);font-size:14px}
+.post-form textarea{min-height:64px;resize:vertical}
+.post-form .chks{display:flex;gap:12px;margin-top:4px}
+.post-form .chks label{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--text);text-transform:none;letter-spacing:0}
 </style>
 </head>
 <body>
@@ -296,6 +321,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   </div>
 </div>
 
+<!-- POST -->
+<div id="s-post" class="screen">
+  <div class="masthead"><div class="mh-name" style="font-size:34px">Post</div><div class="asof" id="postCount"></div></div>
+  <div class="scroll" style="padding:8px 20px calc(96px + var(--safe-bot))">
+    <div class="mv-actions" style="margin:10px 0"><button class="act-btn" onclick="openPostForm()">＋ New draft</button></div>
+    <div id="postForm" style="display:none"></div>
+    <div id="postList"></div>
+  </div>
+</div>
+
 <!-- LANE DETAIL SHEET -->
 <div class="sheet" id="sheet">
   <div class="sh-nav"><div class="sh-back" onclick="closeSheet()">‹</div><div class="sh-title" id="shTitle"></div></div>
@@ -305,6 +340,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 <div class="tabbar">
   <div class="tb on" data-s="home" onclick="go('home')"><span class="ti">◈</span>Naam</div>
   <div class="tb" data-s="creative" onclick="go('creative')"><span class="ti">▣</span>Creative</div>
+  <div class="tb" data-s="post" onclick="go('post')"><span class="ti">✎</span>Post</div>
   <div class="tb" data-s="queue" onclick="go('queue')"><span class="ti">◇</span>Queue</div>
   <div class="tb" data-s="you" onclick="go('you')"><span class="ti">◉</span>You</div>
 </div>
@@ -321,8 +357,9 @@ const PINS=['0305','1918'];
 const LS={pin:'naamPin',pinVal:'naamPinVal',brand:'naamBrand',decisions:'naamDecisions'};
 const HOST='https://hnhotels.in';
 const API=HOST+'/api/naam-actions';
+const POST_API=HOST+'/api/naam-post';
 const POSITIONING={he:'“Same HKP Road Hamza food memory. New Express face.”',nch:'“Irani chai & haleem — Shivajinagar’s evening ritual.”'};
-const S={brand:(localStorage.getItem(LS.brand)||'he').toLowerCase(),data:null,creative:null,live:{},entry:'',cLane:'all',cStatus:'deployed',pin:localStorage.getItem('naamPinVal')||'',decisions:null,resOpen:{}};
+const S={brand:(localStorage.getItem(LS.brand)||'he').toLowerCase(),data:null,creative:null,live:{},entry:'',cLane:'all',cStatus:'deployed',pin:localStorage.getItem('naamPinVal')||'',decisions:null,resOpen:{},posts:null,postFormOpen:false};
 
 /* ── gate ── */
 function key(k){if(S.entry.length>=4)return;S.entry+=k;dots();if(S.entry.length===4){
@@ -340,9 +377,10 @@ function go(s){document.querySelectorAll('.screen').forEach(x=>x.classList.remov
   if(s==='creative')renderCreative();
   if(s==='queue')loadDecisions();
   if(s==='you')renderYou();
+  if(s==='post')loadPosts();
 }
 function toggleBrand(){setBrand(S.brand==='he'?'nch':'he');}
-function setBrand(b){S.brand=b;localStorage.setItem(LS.brand,b);S.decisions=null;renderHome();loadDecisions();}
+function setBrand(b){S.brand=b;localStorage.setItem(LS.brand,b);S.decisions=null;S.posts=null;renderHome();loadDecisions();}
 
 /* ── data ── */
 function normBrands(lane){const out={};for(const[k,v]of Object.entries(lane.brands||{}))out[k.toLowerCase()]=v;lane.brands=out;return lane;}
@@ -666,6 +704,139 @@ function renderYou(){
   $('#ybHe').classList.toggle('on',S.brand==='he');$('#ybNch').classList.toggle('on',S.brand==='nch');
   const gen=S.data&&S.data.generated_at?new Date(S.data.generated_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
   $('#youFresh').innerHTML=`Live feeds: Meta ${S.live.meta&&S.live.meta.ok?'✓':'✗'} · Google Ads ${S.live.gads&&S.live.gads.ok?'✓':'✗'} · Maps ${S.live.gbp&&S.live.gbp.ok?'✓':'✗'} (≤10 min cache)<br>Lane notes snapshot: ${gen} — refresh via naam-snapshot.js on the laptop.`;
+}
+
+/* ── organic post tab ── */
+async function loadPosts(){
+  try{
+    const r=await fetch(POST_API+'?action=list&brand='+S.brand.toUpperCase(),{cache:'no-store'});
+    const d=await r.json();
+    S.posts=(d&&d.ok)?d.posts:null;
+  }catch{S.posts=null;}
+  renderPosts();
+}
+function postStatusClass(st){
+  return st==='idea'?'ps-idea':st==='drafted'?'ps-drafted':st==='approved'?'ps-approved':st==='rendering'?'ps-rendering':st==='rendered'?'ps-rendered':st==='posted'?'ps-posted':'ps-failed';
+}
+function postImagePreview(p){
+  const imgs=p.images||{};
+  const urls=Object.values(imgs).filter(v=>typeof v==='string');
+  if(!urls.length)return'';
+  return `<div class="post-previews">${urls.slice(0,4).map(u=>`<img src="${esc(u)}" alt="">`).join('')}</div>`;
+}
+function postCopyPreview(p){
+  const c=p.copy||{};
+  let h='';
+  if(c.ig)h+=`<div class="post-channel"><b>Instagram</b><p>${esc(c.ig.hook||c.ig.caption||'')}</p></div>`;
+  if(c.fb)h+=`<div class="post-channel"><b>Facebook</b><p>${esc(c.fb.hook||c.fb.caption||'')}</p></div>`;
+  if(c.gbp)h+=`<div class="post-channel"><b>Google</b><p>${esc(c.gbp.summary||'')}</p></div>`;
+  return h;
+}
+function postActions(p){
+  let btns='';
+  if(p.status==='drafted'){
+    btns=`<button class="qi-btn" onclick="approvePost('${esc(p.id)}')">Approve copy</button><button class="qi-btn" onclick="regeneratePost('${esc(p.id)}')">Regenerate</button>`;
+  }else if(p.status==='approved'){
+    btns=`<button class="qi-btn done" onclick="renderPost('${esc(p.id)}')">Render images</button><button class="qi-btn" onclick="regeneratePost('${esc(p.id)}')">Regenerate</button>`;
+  }else if(p.status==='rendered'){
+    btns=`<button class="qi-btn done" onclick="publishPost('${esc(p.id)}',true)">Dry-run</button><button class="act-btn" onclick="publishPost('${esc(p.id)}',false)">Post now</button><button class="qi-btn" onclick="regeneratePost('${esc(p.id)}')">Regenerate</button>`;
+  }else if(p.status==='posted'){
+    const ids=(p.result||{});
+    const idsTxt=Object.entries(ids).map(([k,v])=>`${k}:${(v.post_id||'').toString().slice(-12)}`).join(' · ');
+    btns=`<span class="queued-pill">Posted · ${esc(idsTxt||'')}</span>`;
+  }else{
+    btns=`<button class="qi-btn" onclick="renderPost('${esc(p.id)}')">Retry render</button>`;
+  }
+  return `<div class="post-actions">${btns}</div>`;
+}
+function renderPosts(){
+  const list=S.posts||[];
+  const count=$('#postCount');
+  if(count)count.textContent=list.length?`${list.length} draft${list.length===1?'':'s'} · ${S.brand.toUpperCase()}`:'No drafts yet';
+  const el=$('#postList');if(!el)return;
+  el.innerHTML=list.length?list.map(p=>`
+    <div class="post-card">
+      <div class="post-status ${postStatusClass(p.status)}">${esc(p.status)}</div>
+      <div class="post-title">${esc(p.idea?.theme||p.idea?.item||'Untitled')}</div>
+      <div class="post-meta">${esc(p.brand)} · ${esc((p.channels||[]).join('/'))} · ${fmtTime(p.created_at)}</div>
+      ${postCopyPreview(p)}
+      ${postImagePreview(p)}
+      ${postActions(p)}
+      ${p.guidance_note?`<div style="font-size:11px;color:var(--mute);margin-top:8px">Guidance: ${esc(p.guidance_note)}</div>`:''}
+      ${p.result&&!p.result.ok?`<div style="font-size:11px;color:var(--red);margin-top:8px">${esc(JSON.stringify(p.result).slice(0,200))}</div>`:''}
+    </div>`).join('')
+    :'<div class="empty">No organic posts yet. Tap “New draft” to start the flow.</div>';
+}
+function openPostForm(){
+  S.postFormOpen=!S.postFormOpen;
+  const f=$('#postForm');
+  if(!S.postFormOpen){f.style.display='none';f.innerHTML='';return;}
+  f.style.display='block';
+  f.innerHTML=`<div class="post-form">
+    <label>Idea / theme</label><input id="pfTheme" placeholder="e.g. Ramzan late-night kabab">
+    <label>Hero item</label><input id="pfItem" placeholder="e.g. Tandoori Chicken">
+    <label>Angle</label><input id="pfAngle" placeholder="e.g. sizzling close-up">
+    <label>Occasion (optional)</label><input id="pfOccasion" placeholder="e.g. Eid weekend">
+    <label>Channels</label><div class="chks">
+      <label><input type="checkbox" id="pfFb" checked> FB</label>
+      <label><input type="checkbox" id="pfIg" checked> IG</label>
+      <label><input type="checkbox" id="pfGbp" checked> GBP</label>
+    </div>
+    <div class="post-actions" style="margin-top:14px">
+      <button class="act-btn" onclick="submitDraft()">Create draft</button>
+      <button class="qi-btn" onclick="openPostForm()">Cancel</button>
+    </div>
+  </div>`;
+}
+async function submitDraft(){
+  const idea={
+    theme:strVal('pfTheme'),item:strVal('pfItem'),angle:strVal('pfAngle'),occasion:strVal('pfOccasion')
+  };
+  const ch=[];
+  if($('#pfFb').checked)ch.push('fb');if($('#pfIg').checked)ch.push('ig');if($('#pfGbp').checked)ch.push('gbp');
+  try{
+    const r=await fetch(POST_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create_draft',pin:S.pin,brand:S.brand.toUpperCase(),idea,channels:ch})});
+    const d=await r.json();
+    if(d&&d.ok){openPostForm();loadPosts();toast('Draft created · copy generated');}
+    else toast('Draft failed: '+((d&&d.error)||'error'));
+  }catch{toast('Offline — draft not saved');}
+}
+function strVal(id){const el=$(id.startsWith('#')?id:'#'+id);return el?el.value.trim():'';}
+async function approvePost(id){
+  try{
+    const r=await fetch(POST_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve',pin:S.pin,id})});
+    const d=await r.json();
+    if(d&&d.ok){loadPosts();toast('Copy approved · render next');}
+    else toast('Approve failed: '+((d&&d.error)||'error'));
+  }catch{toast('Offline');}
+}
+async function regeneratePost(id){
+  const g=prompt('What should change in the copy?');
+  if(g===null)return;
+  try{
+    const r=await fetch(POST_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'regenerate',pin:S.pin,id,guidance:g})});
+    const d=await r.json();
+    if(d&&d.ok){loadPosts();toast('Copy regenerated');}
+    else toast('Regenerate failed: '+((d&&d.error)||'error'));
+  }catch{toast('Offline');}
+}
+async function renderPost(id){
+  toast('Rendering images…');
+  try{
+    const r=await fetch(POST_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'render',pin:S.pin,id})});
+    const d=await r.json();
+    if(d&&d.ok){loadPosts();toast('Images rendered');}
+    else {loadPosts();toast('Render failed: '+((d&&d.error)||'error'));}
+  }catch{toast('Offline');}
+}
+async function publishPost(id,dry){
+  if(!dry&&!confirm('This will publish to real FB/IG/GBP. Proceed?'))return;
+  try{
+    const r=await fetch(POST_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'publish',pin:S.pin,id,dry_run:!!dry})});
+    const d=await r.json();
+    if(d&&d.ok){loadPosts();toast(dry?'Dry-run ready':'Posted to channels');}
+    else {loadPosts();toast((dry?'Dry-run':'Post')+' failed: '+((d&&d.error)||'error'));}
+  }catch{toast('Offline');}
 }
 
 /* ── boot ── */
