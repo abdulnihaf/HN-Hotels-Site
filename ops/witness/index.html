@@ -1,0 +1,127 @@
+<!doctype html><html lang=en><head>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name=theme-color content="#140A07">
+<title>Hamza Express — counter check</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#140A07;color:#F4E9E2;font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+ padding:14px 14px 60px;max-width:620px;margin:0 auto;-webkit-font-smoothing:antialiased}
+h1{font-size:20px;margin:0 0 2px;letter-spacing:.3px}
+.sub{font-size:12px;color:#A98C7D;margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px}
+.b-cal{background:rgba(224,163,60,.16);color:#E0A33C}.b-live{background:rgba(127,220,138,.15);color:#7FDC8A}
+.b-stale{background:rgba(255,140,120,.16);color:#FF9A82}.b-shut{background:#241310;color:#A98C7D}
+.hero{background:#241310;border-radius:18px;padding:20px;margin-bottom:14px;border:1px solid rgba(255,180,160,.16)}
+.gap{font-size:60px;font-weight:800;line-height:.95}
+.gap.warn{color:#FFB4A0}.gap.ok{color:#7FDC8A}.gap.blind{color:#E0A33C;font-size:30px;line-height:1.1}
+.gaplab{font-size:15px;color:#F4E9E2;margin-top:6px;font-weight:600}
+.heroline{font-size:13px;color:#C9AE9F;margin-top:10px;line-height:1.5}
+.recrow{display:flex;gap:20px;margin-top:16px;flex-wrap:wrap}
+.rec{font-size:12px;color:#A98C7D}.rec b{display:block;font-size:26px;color:#F4E9E2;font-weight:800;line-height:1.1}
+.cards{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:6px}
+.acard{background:#1E100C;border-radius:14px;padding:14px 15px;border:1px solid #3A201A}
+.acard.warn{border-color:#7a4a2a;background:rgba(224,163,60,.06)}.acard.ok{border-color:#1f5a3a;background:rgba(127,220,138,.05)}
+.acard .top{display:flex;justify-content:space-between;align-items:baseline}
+.acard .nm{font-size:15px;font-weight:800}.acard .lane{font-size:10px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:999px;background:#2c1812;color:#C9966B}
+.acard .nums{display:flex;gap:18px;margin:9px 0 7px}.acard .nums .n{font-size:12px;color:#A98C7D}.acard .nums .n b{display:block;font-size:21px;color:#F4E9E2;font-weight:800}
+.acard .note{font-size:11.5px;color:#9C8073;line-height:1.45}
+.sech{display:flex;align-items:baseline;gap:9px;margin:20px 2px 9px}
+.sech h2{font-size:15px;margin:0}.sech .c{font-size:14px;color:#E0A33C;font-weight:800}.sech .t{font-size:11px;color:#836A5D}
+.tiles{display:grid;gap:9px}
+.tile{display:flex;gap:12px;align-items:center;background:#1E100C;border-radius:12px;padding:12px 13px;border-left:5px solid #E0A33C}
+.tile.leak{border-left-color:#FF6A55}.tile.review{border-left-color:#E0A33C}
+.dot{font-size:20px;line-height:1}
+.tinfo{flex:1;min-width:0}
+.tinfo .t1{font-size:14px;font-weight:800}
+.tinfo .t2{font-size:12px;color:#A98C7D;margin-top:3px;line-height:1.4}
+.empty{background:#1E100C;border-radius:12px;padding:18px;text-align:center;color:#7FDC8A;font-size:14px;font-weight:600}
+.foot{margin-top:20px;font-size:11.5px;color:#7A6256;line-height:1.55;border-top:1px solid #2A1812;padding-top:13px}
+.foot b{color:#A98C7D}
+</style></head><body>
+<h1>Hamza Express · counter check</h1>
+<div class=sub>
+  <span id=daystat class="badge b-shut">…</span>
+  <span id=trust class="badge b-cal">calibrating</span>
+  <span>updated <b id=upd>…</b></span>
+</div>
+<div class=hero id=hero><div class=gap>…</div></div>
+<div class=cards id=cards></div>
+<div id=secs></div>
+<div class=foot id=foot></div>
+<script>
+var API='/api/nazar-witness';
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+function whyHuman(w){
+ var m={'shadow_mode':'engine in review mode','person_only_no_food_evidence':'no food-on-plate proof (camera can’t see plates)',
+  'lone_person':'single person','cash_only_cover':'only a cash bill nearby, no captain bill','under_18min':'under 18 min',
+  'cam_blind_gap':'camera dropped briefly','low_light_or_night':'low light','staff_meal_window':'staff meal window',
+  'staff_face_on_cam':'a staff face was on this camera','low_food_conf':'weak food signal','few_clean_food_cycles':'few clean food frames'};
+ return (w||[]).map(function(x){return m[x]||x}).join(' · ');
+}
+function areaCard(nm,a,lane){
+ if(!a)return '';
+ var gap=a.gap||0,cls=gap>0?'warn':'ok';
+ return '<div class="acard '+cls+'"><div class=top><span class=nm>'+nm+'</span><span class=lane>'+lane+'</span></div>'+
+  '<div class=nums><div class=n><b>'+(a.witnessed||0)+'</b>seen</div><div class=n><b>'+(a.bills!=null?a.bills:(a.bills_cash||0))+'</b>bills</div><div class=n><b>'+gap+'</b>to check</div></div>'+
+  '<div class=note>'+esc(a.note||'')+'</div></div>';
+}
+function render(d){
+ var open=!!d.open, stale=!!d.stale;
+ var ds=document.getElementById('daystat');
+ ds.textContent=open?'● OPEN':'closed';ds.className='badge '+(open?'b-live':'b-shut');
+ var tr=document.getElementById('trust');
+ if(stale){tr.textContent='data stale';tr.className='badge b-stale';}
+ else{tr.textContent=(d.trust||'calibrating');tr.className='badge b-cal';}
+ document.getElementById('upd').textContent=(d.updated||'—');
+ var h=d.hero||{}, hero=document.getElementById('hero');
+ if(!d.ok && d.warming){hero.innerHTML='<div class="gap blind">warming up…</div><div class=heroline>The witness feed hasn’t reported yet. This page will fill in within a minute.</div>';
+  document.getElementById('cards').innerHTML='';document.getElementById('secs').innerHTML='';return;}
+ if(h.pos_keyed===false){
+  hero.innerHTML='<div class="gap blind">POS not keyed yet</div><div class=heroline>Bills aren’t entered in the till yet, so the gap can’t be read — this is a blind spot, not zero sales. It will read once orders are keyed in.</div>';
+ } else {
+  var gap=h.gap||0, gcls=gap>0?'warn':'ok';
+  hero.innerHTML='<div class="gap '+gcls+'">'+gap+'</div>'+
+   '<div class=gaplab>'+(gap>0?'dine-in sittings the till hasn’t matched':'every witnessed sitting has a bill')+'</div>'+
+   '<div class=recrow>'+
+     '<div class=rec><b>'+(h.witnessed||0)+'</b>seen (camera)</div>'+
+     '<div class=rec><b>'+(h.matched||0)+'</b>have a bill</div>'+
+     '<div class=rec><b>'+gap+'</b>to check</div>'+
+   '</div>'+
+   '<div class=heroline>'+esc(h.headline||'')+'</div>';
+ }
+ var ar=d.areas||{};
+ document.getElementById('cards').innerHTML=
+   areaCard('First floor',ar['1F'],'captain · review-only today')+
+   areaCard('Ground floor',ar['GF'],'cash · review-only')+
+   (ar.counter?('<div class="acard"><div class=top><span class=nm>Counter / parcel</span><span class=lane>not counted</span></div><div class=note>'+esc(ar.counter.note||'')+'</div></div>'):'');
+ var cs=(d.candidates||[]);
+ var secs=document.getElementById('secs');
+ if(!cs.length){secs.innerHTML='<div class=sech><h2>To check</h2><span class=c>0</span></div><div class=empty>Nothing to review right now — every sitting the camera held has a matching bill so far.</div>';}
+ else{
+  secs.innerHTML='<div class=sech><h2>To check</h2><span class=c>'+cs.length+'</span><span class=t>each a sitting the camera held with no bill yet</span></div>'+
+   '<div class=tiles>'+cs.map(function(c){
+     var lk=c.confidence==='leak';
+     return '<div class="tile '+(lk?'leak':'review')+'"><div class=dot>'+(lk?'🔴':'🟠')+'</div>'+
+       '<div class=tinfo><div class=t1>'+esc(c.label||c.area||'table')+' · '+esc(c.at||'')+'</div>'+
+       '<div class=t2>'+(c.dur_min||0)+' min · '+(c.persons||0)+' '+((c.persons||0)===1?'person':'people')+
+         (c.why&&c.why.length?(' · '+esc(whyHuman(c.why))):'')+'</div></div></div>';
+   }).join('')+'</div>';
+ }
+ var hl=d.health||{}, ofs=(hl.one_f_source||{});
+ document.getElementById('foot').innerHTML=
+  '<b>How to read this:</b> the camera independently counts real dine-in sittings (staff and the counter are left out). '+
+  'A number under “to check” is a prompt to confirm the bill was entered — <b>not</b> proof money was missed. '+
+  'These figures stay <b>calibrating</b> until a hand-count confirms them.<br><br>'+
+  '<b>First floor</b> is the only area that could prove a miss, but its proving camera is down today, so it is review-only. '+
+  '<b>Ground floor</b> bills (cash) can’t be split from takeaway, so it is review-only too. '+
+  'Full photo proof stays in the owner’s app.'+
+  (d.roster_count?('<br><br>'+d.roster_count+' staff on today’s roster (excluded from the count).'):'');
+}
+function load(){
+ fetch(API+'?brand=HE&_='+Date.now()).then(function(r){return r.json()}).then(render).catch(function(){
+   document.getElementById('hero').innerHTML='<div class="gap blind">offline</div><div class=heroline>Can’t reach the feed right now. Retrying…</div>';
+ });
+}
+load();setInterval(load,30000);
+</script></body></html>
