@@ -75,7 +75,12 @@ function listViewScore(meta) {
 
 const ownerKey = (env) => env.DASHBOARD_KEY || env.DASHBOARD_API_KEY || null;
 const requireOwner = (env, request, body) => {
-  const k = request.headers.get('X-Dashboard-Key') || new URL(request.url).searchParams.get('key') || (body && body.key);
+  // Use body.dashboard_key to avoid clashing with endpoints whose business
+  // payload already has a body.key (e.g. set-config {key, value}).
+  const k = request.headers.get('X-Dashboard-Key') ||
+            request.headers.get('x-dashboard-key') ||
+            new URL(request.url).searchParams.get('key') ||
+            (body && body.dashboard_key);
   return k && k === ownerKey(env);
 };
 const requireCron = (env, request) => {

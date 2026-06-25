@@ -42,11 +42,14 @@ async function getActiveCampaign(env) {
 }
 
 const requireKey = (env, request, body) => {
+  // Use body.dashboard_key so endpoints with a business body.key (record-reply,
+  // update-status, etc.) do not accidentally override the auth key.
   const key =
     request.headers.get('X-Dashboard-Key') ||
+    request.headers.get('x-dashboard-key') ||
     request.headers.get('x-api-key') ||
     new URL(request.url).searchParams.get('key') ||
-    (body && body.key);
+    (body && body.dashboard_key);
   const expected = dashboardKey(env);
   return expected && key === expected;
 };
