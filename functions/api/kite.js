@@ -110,6 +110,20 @@ export async function onRequest(context) {
     }
 
     // ─────────────────────────────────────────────────────
+    // ONE-TIME PIPELINE SMOKE TEST — place a tiny order then immediately exit it,
+    // returning a step-by-step log. Proves the place→exit workflow before real money.
+    // Self-removing: on a confirmed pass it sets user_config.pipeline_test_passed so the
+    // app hides the card. ?simulate=1 runs the wiring WITHOUT any real order (safe to call).
+    // ─────────────────────────────────────────────────────
+    if (action === 'pipeline_test') {
+      const body = request.method === 'POST' ? (await request.json().catch(() => ({}))) : {};
+      if (url.searchParams.get('simulate') === '1') body.simulate = true;
+      if (url.searchParams.get('symbol')) body.symbol = url.searchParams.get('symbol');
+      if (url.searchParams.get('qty')) body.qty = url.searchParams.get('qty');
+      return Response.json(await pipelineTest(env, db, kiteHeaders, body), { headers });
+    }
+
+    // ─────────────────────────────────────────────────────
     // P2: MARGIN PRE-CHECK
     // ─────────────────────────────────────────────────────
     if (action === 'order_margins') {
@@ -1018,6 +1032,88 @@ async function squareOff(env, db, kiteHeaders, body) {
   });
   await reconcilePositions(env, db, kiteHeaders).catch(() => {});
   return { ok: !res.blocked && !res.error, squared: { tradingsymbol, qty: Math.abs(qty), side }, order: res };
+}
+
+// ── ONE-TIME PIPELINE SMOKE TEST ──────────────────────────────────────────────
+// Places a tiny BUY then immediately exits with a SELL, polling each fill, and
+// returns a transparent step log so a failure shows EXACTLY where it broke. On a
+// confirmed round-trip it stamps user_config.pipeline_test_passed (the app then hides
+// the test card). simulate=true runs the wiring with NO real order.
+async function pollOrder(kiteHeaders, orderId, tries = 6) {
+  let last = null;
+  for (let i = 0; i < tries; i++) {
+    await new Promise(r => setTimeout(r, 700));
+    try {
+      const r = await fetch(`${KITE_BASE}/orders/${encodeURIComponent(orderId)}`, { headers: kiteHeaders });
+      const j = await r.json();
+      const legs = j.data || [];
+      last = legs[legs.length - 1] || last;
+      if (last && ['COMPLETE', 'REJECTED', 'CANCELLED'].includes(last.status)) return last;
+    } catch {}
+  }
+  return last;
+}
+
+async function pipelineTest(env, db, kiteHeaders, body) {
+  const symbol = String(body.symbol || 'IDEA').toUpperCase();   // ultra-cheap, ultra-liquid → ~₹8 test
+  const qty = Math.max(1, parseInt(body.qty, 10) || 1);
+  const simulate = body.simulate === true || body.simulate === '1';
+  const steps = [];
+  const add = (name, ok, detail, raw) => { steps.push({ name, ok, detail, raw: raw ?? null, at: Date.now() }); return ok; };
+
+  if (simulate) {
+    add('connect', true, 'Broker connection reachable (simulated path).');
+    add('place_buy', true, `Would BUY ${qty} ${symbol} at market (MIS) — no real order sent.`);
+    add('confirm_buy', true, 'Simulated fill.');
+    add('exit_sell', true, `Would SELL ${qty} ${symbol} at market (MIS) — no real order sent.`);
+    add('confirm_exit', true, 'Simulated exit fill.');
+    return { ok: true, simulate: true, overall: 'pass_simulated', symbol, qty, steps,
+      summary: `Wiring OK (simulated — nothing was sent to the broker). Run the live test at market open to confirm a real fill.` };
+  }
+
+  // 1 — BUY (real, tiny)
+  const buy = await placeOrder(env, db, kiteHeaders, {
+    exchange: 'NSE', tradingsymbol: symbol, transaction_type: 'BUY', quantity: qty,
+    product: 'MIS', order_type: 'MARKET', validity: 'DAY', tag: 'HN_WE_PIPETEST',
+  });
+  if (buy.blocked) { add('place_buy', false, 'Real orders are OFF (practice mode). Turn on real orders to run the live test.', buy);
+    return { ok: false, overall: 'blocked', symbol, qty, steps, summary: 'Real orders are blocked — this is the practice setting.' }; }
+  if (!buy.ok) { add('place_buy', false, buy.error || 'Buy order was not accepted.', buy);
+    return { ok: false, overall: 'fail', failed_step: 'place_buy', symbol, qty, steps, summary: `Could not place the buy: ${buy.error || 'unknown error'}` }; }
+  add('place_buy', true, `Buy ${qty} ${symbol} sent (order ${buy.order_id}).`, buy);
+
+  // 2 — confirm fill
+  const bs = await pollOrder(kiteHeaders, buy.order_id);
+  const buyFilled = bs?.status === 'COMPLETE';
+  add('confirm_buy', buyFilled, buyFilled ? `Bought at ₹${bs.average_price}.` : `Buy status: ${bs?.status || 'unknown'}${bs?.status_message ? ' — ' + bs.status_message : ''}`, bs);
+  if (bs && (bs.status === 'REJECTED' || bs.status === 'CANCELLED')) {
+    return { ok: false, overall: 'fail', failed_step: 'confirm_buy', symbol, qty, steps,
+      summary: `Buy ${bs.status}${bs.status_message ? ': ' + bs.status_message : ''}. Nothing to exit — no position taken.` };
+  }
+
+  // 3 — EXIT (SELL the same qty)
+  const sell = await placeOrder(env, db, kiteHeaders, {
+    exchange: 'NSE', tradingsymbol: symbol, transaction_type: 'SELL', quantity: qty,
+    product: 'MIS', order_type: 'MARKET', validity: 'DAY', tag: 'HN_WE_PIPETESTX',
+  });
+  if (!sell.ok) { add('exit_sell', false, sell.error || 'Exit order was not accepted.', sell);
+    return { ok: false, overall: 'fail', failed_step: 'exit_sell', symbol, qty, steps,
+      summary: `Bought but the exit failed: ${sell.error || 'unknown'}. You may hold ${qty} ${symbol} — square it off from the position card.` }; }
+  add('exit_sell', true, `Exit (sell ${qty} ${symbol}) sent (order ${sell.order_id}).`, sell);
+  const ss = await pollOrder(kiteHeaders, sell.order_id);
+  const sellFilled = ss?.status === 'COMPLETE';
+  add('confirm_exit', sellFilled, sellFilled ? `Exited at ₹${ss.average_price}.` : `Exit status: ${ss?.status || 'unknown'}${ss?.status_message ? ' — ' + ss.status_message : ''}`, ss);
+
+  const pass = buyFilled && sellFilled;
+  if (pass) {
+    const ist = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+    await db.prepare(`INSERT OR REPLACE INTO user_config (config_key, config_value, updated_at) VALUES ('pipeline_test_passed', ?, ?)`)
+      .bind(ist, Date.now()).run().catch(() => {});
+  }
+  return { ok: pass, overall: pass ? 'pass' : 'partial', symbol, qty, steps,
+    summary: pass
+      ? `Pipeline works end to end — bought and exited ${qty} ${symbol}. You're clear to trade. This check is now done and will disappear.`
+      : `Order sent but the fill wasn't confirmed in time. Check the position card before trading.` };
 }
 
 // ─────────────────────────────────────────────────────────
