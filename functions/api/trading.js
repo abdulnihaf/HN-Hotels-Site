@@ -54,6 +54,10 @@ export async function onRequest(context) {
       case 'indices':      return Response.json(await getIndices(db), { headers });
       case 'intraday_backtest': return Response.json(await getIntradayBacktest(db, url), { headers });
       case 'trail':        return Response.json(await getTrail(db, url), { headers });
+      case 'trail_dates':  return Response.json(await getTrailDates(db), { headers });
+      case 'trail_day':    return Response.json(await getTrailDay(db, url), { headers });
+      case 'five_lights':  return Response.json(await getFiveLights(db, url), { headers });
+      case 'research_depth': return Response.json(await getResearchDepth(db), { headers });
       case 'preopen':      return Response.json(await getPreopen(db), { headers });
       case 'intraday':     return Response.json(await getIntraday(db, url), { headers });
       case 'extremes':     return Response.json(await getExtremes(db), { headers });
@@ -211,6 +215,203 @@ async function getChainHealth(db, env) {
   const overall = checks.reduce((w, c) => rank[c.status] < rank[w] ? c.status : w, 'ok');
   const actions = checks.filter(c => c.action).map(c => ({ name: c.name, status: c.status, action: c.action }));
   return { ok: true, overall, checks, actions, checked_at: now };
+}
+
+// ─────────────────────────────────────────────────────────
+// FIVE LIGHTS — never "no data". Each owner-light is derived from a GUARANTEED
+// source (price/volume/delivery from equity_eod, VIX, NIFTY, news), with the engine
+// dims only as an enhancement. Every light always returns good|ok|weak + a real value.
+async function getFiveLights(db, url) {
+  const symsRaw = (url.searchParams.get('symbols') || '').trim();
+  const symbols = symsRaw ? symsRaw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 40) : [];
+  if (!symbols.length) return { ok: true, lights: {}, note: 'no symbols' };
+  const lights = await computeFiveLights(db, symbols);
+  return { ok: true, lights, generated_at: Date.now() };
+}
+
+async function computeFiveLights(db, symbols) {
+  const ph = symbols.map(() => '?').join(',');
+  const cutoff = new Date(Date.now() + 5.5 * 3600000 - 40 * 86400000).toISOString().slice(0, 10);
+  // batched gathers
+  const [eodRows, preRows, vixRow, niftyRows, newsRows, sigRows] = await Promise.all([
+    db.prepare(`SELECT symbol, trade_date, high_paise, low_paise, close_paise, prev_close_paise, volume, delivery_pct
+                FROM equity_eod WHERE symbol IN (${ph}) AND trade_date >= ? ORDER BY symbol, trade_date`).bind(...symbols, cutoff).all().catch(() => ({ results: [] })),
+    db.prepare(`SELECT p.symbol, p.iep_change_pct FROM preopen_snapshot p
+                JOIN (SELECT symbol, MAX(ts) m FROM preopen_snapshot WHERE ts > ? GROUP BY symbol) x
+                  ON p.symbol=x.symbol AND p.ts=x.m WHERE p.symbol IN (${ph})`).bind(Date.now() - 18 * 3600000, ...symbols).all().catch(() => ({ results: [] })),
+    db.prepare(`SELECT vix, change_pct FROM india_vix_ticks ORDER BY ts DESC LIMIT 1`).first().catch(() => null),
+    db.prepare(`SELECT close_paise, prev_close_paise FROM indices_eod WHERE index_name='NIFTY 50' ORDER BY trade_date DESC LIMIT 1`).first().catch(() => null),
+    db.prepare(`SELECT symbols_tagged, sentiment_score, importance_score, headline FROM news_items WHERE published_at > ? ORDER BY published_at DESC LIMIT 600`).bind(Date.now() - 48 * 3600000).all().catch(() => ({ results: [] })),
+    db.prepare(`SELECT s.symbol, s.trend_score, s.flow_score, s.composite_score, s.mtf_alignment FROM signal_scores s
+                JOIN (SELECT MAX(computed_at) m FROM signal_scores) x ON s.computed_at=x.m WHERE s.symbol IN (${ph})`).bind(...symbols).all().catch(() => ({ results: [] })),
+  ]);
+  // index per symbol
+  const eodBy = {}; for (const r of (eodRows.results || [])) (eodBy[r.symbol] = eodBy[r.symbol] || []).push(r);
+  const gapBy = {}; for (const r of (preRows.results || [])) gapBy[r.symbol] = r.iep_change_pct;
+  const sigBy = {}; for (const r of (sigRows.results || [])) sigBy[r.symbol] = r;
+  const newsBy = {};
+  for (const n of (newsRows.results || [])) { let t = []; try { t = JSON.parse(n.symbols_tagged || '[]'); } catch {} for (const s of t) (newsBy[s] = newsBy[s] || []).push(n); }
+  const vix = vixRow?.vix ?? null;
+  const niftyChg = niftyRow_pct(niftyRows);
+  function niftyRow_pct(r) { return (r && r.prev_close_paise) ? +((r.close_paise / r.prev_close_paise - 1) * 100).toFixed(2) : null; }
+
+  // shared market light (same for all)
+  const marketLight = (() => {
+    const parts = [];
+    if (niftyChg != null) parts.push(`NIFTY ${niftyChg >= 0 ? '+' : ''}${niftyChg}%`);
+    if (vix != null) parts.push(`VIX ${vix.toFixed(1)}`);
+    let st = 'ok';
+    if (vix != null && niftyChg != null) {
+      if (vix < 14 && niftyChg >= 0) st = 'good';
+      else if (vix > 18 || niftyChg < -0.6) st = 'weak';
+    } else if (niftyChg != null) st = niftyChg >= 0 ? 'good' : 'weak';
+    const why = st === 'good' ? 'Calm market, index up — tailwind for longs.'
+              : st === 'weak' ? 'Choppy/falling market — headwind, be picky.'
+              : 'Mixed market — neither strong help nor hurt.';
+    return { n: 2, title: 'Is the market helping?', state: st, value: parts.join(' · ') || 'market data loading', why };
+  })();
+
+  const out = {};
+  for (const sym of symbols) {
+    const eod = eodBy[sym] || [];
+    const last = eod[eod.length - 1];
+    const closes = eod.map(r => r.close_paise).filter(Boolean);
+    const sma = (n) => closes.length >= 3 ? closes.slice(-n).reduce((a, b) => a + b, 0) / Math.min(n, closes.length) : null;
+    const sma20 = sma(20), sma5 = sma(5);
+    const gap = gapBy[sym];
+    const todayChg = gap != null ? gap : (last && last.prev_close_paise ? +((last.close_paise / last.prev_close_paise - 1) * 100).toFixed(2) : null);
+
+    // 1 — Is it moving up?
+    const l1 = (() => {
+      let st = 'ok'; const bits = [];
+      if (todayChg != null) bits.push(`${todayChg >= 0 ? '+' : ''}${todayChg}% today`);
+      if (sma20 && last) bits.push(last.close_paise >= sma20 ? 'above 20-day avg' : 'below 20-day avg');
+      const up = (todayChg != null && todayChg >= 1) || (sma20 && sma5 && last && last.close_paise >= sma20 && sma5 >= sma20);
+      const down = (todayChg != null && todayChg <= -1) || (sma20 && last && last.close_paise < sma20 * 0.985);
+      st = up ? 'good' : down ? 'weak' : 'ok';
+      const why = st === 'good' ? 'Rising — price is up today and holding above its 20-day trend.'
+                : st === 'weak' ? 'Falling — below its recent trend; momentum is against you.'
+                : 'Flat — no clear up-move yet.';
+      return { n: 1, title: 'Is it moving up?', state: st, value: bits.join(' · ') || 'price loading', why };
+    })();
+
+    // 3 — Is big money in? (delivery % + volume surge + flow signal)
+    const l3 = (() => {
+      const deliv = last?.delivery_pct ?? null;
+      const vols = eod.map(r => r.volume).filter(v => v > 0);
+      const avgVol = vols.length >= 5 ? vols.slice(0, -1).reduce((a, b) => a + b, 0) / (vols.length - 1) : null;
+      const volMult = (avgVol && last?.volume) ? +(last.volume / avgVol).toFixed(1) : null;
+      const flow = sigBy[sym]?.flow_score;
+      const bits = [];
+      if (deliv != null) bits.push(`${Math.round(deliv)}% delivery`);
+      if (volMult != null) bits.push(`${volMult}× avg volume`);
+      let st = 'ok';
+      const strong = (deliv != null && deliv >= 55) || (volMult != null && volMult >= 1.4) || (flow && flow > 60);
+      const weak = (deliv != null && deliv < 35) && (volMult != null && volMult < 0.8);
+      st = strong ? 'good' : weak ? 'weak' : 'ok';
+      const why = st === 'good' ? 'Real buyers — high delivery / volume surge means institutions, not just traders.'
+                : st === 'weak' ? 'Thin participation — low delivery and below-average volume.'
+                : 'Normal participation — nothing unusual in the order flow.';
+      return { n: 3, title: 'Is big money in?', state: st, value: bits.join(' · ') || 'volume loading', why };
+    })();
+
+    // 4 — Is there a reason? (news catalyst — absence is itself an answer, never "no data")
+    const l4 = (() => {
+      const ns = newsBy[sym] || [];
+      if (!ns.length) return { n: 4, title: 'Is there a reason?', state: 'ok', value: 'no major news today', why: 'No specific catalyst — this is a chart/flow setup, not a news trade.' };
+      const sent = ns.reduce((a, n) => a + (n.sentiment_score || 0), 0) / ns.length;
+      const st = sent > 0.15 ? 'good' : sent < -0.15 ? 'weak' : 'ok';
+      const top = ns.slice().sort((a, b) => (b.importance_score || 0) - (a.importance_score || 0))[0];
+      const why = (st === 'good' ? 'Positive news flow. ' : st === 'weak' ? 'Negative news — caution. ' : 'Mixed news. ') + (top?.headline ? `"${String(top.headline).slice(0, 70)}"` : '');
+      return { n: 4, title: 'Is there a reason?', state: st, value: `${ns.length} headline${ns.length > 1 ? 's' : ''}, ${sent > 0.15 ? 'positive' : sent < -0.15 ? 'negative' : 'mixed'}`, why };
+    })();
+
+    // 5 — What's my risk? (typical daily swing — a defined stop MANAGES risk, doesn't remove it)
+    const l5 = (() => {
+      const ranges = eod.slice(-14).map(r => (r.high_paise && r.low_paise && r.close_paise) ? (r.high_paise - r.low_paise) / r.close_paise * 100 : null).filter(x => x != null);
+      const atr = ranges.length ? +(ranges.reduce((a, b) => a + b, 0) / ranges.length).toFixed(1) : null;
+      let st = 'ok', band = 'moderate';
+      if (atr != null) { if (atr <= 2.5) { st = 'good'; band = 'low'; } else if (atr >= 5) { st = 'weak'; band = 'high'; } }
+      const why = st === 'good' ? `Calm stock — typical day swings ~${atr}%, so a tight stop keeps the loss small.`
+                : st === 'weak' ? `Volatile — typical day swings ~${atr}%, so size small or it stops out on noise.`
+                : `Typical day swings ~${atr}% — manageable with a defined stop. A stop controls risk; it doesn't make the trade safe.`;
+      return { n: 5, title: "What's my risk?", state: st, value: atr != null ? `~${atr}% daily swing · ${band}` : 'range loading', why };
+    })();
+
+    out[sym] = [l1, marketLight, l3, l4, l5];
+  }
+  return out;
+}
+
+// RESEARCH DEPTH — what's under the hood, for the owner to SEE the depth + learn.
+async function getResearchDepth(db) {
+  const cfg = await db.prepare(`SELECT * FROM wealth_strategy_config WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`).first().catch(() => null);
+  const run = await db.prepare(`SELECT * FROM backtest_intraday_runs WHERE run_id='gap_edge_nightly'`).first().catch(() => null);
+  let params = {}; try { params = JSON.parse(cfg?.params_json || '{}'); } catch {}
+  const wf = params.walk_forward_base || {};
+  const journalN = await db.prepare(`SELECT COUNT(*) n FROM wealth_pick_journal`).first().catch(() => null);
+  return {
+    ok: true,
+    headline: cfg ? `${cfg.universe_syms} liquid stocks analysed, survivorship-free — verdict: ${cfg.verdict}` : 'no research published yet',
+    method: 'Walk-forward out-of-sample backtest on the RTX box every night: each rule is chosen on past data, then scored only on the next unseen slice. A random-null control proves the result is real selection skill, not just an up-market. Point-in-time liquidity (no survivorship). Real intraday costs.',
+    universe_syms: cfg?.universe_syms || params.universe_syms || null,
+    candidate_trades: params.candidate_trades || null,
+    bars_total: params.bars_total || null,
+    date_range: params.date_range || null,
+    cost_assumption_pct: cfg?.cost_assumption_pct || params.cost_base_pct || null,
+    tuned_rule: cfg ? { gap_min_pct: cfg.gap_min_pct, stop_pct: cfg.stop_pct, exit_time_ist: cfg.exit_time_ist, min_turnover_cr: cfg.min_turnover_cr } : null,
+    verdict: cfg?.verdict || null,
+    oos_expectancy_pct: cfg?.oos_expectancy_pct ?? null,
+    oos_trades: cfg?.oos_trades ?? null,
+    oos_p: cfg?.oos_p ?? null,
+    folds_positive: cfg?.folds_positive || null,
+    folds: (wf.folds || []).map(f => ({ fold: f.fold, params: f.params, oos_n: f.oos_n, oos_exp: f.oos_exp })),
+    random_null: params.random_null || null,
+    last_run: run ? { finished_at: run.finished_at, notes: run.notes } : null,
+    config_published_at: cfg?.published_at || null,
+    days_journaled: journalN?.n || 0,
+    explain: 'These ~thousand stocks and a year of 5-minute bars are the raw material. The system distils them into one honest daily decision. This card is that depth, shown so you can learn what drives it.',
+  };
+}
+
+// TRAIL — available dates (for the date picker) + a full day's execution log.
+async function getTrailDates(db) {
+  const rows = (await db.prepare(`
+    SELECT v.trade_date AS d, MAX(v.decision) AS decision FROM daily_verdicts v
+    WHERE v.verdict_type='morning' GROUP BY v.trade_date ORDER BY v.trade_date DESC LIMIT 120
+  `).all().catch(() => ({ results: [] }))).results || [];
+  return { ok: true, dates: rows.map(r => ({ date: r.d, decision: r.decision })) };
+}
+
+async function getTrailDay(db, url) {
+  const date = (url.searchParams.get('date') || new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10)).trim();
+  const v = await db.prepare(`SELECT * FROM daily_verdicts WHERE trade_date=? AND verdict_type='morning' ORDER BY composed_at DESC LIMIT 1`).bind(date).first().catch(() => null);
+  const journal = await db.prepare(`SELECT * FROM wealth_pick_journal WHERE trade_date=? ORDER BY learned_at DESC LIMIT 1`).bind(date).first().catch(() => null);
+  // orders/fills that day (real execution log) — kite_orders_log + kite_trades are ms epoch
+  const dayStart = new Date(date + 'T00:00:00+05:30').getTime();
+  const dayEnd = dayStart + 86400000;
+  const orders = (await db.prepare(`SELECT tradingsymbol, transaction_type, quantity, filled_quantity, average_price_paise, status, order_type, product, tag, placed_at FROM kite_orders_log WHERE placed_at >= ? AND placed_at < ? ORDER BY placed_at`).bind(dayStart, dayEnd).all().catch(() => ({ results: [] }))).results || [];
+  let picks = []; try { picks = JSON.parse(v?.picks_json || '[]'); } catch {}
+  let alt = {}; try { alt = JSON.parse(v?.alternatives_json || '{}'); } catch {}
+  let ctx = {}; try { ctx = JSON.parse(v?.context_snapshot_json || '{}'); } catch {}
+  return {
+    ok: true,
+    date,
+    has_data: !!v,
+    decision: v?.decision || null,
+    strategy_mode: v?.strategy_mode || null,
+    headline: v?.headline || null,
+    narrative: v?.narrative || null,
+    composed_at: v?.composed_at || null,
+    composed_by: v?.composed_by_model || null,
+    picks: picks.map(p => ({ symbol: p.symbol, gap_pct: p.gap_pct, qty: p.qty, entry_estimate_paise: p.entry_estimate_paise, stop_paise: p.stop_paise, target_paise: p.target_paise, hard_exit_ist: p.hard_exit_ist, turnover_cr: p.turnover_cr, rationale: p.rationale })),
+    edge: { verdict: alt.edge_verdict, oos_expectancy_pct: alt.oos_expectancy_pct, folds_positive: alt.folds_positive },
+    watch: alt.watch || [],
+    scan: ctx.scan || null,
+    tuned_rule: ctx.tuned_rule || null,
+    outcome: journal ? { realised_pnl_pct: journal.realised_pnl_pct, oracle_top_symbol: journal.oracle_top_symbol, oracle_top_pct: journal.oracle_top_pct, caught_grade: journal.caught_grade, lesson: journal.lesson_text } : null,
+    orders: orders.map(o => ({ symbol: o.tradingsymbol, side: o.transaction_type, qty: o.quantity, filled: o.filled_quantity, avg_paise: o.average_price_paise, status: o.status, type: o.order_type, product: o.product, tag: o.tag, at: o.placed_at })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────
