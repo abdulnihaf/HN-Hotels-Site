@@ -377,10 +377,12 @@ async function getResearchDepth(db) {
 // TRAIL — available dates (for the date picker) + a full day's execution log.
 async function getTrailDates(db) {
   const rows = (await db.prepare(`
-    SELECT v.trade_date AS d, MAX(v.decision) AS decision FROM daily_verdicts v
-    WHERE v.verdict_type='morning' GROUP BY v.trade_date ORDER BY v.trade_date DESC LIMIT 120
+    SELECT v.trade_date AS d, v.decision, v.strategy_mode FROM daily_verdicts v
+    JOIN (SELECT trade_date, MAX(composed_at) m FROM daily_verdicts WHERE verdict_type='morning' GROUP BY trade_date) x
+      ON v.trade_date = x.trade_date AND v.composed_at = x.m
+    WHERE v.verdict_type='morning' ORDER BY v.trade_date DESC LIMIT 120
   `).all().catch(() => ({ results: [] }))).results || [];
-  return { ok: true, dates: rows.map(r => ({ date: r.d, decision: r.decision })) };
+  return { ok: true, dates: rows.map(r => ({ date: r.d, decision: r.decision, strategy_mode: r.strategy_mode })) };
 }
 
 async function getTrailDay(db, url) {
