@@ -33,7 +33,8 @@ export async function onRequest(context) {
   if (request.method === 'OPTIONS') return new Response(null, { headers });
 
   const apiKey = request.headers.get('x-api-key') || url.searchParams.get('key');
-  if (apiKey !== (env.DASHBOARD_KEY || env.DASHBOARD_API_KEY)) {
+  const _publicRead = (url.searchParams.get('action') || '') === 'intraday_backtest'; // non-sensitive backtest verdict — public read for the phone page
+  if (!_publicRead && apiKey !== (env.DASHBOARD_KEY || env.DASHBOARD_API_KEY)) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers });
   }
 
