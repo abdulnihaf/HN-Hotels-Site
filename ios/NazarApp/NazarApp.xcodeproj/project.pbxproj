@@ -1,0 +1,239 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		828ED5D458664B6F80F2D444 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 634D4DF8CEDA4D6AA1705FD7 /* App.swift */; };
+		C5486466575D49689B7D2B73 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D46C56A13474D148B03E263 /* ContentView.swift */; };
+		32CF1D8A3B4C4B039077F25C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C357BC86A4D427A8DEF5237 /* HomeView.swift */; };
+		6AE99057235743D6BE3BC32D /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431A5D9217244FE3B688875A /* KeychainStore.swift */; };
+		5021738D42804A638F4DCFD7 /* NazarCamerasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E468FA128034981BDCBB575 /* NazarCamerasView.swift */; };
+		050875E6D07344F0B2A28B3E /* NazarClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758A0B4B4BA041F8A3382088 /* NazarClient.swift */; };
+		2EC9703311134A01B626B627 /* NazarFlagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA26E4BC52E74CF29052E561 /* NazarFlagsView.swift */; };
+		256AE0BB54FD4EFE9868C895 /* NazarIntelligenceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 150FB4034BFF4D04BCA182E8 /* NazarIntelligenceView.swift */; };
+		D5F2AB40D8F84A8FB163243E /* NazarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81FB421735E44B8BBFBAE3C3 /* NazarModels.swift */; };
+		5C0F71F62EEC4B569C280F8C /* NazarSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D8D7FDBC84575BED3A256 /* NazarSettings.swift */; };
+		A2DFB14DFEA541319B5D73D6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B06E27590C4A20847E739E /* Theme.swift */; };
+		045D7C8DAC7E4B32B5ADCEF9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CD190F04D36F4E5D81DC891A /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		634D4DF8CEDA4D6AA1705FD7 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		6D46C56A13474D148B03E263 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		9C357BC86A4D427A8DEF5237 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		431A5D9217244FE3B688875A /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		5E468FA128034981BDCBB575 /* NazarCamerasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarCamerasView.swift; sourceTree = "<group>"; };
+		758A0B4B4BA041F8A3382088 /* NazarClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarClient.swift; sourceTree = "<group>"; };
+		FA26E4BC52E74CF29052E561 /* NazarFlagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarFlagsView.swift; sourceTree = "<group>"; };
+		150FB4034BFF4D04BCA182E8 /* NazarIntelligenceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarIntelligenceView.swift; sourceTree = "<group>"; };
+		81FB421735E44B8BBFBAE3C3 /* NazarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarModels.swift; sourceTree = "<group>"; };
+		DA9D8D7FDBC84575BED3A256 /* NazarSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarSettings.swift; sourceTree = "<group>"; };
+		49B06E27590C4A20847E739E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		CD190F04D36F4E5D81DC891A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		EB9CF1E9DC82498DBF523AB5 /* Nazar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Nazar.entitlements; sourceTree = "<group>"; };
+		ED797E9E00B84820B20DD33C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		AE5FFDE5AA25440FA7569132 /* NazarApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NazarApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		CCB859DF2DB749CC85B95800 = {
+			isa = PBXGroup;
+			children = (
+				524C68C9B6FF4237A56ADB51 /* Nazar */,
+				5DC0504B92DD48DDA8AF5FE9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5DC0504B92DD48DDA8AF5FE9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AE5FFDE5AA25440FA7569132 /* NazarApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		524C68C9B6FF4237A56ADB51 /* Nazar */ = {
+			isa = PBXGroup;
+			children = (
+				634D4DF8CEDA4D6AA1705FD7 /* App.swift */,
+				6D46C56A13474D148B03E263 /* ContentView.swift */,
+				9C357BC86A4D427A8DEF5237 /* HomeView.swift */,
+				431A5D9217244FE3B688875A /* KeychainStore.swift */,
+				5E468FA128034981BDCBB575 /* NazarCamerasView.swift */,
+				758A0B4B4BA041F8A3382088 /* NazarClient.swift */,
+				FA26E4BC52E74CF29052E561 /* NazarFlagsView.swift */,
+				150FB4034BFF4D04BCA182E8 /* NazarIntelligenceView.swift */,
+				81FB421735E44B8BBFBAE3C3 /* NazarModels.swift */,
+				DA9D8D7FDBC84575BED3A256 /* NazarSettings.swift */,
+				49B06E27590C4A20847E739E /* Theme.swift */,
+				CD190F04D36F4E5D81DC891A /* Assets.xcassets */,
+				EB9CF1E9DC82498DBF523AB5 /* Nazar.entitlements */,
+				ED797E9E00B84820B20DD33C /* Info.plist */,
+			);
+			path = Nazar;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		778B5BF8C67544AFB84021E1 /* NazarApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 60613338F9F4402B8058DCCC /* Build configuration list for PBXNativeTarget "NazarApp" */;
+			buildPhases = (
+				A62847295A1C4D60ABF80BC1 /* Sources */,
+				93D9FAB862AF4D279C74E0D2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NazarApp;
+			packageProductDependencies = (
+			);
+			productName = NazarApp;
+			productReference = AE5FFDE5AA25440FA7569132 /* NazarApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5F8F4B4378A9411EB2F7DA9F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					778B5BF8C67544AFB84021E1 = {
+						DevelopmentTeam = FZ58DQ52QS;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 721DECF567714936BEDC9DF2 /* Build configuration list for PBXProject "NazarApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = CCB859DF2DB749CC85B95800;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5DC0504B92DD48DDA8AF5FE9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				778B5BF8C67544AFB84021E1 /* NazarApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		93D9FAB862AF4D279C74E0D2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				045D7C8DAC7E4B32B5ADCEF9 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A62847295A1C4D60ABF80BC1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				828ED5D458664B6F80F2D444 /* App.swift in Sources */,
+				C5486466575D49689B7D2B73 /* ContentView.swift in Sources */,
+				32CF1D8A3B4C4B039077F25C /* HomeView.swift in Sources */,
+				6AE99057235743D6BE3BC32D /* KeychainStore.swift in Sources */,
+				5021738D42804A638F4DCFD7 /* NazarCamerasView.swift in Sources */,
+				050875E6D07344F0B2A28B3E /* NazarClient.swift in Sources */,
+				2EC9703311134A01B626B627 /* NazarFlagsView.swift in Sources */,
+				256AE0BB54FD4EFE9868C895 /* NazarIntelligenceView.swift in Sources */,
+				D5F2AB40D8F84A8FB163243E /* NazarModels.swift in Sources */,
+				5C0F71F62EEC4B569C280F8C /* NazarSettings.swift in Sources */,
+				A2DFB14DFEA541319B5D73D6 /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		121C1B95A61E4BE5A25BA22A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSTCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Nazar/Nazar.entitlements;
+				INFOPLIST_FILE = Nazar/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.nazar;
+				PRODUCT_NAME = Nazar;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				ASSTCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			};
+			name = Debug;
+		};
+		A468574815AF42ABA60833B6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSTCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Nazar/Nazar.entitlements;
+				INFOPLIST_FILE = Nazar/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.nazar;
+				PRODUCT_NAME = Nazar;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			};
+			name = Release;
+		};
+		E7F3E3AEC48B4E4DABCC009B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		629600F86B7C4056831B5718 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		721DECF567714936BEDC9DF2 /* Build configuration list for PBXProject "NazarApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E7F3E3AEC48B4E4DABCC009B /* Debug */,
+				629600F86B7C4056831B5718 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		60613338F9F4402B8058DCCC /* Build configuration list for PBXNativeTarget "NazarApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				121C1B95A61E4BE5A25BA22A /* Debug */,
+				A468574815AF42ABA60833B6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5F8F4B4378A9411EB2F7DA9F /* Project object */;
+}
