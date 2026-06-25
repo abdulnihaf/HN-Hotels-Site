@@ -16,8 +16,11 @@ crons = [
   "0 2 * * 1-5",
 
   # ─── MORNING ────────────────────────────────────────────────────────────
-  # Phase A — Morning verdict compose (Opus). 08:30 IST = 03:00 UTC, Mon-Fri.
-  "0 3 * * 1-5",
+  # Phase A — Morning verdict compose. 09:40 IST = 04:10 UTC, Mon-Fri.
+  # Moved from 08:30: the first live intraday signal batch lands 09:30 IST (signal-engine
+  # 04:00 UTC), so composing at 09:40 picks from fresh today's-open signals, not last
+  # night's stale scores. Pre-market bias (07:30) still primes the overnight read.
+  "10 4 * * 1-5",
 
   # ─── ALWAYS-ON ──────────────────────────────────────────────────────────
   # Phase B — Alert triager (Haiku). Every 5 min around the clock.

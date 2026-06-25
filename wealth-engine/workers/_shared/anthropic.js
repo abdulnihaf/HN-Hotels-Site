@@ -87,7 +87,7 @@ async function storeCache(db, cacheKey, purpose, text, usage, ttlMs) {
   }
 }
 
-async function logUsage(db, { worker, purpose, modelId, usage, costPaise, costUsdX1000, requestId, cached, notes }) {
+export async function logUsage(db, { worker, purpose, modelId, usage, costPaise, costUsdX1000, requestId, cached, notes }) {
   const today = new Date().toISOString().slice(0, 10);
   try {
     await db.prepare(`
@@ -135,7 +135,9 @@ export async function callClaude(env, modelTier, opts = {}) {
   } = opts;
 
   if (!prompt) throw new Error('prompt is required');
-  if (!env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY secret not set');
+  // Wealth-dedicated key takes precedence (cost segregation); shared key is the fallback.
+  const apiKey = env.WEALTH_ANTHROPIC_API_KEY || env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY secret not set');
 
   // Cache key includes model — same prompt to Haiku vs Opus gives different output
   const cacheKey = rawCacheKey
@@ -212,7 +214,7 @@ export async function callClaude(env, modelTier, opts = {}) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'x-api-key': env.ANTHROPIC_API_KEY,
+      'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     },
