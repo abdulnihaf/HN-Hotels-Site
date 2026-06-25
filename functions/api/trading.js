@@ -7,6 +7,7 @@ import { computeOptionAnalytics } from './_lib/optionAnalytics.js';
 import { recordObservation, getPosterior, scoreBand, detectRegime } from './_lib/bayesianLearner.js';
 import { getTodaysPlan, getGlossary } from './_lib/coaching.js';
 import { callHaiku, getSpendSummary } from './_lib/anthropic.js';
+import { FNO_SET, NIFTY50_SET, FNO_AS_OF, NIFTY50_AS_OF } from './_lib/wealthReference.js';
 //
 // Actions:
 //   health     — cron run log + source health summary
@@ -351,39 +352,97 @@ async function getAnalysedUniverse(db, url) {
   const cutoff = new Date(Date.now() + 5.5 * 3600000 - 50 * 86400000).toISOString().slice(0, 10);
   const cfg = await db.prepare(`SELECT gap_min_pct FROM wealth_strategy_config WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`).first().catch(() => null);
   const gapMin = cfg?.gap_min_pct || 3.0;
-  const rows = (await db.prepare(`
-    WITH liq AS (
-      SELECT symbol, AVG(CAST(volume AS REAL)*close_paise/100.0/1e7) tcr, COUNT(*) d, MAX(trade_date) ld
-      FROM equity_eod WHERE exchange='NSE' AND trade_date >= ? AND volume>0 AND (series IS NULL OR series='EQ')
-      GROUP BY symbol HAVING d >= 20 AND tcr >= 5
-    )
-    SELECT l.symbol, l.tcr, l.ld, e.close_paise, e.prev_close_paise
-    FROM liq l JOIN equity_eod e ON e.symbol=l.symbol AND e.exchange='NSE' AND e.trade_date=l.ld
-    ORDER BY l.tcr DESC
-  `).bind(cutoff).all().catch(() => ({ results: [] }))).results || [];
-  const pre = (await db.prepare(`
-    SELECT p.symbol, p.iep_change_pct FROM preopen_snapshot p
-    JOIN (SELECT symbol, MAX(ts) m FROM preopen_snapshot WHERE ts > ? GROUP BY symbol) x ON p.symbol=x.symbol AND p.ts=x.m
-  `).bind(Date.now() - 18 * 3600000).all().catch(() => ({ results: [] }))).results || [];
-  const gapBy = {}; for (const r of pre) gapBy[r.symbol] = r.iep_change_pct;
+  // ONE scan computes liquidity (turnover), volatility (avg daily range %) and a volume
+  // baseline over the same 50-day window — plus the last day's OHLC/delivery and the
+  // company name. No second heavy query. (ATR over 50d is a steadier band than ATR-14,
+  // which is exactly what we want for a coarse Calm/Moderate/Volatile cut.)
+  const [uRows, pre, suit] = await Promise.all([
+    db.prepare(`
+      WITH liq AS (
+        SELECT symbol,
+          AVG(CAST(volume AS REAL)*close_paise/100.0/1e7) tcr,
+          AVG((high_paise - low_paise) * 100.0 / close_paise) atr_pct,
+          AVG(CAST(volume AS REAL)) avg_vol,
+          COUNT(*) d, MAX(trade_date) ld
+        FROM equity_eod WHERE exchange='NSE' AND trade_date >= ? AND volume>0 AND (series IS NULL OR series='EQ')
+        GROUP BY symbol HAVING d >= 20 AND tcr >= 5
+      )
+      SELECT l.symbol, l.tcr, l.atr_pct, l.avg_vol, l.ld,
+             e.close_paise, e.prev_close_paise, e.high_paise, e.low_paise, e.volume, e.delivery_pct,
+             k.name
+      FROM liq l
+      JOIN equity_eod e ON e.symbol=l.symbol AND e.exchange='NSE' AND e.trade_date=l.ld
+      LEFT JOIN kite_instruments k ON k.tradingsymbol=l.symbol AND k.exchange='NSE' AND k.instrument_type='EQ'
+      ORDER BY l.tcr DESC
+    `).bind(cutoff).all().catch(() => ({ results: [] })),
+    db.prepare(`
+      SELECT p.symbol, p.iep_change_pct FROM preopen_snapshot p
+      JOIN (SELECT symbol, MAX(ts) m FROM preopen_snapshot WHERE ts > ? GROUP BY symbol) x ON p.symbol=x.symbol AND p.ts=x.m
+    `).bind(Date.now() - 18 * 3600000).all().catch(() => ({ results: [] })),
+    // The researched intraday-suitability subset (sparse — only the studied names carry it).
+    db.prepare(`SELECT symbol, owner_score, hit_2pct_rate, green_close_rate, avg_daily_range_pct FROM intraday_suitability`).all().catch(() => ({ results: [] })),
+  ]);
+  const rows = uRows.results || [];
+  const gapBy = {}; for (const r of (pre.results || [])) gapBy[r.symbol] = r.iep_change_pct;
+  const suitBy = {}; for (const r of (suit.results || [])) suitBy[r.symbol] = r;
+
+  const volBand = (atr) => atr == null ? null : (atr < 2.5 ? 'calm' : (atr <= 5 ? 'moderate' : 'volatile'));
   const stocks = rows.map(r => {
     const gap = gapBy[r.symbol];
     const chg = r.prev_close_paise ? +((r.close_paise / r.prev_close_paise - 1) * 100).toFixed(2) : null;
+    const atr = r.atr_pct != null ? +r.atr_pct.toFixed(2) : null;
+    const deliv = r.delivery_pct != null ? +r.delivery_pct.toFixed(1) : null;
+    const volMult = (r.avg_vol > 0 && r.volume) ? +(r.volume / r.avg_vol).toFixed(2) : null;
+    // Big money = real-buyer conviction: heavy delivery OR a clear volume surge (matches light 3).
+    const bigMoney = (deliv != null && deliv >= 55) || (volMult != null && volMult >= 1.4);
+    const su = suitBy[r.symbol];
     return {
       symbol: r.symbol,
+      name: (r.name && r.name !== r.symbol) ? r.name : null,
       turnover_cr: Math.round(r.tcr),
       last_close_rupees: r.close_paise ? +(r.close_paise / 100).toFixed(2) : null,
       prev_close_rupees: r.prev_close_paise ? +(r.prev_close_paise / 100).toFixed(2) : null,
       change_pct: chg,
       gap_pct: gap != null ? +gap.toFixed(2) : null,
       gap_candidate: gap != null && gap >= gapMin,
+      atr_pct: atr,
+      vol_band: volBand(atr),
+      delivery_pct: deliv,
+      vol_mult: volMult,
+      big_money: bigMoney,
+      is_fno: FNO_SET.has(r.symbol),
+      is_nifty50: NIFTY50_SET.has(r.symbol),
+      // Researched intraday-suitability (present ONLY for the studied subset — honest null otherwise).
+      proven: su ? {
+        owner_score: su.owner_score != null ? +su.owner_score.toFixed(1) : null,
+        hit_2pct_rate: su.hit_2pct_rate != null ? +su.hit_2pct_rate.toFixed(2) : null,
+        green_close_rate: su.green_close_rate != null ? +su.green_close_rate.toFixed(2) : null,
+        avg_daily_range_pct: su.avg_daily_range_pct != null ? +su.avg_daily_range_pct.toFixed(2) : null,
+      } : null,
     };
   });
   const gappers = stocks.filter(s => s.gap_candidate).sort((a, b) => (b.gap_pct || 0) - (a.gap_pct || 0));
   const rest = stocks.filter(s => !s.gap_candidate);
+  // Bucket counts → drive the front-door grid tiles (data-driven, never hardcoded).
+  const cnt = (f) => stocks.reduce((n, s) => n + (f(s) ? 1 : 0), 0);
+  const buckets = {
+    all: stocks.length,
+    gapped_up: gappers.length,
+    fno: cnt(s => s.is_fno),
+    nifty50: cnt(s => s.is_nifty50),
+    big_movers: cnt(s => s.change_pct != null && Math.abs(s.change_pct) >= 3),
+    up_today: cnt(s => s.change_pct != null && s.change_pct > 0),
+    big_money: cnt(s => s.big_money),
+    calm: cnt(s => s.vol_band === 'calm'),
+    moderate: cnt(s => s.vol_band === 'moderate'),
+    volatile: cnt(s => s.vol_band === 'volatile'),
+    proven: cnt(s => s.proven != null),
+  };
   return {
     ok: true, count: stocks.length, gap_candidates: gappers.length,
     gap_threshold_pct: gapMin, as_of: rows[0]?.ld || null,
+    buckets,
+    reference: { fno_as_of: FNO_AS_OF, nifty50_as_of: NIFTY50_AS_OF, fno_count: buckets.fno, nifty50_count: buckets.nifty50 },
     stocks: [...gappers, ...rest],
   };
 }
