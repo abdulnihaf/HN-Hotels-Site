@@ -810,13 +810,6 @@ async function handleGet(url, env) {
         waba_id: wabaId,
         waba_id_from_secret: hasWabaIdSecret,
         phone_id: phoneId,
-        token_diag: {
-          len: cfg.token ? cfg.token.length : 0,
-          start: cfg.token ? cfg.token.slice(0, 8) : null,
-          end: cfg.token ? cfg.token.slice(-8) : null,
-          env_has_wa_access: !!env.WA_ACCESS_TOKEN,
-          env_has_wa_he_token: !!env.WA_HE_TOKEN,
-        },
         token_debug: tokenData.data ? {
           app_id: tokenData.data.app_id,
           type: tokenData.data.type,
