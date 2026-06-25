@@ -137,9 +137,9 @@ struct NazarPlayerWebView: UIViewRepresentable {
         web.scrollView.bounces = false
         context.coordinator.web = web
 
-        if let html = Bundle.main.url(forResource: "nazar_player", withExtension: "html", subdirectory: "Web") {
-            web.loadFileURL(html, allowingReadAccessTo: html.deletingLastPathComponent())
-        }
+        // Player is a compiled string (not a bundle resource) — avoids the codesign provenance-xattr
+        // deadlock on App Store export. baseURL gives a sane http origin for the WebSocket/WebRTC.
+        web.loadHTMLString(nazarPlayerHTML, baseURL: URL(string: NazarURL.appBase))
         return web
     }
 

@@ -14,11 +14,7 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: Nazar
-        excludes:
-          - "Web/**"
-      - path: Nazar/Web
-        type: folder
+      - Nazar
     info:
       path: Nazar/Info.plist
       properties:

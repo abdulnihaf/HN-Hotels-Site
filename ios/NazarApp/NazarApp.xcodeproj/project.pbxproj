@@ -14,8 +14,8 @@
 		8C843FC15BD35A5C324CBD79 /* NazarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9F23BF82E2BBEE2C08089BE /* NazarModels.swift */; };
 		998058714531635BD90C4258 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA45B1BA7A1F217253BACED /* App.swift */; };
 		A21519CA542017A437C678B4 /* NazarClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C654853FC74060B3F52A20E7 /* NazarClient.swift */; };
-		B04656C34DF276916F287597 /* Web in Resources */ = {isa = PBXBuildFile; fileRef = 49F62F8E3C1E8F4C3D392ED4 /* Web */; };
 		B6CDA46596E35FE4E82AFFEB /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8EF6986F5F8AC21AD9BFA72 /* Theme.swift */; };
+		C2DF69545894D81ACD16FFE9 /* NazarPlayerHTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD507091DD89A964775A5EDA /* NazarPlayerHTML.swift */; };
 		C62068B8A1AA6F041010820A /* NazarCamerasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B7DF9A2A4F972254DC2740 /* NazarCamerasView.swift */; };
 		E09F33144FC1A0D490E0EC98 /* NazarSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A804FD0AE0D91A0EDA8C92CB /* NazarSettings.swift */; };
 		EA840586579A1CE7FC01E9A7 /* NazarIntelligenceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D63F906FC25AFA3E78B72A4 /* NazarIntelligenceView.swift */; };
@@ -26,7 +26,6 @@
 		043949AAB66FADFFC0BA312A /* NazarFlagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarFlagsView.swift; sourceTree = "<group>"; };
 		2D63F906FC25AFA3E78B72A4 /* NazarIntelligenceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarIntelligenceView.swift; sourceTree = "<group>"; };
 		43956A6C3982D586B5EF90D2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		49F62F8E3C1E8F4C3D392ED4 /* Web */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Web; path = Nazar/Web; sourceTree = SOURCE_ROOT; };
 		4AA45B1BA7A1F217253BACED /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		4CA53CB8934A52F85BAF1733 /* Nazar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Nazar.entitlements; sourceTree = "<group>"; };
 		5F7F1C1FDB54A9FA98720198 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -36,6 +35,7 @@
 		C654853FC74060B3F52A20E7 /* NazarClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarClient.swift; sourceTree = "<group>"; };
 		C9F23BF82E2BBEE2C08089BE /* NazarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarModels.swift; sourceTree = "<group>"; };
 		D358FAF03D4E4379EE266EC6 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		DD507091DD89A964775A5EDA /* NazarPlayerHTML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NazarPlayerHTML.swift; sourceTree = "<group>"; };
 		EEFE047899C7427E8572A324 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F132768A2AA5030633EBB9FC /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		F8EF6986F5F8AC21AD9BFA72 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -53,7 +53,6 @@
 		65AB527775227EC2A9D6A3B1 = {
 			isa = PBXGroup;
 			children = (
-				49F62F8E3C1E8F4C3D392ED4 /* Web */,
 				B76A5EF6DE6AB9DFD2ADD543 /* Nazar */,
 				498AB5792308C98FAA62B297 /* Products */,
 			);
@@ -74,6 +73,7 @@
 				043949AAB66FADFFC0BA312A /* NazarFlagsView.swift */,
 				2D63F906FC25AFA3E78B72A4 /* NazarIntelligenceView.swift */,
 				C9F23BF82E2BBEE2C08089BE /* NazarModels.swift */,
+				DD507091DD89A964775A5EDA /* NazarPlayerHTML.swift */,
 				A804FD0AE0D91A0EDA8C92CB /* NazarSettings.swift */,
 				F8EF6986F5F8AC21AD9BFA72 /* Theme.swift */,
 			);
@@ -141,7 +141,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				0FC005EDEF039D2F484BD709 /* Assets.xcassets in Resources */,
-				B04656C34DF276916F287597 /* Web in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -161,6 +160,7 @@
 				24A46C7B5207CEE976D337E1 /* NazarFlagsView.swift in Sources */,
 				EA840586579A1CE7FC01E9A7 /* NazarIntelligenceView.swift in Sources */,
 				8C843FC15BD35A5C324CBD79 /* NazarModels.swift in Sources */,
+				C2DF69545894D81ACD16FFE9 /* NazarPlayerHTML.swift in Sources */,
 				E09F33144FC1A0D490E0EC98 /* NazarSettings.swift in Sources */,
 				B6CDA46596E35FE4E82AFFEB /* Theme.swift in Sources */,
 			);
