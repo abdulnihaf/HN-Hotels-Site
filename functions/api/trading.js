@@ -53,6 +53,7 @@ export async function onRequest(context) {
       case 'eod':          return Response.json(await getEod(db, url), { headers });
       case 'indices':      return Response.json(await getIndices(db), { headers });
       case 'intraday_backtest': return Response.json(await getIntradayBacktest(db, url), { headers });
+      case 'trail':        return Response.json(await getTrail(db, url), { headers });
       case 'preopen':      return Response.json(await getPreopen(db), { headers });
       case 'intraday':     return Response.json(await getIntraday(db, url), { headers });
       case 'extremes':     return Response.json(await getExtremes(db), { headers });
@@ -5720,6 +5721,111 @@ async function getTradeComparison(db, env, url) {
 // Worker only stores the SYMBOL Opus picked; this reader joins with the live
 // top_recommendation engine to attach a fresh trade plan (entry/stop/target/qty).
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// /api/trading?action=trail  — the LEARNING JOURNAL.
+//   movers : consistent intraday movers (intraday_suitability), ranked
+//            tradeable-first (consistency × liquidity); thin names stay visible.
+//   daily  : last 10 trading days — engine's pick/decision vs what ACTUALLY moved.
+//   oracle : the latest day's real top movers, marked picked / in-pool / missed.
+// All DESCRIPTIVE history. hit_2pct = "rose ≥2% on X% of days", NOT a win rate.
+// ═══════════════════════════════════════════════════════════════════════════
+async function getTrail(db, url) {
+  const safe = (s) => { try { return JSON.parse(s || '[]') || []; } catch { return []; } };
+
+  const sRows = (await db.prepare(`
+    SELECT symbol, hit_2pct_rate, hit_3pct_rate, green_close_rate,
+           avg_open_to_high_pct, avg_open_to_low_pct, avg_turnover_cr,
+           hit_2pct_last_week, avg_up_last_week_pct, green_close_last_week
+    FROM intraday_suitability
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const liqFactor = (t) => t >= 500 ? 1.0 : t >= 150 ? 0.75 : t >= 50 ? 0.5 : 0.3;
+  const movers = sRows.map((r) => ({
+    symbol: r.symbol,
+    hit_2pct: Math.round(r.hit_2pct_rate || 0),
+    hit_3pct: Math.round(r.hit_3pct_rate || 0),
+    green_close: Math.round(r.green_close_rate || 0),
+    avg_up_pct: r.avg_open_to_high_pct != null ? +r.avg_open_to_high_pct.toFixed(1) : null,
+    avg_down_pct: r.avg_open_to_low_pct != null ? +r.avg_open_to_low_pct.toFixed(1) : null,
+    turnover_cr: Math.round(r.avg_turnover_cr || 0),
+    tradeable: (r.avg_turnover_cr || 0) >= 150,
+    hot_this_week: (r.hit_2pct_last_week != null)
+      ? { hit_2pct_lw: Math.round(r.hit_2pct_last_week), avg_up_lw: r.avg_up_last_week_pct }
+      : null,
+    _s: (r.hit_2pct_rate || 0) * liqFactor(r.avg_turnover_cr || 0),
+  })).sort((a, b) => b._s - a._s).slice(0, 15);
+  movers.forEach((m) => { delete m._s; });
+
+  const verdicts = (await db.prepare(`
+    SELECT v.trade_date, v.decision, v.picks_json
+    FROM daily_verdicts v
+    JOIN (SELECT trade_date, MAX(composed_at) AS m FROM daily_verdicts WHERE verdict_type='morning' GROUP BY trade_date) x
+      ON v.trade_date = x.trade_date AND v.composed_at = x.m
+    WHERE v.verdict_type='morning'
+    ORDER BY v.trade_date DESC LIMIT 10
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const dates = verdicts.map((v) => v.trade_date);
+  const winnersByDate = {};
+  if (dates.length) {
+    const ph = dates.map(() => '?').join(',');
+    const wRows = (await db.prepare(`
+      SELECT trade_date, rank, symbol, open_to_high_pct, turnover_cr
+      FROM intraday_winner_daily WHERE trade_date IN (${ph}) AND source='eod' ORDER BY trade_date, rank
+    `).bind(...dates).all().catch(() => ({ results: [] }))).results || [];
+    for (const w of wRows) { (winnersByDate[w.trade_date] = winnersByDate[w.trade_date] || []).push(w); }
+  }
+  const daily = verdicts.map((v) => {
+    const picks = safe(v.picks_json).map((p) => p && p.symbol).filter(Boolean);
+    const ws = winnersByDate[v.trade_date] || [];
+    const top = ws[0] || null;
+    let caught = ws.length ? 'unknown' : 'no_data';
+    if (v.decision === 'SIT_OUT') caught = 'sat_out';
+    else if (ws.length && picks.length) {
+      let best = 999;
+      for (const s of picks) { const w = ws.find((x) => x.symbol === s); if (w && w.rank < best) best = w.rank; }
+      caught = best === 1 ? 'hit' : best <= 5 ? 'near' : best <= 20 ? 'far' : 'miss';
+    }
+    return {
+      date: v.trade_date,
+      decision: v.decision,
+      picks,
+      top_mover: top ? { symbol: top.symbol, pct: top.open_to_high_pct != null ? +top.open_to_high_pct.toFixed(1) : null } : null,
+      caught,
+    };
+  });
+
+  const latestW = (await db.prepare(`SELECT MAX(trade_date) AS d FROM intraday_winner_daily WHERE source='eod'`).first().catch(() => null))?.d;
+  let oracle = null;
+  if (latestW) {
+    const ws = (await db.prepare(`
+      SELECT rank, symbol, open_to_high_pct, turnover_cr FROM intraday_winner_daily
+      WHERE trade_date=? AND source='eod' ORDER BY rank LIMIT 6
+    `).bind(latestW).all().catch(() => ({ results: [] }))).results || [];
+    const poolSet = new Set(sRows.map((r) => r.symbol));
+    const dayV = verdicts.find((v) => v.trade_date === latestW);
+    const pickSet = new Set(dayV ? safe(dayV.picks_json).map((p) => p && p.symbol) : []);
+    oracle = {
+      date: latestW,
+      movers: ws.map((w) => ({
+        symbol: w.symbol,
+        pct: w.open_to_high_pct != null ? +w.open_to_high_pct.toFixed(1) : null,
+        turnover_cr: Math.round(w.turnover_cr || 0),
+        status: pickSet.has(w.symbol) ? 'picked' : poolSet.has(w.symbol) ? 'in_pool' : 'missed',
+      })),
+    };
+  }
+
+  const upd = (await db.prepare(`SELECT MAX(computed_at) AS m FROM intraday_suitability`).first().catch(() => null))?.m;
+  return {
+    ok: true,
+    edge_note: 'Tested edge: −0.125% per trade out-of-sample',
+    suitability_updated: upd || null,
+    movers,
+    daily,
+    oracle,
+    generated_at: Date.now(),
+  };
+}
+
 async function getVerdictToday(db, env) {
   const istNow = new Date(Date.now() + 5.5 * 3600000);
   const today = istNow.toISOString().slice(0, 10);
