@@ -204,9 +204,14 @@ def main():
     thin = bool(pos and base["oos_n"] >= 100 and beats_null
                 and base["oos_p"] is not None and base["oos_p"] < 0.15)
     verdict = ("ROBUST_EDGE" if robust else "THIN_EDGE" if thin else "NO_EDGE")
+    c2 = sqlite3.connect(DB)
+    bars_total = c2.execute("SELECT COUNT(*) FROM bars5m").fetchone()[0]
+    bars_syms = c2.execute("SELECT COUNT(DISTINCT symbol) FROM bars5m").fetchone()[0]
+    c2.close()
     out = {
         "generated_at": dt.datetime.now().isoformat(),
         "universe_syms": len(syms), "candidate_trades": len(cands),
+        "bars_total": bars_total, "bars_syms": bars_syms,
         "date_range": [dates[0], dates[-1]] if dates else None,
         "entry": "09:40 IST (bar 5)", "liquidity_gate_cr": MIN_LIQ_CR,
         "survivorship": "point-in-time trailing-20d turnover gate (no liquid-today leak)",
