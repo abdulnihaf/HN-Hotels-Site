@@ -1,6 +1,12 @@
 package com.hnhotels.hnstaff
 
+import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import androidx.core.content.FileProvider
+import androidx.compose.ui.platform.LocalContext
+import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -93,6 +99,44 @@ object Api {
         return (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: "{}"
     }
     private fun err(e: Exception) = JSONObject().put("ok", false).put("error", e.message ?: "network error")
+}
+
+// ---- self-update (sideload-friendly): check version.json, download + install ----
+private const val VERSION_URL = "https://hn-ops-api.pages.dev/version.json"
+object Updater {
+    fun installedCode(ctx: Context): Long = try {
+        val p = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+        if (Build.VERSION.SDK_INT >= 28) p.longVersionCode else @Suppress("DEPRECATION") p.versionCode.toLong()
+    } catch (e: Exception) { 0L }
+
+    // returns the update JSON {versionCode,url,versionName,notes} if a newer one exists, else null
+    suspend fun check(ctx: Context): JSONObject? = withContext(Dispatchers.IO) {
+        try {
+            val c = URL(VERSION_URL).openConnection() as HttpURLConnection
+            c.connectTimeout = 8000; c.readTimeout = 8000
+            val txt = c.inputStream.bufferedReader().readText(); c.disconnect()
+            val j = JSONObject(txt)
+            if (j.optLong("versionCode") > installedCode(ctx)) j else null
+        } catch (e: Exception) { null }
+    }
+
+    // download the apk to cache and launch the system installer; returns error string or null
+    suspend fun downloadAndInstall(ctx: Context, url: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val out = File(ctx.externalCacheDir, "HN-Staff-update.apk")
+            val c = URL(url).openConnection() as HttpURLConnection
+            c.connectTimeout = 12000; c.readTimeout = 30000
+            c.inputStream.use { i -> out.outputStream().use { o -> i.copyTo(o) } }
+            c.disconnect()
+            val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", out)
+            val i = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ctx.startActivity(i)
+            null
+        } catch (e: Exception) { e.message ?: "update failed" }
+    }
 }
 
 // ---- nav model ------------------------------------------------------------
@@ -191,8 +235,35 @@ fun StaffShell(me: JSONObject) {
 fun HomeScreen(me: JSONObject, chambers: List<String>, openSauda: (String, String) -> Unit) {
     val outlets = me.optJSONArray("outlets") ?: JSONArray()
     val firstOutlet = if (outlets.length() > 0) outlets.getJSONObject(0).optString("outlet_id") else ""
+    val ctx = LocalContext.current
+    var upd by remember { mutableStateOf<JSONObject?>(null) }
+    var updating by remember { mutableStateOf(false) }
+    var updErr by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { upd = Updater.check(ctx) }
     Scaffold(topBar = { HnBar("HN Hotels", subtitle = me.optString("name") + " · " + me.optString("role_label")) }) { p ->
         Column(Modifier.padding(p).padding(20.dp).fillMaxSize()) {
+            val u = upd
+            if (u != null) {
+                Surface(color = Maroon, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Update available", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(u.optString("notes").ifEmpty { "A new version is ready" },
+                                color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                        }
+                        Button(onClick = {
+                            if (updating) return@Button; updating = true; updErr = ""
+                            scope.launch { val e = Updater.downloadAndInstall(ctx, u.optString("url")); updating = false; if (e != null) updErr = e }
+                        }, colors = ButtonDefaults.buttonColors(containerColor = Color.White)) {
+                            if (updating) CircularProgressIndicator(Modifier.size(20.dp), color = Maroon, strokeWidth = 2.dp)
+                            else Text("Update", color = Maroon, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+                if (updErr.isNotEmpty()) Text("⚠ $updErr", color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                Spacer(Modifier.height(16.dp))
+            }
             Text("Your work", color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(12.dp))
             if (chambers.contains("sauda"))
