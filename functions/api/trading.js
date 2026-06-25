@@ -5754,42 +5754,12 @@ async function getVerdictToday(db, env) {
 
   // Attach live plan from top_recommendation engine if Opus picked a symbol
   // (Single source of truth: plans are computed dynamically; worker stores only the pick.)
-  let livePlan = safeParse(verdict.recommended_plan_json);  // fallback to stored
-  if (!livePlan && verdict.recommended_symbol && verdict.decision === 'TRADE') {
-    try {
-      const fullRec = await getTopRecommendation(db, env);
-      if (fullRec.ok) {
-        // If engine's top pick == Opus's pick, use the engine's plan directly
-        if (fullRec.plan && fullRec.plan.symbol === verdict.recommended_symbol) {
-          livePlan = {
-            symbol: fullRec.plan.symbol,
-            entry_paise: Math.round((fullRec.plan.entry_price || 0) * 100),
-            stop_paise: Math.round((fullRec.plan.stop_price || 0) * 100),
-            target_paise: Math.round((fullRec.plan.target_price || 0) * 100),
-            qty: fullRec.plan.qty,
-            capital_deployed_paise: Math.round((fullRec.plan.capital_deployed || 0) * 100),
-            rr_ratio: fullRec.plan.rr_ratio,
-            stop_pct: fullRec.plan.stop_pct,
-            target_pct: fullRec.plan.target_pct,
-            net_loss_paise: Math.round((fullRec.plan.net_loss_rupees || 0) * 100),
-            net_gain_paise: Math.round((fullRec.plan.net_gain_rupees || 0) * 100),
-            composite_score: fullRec.plan.composite_score,
-            tranche: fullRec.plan.tranche,
-          };
-        }
-        // If Opus picked from alternatives, find it there
-        else if (fullRec.alternatives) {
-          const alt = fullRec.alternatives.find(a => a.symbol === verdict.recommended_symbol);
-          if (alt) {
-            // Only score+rationale from alts; plan needs separate computation
-            livePlan = { symbol: alt.symbol, composite_score: alt.composite_score, tranche: alt.tranche, _note: 'alternative — full plan not pre-computed' };
-          }
-        }
-      }
-    } catch (e) {
-      // Don't break the verdict UI if plan attach fails
-    }
-  }
+  // recommended_plan is a LEGACY single-pick field. The PRIMARY output is picks[] below
+  // (computed fast from picks_json + equity_eod). We deliberately DO NOT call
+  // getTopRecommendation here: it runs a Claude Haiku LLM call at read time that made
+  // verdict_today take ~30s and timed out the app's fetch (so the call never showed).
+  // Use the stored plan if present, else null; the app reads picks[], not this field.
+  const livePlan = safeParse(verdict.recommended_plan_json);
 
   // INTRADAY PORTFOLIO MODE — picks array is the new primary output.
   // Each pick has its own plan; we attach live LTP for entry sizing.
