@@ -7,6 +7,7 @@ import SwiftUI
 
 struct DarbarHiringTab: View {
     @ObservedObject var model: DarbarAppModel
+    @Binding var sheet: DarbarSheet?
     private let accent = DarbarView.accent
 
     private let filters: [(key: String, label: String)] = [
@@ -17,6 +18,7 @@ struct DarbarHiringTab: View {
         DarbarScreen(title: "Hiring", subtitle: subtitle) {
             ScrollView {
                 VStack(spacing: 12) {
+                    whatsappCampaignCard
                     filterBar
                     if model.loadingSuppliers && model.suppliers.isEmpty {
                         loadingState
@@ -44,6 +46,35 @@ struct DarbarHiringTab: View {
         if !model.suppliersLoaded { return "Loading suppliers…" }
         let n = model.supplierUncalled
         return n > 0 ? "\(n) supplier\(n == 1 ? "" : "s") still to call" : "All suppliers contacted"
+    }
+
+    private var whatsappCampaignCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "message.badge.filled.fill")
+                    .font(.system(size: 22)).foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(accent, in: RoundedRectangle(cornerRadius: HK.radiusSm))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("WhatsApp Campaigns").font(.system(size: 16, weight: .bold)).foregroundStyle(HK.text)
+                    Text("Compose & send hiring messages to your candidate DB")
+                        .font(.system(size: 12)).foregroundStyle(HK.textDim).lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundStyle(HK.textDim)
+            }
+            HStack(spacing: 6) {
+                Text("NEW".uppercased()).font(.system(size: 8, weight: .heavy)).tracking(0.5)
+                    .foregroundStyle(.black).padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(HK.ready, in: Capsule())
+                Text(" IMAGE header · 3 variables · roster exclusion")
+                    .font(.system(size: 10, weight: .semibold)).foregroundStyle(HK.textFaint)
+            }
+        }
+        .padding(13)
+        .background(HK.card, in: RoundedRectangle(cornerRadius: HK.radius))
+        .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(HK.line, lineWidth: 1))
+        .onTapGesture { sheet = .hiringCampaign }
     }
 
     private var filterBar: some View {

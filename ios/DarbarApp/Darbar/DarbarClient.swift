@@ -60,6 +60,43 @@ actor DarbarClient {
         return (try? decoder.decode(SupplierLogResponse.self, from: d))?.supplier
     }
 
+    // MARK: hiring — WhatsApp campaign (flow #2)
+    func hiringRoles(token: String) async throws -> HiringRolesResponse {
+        let d = try await get("/api/hiring-darbar", ["action": "roles"], token)
+        return try decoder.decode(HiringRolesResponse.self, from: d)
+    }
+    func audiencePreview(role: String, brand: String, city: String?, token: String) async throws -> AudiencePreview {
+        var q: [String: String] = ["action": "audience_preview", "role": role, "brand": brand]
+        if let city, !city.isEmpty { q["city"] = city }
+        let d = try await get("/api/hiring-darbar", q, token)
+        return try decoder.decode(AudiencePreview.self, from: d)
+    }
+    func composeCampaign(roleKey: String, brand: String, commission: String, package: String,
+                         city: String?, audienceMode: String, token: String) async throws -> ComposeResponse {
+        var body: [String: Any] = ["action": "compose", "role_key": roleKey, "brand": brand,
+                                   "commission": commission, "package": package, "audience_mode": audienceMode]
+        if let city, !city.isEmpty { body["city"] = city }
+        let d = try await send(path: "/api/hiring-darbar", query: [:], method: "POST", body: body, token: token)
+        return try decoder.decode(ComposeResponse.self, from: d)
+    }
+    func sendCampaign(campaignId: Int, token: String) async throws -> SendResponse {
+        let d = try await send(path: "/api/hiring-darbar", query: [:], method: "POST",
+                               body: ["action": "send", "campaign_id": campaignId], token: token)
+        return try decoder.decode(SendResponse.self, from: d)
+    }
+    func campaignStatus(campaignId: Int, token: String) async throws -> CampaignStatusResponse {
+        let d = try await get("/api/hiring-darbar", ["action": "campaign", "id": String(campaignId)], token)
+        return try decoder.decode(CampaignStatusResponse.self, from: d)
+    }
+    func hiringInbox(status: String, page: Int, token: String) async throws -> InboxResponse {
+        let d = try await get("/api/hiring-darbar", ["action": "inbox", "status": status, "page": String(page)], token)
+        return try decoder.decode(InboxResponse.self, from: d)
+    }
+    func replyToCandidate(phone: String, text: String, brand: String, token: String) async throws {
+        _ = try await send(path: "/api/hiring-darbar", query: [:], method: "POST",
+                           body: ["action": "reply", "phone": phone, "text": text, "brand": brand], token: token)
+    }
+
     // MARK: writes — execution (each is an owner-approved action, fired from a confirmed tap)
     func recordAdvance(employeeId: Int, amount: Double, paidVia: String, payPeriod: String,
                        phone: String, token: String) async throws {

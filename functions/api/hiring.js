@@ -40,9 +40,19 @@ function json(data, status = 200) {
 function getHiringWabaConfig(env, brand = 'he') {
   const b = String(brand || 'he').toLowerCase();
   if (b === 'nch') {
+    // Until a dedicated NCH WABA token is provisioned, send NCH campaigns through the
+    // Hamza Express (HE) WABA so the feature is usable on day one. Flip back to NCH
+    // instantly once WA_NCH_TOKEN is configured.
+    if (!env.WA_NCH_TOKEN) {
+      return {
+        phoneId: env.WA_HE_PHONE_ID || env.WA_PHONE_ID,
+        token: env.WA_HE_TOKEN || env.WA_ACCESS_TOKEN,
+        wabaId: env.WA_HE_WABA_ID || env.WABA_ID,
+      };
+    }
     return {
       phoneId: env.WA_NCH_PHONE_ID,
-      token: env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+      token: env.WA_NCH_TOKEN,
       wabaId: env.WA_NCH_WABA_ID,
     };
   }
