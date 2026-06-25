@@ -35,8 +35,8 @@ export async function onRequest(context) {
   if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors() });
 
   if (method === 'POST') {
-    // ingest is gated by the project's existing DASHBOARD_KEY (the box already holds it) — no new secret to provision
-    const expected = env.DASHBOARD_KEY || env.DASHBOARD_API_KEY || '';
+    // ingest gated by the dedicated NAZAR_WITNESS_KEY Pages secret (the box he_witness.py holds the same value)
+    const expected = env.NAZAR_WITNESS_KEY || '';
     const key = request.headers.get('x-ingest-key') || '';
     if (!expected || key !== expected) return json({ ok: false, err: 'unauthorized' }, 403);
     let body;
