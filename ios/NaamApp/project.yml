@@ -1,0 +1,34 @@
+name: Naam
+options:
+  bundleIdPrefix: in.hnhotels
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    IPHONEOS_DEPLOYMENT_TARGET: 17.0
+    DEVELOPMENT_TEAM: FZ58DQ52QS
+targets:
+  Naam:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    resources:
+      - path: Resources
+    settings:
+      base:
+        PRODUCT_NAME: Naam
+        PRODUCT_BUNDLE_IDENTIFIER: in.hnhotels.naam
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Naam
+        CFBundleName: Naam
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIUserInterfaceStyle: Dark
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
