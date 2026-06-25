@@ -16,6 +16,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { callOpus, callSonnet, callHaiku, parseJsonOutput } from '../../_shared/anthropic.js';
+import { callOpenAI } from '../../_shared/openai.js';
 
 const WORKER_NAME = 'wealth-verdict';
 
@@ -54,7 +55,7 @@ async function logCronEnd(db, id, status, rows, err) {
 function buildEngineOnlyVerdict(ctx, topPicks) {
   const dims = ctx.dim_health_pct || {};
   const deadDims = Object.values(dims).filter(p => p < 10).length;
-  const maxScore = topPicks?.[0]?.score || 0;
+  const maxScore = topPicks?.[0]?.composite_score || topPicks?.[0]?.score || 0;
   const regime = ctx.regime || 'unknown';
   const topPick = topPicks?.[0];
 
@@ -969,9 +970,13 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
     cache_ttl_ms: 8 * 3600 * 1000,
   };
   const tiers = [
-    { name: 'opus',   call: callOpus },
-    { name: 'sonnet', call: callSonnet },
-    { name: 'haiku',  call: callHaiku },
+    { name: 'opus',   call: callOpus,   provider: 'anthropic' },
+    { name: 'sonnet', call: callSonnet, provider: 'anthropic' },
+    { name: 'haiku',  call: callHaiku,  provider: 'anthropic' },
+    // OpenAI fallback (gpt-4.1, JSON mode): fires when every Anthropic tier fails
+    // (bad/expired key, overload, malformed JSON). This is what keeps the daily pick
+    // alive instead of collapsing to the engine-only SIT_OUT default.
+    { name: 'openai-gpt-4.1', call: callOpenAI, provider: 'openai' },
   ];
   // Errors we should fall through on (Anthropic-side / transient):
   const TRANSIENT = /overloaded|529|503|timeout|rate.?limit|service.?unavailable|connection|ECONNRESET|fetch failed/i;
@@ -981,7 +986,17 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
   let attempts = [];
   let tierUsed = null;
 
+  // Fallback policy: try each tier in order; on ANY Anthropic failure fall through to
+  // the next, and ultimately to OpenAI, before the deterministic engine-only verdict.
+  // A confirmed Anthropic AUTH failure skips the remaining Anthropic tiers (they share
+  // the same key, so they'd fail identically) and jumps straight to OpenAI.
+  let anthropicDead = false;
+  const AUTH_DEAD = /authentication|invalid x-api-key|permission|unauthorized|401|403/i;
   for (const tier of tiers) {
+    if (tier.provider === 'anthropic' && anthropicDead) {
+      attempts.push({ tier: tier.name, status: 'skipped_anthropic_auth_dead' });
+      continue;
+    }
     try {
       const r = await tier.call(env, callOpts);
       const p = parseJsonOutput(r.text);
@@ -999,8 +1014,10 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
     } catch (e) {
       const msg = (e.message || String(e)).slice(0, 200);
       attempts.push({ tier: tier.name, status: 'failed', error: msg });
-      // Only continue down the chain on transient errors. Auth/quota/cap errors stop here.
-      if (!TRANSIENT.test(msg)) break;
+      if (tier.provider === 'anthropic' && AUTH_DEAD.test(msg)) anthropicDead = true;
+      // Any failure (transient OR hard) advances to the next tier; OpenAI is the
+      // final LLM attempt before the engine-only fallback.
+      continue;
     }
   }
 
@@ -1663,7 +1680,7 @@ async function fireEodLearningAudit(env) {
 // ═══════════════════════════════════════════════════════════════════════════
 const CRON_DISPATCH = {
   '0 2 * * 1-5':              { name: 'pre_market', fn: composePreMarketBriefing },  // 07:30 IST
-  '0 3 * * 1-5':              { name: 'compose',    fn: composeVerdict },        // 08:30 IST
+  '10 4 * * 1-5':             { name: 'compose',    fn: composeVerdict },        // 09:40 IST (after first live signal batch ~09:30)
   '*/5 * * * *':              { name: 'triage',     fn: triageAlerts },          // every 5 min
   // TZ-7 fix May 6 2026 evening: invalidator now covers EXACTLY 09:15-15:30 IST.
   // 3 dispatch entries → same handler. Was just '0,15,30,45 4-9' (09:30-15:15 IST).
