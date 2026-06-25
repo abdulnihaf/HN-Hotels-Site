@@ -4,6 +4,8 @@ import SwiftUI
 final class NazarCockpitModel: ObservableObject {
     @Published var metrics: NazarMetrics?
     @Published var flags: NazarFlags?
+    @Published var health: NazarHealth?
+    @Published var counts: NazarCounts?
     @Published var status: String = "Loading…"
     @Published var isLoading = false
 
@@ -24,6 +26,8 @@ final class NazarCockpitModel: ObservableObject {
         isLoading = true
         if let m = try? await NazarClient.shared.fetchMetrics() { metrics = m }
         if let f = try? await NazarClient.shared.fetchFlags(includeHistory: true) { flags = f }
+        if let h = try? await NazarClient.shared.fetchHealth() { health = h }
+        if let c = try? await NazarClient.shared.fetchCounts() { counts = c }
         status = metrics == nil ? "Connecting…" : "Updated"
         isLoading = false
     }
@@ -47,6 +51,7 @@ struct NazarIntelligenceView: View {
                         if model.isLoading { ProgressView().tint(HK.accent).scaleEffect(0.6) }
                     }
                     if brand == "NCH" { nch(b) } else { he(b) }
+                if let h = model.health { healthCard(h) }
                 } else {
                     loadingCard
                 }
@@ -131,6 +136,72 @@ struct NazarIntelligenceView: View {
                            value: "\(b.occupancyNow ?? 0)", sub: "peak \(b.occupancyPeakToday ?? 0)", trust: b.occTrust)
             }
         }
+    }
+
+    // MARK: — System health card (truth layer: frozen cams, network rigidity, sentinel)
+    @ViewBuilder
+    private func healthCard(_ h: NazarHealth) -> some View {
+        let frozen = h.frameCache?.frozen ?? []
+        let net = h.networkRigidity
+        let sentinel = h.sentinel
+        let frigateOK = h.frigate?.reachable ?? (h.frigate?.cameras != nil)
+        let networkOK = net?.status == "ok"
+        let allGood = frozen.isEmpty && frigateOK && networkOK && (sentinel?.state?.frozen ?? []).isEmpty
+
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: allGood ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(allGood ? HK.ok : HK.warn)
+                Text("System Health").font(.system(size: 14, weight: .semibold)).foregroundColor(HK.text)
+                Spacer()
+                Text(healthStatusText(h)).font(.system(size: 11)).foregroundColor(HK.textFaint)
+            }
+
+            HStack(spacing: 10) {
+                healthPill("Frigate", frigateOK ? "live" : "down", frigateOK ? HK.ok : HK.error)
+                healthPill("Network", networkOK ? "ok" : (net?.status ?? "–"), networkOK ? HK.ok : HK.warn)
+                if !frozen.isEmpty {
+                    healthPill("Frozen", "\(frozen.count)", HK.error)
+                }
+                if let anomalies = net?.anomalies, !anomalies.isEmpty {
+                    healthPill("Anomalies", "\(anomalies.count)", HK.error)
+                }
+            }
+
+            if !frozen.isEmpty {
+                Text("Frozen cameras: \(frozen.joined(separator: ", "))")
+                    .font(.system(size: 11)).foregroundColor(HK.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let anomalies = net?.anomalies, !anomalies.isEmpty {
+                ForEach(Array(anomalies.prefix(2).enumerated()), id: \.offset) { _, a in
+                    Text("\(a.type ?? "?") on \(a.ip ?? "?")")
+                        .font(.system(size: 11)).foregroundColor(HK.textDim)
+                }
+            }
+            if let last = sentinel?.state?.lastAction, !last.isEmpty {
+                Text("Sentinel: \(last)").font(.system(size: 11)).foregroundColor(HK.textFaint)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(HK.card))
+    }
+
+    private func healthStatusText(_ h: NazarHealth) -> String {
+        if h.ok == true { return "ok" }
+        if let frozen = h.frameCache?.frozen, !frozen.isEmpty { return "\(frozen.count) frozen" }
+        if h.networkRigidity?.status != "ok" { return h.networkRigidity?.status ?? "check" }
+        return "check"
+    }
+
+    private func healthPill(_ label: String, _ value: String, _ color: Color) -> some View {
+        HStack(spacing: 4) {
+            Text(label).font(.system(size: 10)).foregroundColor(HK.textFaint)
+            Text(value).font(.system(size: 10, weight: .semibold)).foregroundColor(color)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Capsule().fill(color.opacity(0.12)))
     }
 
     // MARK: — Reusable bits

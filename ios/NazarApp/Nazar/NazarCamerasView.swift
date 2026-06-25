@@ -1,9 +1,23 @@
 import SwiftUI
 import WebKit
 
+@MainActor
+final class NazarCamerasModel: ObservableObject {
+    @Published var counts: NazarCounts?
+
+    func load() async {
+        if let c = try? await NazarClient.shared.fetchCounts() { counts = c }
+    }
+
+    func trust(for camId: String) -> String? {
+        counts?.cameras?[camId]?.trustVerdict
+    }
+}
+
 struct NazarCamerasView: View {
     @State private var brand: String = "HE"
     @State private var selectedCam: NazarCamera?
+    @StateObject private var model = NazarCamerasModel()
 
     private var filtered: [NazarCamera] { allCameras.filter { $0.brand == brand } }
 
@@ -13,7 +27,7 @@ struct NazarCamerasView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(filtered) { cam in
-                        CameraThumbView(cam: cam)
+                        CameraThumbView(cam: cam, trust: model.trust(for: cam.id))
                             .onTapGesture { selectedCam = cam }
                     }
                 }
@@ -24,6 +38,8 @@ struct NazarCamerasView: View {
         .fullScreenCover(item: $selectedCam) { cam in
             NazarLiveFullscreen(startCam: cam) { selectedCam = nil }
         }
+        .task { await model.load() }
+        .refreshable { await model.load() }
     }
 
     private var brandPicker: some View {
@@ -46,8 +62,18 @@ struct NazarCamerasView: View {
 // MARK: — Thumbnail card (auto-loads a live JPEG snapshot)
 struct CameraThumbView: View {
     let cam: NazarCamera
+    let trust: String?
     @State private var image: UIImage?
     @State private var loadError = false
+
+    private var trustColor: Color {
+        switch trust {
+        case "LIVE": return HK.ok
+        case "STALE", "FROZEN": return HK.error
+        case "BACKUP": return HK.warn
+        default: return HK.textFaint
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -67,11 +93,19 @@ struct CameraThumbView: View {
             .clipped()
 
             VStack(alignment: .leading, spacing: 2) {
-                if cam.isDead {
-                    Text("DEAD → BACKUP")
-                        .font(.system(size: 8, weight: .black)).foregroundColor(HK.error)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(Capsule().fill(HK.error.opacity(0.25)))
+                HStack(spacing: 4) {
+                    if cam.isDead {
+                        Text("DEAD → BACKUP")
+                            .font(.system(size: 8, weight: .black)).foregroundColor(HK.error)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(Capsule().fill(HK.error.opacity(0.25)))
+                    }
+                    if let t = trust {
+                        Text(t)
+                            .font(.system(size: 8, weight: .black)).foregroundColor(trustColor)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(Capsule().fill(trustColor.opacity(0.25)))
+                    }
                 }
                 Text(cam.label)
                     .font(.system(size: 11, weight: .semibold)).foregroundColor(HK.text).lineLimit(1)

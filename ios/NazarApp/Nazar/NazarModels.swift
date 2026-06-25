@@ -246,3 +246,122 @@ struct NazarTrendPoint: Codable, Identifiable {
     let t: String?
     let v: Int?
 }
+
+// MARK: - System health (GET /nz/health)
+
+struct NazarHealth: Codable {
+    let ok: Bool?
+    let asOf: String?
+    let frameCache: NazarFrameCacheHealth?
+    let frigate: NazarFrigateHealth?
+    let sentinel: NazarSentinelState?
+    let networkRigidity: NazarNetworkRigidity?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case asOf = "as_of"
+        case frameCache = "frame_cache"
+        case frigate, sentinel
+        case networkRigidity = "network_rigidity"
+    }
+}
+
+struct NazarFrameCacheHealth: Codable {
+    let live: Int?
+    let frozen: [String]?
+    let total: Int?
+}
+
+struct NazarFrigateHealth: Codable {
+    let reachable: Bool?
+    let cameras: [String: NazarFrigateCameraHealth]?
+}
+
+struct NazarFrigateCameraHealth: Codable {
+    let fps: Double?
+    let pid: Int?
+}
+
+struct NazarSentinelState: Codable {
+    let updated: String?
+    let generatedAt: String?
+    let dryRun: Bool?
+    let state: NazarSentinelDetails?
+
+    enum CodingKeys: String, CodingKey {
+        case updated
+        case generatedAt = "generated_at"
+        case dryRun = "dry_run"
+        case state
+    }
+}
+
+struct NazarSentinelDetails: Codable {
+    let frozen: [String]?
+    let recovered: [String]?
+    let lastAction: String?
+    let lastActionAt: String?
+    let cooldownUntil: String?
+
+    enum CodingKeys: String, CodingKey {
+        case frozen, recovered
+        case lastAction = "last_action"
+        case lastActionAt = "last_action_at"
+        case cooldownUntil = "cooldown_until"
+    }
+}
+
+struct NazarNetworkRigidity: Codable {
+    let status: String?   // ok | warning | critical
+    let cameraSubnet: String?
+    let interface: String?
+    let hostsSeen: Int?
+    let nvrReachable: Bool?
+    let nvrMac: String?
+    let anomalies: [NazarNetworkAnomaly]?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case cameraSubnet = "camera_subnet"
+        case interface
+        case hostsSeen = "hosts_seen"
+        case nvrReachable = "nvr_reachable"
+        case nvrMac = "nvr_mac"
+        case anomalies
+    }
+}
+
+struct NazarNetworkAnomaly: Codable {
+    let type: String?
+    let ip: String?
+    let mac: String?
+    let severity: String?
+}
+
+// MARK: - Per-camera counts / trust (GET /nz/counts)
+
+struct NazarCounts: Codable {
+    let ok: Bool?
+    let updated: String?
+    let liveCount: Int?
+    let frozen: [String]?
+    let cameras: [String: NazarCameraCount]?
+
+    enum CodingKeys: String, CodingKey {
+        case ok, updated
+        case liveCount = "live_count"
+        case frozen, cameras
+    }
+}
+
+struct NazarCameraCount: Codable {
+    let now: Int?
+    let today: Int?
+    let live: Bool?
+    let trustVerdict: String?
+
+    enum CodingKeys: String, CodingKey {
+        case now, today, live
+        case trustVerdict = "trust_verdict"
+    }
+}

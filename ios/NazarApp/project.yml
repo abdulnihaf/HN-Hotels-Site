@@ -20,7 +20,7 @@ targets:
       properties:
         CFBundleDisplayName: Nazar
         CFBundleIconName: AppIcon
-        CFBundleVersion: "2"
+        CFBundleVersion: "3"
         CFBundleShortVersionString: "1.0"
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: "Unlock Nazar with Face ID instead of typing your PIN."

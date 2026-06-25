@@ -70,6 +70,18 @@ actor NazarClient {
         return try JSONDecoder().decode(NazarMetrics.self, from: data)
     }
 
+    func fetchHealth() async throws -> NazarHealth {
+        guard let url = URL(string: "\(NazarURL.appBase)/nz/health?_=\(Int(Date().timeIntervalSince1970))") else { throw NazarError.badURL }
+        let data = try await get(url)
+        return try JSONDecoder().decode(NazarHealth.self, from: data)
+    }
+
+    func fetchCounts() async throws -> NazarCounts {
+        guard let url = URL(string: "\(NazarURL.appBase)/nz/counts?_=\(Int(Date().timeIntervalSince1970))") else { throw NazarError.badURL }
+        let data = try await get(url)
+        return try JSONDecoder().decode(NazarCounts.self, from: data)
+    }
+
     // MARK: - Flag verdicts
 
     func confirmFlag(code: String, verdict: String, label: String?) async throws {
