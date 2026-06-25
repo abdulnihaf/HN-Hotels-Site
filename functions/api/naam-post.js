@@ -15,6 +15,7 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 import { callSonnet, parseJsonOutput } from './_lib/anthropic.js';
+import { compositeImage } from './_lib/naam-image-compositor.js';
 
 const OWNER_PINS = new Set(['0305', '1918']);
 const BRANDS = new Set(['HE', 'NCH']);
@@ -117,8 +118,8 @@ HARD RULES:
 - Spell kebab as "${b.spell}" everywhere.
 - ONE clear CTA per channel. No multiple CTAs.
 - Hashtags must be channel-appropriate (IG gets 8-12; FB gets 3-5; GBP gets 0-2).
-- IG caption: hook on its own first line, then body, then CTA, then hashtags.
-- FB caption: slightly longer, conversational, one CTA, few hashtags.
+- IG: "hook" on its own first line; "caption" is the body ONLY (do not repeat the hook or CTA or hashtags in it); then CTA line; then hashtags.
+- FB: "hook" as the opening; "caption" is the body ONLY (do not repeat hook/CTA/hashtags); one CTA; few hashtags.
 - GBP post: short summary (max 1500 chars), one CTA, no heavy hashtags.
 - Do not invent offers, prices, or timings. Use only what the idea provides.
 Output ONLY valid JSON in this exact shape:
@@ -214,6 +215,8 @@ function publicImageUrl(env, brand, postId, aspectKey) {
 
 async function renderImages(env, row) {
   const idea = safeParse(row.idea_json) || {};
+  const copy = safeParse(row.copy_json) || {};
+  const hook = copy.ig?.hook || copy.fb?.hook || idea.item || idea.theme || '';
   const images = {};
   const preconditions = [];
   const r2 = env.NAAM_CREATIVE;
@@ -225,9 +228,16 @@ async function renderImages(env, row) {
   }
   for (const aspect of ASPECTS) {
     try {
-      const { buffer } = await generateImageBuffer(env, row.brand, idea, aspect);
+      const { buffer: rawBuffer } = await generateImageBuffer(env, row.brand, idea, aspect);
+      const framed = await compositeImage(env, {
+        brand: row.brand,
+        width: aspect.width,
+        height: aspect.height,
+        imageBuffer: rawBuffer,
+        hook,
+      });
       const key = `naam/${row.brand.toLowerCase()}/${row.id}/${aspect.key}.png`;
-      await r2.put(key, buffer, { httpMetadata: { contentType: 'image/png' } });
+      await r2.put(key, framed, { httpMetadata: { contentType: 'image/png' } });
       images[aspect.key] = publicImageUrl(env, row.brand, row.id, aspect.key);
     } catch (e) {
       images[aspect.key] = { error: e.message };
@@ -238,21 +248,21 @@ async function renderImages(env, row) {
 }
 
 async function metaAccessToken(env, brand) {
-  return env[`${brand}_META_PAGE_ACCESS_TOKEN`] || null;
+  return env[`${brand}_META_ACCESS_TOKEN_PAGE_ACCESS_TOKEN`] || null;
 }
 function metaPageId(env, brand) {
-  return env[`${brand}_META_PAGE_ID`] || null;
+  return env[`${brand}_META_FACEBOOK_FB_PAGE_ID_GRAPH_API`] || null;
 }
 function metaIgId(env, brand) {
-  return env[`${brand}_META_IG_ACCOUNT_ID`] || null;
+  return env[`${brand}_META_INSTAGRAM_IG_BUSINESS_ACCOUNT_ID`] || null;
 }
 function graphVersion(env) {
-  return env.META_GRAPH_API_VERSION || 'v21.0';
+  return env.HN_HOTELS_SHARED_META_GRAPH_API_VERSION || 'v21.0';
 }
 
 async function metaTokenHealth(env, brand) {
   const token = await metaAccessToken(env, brand);
-  const userToken = env.META_USER_ACCESS_TOKEN;
+  const userToken = env.HN_HOTELS_SHARED_META_BUSINESS_META_USER_TOKEN;
   if (!token || !userToken) return { ok: false, reason: 'page or user token missing' };
   try {
     const r = await fetch(`https://graph.facebook.com/${graphVersion(env)}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(userToken)}`);
@@ -290,7 +300,7 @@ async function postInstagram(env, brand, copy, imageUrl) {
   if (!imageUrl || !imageUrl.startsWith('https://')) {
     return { ok: false, error: 'IG requires a public https image URL' };
   }
-  const caption = `${copy.ig.hook}\n\n${copy.ig.caption}\n\n${copy.ig.cta}\n\n${copy.ig.hashtags}`;
+  const caption = `${copy.ig.hook || ''}\n\n${copy.ig.caption || ''}\n\n${copy.ig.cta || ''}\n\n${copy.ig.hashtags || ''}`.trim();
   const create = await fetch(`https://graph.facebook.com/${graphVersion(env)}/${igId}/media`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -388,10 +398,14 @@ async function publishPost(env, row, dryRun) {
   if (dryRun) {
     for (const ch of channels) {
       const imageUrl = chooseImageUrl(images, ch);
+      let text = '';
+      if (ch === 'gbp') text = copy.gbp?.summary || '';
+      else if (ch === 'ig') text = `${copy.ig?.hook || ''}\n\n${copy.ig?.caption || ''}\n\n${copy.ig?.cta || ''}\n\n${copy.ig?.hashtags || ''}`.trim();
+      else text = `${copy.fb?.hook || ''}\n\n${copy.fb?.caption || ''}\n\n${copy.fb?.cta || ''}\n\n${copy.fb?.hashtags || ''}`.trim();
       payloads[ch] = {
         channel: ch,
         image_url: imageUrl,
-        caption_or_summary: ch === 'gbp' ? copy.gbp?.summary : (ch === 'ig' ? `${copy.ig?.hook}\n${copy.ig?.caption}` : copy.fb?.caption),
+        caption_or_summary: text,
       };
       result[ch] = { ok: true, dry_run: true, payload: payloads[ch] };
     }
@@ -473,10 +487,13 @@ async function renderPost(DB, env, body) {
 
 async function publishAction(DB, env, body) {
   const postId = str(body.id, 80);
-  const dryRun = !!body.dry_run;
+  let dryRun = !!body.dry_run;
   if (!postId) return { status: 400, data: { ok: false, error: 'id required' } };
   const row = await DB.prepare('SELECT * FROM naam_posts WHERE id = ?').bind(postId).first();
   if (!row) return { status: 404, data: { ok: false, error: 'post not found' } };
+  // Live posting is gated by env.POSTING_LIVE until the owner explicitly enables it.
+  const liveEnabled = env.POSTING_LIVE === 'true';
+  if (!dryRun && !liveEnabled) dryRun = true;
   if (!dryRun && row.status !== 'rendered') {
     return { status: 409, data: { ok: false, error: `post status is ${row.status}; render first` } };
   }
@@ -487,7 +504,7 @@ async function publishAction(DB, env, body) {
     await DB.prepare(`UPDATE naam_posts SET result_json = ?, status = ?, posted_at = COALESCE(?, posted_at) WHERE id = ?`)
       .bind(JSON.stringify(result), status, postedAt, postId).run();
   }
-  return { status: 200, data: { ok, dry_run: dryRun, result, status } };
+  return { status: 200, data: { ok, dry_run: dryRun, live_enabled: liveEnabled, result, status } };
 }
 
 async function cronAction(DB, env, body, url) {
@@ -512,11 +529,12 @@ async function cronAction(DB, env, body, url) {
       }
       step = 'publish';
       const fresh = await DB.prepare('SELECT * FROM naam_posts WHERE id = ?').bind(row.id).first();
-      const pub = await publishPost(env, fresh, false);
-      const status = pub.ok ? 'posted' : 'failed';
+      const liveEnabled = env.POSTING_LIVE === 'true';
+      const pub = await publishPost(env, fresh, !liveEnabled);
+      const status = pub.ok ? (liveEnabled ? 'posted' : 'approved') : 'failed';
       await DB.prepare(`UPDATE naam_posts SET result_json = ?, status = ?, posted_at = ? WHERE id = ?`)
-        .bind(JSON.stringify(pub.result), status, pub.ok ? nowIST() : null, row.id).run();
-      results.push({ id: row.id, ok: pub.ok, step, result: pub.result });
+        .bind(JSON.stringify(pub.result), status, (pub.ok && liveEnabled) ? nowIST() : null, row.id).run();
+      results.push({ id: row.id, ok: pub.ok, step, live_enabled: liveEnabled, result: pub.result });
     } catch (e) {
       results.push({ id: row.id, ok: false, step, error: e.message });
     }

@@ -41,9 +41,10 @@ KITE_API_KEY = "85yfvys3t9t66l35"
 WA_HE_WABA_ID = "27110385081896362"
 WA_HE_PHONE_ID = "970365416152029"
 WA_PHONE_ID = "970365416152029"
-# Public image URL base for NAAM_CREATIVE. Use the CDN/custom domain if configured,
-# otherwise the Pages function proxy at /api/naam-creative-asset?key= serves objects.
+# Naam organic posting — public image proxy base (must end with ?key= for /api/naam-creative-asset)
 NAAM_CREATIVE_PUBLIC_URL = "https://hnhotels.in/api/naam-creative-asset?key="
+# Live posting gate: set POSTING_LIVE=true secret only when owner is ready to publish for real.
+POSTING_LIVE = "false"
 
 [[d1_databases]]
 binding = "DB"
