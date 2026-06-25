@@ -36,3 +36,7 @@ ios/HNHukumControl/*.xcodeproj/
 ios/HNHukumControl/HukumWatch/HukumWatchConfig.swift
 ios/WealthApp/*.xcodeproj/
 ios/WealthApp/Wealth/Secrets.swift
+ios/AnbarApp/*.xcodeproj/
+ios/TakhtApp/*.xcodeproj/
+ios/MahfazaApp/*.xcodeproj/
+ios/DarbarApp/*.xcodeproj/
