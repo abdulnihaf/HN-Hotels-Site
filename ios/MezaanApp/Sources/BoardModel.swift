@@ -23,48 +23,48 @@ final class BoardModel: ObservableObject {
 
     func refresh() async {
         await Net.resolve()
-        do {
-            async let lanesT: LanesResponse = Net.get("/api/lanes")
-            async let jobsT: JobsResponse   = Net.get("/api/jobs?limit=30")
-            let approvals = await loadApprovals()
-            let lanes = try await lanesT
-            let jobs  = try await jobsT
-
-            let laneList = lanes.lanes ?? []
-            let jobList  = jobs.jobs ?? []
-
-            var st = BoardState()
-            st.laneCount = laneList.count
-            st.needsYou  = approvals
-            st.inFlight  = jobList.filter { active.contains(($0.status ?? "").lowercased()) }
-            st.doneToday = jobList.filter { ($0.status ?? "") == "done" && isToday($0.finished_at ?? $0.created_at) }
-                                  .sorted { ($0.finished_at ?? 0) > ($1.finished_at ?? 0) }
-
-            let activeAlias = (lanes.active ?? "").lowercased()
-            st.chain = chainSpec.map { spec in
-                let lane = laneList.first { l in
-                    let hay = [(l.workflow ?? ""), (l.alias ?? ""), (l.title ?? "")].map { $0.lowercased() }
-                    return spec.keys.contains { k in hay.contains { $0.contains(k) } }
-                }
-                let working = st.inFlight.contains { j in
-                    let t = (Fmt.jobTitle(j)).lowercased()
-                    return spec.keys.contains { t.contains($0) }
-                }
-                let isActive = spec.keys.contains { activeAlias.contains($0) }
-                return ChamberHealth(
-                    name: spec.name,
-                    engine: lane?.app,
-                    present: lane != nil,
-                    active: isActive,
-                    working: working)
-            }
-            st.updated = Date()
-            self.board = st
-            self.reachable = true
-            self.statusLine = "\(st.needsYou.count) need you · \(st.inFlight.count) in flight · \(laneList.count) lanes"
-        } catch {
+        // Essential + fast endpoints (jobs + approvals) render the board on their own.
+        // /api/lanes is the heavy one (cold cache parses 35 transcripts) — never block on it.
+        guard let jobs: JobsResponse = try? await Net.get("/api/jobs?limit=30") else {
             self.reachable = false
             self.statusLine = "Hukum bridge unreachable — is Tailscale on?"
+            return
+        }
+        let approvals = await loadApprovals()
+        let jobList = jobs.jobs ?? []
+        var st = board ?? BoardState()
+        st.needsYou  = approvals
+        st.inFlight  = jobList.filter { active.contains(($0.status ?? "").lowercased()) }
+        st.doneToday = jobList.filter { ($0.status ?? "") == "done" && isToday($0.finished_at ?? $0.created_at) }
+                              .sorted { ($0.finished_at ?? 0) > ($1.finished_at ?? 0) }
+        st.updated = Date()
+        self.reachable = true
+        self.board = st
+        self.statusLine = "\(st.needsYou.count) need you · \(st.inFlight.count) in flight"
+
+        // Chain health from lanes — best effort; a slow/cold lanes fetch never blanks the board.
+        if let lanes: LanesResponse = try? await Net.get("/api/lanes") {
+            let laneList = lanes.lanes ?? []
+            var s2 = self.board ?? st
+            s2.laneCount = laneList.count
+            s2.chain = composeChain(laneList, activeAlias: (lanes.active ?? "").lowercased(), inFlight: s2.inFlight)
+            self.board = s2
+            self.statusLine = "\(s2.needsYou.count) need you · \(s2.inFlight.count) in flight · \(laneList.count) lanes"
+        }
+    }
+
+    private func composeChain(_ laneList: [Lane], activeAlias: String, inFlight: [Job]) -> [ChamberHealth] {
+        chainSpec.map { spec in
+            let lane = laneList.first { l in
+                let hay = [(l.workflow ?? ""), (l.alias ?? ""), (l.title ?? "")].map { $0.lowercased() }
+                return spec.keys.contains { k in hay.contains { $0.contains(k) } }
+            }
+            let working = inFlight.contains { j in
+                let t = Fmt.jobTitle(j).lowercased()
+                return spec.keys.contains { t.contains($0) }
+            }
+            let isActive = spec.keys.contains { activeAlias.contains($0) }
+            return ChamberHealth(name: spec.name, engine: lane?.app, present: lane != nil, active: isActive, working: working)
         }
     }
 
