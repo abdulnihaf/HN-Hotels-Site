@@ -92,8 +92,8 @@ function render(d){
  }
  var ar=d.areas||{};
  document.getElementById('cards').innerHTML=
-   areaCard('First floor',ar['1F'],'captain · review-only today')+
-   areaCard('Ground floor',ar['GF'],'cash · review-only')+
+   areaCard('First floor',ar['1F'],'captain · live')+
+   areaCard('Ground floor',ar['GF'],'cash · live')+
    (ar.counter?('<div class="acard"><div class=top><span class=nm>Counter / parcel</span><span class=lane>not counted</span></div><div class=note>'+esc(ar.counter.note||'')+'</div></div>'):'');
  var cs=(d.candidates||[]);
  var secs=document.getElementById('secs');
@@ -113,8 +113,7 @@ function render(d){
   '<b>How to read this:</b> the camera independently counts real dine-in sittings (staff and the counter are left out). '+
   'A number under “to check” is a prompt to confirm the bill was entered — <b>not</b> proof money was missed. '+
   'These figures stay <b>calibrating</b> until a hand-count confirms them.<br><br>'+
-  '<b>First floor</b> is the only area that could prove a miss, but its proving camera is down today, so it is review-only. '+
-  '<b>Ground floor</b> bills (cash) can’t be split from takeaway, so it is review-only too. '+
+  '<b>First floor</b> and <b>ground floor</b> are each counted live on their own camera. A number under “to check” means the camera held a sitting the till hasn’t matched yet — confirm the bill was entered. '+
   'Full photo proof stays in the owner’s app.'+
   (d.roster_count?('<br><br>'+d.roster_count+' staff on today’s roster (excluded from the count).'):'');
 }
