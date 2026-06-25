@@ -186,7 +186,9 @@ Roles being hired for (from Darbar): majorly **cleaners, dishwashers, service st
 - **Data:** 30 graded Bangalore manpower suppliers seeded from deep research (`data/hiring-suppliers-seed.sql`, generator `scripts/seed-suppliers-from-research.py`). 26 callable, 3 grade-A (Sree Manpower 9620301447, Whitehand 9945741572, S&IB 9836283183), mobile-preferred. Honest gap: best role-fit firms are south BLR; central ones do cleaning only → expect 2–3 vendors. Numbers are research leads — verify on the call.
 - **iOS:** `DarbarHiringTab.swift` (new) + 1-line tab in `DarbarView.swift` + model/client/app-model methods. **BUILD SUCCEEDED** (5-tab chain compiles; Today/Attendance/Pay/Roster untouched).
 - **Exclusion verified live:** roster JOIN returns 23 active-staff phones for the flow-#2 do-not-message set.
-- **Still to do:** deploy `hiring-darbar.js` (CI/main) → verify endpoint live; ship Darbar app to TestFlight; build flow #2 (manager-referral WhatsApp — needs commission ₹ + manager audience).
+- **Deployed + verified live:** PR #462 merged → `hiring-darbar.js` live on darbar.hnhotels.in (curl-verified: overview 30/26/3A, exclusion_count 23, suppliers grade=A returns the 3 with mobiles).
+- **iOS shipped:** Darbar **TestFlight build 7 VALID**, attached to "HN Internal" group (app id 6782544979) — owner taps Update. (No human gate; ASC record pre-existed.)
+- **Still to do:** owner phone-test the Hiring tab; build **flow #2** (manager-referral WhatsApp — needs commission ₹/joined-hire + a manager audience: research or owner-provided); then Phase-2 (Apna/FB posting on the box, only if free channels miss).
 
 ### 8.7 No-regression checklist (every change)
 - iOS: add tab only; full 4-tab build still compiles + runs before "done"; bump nothing in existing tabs.
