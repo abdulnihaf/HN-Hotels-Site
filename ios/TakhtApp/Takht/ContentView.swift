@@ -42,23 +42,27 @@ struct HomeView: View {
     private var accent: Color { model.accent }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollView {
-                VStack(spacing: 12) {
-                    switch me.scope.role {
-                    case .cashier, .manager: settlementBody(canFix: me.scope.canFix, canSettle: me.scope.canSettle)
-                    case .counter:           settlementBody(canFix: false, canSettle: false)
-                    case .runner:            RunnerHome(accent: accent)
-                    case .captain:           CaptainHome(accent: accent)
-                    case .none:              noSurface
+        NavigationStack {
+            VStack(spacing: 0) {
+                header
+                ScrollView {
+                    VStack(spacing: 12) {
+                        switch me.scope.role {
+                        case .cashier, .manager: settlementBody(canFix: me.scope.canFix, canSettle: me.scope.canSettle)
+                        case .counter:           settlementBody(canFix: false, canSettle: false)
+                        case .runner:            RunnerHome(accent: accent)
+                        case .captain:           CaptainHome(accent: accent)
+                        case .none:              noSurface
+                        }
                     }
+                    .padding(.horizontal, 16).padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16).padding(.bottom, 24)
+                .scrollIndicators(.hidden)
+                .refreshable { await model.refresh() }
             }
-            .scrollIndicators(.hidden)
-            .refreshable { await model.refresh() }
+            .navigationBarHidden(true)
         }
+        .tint(accent)
     }
 
     // ── Header: who, role, brand, lock ──
@@ -111,8 +115,29 @@ struct HomeView: View {
         upiCard
         chaiCard
         sessionCard
-        if canFix { fixCard }
+        if canFix { fixLink }
         if canSettle { settleCard }
+    }
+
+    // ── The SOLVE flow entry — tap to fix, not just to read ──
+    private var fixLink: some View {
+        NavigationLink {
+            FixFlowView(model: model, accent: accent)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "wrench.and.screwdriver.fill").font(.system(size: 14)).foregroundStyle(accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fix what's wrong").font(.system(size: 14, weight: .semibold)).foregroundStyle(TakhtTheme.text)
+                    Text("One tap per error — never blocks the day.")
+                        .font(.system(size: 12)).foregroundStyle(TakhtTheme.textDim)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(TakhtTheme.textFaint)
+            }
+            .padding(13).frame(maxWidth: .infinity, alignment: .leading)
+            .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(accent.opacity(0.3), lineWidth: 1))
+        }
     }
 
     private var noSurface: some View {
@@ -254,12 +279,6 @@ struct HomeView: View {
         }
     }
 
-    // ── Fix (built, WRITE gated) ──
-    private var fixCard: some View {
-        gatedAction(icon: "wrench.and.screwdriver.fill",
-                    title: "Fix what's wrong",
-                    sub: "One tap per error — never blocks the day. Writes to POS; switched on with owner approval.")
-    }
     private var settleCard: some View {
         gatedAction(icon: "checkmark.seal.fill",
                     title: "Settle this shift",

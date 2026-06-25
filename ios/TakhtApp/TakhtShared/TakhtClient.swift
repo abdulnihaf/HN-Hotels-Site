@@ -45,6 +45,42 @@ actor TakhtClient {
         return try decoder.decode(TakhtShiftResponse.self, from: data)
     }
 
+    // ── SOLVE FLOW (auth = the person's Darbar PIN) ──
+    func openErrors(host: String, pin: String) async throws -> TakhtErrorsResponse {
+        let data = try await request(base: host, path: "/api/rectify",
+                                     query: ["action": "get-all-errors", "pin": pin], timeout: 25)
+        return try decoder.decode(TakhtErrorsResponse.self, from: data)
+    }
+
+    func applyFix(host: String, pin: String, errorId: Int, fix: TakhtFix) async throws -> TakhtFixResponse {
+        var fixData: [String: Any] = [:]
+        if let s = fix.runnerSlot { fixData["runner_slot"] = s }
+        if let m = fix.paymentMethodId { fixData["payment_method_id"] = m }
+        let body: [String: Any] = ["pin": pin, "error_id": errorId, "fix_action": fix.action, "fix_data": fixData]
+        let data = try await postJSON(base: host, path: "/api/rectify", query: ["action": "fix-error"], body: body)
+        return try decoder.decode(TakhtFixResponse.self, from: data)
+    }
+
+    private func postJSON(base: String, path: String, query: [String: String], body: [String: Any]) async throws -> Data {
+        guard var c = URLComponents(string: base) else { throw TakhtError.badURL }
+        c.path = path
+        c.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        guard let url = c.url else { throw TakhtError.badURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            // rectify returns JSON error bodies with non-2xx — surface the body, not just the code.
+            if !data.isEmpty { return data }
+            throw TakhtError.server("HTTP \(http.statusCode)")
+        }
+        if data.isEmpty { throw TakhtError.server("Empty response") }
+        return data
+    }
+
     private func request(base: String, path: String, query: [String: String] = [:],
                          timeout: TimeInterval = 15) async throws -> Data {
         guard var c = URLComponents(string: base) else { throw TakhtError.badURL }

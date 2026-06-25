@@ -19,7 +19,13 @@ final class TakhtAppModel: ObservableObject {
     @Published var isRefreshing = false
     @Published var resuming = false
 
+    // ── Solve flow (the leak map → one-tap fix) ──
+    enum FixLoad: Equatable { case idle, loading, ready, denied(String), failed(String) }
+    @Published var fixState: FixLoad = .idle
+    @Published var openErrors: [TakhtOpenError] = []
+
     private var pollTask: Task<Void, Never>?
+    private var pin: String? { TakhtAuth.get() }
 
     var unlocked: Bool { identity != nil }
     var accent: Color { (workingBrand ?? identity?.brand)?.accent ?? TakhtTheme.accent }
@@ -121,6 +127,40 @@ final class TakhtAppModel: ObservableObject {
     }
 
     var handTotal: Double { balance?.total ?? 0 }
+
+    // Load the live open errors for this brand, authed by the person's Darbar PIN.
+    func loadErrors() async {
+        guard let host = dataHost, let pin = pin else { fixState = .denied("Not signed in"); return }
+        fixState = .loading
+        do {
+            let r = try await TakhtClient.shared.openErrors(host: host, pin: pin)
+            if r.success == true {
+                openErrors = r.allErrors
+                fixState = .ready
+            } else {
+                fixState = .denied(r.error ?? "Not authorised")
+            }
+        } catch {
+            // Non-2xx (e.g. 401) — the correction engine doesn't accept this PIN yet.
+            fixState = .denied("The correction engine hasn't been switched on for Darbar PINs yet.")
+        }
+    }
+
+    // Apply one fix. Returns nil on success, or the engine's plain-language reason on failure.
+    func applyFix(_ e: TakhtOpenError, _ fix: TakhtFix) async -> String? {
+        guard let host = dataHost, let pin = pin else { return "Not signed in" }
+        do {
+            let r = try await TakhtClient.shared.applyFix(host: host, pin: pin, errorId: e.id, fix: fix)
+            if r.success {
+                openErrors.removeAll { $0.id == e.id }
+                await refresh()                 // a real fix changes the witnesses — recompute
+                return nil
+            }
+            return r.message ?? "The engine rejected that fix."
+        } catch {
+            return "Connection error"
+        }
+    }
 
     private func buildFlags() {
         var out: [TakhtFlag] = []
