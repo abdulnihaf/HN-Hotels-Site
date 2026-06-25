@@ -334,6 +334,190 @@ enum DarbarError: LocalizedError {
     }
 }
 
+// MARK: - Hiring WhatsApp campaign (flow #2)
+
+struct HiringRolesResponse: Codable { var roles: [HiringRole]?; var nudges: [String]? }
+
+struct HiringRole: Codable, Identifiable, Hashable {
+    var roleKey: String
+    var label: String
+    var brand: String
+    var creativeKey: String?
+    var posterUrl: String?
+    var defaultPackage: String?
+    var alwaysNeed: Bool
+    var priorityScore: Int?
+    var churnRank: Int?
+    var templateName: String?
+    var odooJobNames: [String]?
+    var supplyCount: Int
+    var replyRate: Double?
+    var replySent: Int?
+    var replyReplied: Int?
+    var channel: String
+
+    enum CodingKeys: String, CodingKey {
+        case roleKey = "role_key"
+        case label, brand
+        case creativeKey = "creative_key"
+        case posterUrl = "poster_url"
+        case defaultPackage = "default_package"
+        case alwaysNeed = "always_need"
+        case priorityScore = "priority_score"
+        case churnRank = "churn_rank"
+        case templateName = "template_name"
+        case odooJobNames = "odoo_job_names"
+        case supplyCount = "supply_count"
+        case replyRate = "reply_rate"
+        case replySent = "reply_sent"
+        case replyReplied = "reply_replied"
+        case channel
+    }
+
+    var id: String { roleKey }
+    var channelLabel: String {
+        switch channel {
+        case "db+referral": return "WhatsApp + referral"
+        case "db-on-demand": return "WhatsApp on-demand"
+        case "suppliers+referral+fb": return "Suppliers + FB"
+        case "suppliers+referral": return "Suppliers + referral"
+        default: return channel
+        }
+    }
+}
+
+struct AudiencePreview: Codable {
+    var role: String
+    var city: String?
+    var totalCandidates: Int
+    var afterExclusion: Int
+    var excludedStaff: Int
+
+    enum CodingKeys: String, CodingKey {
+        case role, city
+        case totalCandidates = "total_candidates"
+        case afterExclusion = "after_exclusion"
+        case excludedStaff = "excluded_staff"
+    }
+}
+
+struct ComposeResponse: Codable {
+    var ok: Bool?
+    var campaignId: Int?
+    var brand: String?
+    var roleKey: String?
+    var roleLabel: String?
+    var queued: Int?
+    var commission: String?
+    var package: String?
+    var posterUrl: String?
+    var audienceMode: String?
+    var city: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case campaignId = "campaign_id"
+        case brand
+        case roleKey = "role_key"
+        case roleLabel = "role_label"
+        case queued, commission, package
+        case posterUrl = "poster_url"
+        case audienceMode = "audience_mode"
+        case city
+    }
+}
+
+struct SendResponse: Codable {
+    var success: Bool?
+    var campaignId: Int?
+    var brand: String?
+    var sent: Int?
+    var failed: Int?
+    var remaining: Int?
+    var error: String?
+}
+
+struct CampaignStatusResponse: Codable {
+    var campaign: Campaign?
+    var counts: CampaignCounts?
+}
+
+struct Campaign: Codable {
+    var id: Int
+    var name: String?
+    var templateName: String?
+    var role: String?
+    var roleKey: String?
+    var brand: String?
+    var commission: String?
+    var package: String?
+    var posterUrl: String?
+    var status: String?
+    var totalCandidates: Int?
+    var createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case templateName = "template_name"
+        case role
+        case roleKey = "role_key"
+        case brand, commission, package
+        case posterUrl = "poster_url"
+        case status
+        case totalCandidates = "total_candidates"
+        case createdAt = "created_at"
+    }
+}
+
+struct CampaignCounts: Codable {
+    var total: Int?
+    var sent: Int?
+    var failed: Int?
+    var queued: Int?
+    var replies: Int?
+}
+
+struct InboxResponse: Codable {
+    var conversations: [HiringConversation]?
+    var total: Int?
+    var page: Int?
+    var pages: Int?
+}
+
+struct HiringConversation: Codable, Identifiable, Hashable {
+    var phone: String
+    var candidateName: String?
+    var campaignId: Int?
+    var campaignName: String?
+    var campaignRole: String?
+    var campaignBrand: String?
+    var lastMessage: String?
+    var lastDirection: String?
+    var lastMessageAt: String?
+    var msgType: String?
+    var unreadCount: Int
+    var totalMessages: Int
+
+    enum CodingKeys: String, CodingKey {
+        case phone
+        case candidateName = "candidate_name"
+        case campaignId = "campaign_id"
+        case campaignName = "campaign_name"
+        case campaignRole = "campaign_role"
+        case campaignBrand = "campaign_brand"
+        case lastMessage = "last_message"
+        case lastDirection = "last_direction"
+        case lastMessageAt = "last_message_at"
+        case msgType = "msg_type"
+        case unreadCount = "unread_count"
+        case totalMessages = "total_messages"
+    }
+
+    var id: String { phone }
+    var displayName: String { (candidateName?.isEmpty == false ? candidateName : phone) ?? phone }
+    var isUnread: Bool { unreadCount > 0 }
+}
+
 // Closed payment-method set (PWA PAY_VIA) — the only values paid_via may take.
 enum PayVia: String, CaseIterable, Identifiable {
     case cash, upi, bank, razorpay, paytm

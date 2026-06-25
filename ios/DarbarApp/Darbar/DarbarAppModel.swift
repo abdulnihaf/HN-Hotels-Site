@@ -40,6 +40,29 @@ final class DarbarAppModel: ObservableObject {
     @Published var loadingSuppliers = false
     @Published var suppliersLoaded = false
 
+    // hiring (flow #2 — WhatsApp campaign)
+    @Published var hiringRoles: [HiringRole] = []
+    @Published var loadingHiringRoles = false
+    @Published var hiringRoleNudges: [String] = []
+
+    @Published var selectedHiringRole: HiringRole?
+    @Published var campaignBrand = "he"        // he | nch
+    @Published var campaignCommission = ""
+    @Published var campaignPackage = ""
+    @Published var campaignCity = ""
+    @Published var campaignAudience = "available" // available | not_this_template | all
+    @Published var audiencePreview: AudiencePreview?
+    @Published var loadingAudience = false
+
+    @Published var composedCampaign: ComposeResponse?
+    @Published var sendingCampaign = false
+    @Published var campaignSendResult: SendResponse?
+    @Published var campaignStatus: CampaignStatusResponse?
+
+    @Published var hiringInbox: [HiringConversation] = []
+    @Published var loadingHiringInbox = false
+    @Published var hiringInboxStatus = "all"
+
     private var mintedToken: String?
 
     struct ToastMsg: Identifiable, Equatable { let id = UUID(); let text: String; let ok: Bool }
@@ -127,6 +150,63 @@ final class DarbarAppModel: ObservableObject {
         }
     }
 
+    func loadHiringRoles() async {
+        guard let t = await ensureToken() else { return }
+        loadingHiringRoles = true; defer { loadingHiringRoles = false }
+        if let r = try? await DarbarClient.shared.hiringRoles(token: t) {
+            hiringRoles = r.roles ?? []
+            hiringRoleNudges = r.nudges ?? []
+        }
+    }
+
+    func loadAudiencePreview(role: String) async {
+        guard let t = await ensureToken() else { return }
+        loadingAudience = true; defer { loadingAudience = false }
+        audiencePreview = try? await DarbarClient.shared.audiencePreview(role: role, brand: campaignBrand, city: campaignCity, token: t)
+    }
+
+    func composeCampaign() async {
+        guard let t = await ensureToken(), let role = selectedHiringRole else { show("Choose a role", ok: false); return }
+        await run("Campaign composed", refresh: .hiring) {
+            let r = try await DarbarClient.shared.composeCampaign(
+                roleKey: role.roleKey, brand: self.campaignBrand,
+                commission: self.campaignCommission, package: self.campaignPackage,
+                city: self.campaignCity.isEmpty ? nil : self.campaignCity,
+                audienceMode: self.campaignAudience, token: $0)
+            self.composedCampaign = r
+            if let id = r.campaignId { await self.refreshCampaignStatus(id: id) }
+        }
+    }
+
+    func sendCampaign() async {
+        guard let t = await ensureToken(), let id = composedCampaign?.campaignId else { return }
+        sendingCampaign = true; defer { sendingCampaign = false }
+        do {
+            campaignSendResult = try await DarbarClient.shared.sendCampaign(campaignId: id, token: t)
+            await refreshCampaignStatus(id: id)
+            show("Batch sent", ok: true)
+        } catch { show(error.localizedDescription, ok: false) }
+    }
+
+    func refreshCampaignStatus(id: Int) async {
+        guard let t = await ensureToken() else { return }
+        campaignStatus = try? await DarbarClient.shared.campaignStatus(campaignId: id, token: t)
+    }
+
+    func loadHiringInbox() async {
+        guard let t = await ensureToken() else { return }
+        loadingHiringInbox = true; defer { loadingHiringInbox = false }
+        hiringInbox = (try? await DarbarClient.shared.hiringInbox(status: hiringInboxStatus, page: 1, token: t))?.conversations ?? []
+    }
+
+    func replyToCandidate(phone: String, text: String) async {
+        guard !text.isEmpty else { return }
+        await run("Reply sent", refresh: .hiring) {
+            try await DarbarClient.shared.replyToCandidate(phone: phone, text: text, brand: self.campaignBrand, token: $0)
+            await self.loadHiringInbox()
+        }
+    }
+
     // MARK: execution actions (each shows a toast + refreshes; fin-gated where the PWA gates)
     private func run(_ label: String, refresh: RefreshKind = .today, _ op: @escaping (String) async throws -> Void) async {
         guard let t = await ensureToken() else { show("Locked", ok: false); return }
@@ -139,11 +219,15 @@ final class DarbarAppModel: ObservableObject {
             case .attend: await loadAttendance()
             case .roster: await loadRoster(); await loadToday()
             case .suppliers: await loadSuppliers()
+            case .hiring:
+                await loadHiringRoles()
+                await loadHiringInbox()
+                if let id = self.composedCampaign?.campaignId { await self.refreshCampaignStatus(id: id) }
             case .none: break
             }
         } catch { show(error.localizedDescription, ok: false) }
     }
-    enum RefreshKind { case today, pay, attend, roster, suppliers, none }
+    enum RefreshKind { case today, pay, attend, roster, suppliers, hiring, none }
 
     func recordAdvance(employeeId: Int, amount: Double, paidVia: String, phone: String) async {
         guard fin else { return show("Pay is owner-only", ok: false) }

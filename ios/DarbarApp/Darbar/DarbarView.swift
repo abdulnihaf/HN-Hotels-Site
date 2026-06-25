@@ -22,7 +22,7 @@ struct DarbarView: View {
                     .tabItem { Label("Pay", systemImage: "indianrupeesign.circle.fill") }
                 DarbarRosterTab(model: model, sheet: $sheet).tag(3)
                     .tabItem { Label("Roster", systemImage: "person.3.fill") }
-                DarbarHiringTab(model: model).tag(4)
+                DarbarHiringTab(model: model, sheet: $sheet).tag(4)
                     .tabItem { Label("Hiring", systemImage: "person.badge.plus") }
             }
             .tint(accent)
@@ -56,6 +56,7 @@ enum DarbarSheet: Identifiable {
     case onboard(pin: String, name: String)
     case settle(id: Int, name: String)
     case editAdvance(AdvanceRow)
+    case hiringCampaign
 
     var id: String {
         switch self {
@@ -66,6 +67,7 @@ enum DarbarSheet: Identifiable {
         case .onboard(let p, _): return "onb-\(p)"
         case .settle(let i, _): return "settle-\(i)"
         case .editAdvance(let r): return "edit-\(r.id)"
+        case .hiringCampaign: return "hiring-campaign"
         }
     }
 }
@@ -82,6 +84,7 @@ struct DarbarSheetHost: View {
         case .onboard(let p, let n):    OnboardSheet(model: model, pin: p, deviceName: n)
         case .settle(let id, let n):    SettleSheet(model: model, id: id, name: n)
         case .editAdvance(let r):       EditAdvanceSheet(model: model, row: r)
+        case .hiringCampaign:           DarbarHiringCampaignSheet(model: model)
         }
     }
 }
