@@ -51,6 +51,7 @@ export async function onRequest(context) {
       case 'health':       return Response.json(await getHealth(db), { headers });
       case 'eod':          return Response.json(await getEod(db, url), { headers });
       case 'indices':      return Response.json(await getIndices(db), { headers });
+      case 'intraday_backtest': return Response.json(await getIntradayBacktest(db, url), { headers });
       case 'preopen':      return Response.json(await getPreopen(db), { headers });
       case 'intraday':     return Response.json(await getIntraday(db, url), { headers });
       case 'extremes':     return Response.json(await getExtremes(db), { headers });
@@ -7164,3 +7165,15 @@ async function getMorningBriefing(db) {
 // trigger redeploy after pages secret 1777884688
 // fix env.WEALTH_DB binding 1777884774
 // fix DB binding priority 1777884866
+
+
+// ── Intraday backtest results (RTX-hosted walk-forward edge engine). READ-ONLY. ──
+async function getIntradayBacktest(db, url) {
+  const runs = await db.prepare(
+    `SELECT run_id, mode, status, total_trades, win_rate_pct, avg_win_pct, avg_loss_pct,
+            expectancy_pct, total_return_pct, max_drawdown_pct, sharpe, winner_capture_pct,
+            trading_days, started_at, finished_at, config_json, notes
+     FROM backtest_intraday_runs ORDER BY started_at DESC LIMIT 20`
+  ).all();
+  return { runs: runs.results || [] };
+}
