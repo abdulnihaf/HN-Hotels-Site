@@ -2079,10 +2079,18 @@ async function addWatchlist(db, url) {
 }
 
 async function removeWatchlist(db, url) {
+  // Accept EITHER id OR symbol (the app toggles Watch by symbol, having no row id).
   const id = parseInt(url.searchParams.get('id'));
-  if (!id) return { error: 'id required' };
-  await db.prepare(`UPDATE user_watchlist SET is_active=0 WHERE id=?`).bind(id).run();
-  return { ok: true };
+  const symbol = (url.searchParams.get('symbol') || '').toUpperCase().trim();
+  if (id) {
+    await db.prepare(`UPDATE user_watchlist SET is_active=0 WHERE id=?`).bind(id).run();
+    return { ok: true };
+  }
+  if (symbol) {
+    await db.prepare(`UPDATE user_watchlist SET is_active=0 WHERE symbol=? AND is_active=1`).bind(symbol).run();
+    return { ok: true, symbol };
+  }
+  return { error: 'id or symbol required' };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
