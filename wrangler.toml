@@ -40,6 +40,13 @@ binding = "WEALTH_DB"
 database_name = "wealth-engine"
 database_id = "1e3cea30-5990-43d2-a9de-b749d32e225a"
 
+# NCH settlement registry (READ-ONLY) — the Takht slot↔Darbar resolver reads
+# v_staff_slots / v_runner_slots here to bind each POS slot to its LIVE Darbar person.
+[[d1_databases]]
+binding = "NCH_DB"
+database_name = "nch-settlements"
+database_id = "3388724b-41b2-4925-a7df-12f068c19e6e"
+
 # KV for storing Swiggy/Zomato auth sessions (captured by extension, read by cron worker)
 [[kv_namespaces]]
 binding = "SESSIONS"
