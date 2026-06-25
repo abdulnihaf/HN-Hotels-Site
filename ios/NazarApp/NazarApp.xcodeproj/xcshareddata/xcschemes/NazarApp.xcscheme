@@ -15,7 +15,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "778B5BF8C67544AFB84021E1"
+               BlueprintIdentifier = "957BC037141C067E089E4533"
                BuildableName = "NazarApp.app"
                BlueprintName = "NazarApp"
                ReferencedContainer = "container:NazarApp.xcodeproj">
@@ -32,7 +32,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "778B5BF8C67544AFB84021E1"
+            BlueprintIdentifier = "957BC037141C067E089E4533"
             BuildableName = "NazarApp.app"
             BlueprintName = "NazarApp"
             ReferencedContainer = "container:NazarApp.xcodeproj">
@@ -55,7 +55,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "778B5BF8C67544AFB84021E1"
+            BlueprintIdentifier = "957BC037141C067E089E4533"
             BuildableName = "NazarApp.app"
             BlueprintName = "NazarApp"
             ReferencedContainer = "container:NazarApp.xcodeproj">
@@ -74,7 +74,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "778B5BF8C67544AFB84021E1"
+            BlueprintIdentifier = "957BC037141C067E089E4533"
             BuildableName = "NazarApp.app"
             BlueprintName = "NazarApp"
             ReferencedContainer = "container:NazarApp.xcodeproj">

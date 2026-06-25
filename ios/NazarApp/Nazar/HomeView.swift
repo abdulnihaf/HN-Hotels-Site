@@ -2,9 +2,11 @@ import SwiftUI
 
 struct HomeView: View {
     @ObservedObject var session: NazarSession
+    // Optional launch override (NAZAR_TAB=0|1|2) for verification screenshots; defaults to Watch.
+    @State private var tab = Int(ProcessInfo.processInfo.environment["NAZAR_TAB"] ?? "0") ?? 0
 
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             NavigationStack {
                 NazarIntelligenceView()
                     .navigationTitle("Nazar")
@@ -19,6 +21,7 @@ struct HomeView: View {
                     }
             }
             .tabItem { Label("Watch", systemImage: "eye.fill") }
+            .tag(0)
 
             NavigationStack {
                 NazarCamerasView()
@@ -26,6 +29,7 @@ struct HomeView: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
             .tabItem { Label("Cameras", systemImage: "camera.fill") }
+            .tag(1)
 
             NavigationStack {
                 NazarFlagsView()
@@ -33,6 +37,7 @@ struct HomeView: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
             .tabItem { Label("Flags", systemImage: "exclamationmark.triangle.fill") }
+            .tag(2)
         }
         .tint(HK.accent)
         .background(HK.bg.ignoresSafeArea())

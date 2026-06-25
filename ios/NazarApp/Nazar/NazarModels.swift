@@ -1,26 +1,37 @@
 import Foundation
 
-// /nz/flags response — lenient Codable, all fields optional so partial JSON doesn't break decode.
+// Models mirror the LIVE /nz/flags payload built by ~/nazar-srv/nazar_srv.py on the RTX box.
+// Every field is optional so a partial / evolving payload never breaks decode (lenient by design).
+// Verified against live HE cockpit 2026-06-25 (claude/ios-nazar-app rollout).
+
+// MARK: - Top level
+
 struct NazarFlags: Codable {
+    let ok: Bool?
+    let brand: String?
+    let asOf: String?
     let mode: String?
     let canProveZeroMiss: Bool?
-    let whyNot: String?
-    let confidence: String?
+    let confidenceLabel: String?
+    let whyNotProof: [String]?
     let summary: NazarSummary?
+    let liveCounts: NazarLiveCounts?
     let sourceHealth: NazarSourceHealth?
     let channels: [String: NazarChannel]?
-    let history: [NazarFlag]?
+    let flags: [NazarFlag]?        // active + active_closed exceptions
+    let historical: [NazarFlag]?   // historical review flags
 
     enum CodingKeys: String, CodingKey {
-        case mode
+        case ok, brand, mode, summary, channels, flags, historical
+        case asOf = "as_of"
         case canProveZeroMiss = "can_prove_zero_miss"
-        case whyNot = "why_not"
-        case confidence
-        case summary
+        case confidenceLabel = "confidence_label"
+        case whyNotProof = "why_not_proof"
+        case liveCounts = "live_counts"
         case sourceHealth = "source_health"
-        case channels
-        case history
     }
+    // NOTE: `duplicates` (duplicate_bills) is intentionally not decoded — shape is unconfirmed
+    // (currently always empty) and a wrong guess would risk the whole decode. Surface later when shape is known.
 }
 
 struct NazarSummary: Codable {
@@ -31,61 +42,165 @@ struct NazarSummary: Codable {
     let historicalReviewFlags: Int?
 
     enum CodingKeys: String, CodingKey {
-        case peopleNow            = "people_now"
-        case billsToday           = "bills_today"
-        case salesRs              = "sales_rs"
-        case activeExceptions     = "active_exceptions"
+        case peopleNow = "people_now"
+        case billsToday = "bills_today"
+        case salesRs = "sales_rs"
+        case activeExceptions = "active_exceptions"
         case historicalReviewFlags = "historical_review_flags"
     }
 }
 
-struct NazarSourceHealth: Codable {
-    let firstFloorMode: String?
-    let frozenCameras: [String]?
+// MARK: - Live counts (occupancy / footfall) — most carry an honest trust flag (often false)
+
+struct NazarLiveCounts: Codable {
+    let occupancy: NazarMetric?           // instantaneous_yolo_occupancy
+    let livePeople: NazarMetric?          // live_people_from_frigate_events
+    let rawSeenToday: NazarMetric?        // raw_frigate_seen_today
+    let footfallPublished: NazarFootfall? // footfall_published
+    let footfallRaw: NazarFootfall?       // footfall_raw_suppressed
 
     enum CodingKeys: String, CodingKey {
-        case firstFloorMode   = "first_floor_mode"
-        case frozenCameras    = "frozen_cameras"
+        case occupancy = "instantaneous_yolo_occupancy"
+        case livePeople = "live_people_from_frigate_events"
+        case rawSeenToday = "raw_frigate_seen_today"
+        case footfallPublished = "footfall_published"
+        case footfallRaw = "footfall_raw_suppressed"
     }
 }
+
+struct NazarMetric: Codable {
+    let value: Int?
+    let peak: Int?
+    let source: String?
+    let perCamera: [String: Int]?
+    let trustedForNow: Bool?
+    let trustedForDisplay: Bool?
+    let trustedForFootfall: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case value, peak, source
+        case perCamera = "per_camera"
+        case trustedForNow = "trusted_for_now_count"
+        case trustedForDisplay = "trusted_for_display"
+        case trustedForFootfall = "trusted_for_footfall"
+    }
+
+    // Honest trust label: true only when the payload explicitly marks this number trusted.
+    var trusted: Bool { (trustedForNow ?? trustedForDisplay ?? trustedForFootfall) ?? false }
+}
+
+struct NazarFootfall: Codable {
+    let he: Int?
+    let source: String?
+    let trusted: Bool?
+}
+
+// MARK: - Source health
+
+struct NazarSourceHealth: Codable {
+    let frigate: String?
+    let frozenCameras: [String]?
+    let odoo: String?
+    let foodDetection: String?
+    let faceLayer: String?
+    let firstFloorPrimary: String?
+    let firstFloorBackup: String?
+    let firstFloorMode: String?
+    let firstFloorEngineReads: String?
+    let groundFloor: String?
+    let kitchenPass: String?
+
+    enum CodingKeys: String, CodingKey {
+        case frigate, odoo
+        case frozenCameras = "frozen_cameras"
+        case foodDetection = "food_detection"
+        case faceLayer = "face_layer"
+        case firstFloorPrimary = "first_floor_primary"
+        case firstFloorBackup = "first_floor_backup"
+        case firstFloorMode = "first_floor_mode"
+        case firstFloorEngineReads = "first_floor_engine_reads"
+        case groundFloor = "ground_floor"
+        case kitchenPass = "kitchen_pass"
+    }
+}
+
+// MARK: - Channels (per-area POS vs camera reconciliation)
 
 struct NazarChannel: Codable {
-    let state: String?
-    let proofSource: String?
+    let status: String?
+    let pos: NazarChannelPos?
+    let cameraCountSource: String?
     let engineReads: String?
-    let assertCapable: Bool?
+    let engineAssertCapable: Bool?
+    let cameraIds: [String]?
+    let proofStates: [String]?
+    let reason: String?
 
     enum CodingKeys: String, CodingKey {
-        case state
-        case proofSource   = "proof_source"
-        case engineReads   = "engine_reads"
-        case assertCapable = "assert_capable"
+        case status, pos, reason
+        case cameraCountSource = "camera_count_source"
+        case engineReads = "engine_reads"
+        case engineAssertCapable = "engine_assert_capable"
+        case cameraIds = "camera_ids"
+        case proofStates = "proof_states"
     }
 }
 
+struct NazarChannelPos: Codable {
+    let bills: Int?
+    let salesRs: Int?
+    enum CodingKeys: String, CodingKey {
+        case bills
+        case salesRs = "sales_rs"
+    }
+}
+
+// MARK: - Flag / exception item (active, closed, or historical review)
+
 struct NazarFlag: Codable, Identifiable {
-    var id: String { flagId ?? UUID().uuidString }
-    let flagId: String?
-    let state: String?
-    let area: String?
-    let location: String?
-    let time: String?
-    let headcount: Int?
-    let billId: String?
-    let confidence: String?
+    // Stable per-decode id; the server `code` is preferred when present and non-empty.
+    private let localId = UUID()
+    var id: String { (code?.isEmpty == false ? code! : localId.uuidString) }
+
+    let status: String?
+    let code: String?
+    let camera: String?
+    let openCamera: String?
     let snapshotUrl: String?
-    let confirmed: String?
+    let time: String?
+    let durationMin: Double?
+    let personCount: Int?
+    let billMatch: String?
+    let reason: String?
+    let confidence: String?
+    let label: String?
+    let source: String?
 
     enum CodingKeys: String, CodingKey {
-        case flagId      = "id"
-        case state
-        case area
-        case location
-        case time
-        case headcount
-        case billId      = "bill_id"
-        case confidence
+        case status, code, camera, time, reason, confidence, label, source
+        case openCamera = "open_camera"
         case snapshotUrl = "snapshot_url"
-        case confirmed
+        case durationMin = "duration_min"
+        case personCount = "person_count"
+        case billMatch = "bill_match"
+    }
+
+    var isActive: Bool { status == "active" }
+    var isHistorical: Bool { (status ?? "").contains("historical") }
+}
+
+// MARK: - Confirmations (recorded verdicts: GET /nz/confirmations)
+
+struct NazarConfirmation: Codable, Identifiable {
+    private let localId = UUID()
+    var id: String { (code?.isEmpty == false ? code! : (at ?? localId.uuidString)) }
+
+    let at: String?
+    let code: String?
+    let verdict: String?
+    let label: String?
+
+    enum CodingKeys: String, CodingKey {
+        case at, code, verdict, label
     }
 }
