@@ -97,6 +97,29 @@ actor DarbarClient {
                            body: ["action": "reply", "phone": phone, "text": text, "brand": brand], token: token)
     }
 
+    // MARK: hiring — Facebook posting (flow #3)
+    func fbOverview(token: String) async throws -> FbOverview {
+        let d = try await get("/api/hiring-darbar", ["action": "fb_overview"], token)
+        return try decoder.decode(FbOverview.self, from: d)
+    }
+    func fbCreatives(token: String) async throws -> [FbCreative] {
+        let d = try await get("/api/hiring-darbar", ["action": "fb_creatives"], token)
+        return (try decoder.decode([FbCreative].self, from: d))
+    }
+    func fbSessions(token: String) async throws -> [FbSession] {
+        let d = try await get("/api/hiring-darbar", ["action": "fb_sessions"], token)
+        return (try decoder.decode([FbSession].self, from: d))
+    }
+    func fbPosts(sessionId: Int, token: String) async throws -> [FbPost] {
+        let d = try await get("/api/hiring-darbar", ["action": "fb_posts", "session_id": String(sessionId)], token)
+        return (try decoder.decode([FbPost].self, from: d))
+    }
+    func fbCompose(creativeId: Int, brand: String, token: String) async throws -> FbComposeResponse {
+        let d = try await send(path: "/api/hiring-darbar", query: [:], method: "POST",
+                               body: ["action": "fb_compose", "creative_id": creativeId, "brand": brand], token: token)
+        return try decoder.decode(FbComposeResponse.self, from: d)
+    }
+
     // MARK: writes — execution (each is an owner-approved action, fired from a confirmed tap)
     func recordAdvance(employeeId: Int, amount: Double, paidVia: String, payPeriod: String,
                        phone: String, token: String) async throws {

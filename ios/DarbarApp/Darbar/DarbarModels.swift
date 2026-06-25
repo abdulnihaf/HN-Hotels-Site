@@ -524,3 +524,110 @@ enum PayVia: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String { rawValue == "upi" ? "UPI" : rawValue.capitalized }
 }
+
+// MARK: - Hiring Facebook posting (flow #3)
+
+struct FbOverview: Codable {
+    var creativesCount: Int?
+    var eligibleGroups: Int?
+    var totalMembers: Int?
+    var sessionsCount: Int?
+    var postsTotal: Int?
+    var postsSuccess: Int?
+    var postsFailed: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case creativesCount = "creatives_count"
+        case eligibleGroups = "eligible_groups"
+        case totalMembers = "total_members"
+        case sessionsCount = "sessions_count"
+        case postsTotal = "posts_total"
+        case postsSuccess = "posts_success"
+        case postsFailed = "posts_failed"
+    }
+}
+
+struct FbCreative: Codable, Identifiable {
+    var id: Int
+    var name: String
+    var brand: String?
+    var postText: String?
+    var imageFilename: String?
+    var postType: String?
+    var timesUsed: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, brand
+        case postText = "post_text"
+        case imageFilename = "image_filename"
+        case postType = "post_type"
+        case timesUsed = "times_used"
+    }
+}
+
+struct FbSession: Codable, Identifiable {
+    var id: Int
+    var creativeId: Int?
+    var accountName: String?
+    var totalGroups: Int?
+    var postedCount: Int?
+    var failedCount: Int?
+    var skippedCount: Int?
+    var status: String?
+    var startedAt: String?
+    var completedAt: String?
+    var creativeName: String?
+    var imageFilename: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, status
+        case creativeId = "creative_id"
+        case accountName = "account_name"
+        case totalGroups = "total_groups"
+        case postedCount = "posted_count"
+        case failedCount = "failed_count"
+        case skippedCount = "skipped_count"
+        case startedAt = "started_at"
+        case completedAt = "completed_at"
+        case creativeName = "creative_name"
+        case imageFilename = "image_filename"
+    }
+}
+
+struct FbPost: Codable, Identifiable {
+    var id: Int
+    var groupId: Int?
+    var creativeId: Int?
+    var sessionId: Int?
+    var accountName: String?
+    var status: String?
+    var errorMessage: String?
+    var postedAt: String?
+    var groupName: String?
+    var groupUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, status
+        case groupId = "group_id"
+        case creativeId = "creative_id"
+        case sessionId = "session_id"
+        case accountName = "account_name"
+        case errorMessage = "error_message"
+        case postedAt = "posted_at"
+        case groupName = "group_name"
+        case groupUrl = "group_url"
+    }
+}
+
+struct FbComposeResponse: Codable {
+    var ok: Bool?
+    var sessionId: Int?
+    var totalGroups: Int?
+    var error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ok, error
+        case sessionId = "session_id"
+        case totalGroups = "total_groups"
+    }
+}
