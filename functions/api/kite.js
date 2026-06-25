@@ -56,6 +56,44 @@ export async function onRequest(context) {
 
   const action = url.searchParams.get('action') || 'status';
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EXEC-KEY GATE — real-order MUTATION requires a SECOND, dedicated secret.
+  //
+  // The dashboard key (above) is shared/semi-public: it is embedded in the
+  // aggregator extension + ops dashboards and gates read-only views. It must
+  // NEVER be sufficient to place a real Kite order. So every order-MUTATING
+  // action is gated by a separate secret (env.KITE_EXEC_KEY), supplied via the
+  // `x-exec-key` header (server callers) or `exec_key` query param (browser).
+  //
+  // Read/pre-check actions (status, margins, quote, order_margins, reconcile_*,
+  // sync_instruments, …) stay on the dashboard key alone — they cannot move money.
+  //
+  // Fail CLOSED: if KITE_EXEC_KEY is not configured on this deployment, order
+  // execution is disabled (503) rather than silently falling back to the
+  // dashboard key. Set it via:
+  //   wrangler pages secret put KITE_EXEC_KEY --project-name hn-hotels-site
+  // ═══════════════════════════════════════════════════════════════════════════
+  const EXEC_ACTIONS = new Set([
+    'place_order', 'place_bracket', 'place_gtt',
+    'cancel_order', 'delete_gtt', 'modify_order',
+  ]);
+  if (EXEC_ACTIONS.has(action)) {
+    const expected = env.KITE_EXEC_KEY;
+    if (!expected) {
+      return new Response(JSON.stringify({
+        error: 'exec_key_not_configured',
+        message: 'KITE_EXEC_KEY is not set on this deployment — real-order execution is disabled. Set it with: wrangler pages secret put KITE_EXEC_KEY --project-name hn-hotels-site',
+      }), { status: 503, headers });
+    }
+    const execKey = request.headers.get('x-exec-key') || url.searchParams.get('exec_key');
+    if (execKey !== expected) {
+      return new Response(JSON.stringify({
+        error: 'exec_unauthorized',
+        message: 'Order execution requires a valid execution key (separate from the dashboard key). Pass it via the x-exec-key header or exec_key query param.',
+      }), { status: 401, headers });
+    }
+  }
+
   try {
     if (action === 'status') return Response.json(await getStatus(db, env), { headers });
 
