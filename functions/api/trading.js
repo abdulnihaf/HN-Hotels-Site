@@ -5881,9 +5881,20 @@ async function getTrail(db, url) {
   }
 
   const upd = (await db.prepare(`SELECT MAX(computed_at) AS m FROM intraday_suitability`).first().catch(() => null))?.m;
+  // Honest edge note from the LIVE nightly-tuned config (not a hardcoded old number).
+  const cfg = await db.prepare(
+    `SELECT verdict, oos_expectancy_pct, universe_syms, folds_positive FROM wealth_strategy_config WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`
+  ).first().catch(() => null);
+  const edgeNote = cfg
+    ? (cfg.verdict === 'NO_EDGE'
+        ? `Tested edge: none proven yet — gap-up ~${cfg.oos_expectancy_pct}%/trade out-of-sample but it doesn't beat a random gap pick (${cfg.universe_syms} liquid stocks, survivorship-free)`
+        : `Tested edge: ${cfg.verdict === 'ROBUST_EDGE' ? 'confirmed but small' : 'thin'} — gap-up ~${cfg.oos_expectancy_pct}%/trade out-of-sample (${cfg.folds_positive} folds, ${cfg.universe_syms} stocks)`)
+    : 'Tested edge: pending tonight’s backtest';
   return {
     ok: true,
-    edge_note: 'Tested edge: −0.125% per trade out-of-sample',
+    edge_note: edgeNote,
+    edge_verdict: cfg?.verdict || null,
+    universe_syms: cfg?.universe_syms || null,
     suitability_updated: upd || null,
     movers,
     daily,
