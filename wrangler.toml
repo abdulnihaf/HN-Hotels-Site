@@ -26,6 +26,10 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # Kite Connect public-ish API key — exposed in Worker env, used by OAuth flow
 KITE_API_KEY = "85yfvys3t9t66l35"
+# WhatsApp Business Account IDs + phone number IDs (non-sensitive; token stays in secrets)
+WA_HE_WABA_ID = "27110385081896362"
+WA_HE_PHONE_ID = "970365416152029"
+WA_PHONE_ID = "970365416152029"
 
 [[d1_databases]]
 binding = "DB"
