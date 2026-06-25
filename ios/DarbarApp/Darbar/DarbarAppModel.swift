@@ -63,6 +63,14 @@ final class DarbarAppModel: ObservableObject {
     @Published var loadingHiringInbox = false
     @Published var hiringInboxStatus = "all"
 
+    // hiring (flow #3 — Facebook posting)
+    @Published var fbOverview: FbOverview?
+    @Published var fbCreatives: [FbCreative] = []
+    @Published var fbSessions: [FbSession] = []
+    @Published var selectedFbCreative: FbCreative?
+    @Published var fbComposing = false
+    @Published var fbComposeResult: FbComposeResponse?
+
     private var mintedToken: String?
 
     struct ToastMsg: Identifiable, Equatable { let id = UUID(); let text: String; let ok: Bool }
@@ -166,7 +174,7 @@ final class DarbarAppModel: ObservableObject {
     }
 
     func composeCampaign() async {
-        guard let t = await ensureToken(), let role = selectedHiringRole else { show("Choose a role", ok: false); return }
+        guard let _ = await ensureToken(), let role = selectedHiringRole else { show("Choose a role", ok: false); return }
         await run("Campaign composed", refresh: .hiring) {
             let r = try await DarbarClient.shared.composeCampaign(
                 roleKey: role.roleKey, brand: self.campaignBrand,
@@ -205,6 +213,40 @@ final class DarbarAppModel: ObservableObject {
             try await DarbarClient.shared.replyToCandidate(phone: phone, text: text, brand: self.campaignBrand, token: $0)
             await self.loadHiringInbox()
         }
+    }
+
+    func loadFbOverview() async {
+        guard let t = await ensureToken() else { return }
+        fbOverview = try? await DarbarClient.shared.fbOverview(token: t)
+    }
+
+    func loadFbCreatives() async {
+        guard let t = await ensureToken() else { return }
+        fbCreatives = (try? await DarbarClient.shared.fbCreatives(token: t)) ?? []
+    }
+
+    func loadFbSessions() async {
+        guard let t = await ensureToken() else { return }
+        fbSessions = (try? await DarbarClient.shared.fbSessions(token: t)) ?? []
+    }
+
+    func createFbSession() async {
+        guard let t = await ensureToken(), let creative = selectedFbCreative else { show("Choose a creative", ok: false); return }
+        fbComposing = true; defer { fbComposing = false }
+        do {
+            let brand = campaignBrand.isEmpty ? "he" : campaignBrand
+            let r = try await DarbarClient.shared.fbCompose(creativeId: creative.id, brand: brand, token: t)
+            fbComposeResult = r
+            if r.ok == true { show("Posted to \(r.totalGroups ?? 0) groups", ok: true) }
+            else { show(r.error ?? "Facebook post failed", ok: false) }
+            await loadFbSessions()
+            await loadFbOverview()
+        } catch { show(error.localizedDescription, ok: false) }
+    }
+
+    func fbPosts(sessionId: Int) async -> [FbPost] {
+        guard let t = await ensureToken() else { return [] }
+        return (try? await DarbarClient.shared.fbPosts(sessionId: sessionId, token: t)) ?? []
     }
 
     // MARK: execution actions (each shows a toast + refreshes; fin-gated where the PWA gates)

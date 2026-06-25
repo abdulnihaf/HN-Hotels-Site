@@ -57,6 +57,8 @@ enum DarbarSheet: Identifiable {
     case settle(id: Int, name: String)
     case editAdvance(AdvanceRow)
     case hiringCampaign
+    case hiringSuppliers
+    case hiringFacebook
 
     var id: String {
         switch self {
@@ -68,6 +70,8 @@ enum DarbarSheet: Identifiable {
         case .settle(let i, _): return "settle-\(i)"
         case .editAdvance(let r): return "edit-\(r.id)"
         case .hiringCampaign: return "hiring-campaign"
+        case .hiringSuppliers: return "hiring-suppliers"
+        case .hiringFacebook: return "hiring-facebook"
         }
     }
 }
@@ -85,6 +89,8 @@ struct DarbarSheetHost: View {
         case .settle(let id, let n):    SettleSheet(model: model, id: id, name: n)
         case .editAdvance(let r):       EditAdvanceSheet(model: model, row: r)
         case .hiringCampaign:           DarbarHiringCampaignSheet(model: model)
+        case .hiringSuppliers:          DarbarHiringSuppliersSheet(model: model)
+        case .hiringFacebook:           DarbarHiringFacebookSheet(model: model)
         }
     }
 }

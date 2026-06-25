@@ -100,6 +100,11 @@ export async function onRequest(context) {
       if (action === 'audience_preview')return withCors(await audiencePreview(db, url), request);
       if (action === 'inbox')           return withCors(await hiringInbox(db, url), request);
       if (action === 'campaign')        return withCors(await campaignOne(db, url), request);
+      if (action === 'fb_overview')     return withCors(await fbOverview(db), request);
+      if (action === 'fb_creatives')    return withCors(await fbCreatives(db), request);
+      if (action === 'fb_sessions')     return withCors(await fbSessions(db, url), request);
+      if (action === 'fb_posts')        return withCors(await fbPosts(db, url), request);
+      if (action === 'fb_preview')      return withCors(await fbPreview(db, url, env, request), request);
       return withCors(json({ error: `unknown GET action: ${action}` }, 400), request);
     }
 
@@ -115,6 +120,9 @@ export async function onRequest(context) {
       if (action === 'send')           return withCors(await sendCampaign(db, body, env, request), request);
       if (action === 'reply')          return withCors(await replyToCandidate(db, body, env, request), request);
       if (action === 'mark_outcome')   return withCors(await markOutcome(db, body), request);
+      if (action === 'fb_compose')     return withCors(await fbCompose(db, body, env, request), request);
+      if (action === 'fb_pause')       return withCors(await fbPause(db, body, env, request), request);
+      if (action === 'fb_resume')      return withCors(await fbResume(db, body, env, request), request);
       return withCors(json({ error: `unknown POST action: ${action}` }, 400), request);
     }
 
@@ -615,4 +623,113 @@ async function markOutcome(db, body) {
   ).bind(campaignId, roleKey).run().catch(() => null);
 
   return json({ ok: true, campaign_id: campaignId, role_key: roleKey, outcome });
+}
+
+// ===========================================================================
+// Facebook Group Posting surface (flow #3) — Darbar-facing wrapper around the
+// same D1 tables used by the RTX executor in /api/fb-posting.
+// ===========================================================================
+
+async function fbOverview(db) {
+  const creatives = await db.prepare(`SELECT COUNT(*) n FROM fb_creatives`).first();
+  const groups = await db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(members_parsed),0) members FROM fb_groups WHERE status='active' AND is_blocked=0 AND status_join='Joined'`).first();
+  const sessions = await db.prepare(`SELECT COUNT(*) n FROM fb_sessions`).first();
+  const posts = await db.prepare(`SELECT COUNT(*) n, SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) success, SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) failed FROM fb_posts`).first();
+  return json({
+    creatives_count: creatives?.n || 0,
+    eligible_groups: groups?.n || 0,
+    total_members: groups?.members || 0,
+    sessions_count: sessions?.n || 0,
+    posts_total: posts?.n || 0,
+    posts_success: posts?.success || 0,
+    posts_failed: posts?.failed || 0,
+  });
+}
+
+async function fbCreatives(db) {
+  const rows = await db.prepare(`SELECT * FROM fb_creatives ORDER BY id DESC`).all();
+  return json(rows.results || []);
+}
+
+async function fbSessions(db, url) {
+  const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+  const rows = await db.prepare(`
+    SELECT s.*, c.name as creative_name, c.image_filename
+    FROM fb_sessions s JOIN fb_creatives c ON s.creative_id = c.id
+    ORDER BY s.id DESC LIMIT ?
+  `).bind(limit).all();
+  return json(rows.results || []);
+}
+
+async function fbPosts(db, url) {
+  const sessionId = parseInt(url.searchParams.get('session_id') || '0', 10);
+  if (!sessionId) return json({ error: 'session_id required' }, 400);
+  const rows = await db.prepare(`
+    SELECT p.*, g.name as group_name, g.group_url
+    FROM fb_posts p JOIN fb_groups g ON p.group_id = g.id
+    WHERE p.session_id = ? ORDER BY p.id DESC
+  `).bind(sessionId).all();
+  return json(rows.results || []);
+}
+
+// Internal call to /api/fb-posting using the service key.
+async function fbInternal(env, request, body) {
+  const base = new URL(request.url).origin;
+  const resp = await fetch(`${base}/api/fb-posting`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-service-key': env.CAMS_AUTH_TOKEN || '',
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json().catch(() => ({ ok: false, error: 'invalid upstream response' }));
+  return { data, status: resp.status };
+}
+
+// GET ?action=fb_preview&creative_id=X&daily_cap=35&cooldown_days=7&location=Bangalore
+async function fbPreview(db, url, env, request) {
+  const creativeId = parseInt(url.searchParams.get('creative_id') || '0', 10);
+  if (!creativeId) return json({ error: 'creative_id required' }, 400);
+  const dailyCap = parseInt(url.searchParams.get('daily_cap') || '35', 10);
+  const cooldownDays = parseInt(url.searchParams.get('cooldown_days') || '7', 10);
+  const location = url.searchParams.get('location') || 'Bangalore';
+  const { data, status } = await fbInternal(env, request, {
+    action: 'select_groups',
+    creative_id: creativeId,
+    daily_cap: dailyCap,
+    cooldown_days: cooldownDays,
+    location,
+  });
+  return json(data, status);
+}
+
+// POST ?action=fb_compose {creative_id, brand, daily_cap?, cooldown_days?, location?}
+async function fbCompose(db, body, env, request) {
+  const creativeId = parseInt(body.creative_id || 0, 10);
+  if (!creativeId) return json({ error: 'creative_id required' }, 400);
+  const { data, status } = await fbInternal(env, request, {
+    action: 'create_session',
+    creative_id: creativeId,
+    account_name: String(body.brand || 'he').toUpperCase(),
+    use_intelligence: true,
+    daily_cap: body.daily_cap || 35,
+    cooldown_days: body.cooldown_days || 7,
+    location: body.location || 'Bangalore',
+  });
+  return json(data, status);
+}
+
+async function fbPause(db, body, env, request) {
+  const sessionId = parseInt(body.session_id || 0, 10);
+  if (!sessionId) return json({ error: 'session_id required' }, 400);
+  const { data, status } = await fbInternal(env, request, { action: 'pause_session', session_id: sessionId });
+  return json(data, status);
+}
+
+async function fbResume(db, body, env, request) {
+  const sessionId = parseInt(body.session_id || 0, 10);
+  if (!sessionId) return json({ error: 'session_id required' }, 400);
+  const { data, status } = await fbInternal(env, request, { action: 'resume_session', session_id: sessionId });
+  return json(data, status);
 }

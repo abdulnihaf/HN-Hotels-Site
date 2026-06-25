@@ -20,7 +20,7 @@ targets:
       properties:
         CFBundleDisplayName: Darbar
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "8"
+        CFBundleVersion: "9"
         CFBundleIconName: AppIcon
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: "Unlock Darbar with Face ID instead of typing your PIN."

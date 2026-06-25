@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS fb_groups (
   last_posted_at TEXT,
   last_posted_creative_id INTEGER,
   creatives_posted TEXT,
+  status_join TEXT DEFAULT 'unknown',
   is_blocked INTEGER DEFAULT 0,
   notes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS fb_groups (
 CREATE INDEX IF NOT EXISTS idx_fb_groups_status ON fb_groups(status);
 CREATE INDEX IF NOT EXISTS idx_fb_groups_members ON fb_groups(members_parsed);
 CREATE INDEX IF NOT EXISTS idx_fb_groups_category ON fb_groups(category);
+CREATE INDEX IF NOT EXISTS idx_fb_groups_status_join ON fb_groups(status_join);
 
 -- Creatives library (reusable post templates)
 CREATE TABLE IF NOT EXISTS fb_creatives (

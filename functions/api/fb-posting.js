@@ -8,31 +8,202 @@
  *   GET  /api/fb-posting?action=creatives          → all creatives
  *   GET  /api/fb-posting?action=posts              → post history
  *   GET  /api/fb-posting?action=session&id=X       → session details
- *   GET  /api/fb-posting?action=queue&creative_id=X → next groups to post
- *   POST /api/fb-posting  { action: "import_groups", groups: [...] }
- *   POST /api/fb-posting  { action: "create_creative", ... }
- *   POST /api/fb-posting  { action: "create_session", creative_id, group_ids }
- *   POST /api/fb-posting  { action: "update_post", post_id, status, error }
- *   POST /api/fb-posting  { action: "update_group", group_id, ... }
- *   POST /api/fb-posting  { action: "pause_session", session_id }
- *   POST /api/fb-posting  { action: "resume_session", session_id }
+ *   GET  /api/fb-posting?action=queue&creative_id=X → next groups to post (auth)
+ *   POST /api/fb-posting  { action: "import_groups", groups: [...] }            (auth)
+ *   POST /api/fb-posting  { action: "create_creative", ... }                    (auth)
+ *   POST /api/fb-posting  { action: "create_session", creative_id, group_ids }  (auth)
+ *   POST /api/fb-posting  { action: "update_post", post_id, status, error }     (auth)
+ *   POST /api/fb-posting  { action: "update_group", group_id, ... }             (auth)
+ *   POST /api/fb-posting  { action: "pause_session", session_id }               (auth)
+ *   POST /api/fb-posting  { action: "resume_session", session_id }              (auth)
+ *
+ * Auth: every mutating POST (and the executor queue) requires one of:
+ *   - x-darbar-token   (Darbar iOS app / PWA)
+ *   - x-service-key    (internal RTX box / cron; must match env.CAMS_AUTH_TOKEN)
+ *   - x-fb-posting-secret (dedicated box secret; must match env.FB_POSTING_SECRET)
  */
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+import { verifyToken } from './_lib/darbar-auth.js';
 
-function json(data, status = 200) {
+const ALLOWED_ORIGINS = new Set([
+  'https://darbar.hnhotels.in',
+  'https://hnhotels.in',
+  'https://app.hnhotels.in',
+  'https://hiring-fb.hn-hotels-site.pages.dev',
+]);
+
+function cors(request) {
+  const origin = request.headers.get('origin') || '';
+  const allow = ALLOWED_ORIGINS.has(origin) ? origin : 'https://darbar.hnhotels.in';
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-darbar-token, x-service-key, x-fb-posting-secret",
+    "Vary": "Origin",
+  };
+}
+
+function json(data, status = 200, request) {
+  const corsHeaders = request ? cors(request) : {
+    "Access-Control-Allow-Origin": "https://darbar.hnhotels.in",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-darbar-token, x-service-key, x-fb-posting-secret",
+  };
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS },
+    headers: { "Content-Type": "application/json", ...corsHeaders },
   });
 }
 
-function err(msg, status = 400) {
-  return json({ ok: false, error: msg }, status);
+function err(msg, status = 400, request) {
+  return json({ ok: false, error: msg }, status, request);
+}
+
+function timingSafeEq(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+// Verify request auth. Returns principal or null.
+async function verifyAuth(env, request, body = null) {
+  // 1. Darbar token / service key (proven HMAC + shared secret pattern)
+  const principal = await verifyToken(env, request);
+  if (principal) return principal;
+
+  // 2. Dedicated FB posting secret (header or body)
+  const secret = request.headers.get('x-fb-posting-secret') || body?.secret || '';
+  const expected = env.FB_POSTING_SECRET || env.CAMS_AUTH_TOKEN || env.DASHBOARD_KEY || '';
+  if (secret && expected && timingSafeEq(secret, expected)) {
+    return { u: 'fb-box', r: 'service', service: true };
+  }
+
+  // 3. Service-key fallback to DASHBOARD_KEY (preview deployments inherit this reliably)
+  const svc = request.headers.get('x-service-key') || '';
+  const svcExpected = env.CAMS_AUTH_TOKEN || env.DASHBOARD_KEY || '';
+  if (svc && svcExpected && timingSafeEq(svc, svcExpected)) {
+    return { u: 'fb-service', r: 'service', service: true };
+  }
+
+  return null;
+}
+
+// ─── Group selection intelligence ──────────────────────────
+const CREATIVE_RELEVANCE = {
+  'Restaurant Cleaner': ['cleaner', 'cleaning', 'housekeeping', 'helper', 'support', 'staff'],
+  'Cleaner': ['cleaner', 'cleaning', 'housekeeping', 'helper', 'support', 'staff'],
+  'Restaurant Washer': ['washer', 'dishwasher', 'dish washer', 'cleaning', 'helper', 'support', 'staff'],
+  'Washer': ['washer', 'dishwasher', 'dish washer', 'cleaning', 'helper', 'support', 'staff'],
+  'Restaurant Kitchen Helper': ['kitchen helper', 'kitchenhelper', 'helper', 'boh', 'support', 'staff'],
+  'Kitchen Helper': ['kitchen helper', 'kitchenhelper', 'helper', 'boh', 'support', 'staff'],
+  'Restaurant Counter Boy': ['counter boy', 'counter', 'server', 'foh', 'service', 'staff'],
+  'Counter Boy': ['counter boy', 'counter', 'server', 'foh', 'service', 'staff'],
+  'BOH Support Staff': ['boh', 'back of house', 'kitchen helper', 'washer', 'cleaner', 'helper', 'support', 'staff'],
+  'HE Hiring Mar 2026': ['restaurant', 'hotel', 'job', 'jobs', 'hiring', 'staff'],
+};
+
+function relevanceTermsForCreative(creative) {
+  const name = creative?.name || '';
+  const terms = new Set();
+  // exact creative-name terms
+  for (const [key, list] of Object.entries(CREATIVE_RELEVANCE)) {
+    if (name.toLowerCase().includes(key.toLowerCase())) {
+      for (const t of list) terms.add(t);
+    }
+  }
+  // generic fallback
+  if (terms.size === 0) {
+    for (const t of CREATIVE_RELEVANCE['HE Hiring Mar 2026']) terms.add(t);
+  }
+  return Array.from(terms);
+}
+
+function scoreGroup(group, terms) {
+  let score = 0;
+  const hay = [
+    group.keywords || '',
+    group.category || '',
+    group.sub_category || '',
+    group.name || '',
+    group.creatives_posted || '',
+  ].join(' ').toLowerCase();
+  for (const term of terms) {
+    if (hay.includes(term.toLowerCase())) score += 1;
+  }
+  // small boost for Bangalore / BLR relevance
+  if (hay.includes('bangalore') || hay.includes('loc_blr') || hay.includes('blr')) score += 0.5;
+  // members size as tie-breaker (normalized to avoid dominating)
+  const members = parseInt(group.members_parsed) || 0;
+  score += Math.min(members / 50000, 2); // up to 2 points for large groups
+  return score;
+}
+
+async function selectGroups(db, creative_id, options = {}) {
+  const daily_cap = Math.min(Math.max(parseInt(options.daily_cap) || 35, 1), 50);
+  const cooldown_days = Math.max(parseInt(options.cooldown_days) || 7, 1);
+  const location = (options.location || 'Bangalore').toLowerCase();
+
+  // Get creative
+  const creative = await db.prepare(`SELECT * FROM fb_creatives WHERE id = ?`).bind(creative_id).first();
+  if (!creative) throw new Error('creative not found');
+
+  const terms = relevanceTermsForCreative(creative);
+
+  // Count today's successful posts across all creatives (daily cap)
+  const todayCount = await db.prepare(`
+    SELECT COUNT(*) as n FROM fb_posts
+    WHERE status = 'success' AND date(posted_at) = date('now')
+  `).first();
+  const alreadyToday = todayCount?.n || 0;
+  const remainingToday = Math.max(daily_cap - alreadyToday, 0);
+
+  // Cooldown date
+  const cooldownDate = new Date();
+  cooldownDate.setDate(cooldownDate.getDate() - cooldown_days);
+  const cooldownIso = cooldownDate.toISOString().slice(0, 19);
+
+  // Fetch eligible joined groups
+  const eligible = await db.prepare(`
+    SELECT * FROM fb_groups
+    WHERE status = 'active' AND is_blocked = 0 AND status_join = 'Joined'
+      AND id NOT IN (
+        SELECT group_id FROM fb_posts
+        WHERE creative_id = ? AND status IN ('success', 'queued', 'posting')
+      )
+      AND (last_posted_at IS NULL OR last_posted_at < ?)
+  `).bind(creative_id, cooldownIso).all();
+
+  const rows = eligible.results || [];
+
+  // Score and sort
+  const scored = rows.map(g => ({ ...g, _score: scoreGroup(g, terms) }));
+  scored.sort((a, b) => b._score - a._score || b.members_parsed - a.members_parsed);
+
+  // Rotation: skip the top N groups that were most recently favored by this creative
+  // (simpler: pick top daily_cap * 2, then jitter shuffle, then slice)
+  const poolSize = Math.min(scored.length, remainingToday * 3 + 10, 200);
+  const pool = scored.slice(0, poolSize);
+
+  // Jitter shuffle (Fisher-Yates light)
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  // Re-sort by score within jitter but keep variety: take best from jittered pool
+  pool.sort((a, b) => b._score - a._score);
+  const selected = pool.slice(0, remainingToday);
+
+  return {
+    creative_id,
+    daily_cap,
+    remaining_today: remainingToday,
+    cooldown_days,
+    terms,
+    eligible_count: rows.length,
+    selected_count: selected.length,
+    selected: selected.map(g => ({ id: g.id, name: g.name, members_parsed: g.members_parsed, score: g._score })),
+  };
 }
 
 // ─── Normalize group URL ───────────────────────────────────
@@ -58,8 +229,17 @@ function extractGroupId(url) {
   return m ? m[1] : null;
 }
 
+function normalizeStatusJoin(raw) {
+  if (!raw) return 'unknown';
+  const s = String(raw).trim().toLowerCase().replace(/\s+/g, '_');
+  if (s.startsWith('join') || s === 'joined') return 'Joined';
+  if (s.includes('not_join') || s === 'notjoined') return 'Not_Joined';
+  if (s.includes('pending') || s.includes('requested')) return 'Pending';
+  return String(raw).trim();
+}
+
 // ─── GET handlers ──────────────────────────────────────────
-async function handleGet(url, db) {
+async function handleGet(url, db, env, request) {
   const action = url.searchParams.get("action");
 
   // ── Stats ──
@@ -213,8 +393,11 @@ async function handleGet(url, db) {
 
   // ── Queue (next groups to post) ──
   if (action === "queue") {
+    const auth = await verifyAuth(env, request, null);
+    if (!auth) return err("unauthorized", 401, request);
+
     const creative_id = url.searchParams.get("creative_id");
-    if (!creative_id) return err("creative_id required");
+    if (!creative_id) return err("creative_id required", 400, request);
     const limit = parseInt(url.searchParams.get("limit") || "20");
 
     const groups = await db.prepare(`
@@ -228,20 +411,49 @@ async function handleGet(url, db) {
       LIMIT ?
     `).bind(creative_id, limit).all();
 
-    return json({ ok: true, groups: groups.results || [], count: groups.results?.length || 0 });
+    return json({ ok: true, groups: groups.results || [], count: groups.results?.length || 0 }, 200, request);
   }
 
-  return err("unknown action: " + action);
+  // ── Next Job (executor poll) ──
+  if (action === "next_job") {
+    const auth = await verifyAuth(env, request, null);
+    if (!auth) return err("unauthorized", 401, request);
+
+    // Mark one queued post as 'posting' and return it with creative + group
+    const job = await db.prepare(`
+      SELECT p.*, g.name as group_name, g.group_url, g.members_parsed,
+             c.name as creative_name, c.post_text, c.image_filename
+      FROM fb_posts p
+      JOIN fb_groups g ON p.group_id = g.id
+      JOIN fb_creatives c ON p.creative_id = c.id
+      WHERE p.status = 'queued'
+      ORDER BY p.id ASC
+      LIMIT 1
+    `).first();
+
+    if (!job) {
+      return json({ ok: true, job: null, note: "no queued posts" }, 200, request);
+    }
+
+    await db.prepare(`UPDATE fb_posts SET status='posting' WHERE id=?`).bind(job.id).run();
+
+    return json({ ok: true, job }, 200, request);
+  }
+
+  return err("unknown action: " + action, 400, request);
 }
 
 // ─── POST handlers ─────────────────────────────────────────
-async function handlePost(body, db) {
+async function handlePost(body, db, env, request) {
   const { action } = body;
+
+  const auth = await verifyAuth(env, request, body);
+  if (!auth) return err("unauthorized", 401, request);
 
   // ── Import Groups ──
   if (action === "import_groups") {
     const { groups } = body;
-    if (!groups || !Array.isArray(groups)) return err("groups array required");
+    if (!groups || !Array.isArray(groups)) return err("groups array required", 400, request);
 
     let imported = 0, skipped = 0, errors = 0;
 
@@ -251,22 +463,39 @@ async function handlePost(body, db) {
 
       const name = g.name || g.Group_Name || "Unknown";
       const visibility = g.visibility || g.Visibility || "Public";
-      const members_raw = g.members_raw || g.Members_Raw || "";
+      const members_raw = g.members_raw || g.Members || g.Members_Raw || "";
       const members_parsed = parseInt(g.members_parsed || g.Members_Parsed || "0") || 0;
       const posts_activity = g.posts_activity || g.Posts_Activity || "";
-      const category = g.category || g.Category || null;
+      const category = g.category || g.Categories || g.Category || null;
+      const sub_category = g.sub_category || g.Sub_Categories || g.Sub_Category || null;
+      const keywords = g.keywords || g.Keywords || null;
+      const status_join = normalizeStatusJoin(g.status_join || g.Status || g.Joined || null);
+      const is_blocked = g.is_blocked || g.Is_Blocked || 0;
+      const notes = g.notes || g.Notes || null;
       const group_id = extractGroupId(url);
 
       try {
         await db.prepare(`
-          INSERT INTO fb_groups (group_url, group_id, name, visibility, members_raw, members_parsed, posts_activity, category)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO fb_groups (
+            group_url, group_id, name, visibility, members_raw, members_parsed,
+            posts_activity, category, sub_category, keywords, status_join, is_blocked, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(group_url) DO UPDATE SET
             name = excluded.name,
             members_raw = excluded.members_raw,
             members_parsed = excluded.members_parsed,
-            posts_activity = excluded.posts_activity
-        `).bind(url, group_id, name, visibility, members_raw, members_parsed, posts_activity, category).run();
+            posts_activity = excluded.posts_activity,
+            category = COALESCE(excluded.category, fb_groups.category),
+            sub_category = COALESCE(excluded.sub_category, fb_groups.sub_category),
+            keywords = COALESCE(excluded.keywords, fb_groups.keywords),
+            status_join = COALESCE(excluded.status_join, fb_groups.status_join),
+            is_blocked = excluded.is_blocked,
+            notes = COALESCE(excluded.notes, fb_groups.notes)
+        `).bind(
+          url, group_id, name, visibility, members_raw, members_parsed,
+          posts_activity, category, sub_category, keywords, status_join,
+          is_blocked ? 1 : 0, notes
+        ).run();
         imported++;
       } catch (e) {
         if (e.message?.includes("UNIQUE")) { skipped++; }
@@ -274,7 +503,7 @@ async function handlePost(body, db) {
       }
     }
 
-    return json({ ok: true, imported, skipped, errors, total: groups.length });
+    return json({ ok: true, imported, skipped, errors, total: groups.length }, 200, request);
   }
 
   // ── Create Creative ──
@@ -296,20 +525,38 @@ async function handlePost(body, db) {
     return json({ ok: true, creative_id: result.meta.last_row_id });
   }
 
+  // ── Select Groups (intelligence: relevance + cooldown + rotation + daily cap) ──
+  if (action === "select_groups") {
+    const { creative_id, daily_cap, cooldown_days, location } = body;
+    if (!creative_id) return err("creative_id required", 400, request);
+    try {
+      const result = await selectGroups(db, creative_id, { daily_cap, cooldown_days, location });
+      return json({ ok: true, ...result }, 200, request);
+    } catch (e) {
+      return err(e.message, 400, request);
+    }
+  }
+
   // ── Create Session ──
   if (action === "create_session") {
-    const { creative_id, group_ids, account_name } = body;
-    if (!creative_id) return err("creative_id required");
+    const { creative_id, group_ids, account_name, use_intelligence, daily_cap, cooldown_days, location } = body;
+    if (!creative_id) return err("creative_id required", 400, request);
 
-    // Get target groups (either specific IDs or all unposted)
-    let targetGroups;
+    let ids;
     if (group_ids && group_ids.length > 0) {
+      // Explicit group list (admin/debug)
       const placeholders = group_ids.map(() => "?").join(",");
-      targetGroups = await db.prepare(
+      const targetGroups = await db.prepare(
         `SELECT id FROM fb_groups WHERE id IN (${placeholders}) AND status='active' AND is_blocked=0`
       ).bind(...group_ids).all();
+      ids = (targetGroups.results || []).map(g => g.id);
+    } else if (use_intelligence) {
+      // Use select_groups intelligence
+      const selected = await selectGroups(db, creative_id, { daily_cap, cooldown_days, location });
+      ids = selected.selected.map(g => g.id);
     } else {
-      targetGroups = await db.prepare(`
+      // Legacy: all unposted active groups by size
+      const targetGroups = await db.prepare(`
         SELECT id FROM fb_groups
         WHERE status='active' AND is_blocked=0
           AND id NOT IN (
@@ -317,10 +564,10 @@ async function handlePost(body, db) {
           )
         ORDER BY members_parsed DESC
       `).bind(creative_id).all();
+      ids = (targetGroups.results || []).map(g => g.id);
     }
 
-    const ids = (targetGroups.results || []).map(g => g.id);
-    if (ids.length === 0) return err("no target groups found");
+    if (!ids || ids.length === 0) return err("no target groups found", 400, request);
 
     // Create session
     const session = await db.prepare(`
@@ -344,7 +591,7 @@ async function handlePost(body, db) {
       ));
     }
 
-    return json({ ok: true, session_id: sessionId, total_groups: ids.length });
+    return json({ ok: true, session_id: sessionId, total_groups: ids.length }, 200, request);
   }
 
   // ── Update Post (called by Claude after posting) ──
@@ -465,22 +712,22 @@ export async function onRequest(context) {
   const db = env.DB;
 
   if (request.method === "OPTIONS") {
-    return new Response(null, { headers: CORS });
+    return new Response(null, { headers: cors(request) });
   }
 
   try {
     if (request.method === "GET") {
-      return await handleGet(url, db);
+      return await handleGet(url, db, env, request);
     }
 
     if (request.method === "POST") {
       const body = await request.json();
-      return await handlePost(body, db);
+      return await handlePost(body, db, env, request);
     }
 
-    return err("method not allowed", 405);
+    return err("method not allowed", 405, request);
   } catch (e) {
     console.error("fb-posting error:", e);
-    return json({ ok: false, error: e.message || "internal error" }, 500);
+    return json({ ok: false, error: e.message || "internal error" }, 500, request);
   }
 }

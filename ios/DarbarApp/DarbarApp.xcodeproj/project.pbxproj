@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		162276F644A5CD97258269BC /* DarbarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE9D3521B28FC3F04E78947 /* DarbarModels.swift */; };
+		27893C6172FFDB54ED2F51A6 /* DarbarHiringFacebookSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 285B2D0B25D885B34B4CA1F2 /* DarbarHiringFacebookSheet.swift */; };
 		33C154F6DFAFF5D9550BE7CF /* DiwanAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49F5E70923F62460E7BF9628 /* DiwanAuth.swift */; };
 		39D1974AB4442F10A3925C7D /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDBEEAEF77C932BCB79F589 /* App.swift */; };
 		463A8C98E1D58351D9EE5BBE /* Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6957C24790474D02A033F583 /* Client.swift */; };
@@ -16,6 +17,7 @@
 		8EE877A07D1049C4E16B7724 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4C216DE0A5C1C2C9C9782F50 /* Assets.xcassets */; };
 		8F5E80475713F119B3F9536F /* DarbarHiringTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96432803BBFD3E475D1C9978 /* DarbarHiringTab.swift */; };
 		91236DAFF718A2AD3232A305 /* DarbarAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39609051605941E6881B521E /* DarbarAppModel.swift */; };
+		99C53853E2749A241EBE2E4F /* DarbarHiringSuppliersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08DD24C56BD584E1B622B4AF /* DarbarHiringSuppliersSheet.swift */; };
 		9B8807D024586B1345055FB3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131CE1C91FB07E2D1386956F /* ContentView.swift */; };
 		A1654A25304DB889BAD8D51C /* ChamberKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4598E5CC7BC187258DA1D5 /* ChamberKit.swift */; };
 		B0E4D1A68B77A5F729F44C4B /* DarbarClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B90E88C588C2BDA0C82846 /* DarbarClient.swift */; };
@@ -26,9 +28,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		08DD24C56BD584E1B622B4AF /* DarbarHiringSuppliersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarHiringSuppliersSheet.swift; sourceTree = "<group>"; };
 		0D2123826DE5D4210DFBE414 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		131CE1C91FB07E2D1386956F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1ADB46AD68B7E249E7EF91A7 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		285B2D0B25D885B34B4CA1F2 /* DarbarHiringFacebookSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarHiringFacebookSheet.swift; sourceTree = "<group>"; };
 		39609051605941E6881B521E /* DarbarAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarAppModel.swift; sourceTree = "<group>"; };
 		3E382A247A944E8D4E563EFB /* DarbarHiringCampaignSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarbarHiringCampaignSheet.swift; sourceTree = "<group>"; };
 		49F5E70923F62460E7BF9628 /* DiwanAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiwanAuth.swift; sourceTree = "<group>"; };
@@ -76,6 +80,8 @@
 				39609051605941E6881B521E /* DarbarAppModel.swift */,
 				A3B90E88C588C2BDA0C82846 /* DarbarClient.swift */,
 				3E382A247A944E8D4E563EFB /* DarbarHiringCampaignSheet.swift */,
+				285B2D0B25D885B34B4CA1F2 /* DarbarHiringFacebookSheet.swift */,
+				08DD24C56BD584E1B622B4AF /* DarbarHiringSuppliersSheet.swift */,
 				96432803BBFD3E475D1C9978 /* DarbarHiringTab.swift */,
 				ABE9D3521B28FC3F04E78947 /* DarbarModels.swift */,
 				500C24F85AF19D882C7990F8 /* DarbarSheets.swift */,
@@ -167,6 +173,8 @@
 				91236DAFF718A2AD3232A305 /* DarbarAppModel.swift in Sources */,
 				B0E4D1A68B77A5F729F44C4B /* DarbarClient.swift in Sources */,
 				58FAABA54047D9765EB756C1 /* DarbarHiringCampaignSheet.swift in Sources */,
+				27893C6172FFDB54ED2F51A6 /* DarbarHiringFacebookSheet.swift in Sources */,
+				99C53853E2749A241EBE2E4F /* DarbarHiringSuppliersSheet.swift in Sources */,
 				8F5E80475713F119B3F9536F /* DarbarHiringTab.swift in Sources */,
 				162276F644A5CD97258269BC /* DarbarModels.swift in Sources */,
 				F972BD35E8C10321A5726AF1 /* DarbarSheets.swift in Sources */,
