@@ -8,7 +8,7 @@ struct TakhtApp: App {
         WindowGroup {
             ContentView(model: model)
                 .preferredColorScheme(.dark)
-                .task { await model.resume() }
+                .task { await model.boot() }
         }
     }
 }

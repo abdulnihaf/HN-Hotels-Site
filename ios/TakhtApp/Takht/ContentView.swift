@@ -14,7 +14,10 @@ struct ContentView: View {
         ZStack {
             TakhtTheme.bg.ignoresSafeArea()
             if model.identity == nil {
-                if model.resuming { splash } else { GateView(model: model) }
+                switch model.gate {
+                case .biometric: BiometricLockView(model: model)
+                case .pin:       GateView(model: model)
+                }
             } else if model.needsBrandPick {
                 BrandPickerView(model: model)
             } else {
@@ -436,6 +439,65 @@ struct BrandPickerView: View {
             .background(TakhtTheme.card, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(b.accent.opacity(0.5), lineWidth: 1))
         }
+    }
+}
+
+// ═══════════════════════════════ FACE ID LOCK ═══════════════════════════════
+struct BiometricLockView: View {
+    @ObservedObject var model: TakhtAppModel
+    private let accent = TakhtTheme.accent
+    @State private var failed = false
+    @State private var working = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            ZStack {
+                RoundedRectangle(cornerRadius: 18).fill(TakhtTheme.bgElev)
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(accent.opacity(0.5), lineWidth: 1))
+                    .frame(width: 76, height: 76)
+                Text("त").font(.system(size: 38, weight: .heavy, design: .serif)).foregroundStyle(accent)
+            }
+            Text("Takht").font(.system(size: 46, weight: .heavy, design: .serif))
+                .foregroundStyle(TakhtTheme.text).padding(.top, 16)
+            Text("the seat where revenue lands")
+                .font(.system(size: 14, weight: .medium, design: .serif)).italic()
+                .foregroundStyle(accent).padding(.top, 2)
+            Spacer()
+            if working {
+                ProgressView().tint(accent).scaleEffect(1.1)
+            } else {
+                Button { Task { await unlock() } } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: "faceid").font(.system(size: 20, weight: .semibold))
+                        Text("Unlock with \(TakhtBiometric.kind)").font(.system(size: 16, weight: .bold))
+                    }
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, 22).padding(.vertical, 14)
+                    .background(accent.opacity(0.14), in: Capsule())
+                    .overlay(Capsule().stroke(accent.opacity(0.4), lineWidth: 1))
+                }
+                if failed {
+                    Button { model.usePinInstead() } label: {
+                        Text("Use PIN instead").font(.system(size: 13, weight: .medium)).foregroundStyle(TakhtTheme.textDim)
+                    }.padding(.top, 16)
+                }
+            }
+            Spacer()
+            Text("HN Hotels · since 1918")
+                .font(.system(size: 11, weight: .medium, design: .serif)).italic()
+                .foregroundStyle(accent.opacity(0.5)).padding(.bottom, 8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(TakhtTheme.bg.ignoresSafeArea())
+        .task { await unlock() }
+    }
+
+    private func unlock() async {
+        working = true
+        let ok = await model.tryBiometric()
+        working = false
+        if !ok { failed = true }
     }
 }
 

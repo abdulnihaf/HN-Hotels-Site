@@ -19,6 +19,10 @@ final class TakhtAppModel: ObservableObject {
     @Published var isRefreshing = false
     @Published var resuming = false
 
+    // ── Unlock gate: Face ID after the first PIN login ──
+    enum Gate { case pin, biometric }
+    @Published var gate: Gate = .pin
+
     // ── Solve flow (the leak map → one-tap fix) ──
     enum FixLoad: Equatable { case idle, loading, ready, denied(String), failed(String) }
     @Published var fixState: FixLoad = .idle
@@ -79,20 +83,49 @@ final class TakhtAppModel: ObservableObject {
             if workingBrand != nil { await bootstrap() }
         } else {
             TakhtAuth.clear()   // stale/disabled PIN — fall back to keypad
+            gate = .pin
         }
     }
+
+    // Decide the gate on launch: Face ID if a session PIN is stored, else the keypad.
+    func boot() async {
+        if TakhtAuth.get() != nil && TakhtBiometric.available {
+            gate = .biometric
+            _ = await tryBiometric()
+        } else {
+            gate = .pin
+        }
+    }
+
+    // Face ID → resume the stored session. Returns true if it opened the board.
+    func tryBiometric() async -> Bool {
+        guard TakhtAuth.get() != nil else { gate = .pin; return false }
+        guard await TakhtBiometric.authenticate("Unlock Takht") else { return false }
+        await resume()
+        return identity != nil
+    }
+
+    func usePinInstead() { gate = .pin }
 
     func pickBrand(_ b: TakhtBrand) async {
         workingBrand = b
         await bootstrap()
     }
 
+    // Lock = hide the board, require Face ID to re-open. The session PIN stays so
+    // Face ID can resume without retyping. signOut() forgets the identity entirely.
     func lock() {
-        TakhtAuth.clear()
         pollTask?.cancel()
         identity = nil; workingBrand = nil
         balance = nil; token = nil; upi = nil; shift = nil; flags = []
         status = "opening the court…"
+        gate = (TakhtAuth.get() != nil && TakhtBiometric.available) ? .biometric : .pin
+    }
+
+    func signOut() {
+        TakhtAuth.clear()
+        lock()
+        gate = .pin
     }
 
     func bootstrap() async { await refresh(); startPolling() }
