@@ -1,0 +1,194 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		165C0BD9E51154A24916A3CC /* MezaanKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D72BB5F732C5E726369B85BA /* MezaanKit.swift */; };
+		1C3905AC6891E4DE573A78BD /* BoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1CF52F936469CF8B9F6E9AF /* BoardView.swift */; };
+		99413581263AF2613F0CCA08 /* MezaanApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9EE1906584C27C104B8655 /* MezaanApp.swift */; };
+		9FB4F223D9506DB0FDF07469 /* BoardModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1851F9A2AE01941C6C8E46 /* BoardModel.swift */; };
+		B691715B2B7CA0FC4F4358F6 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9050D77F611B4075AC3D4AD2 /* Config.swift */; };
+		FBB52A859B1B5FC926420615 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD78B71D17FFBD49A101DB0 /* Models.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		3D9EE1906584C27C104B8655 /* MezaanApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezaanApp.swift; sourceTree = "<group>"; };
+		76498647E9D9431762D7EEC4 /* Mezaan.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Mezaan.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9050D77F611B4075AC3D4AD2 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		9D4EFF9DE4205F4587A2DD2C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		AE1851F9A2AE01941C6C8E46 /* BoardModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardModel.swift; sourceTree = "<group>"; };
+		C1CF52F936469CF8B9F6E9AF /* BoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardView.swift; sourceTree = "<group>"; };
+		D72BB5F732C5E726369B85BA /* MezaanKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezaanKit.swift; sourceTree = "<group>"; };
+		DDD78B71D17FFBD49A101DB0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0DF9F14FEA8DE4E93AE8EFF5 = {
+			isa = PBXGroup;
+			children = (
+				ADE7B83AA326669AC876E462 /* Sources */,
+				2EC3CB29F38AAE2C2B56F987 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		2EC3CB29F38AAE2C2B56F987 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				76498647E9D9431762D7EEC4 /* Mezaan.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ADE7B83AA326669AC876E462 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				AE1851F9A2AE01941C6C8E46 /* BoardModel.swift */,
+				C1CF52F936469CF8B9F6E9AF /* BoardView.swift */,
+				9050D77F611B4075AC3D4AD2 /* Config.swift */,
+				9D4EFF9DE4205F4587A2DD2C /* Info.plist */,
+				3D9EE1906584C27C104B8655 /* MezaanApp.swift */,
+				D72BB5F732C5E726369B85BA /* MezaanKit.swift */,
+				DDD78B71D17FFBD49A101DB0 /* Models.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		193D9EB125833C6D0E975B85 /* Mezaan */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C2297017019EEC9C5B126D84 /* Build configuration list for PBXNativeTarget "Mezaan" */;
+			buildPhases = (
+				B99F5D93BC47BBE616053AA0 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Mezaan;
+			packageProductDependencies = (
+			);
+			productName = Mezaan;
+			productReference = 76498647E9D9431762D7EEC4 /* Mezaan.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2C446F5813E90A10A49CF94F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					193D9EB125833C6D0E975B85 = {
+						DevelopmentTeam = FZ58DQ52QS;
+					};
+				};
+			};
+			buildConfigurationList = AB6CDEA46DAB6A4741857342 /* Build configuration list for PBXProject "Mezaan" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 0DF9F14FEA8DE4E93AE8EFF5;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 2EC3CB29F38AAE2C2B56F987 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				193D9EB125833C6D0E975B85 /* Mezaan */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B99F5D93BC47BBE616053AA0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9FB4F223D9506DB0FDF07469 /* BoardModel.swift in Sources */,
+				1C3905AC6891E4DE573A78BD /* BoardView.swift in Sources */,
+				B691715B2B7CA0FC4F4358F6 /* Config.swift in Sources */,
+				99413581263AF2613F0CCA08 /* MezaanApp.swift in Sources */,
+				165C0BD9E51154A24916A3CC /* MezaanKit.swift in Sources */,
+				FBB52A859B1B5FC926420615 /* Models.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		6F9D10FD06A17C9653D69450 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				INFOPLIST_FILE = Sources/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.mezaan;
+				PRODUCT_NAME = Mezaan;
+			};
+			name = Debug;
+		};
+		A9DDE5FA03525082FE6ED652 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AFC5E91CC4D50B6B62B15595 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				INFOPLIST_FILE = Sources/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.mezaan;
+				PRODUCT_NAME = Mezaan;
+			};
+			name = Release;
+		};
+		D92C9EDE19178D5B0C1F4175 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AB6CDEA46DAB6A4741857342 /* Build configuration list for PBXProject "Mezaan" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A9DDE5FA03525082FE6ED652 /* Debug */,
+				D92C9EDE19178D5B0C1F4175 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C2297017019EEC9C5B126D84 /* Build configuration list for PBXNativeTarget "Mezaan" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6F9D10FD06A17C9653D69450 /* Debug */,
+				AFC5E91CC4D50B6B62B15595 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2C446F5813E90A10A49CF94F /* Project object */;
+}

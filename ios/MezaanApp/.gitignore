@@ -1,0 +1,5 @@
+build/
+DerivedData/
+Sources/Config.swift
+*.xcuserstate
+xcuserdata/
