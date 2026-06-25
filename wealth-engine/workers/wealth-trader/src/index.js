@@ -259,6 +259,10 @@ async function tryAutoBridge(env, db, trade, params) {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': env.DASHBOARD_KEY || '',
+        // Order-mutating actions require the dedicated execution secret
+        // (separate from the shared dashboard key). Set on this worker via:
+        //   wrangler secret put KITE_EXEC_KEY
+        'x-exec-key': env.KITE_EXEC_KEY || '',
       },
       body: JSON.stringify({
         exchange: 'NSE',
