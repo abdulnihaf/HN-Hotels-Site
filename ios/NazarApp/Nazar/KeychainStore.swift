@@ -15,9 +15,11 @@ enum KeychainStore {
         var add = query
         add[kSecValueData as String] = data
         let status = SecItemAdd(add as CFDictionary, nil)
+        #if DEBUG
         if status == errSecMissingEntitlement || status == -34018 {
             UserDefaults.standard.set(value, forKey: "\(service).\(account)")
         }
+        #endif
     }
 
     static func get(_ account: String) -> String? {
@@ -34,7 +36,11 @@ enum KeychainStore {
            let s = String(data: d, encoding: .utf8) {
             return s
         }
+        #if DEBUG
         return UserDefaults.standard.string(forKey: "\(service).\(account)")
+        #else
+        return nil
+        #endif
     }
 
     static func clear(_ account: String) {

@@ -20,13 +20,18 @@ targets:
       properties:
         CFBundleDisplayName: Nazar
         CFBundleIconName: AppIcon
-        CFBundleVersion: "3"
+        CFBundleVersion: "4"
         CFBundleShortVersionString: "1.0"
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: "Unlock Nazar with Face ID instead of typing your PIN."
         NSLocalNetworkUsageDescription: "Nazar connects to the RTX camera server on your private network."
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+          NSAllowsArbitraryLoads: false
+          NSExceptionDomains:
+            100.107.54.16:
+              NSIncludesSubdomains: false
+              NSExceptionAllowsInsecureHTTPLoads: true
+              NSExceptionMinimumTLSVersion: TLSv1.0
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

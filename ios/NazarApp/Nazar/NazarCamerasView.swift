@@ -65,11 +65,13 @@ struct CameraThumbView: View {
     let trust: String?
     @State private var image: UIImage?
     @State private var loadError = false
+    @State private var retryCount = 0
+    private let maxRetries = 3
 
     private var trustColor: Color {
         switch trust {
         case "LIVE": return HK.ok
-        case "STALE", "FROZEN": return HK.error
+        case "STALE", "FROZEN", "NO-SIGNAL", "NO_SIGNAL", "DEGRADED": return HK.error
         case "BACKUP": return HK.warn
         default: return HK.textFaint
         }
@@ -120,12 +122,23 @@ struct CameraThumbView: View {
     }
 
     private func fetchFrame() async {
-        do {
-            let data = try await NazarClient.shared.fetchFrame(cam: cam.liveFeedId)
-            image = UIImage(data: data)
-        } catch {
-            loadError = true
+        while retryCount <= maxRetries {
+            do {
+                let data = try await NazarClient.shared.fetchFrame(cam: cam.liveFeedId)
+                if let img = UIImage(data: data), img.size.width > 0 {
+                    image = img
+                    loadError = false
+                    return
+                }
+            } catch {
+                // retry after short delay
+            }
+            retryCount += 1
+            if retryCount <= maxRetries {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
         }
+        loadError = true
     }
 }
 

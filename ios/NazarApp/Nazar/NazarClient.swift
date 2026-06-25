@@ -21,6 +21,8 @@ actor NazarClient {
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 10
         cfg.timeoutIntervalForResource = 15
+        cfg.urlCache = nil                         // never cache live camera data / flags / counts
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
         session = URLSession(configuration: cfg)
     }
 
