@@ -178,6 +178,10 @@ async function createToken(env, body) {
   const tier = tierOf(followers);
   const matrix = TIER_MATRIX[tier];
 
+  // Pick any seeded slot as a placeholder; the shell is updated when the creator actually books.
+  const slot = await env.DB.prepare(`SELECT id, slot_date, window_code FROM influencer_slots ORDER BY id LIMIT 1`).first();
+  if (!slot) return json({ error: 'no_influencer_slots_seeded' }, 500);
+
   // Generate token
   let token;
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -186,12 +190,12 @@ async function createToken(env, body) {
     if (!exists) break;
   }
 
-  // Insert booking shell — slot_id 0 means not-yet-booked; will be filled when creator books
+  // Insert booking shell; placeholder slot is replaced when creator books.
   const r = await env.DB.prepare(`
     INSERT INTO influencer_bookings
       (creator_username, creator_name, creator_followers, creator_tier, cover_commitment, meal_budget_paise,
        slot_id, slot_date, window_code, status, outreach_token)
-    VALUES (?, ?, ?, ?, ?, ?, 0, '0000-00-00', 'PENDING', 'pending', ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).bind(
     creator_username.toLowerCase().replace(/^@/, ''),
     creator_name || null,
@@ -199,6 +203,7 @@ async function createToken(env, body) {
     tier,
     matrix.covers,
     matrix.budget_paise,
+    slot.id, slot.slot_date, slot.window_code,
     token
   ).run();
 

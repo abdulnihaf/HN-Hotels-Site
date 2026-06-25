@@ -1102,12 +1102,12 @@ async function cronOutreachWave(env, body, request) {
 async function pickWaveCandidates(env, campaign) {
   // BLR + 1K–99999 (T1..T5; outreachBucket filters T5 to MANUAL_CASH downstream).
   // Memory: feedback_influencer_barter_targeting.md — cold barter restricted to T1..T4.
-  // Skip already-contacted on any channel for any campaign — a creator is a creator.
+  // Skip already-contacted on any channel for this campaign — a creator is a creator.
   const r = await env.DB.prepare(`
     SELECT p.*
     FROM influencer_bio_pulse p
     LEFT JOIN influencer_outreach_log o
-      ON o.creator_username = p.username AND o.status != 'queued'
+      ON o.creator_username = p.username AND o.campaign=? AND o.status != 'queued'
     WHERE p.status='ok' AND p.is_private=0
       AND p.followers_count BETWEEN 1000 AND 99999
       AND o.id IS NULL
@@ -1115,7 +1115,7 @@ async function pickWaveCandidates(env, campaign) {
         OR LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%blr%'
         OR LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%bengaluru%')
     LIMIT 200
-  `).all();
+  `).bind(campaign).all();
 
   return r.results.map(c => {
     const { score } = scoreRelevance(c);
@@ -1858,6 +1858,10 @@ async function ensureBookingShell(env, profile, tier) {
   `).bind(profile.username).first();
   if (existing && existing.outreach_token) return existing.outreach_token;
 
+  // Pick any seeded slot as a placeholder; the shell is updated when the creator actually books.
+  const slot = await env.DB.prepare(`SELECT id, slot_date, window_code FROM influencer_slots ORDER BY id LIMIT 1`).first();
+  if (!slot) throw new Error('no_influencer_slots_seeded');
+
   let token;
   for (let i = 0; i < 5; i++) {
     token = genToken();
@@ -1868,11 +1872,11 @@ async function ensureBookingShell(env, profile, tier) {
     INSERT INTO influencer_bookings (
       creator_username, creator_name, creator_followers, creator_tier, cover_commitment,
       meal_budget_paise, slot_id, slot_date, window_code, status, outreach_token
-    ) VALUES (?, ?, ?, ?, ?, ?, 0, '0000-00-00', 'PENDING', 'pending', ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).bind(
     profile.username, profile.full_name || null, profile.followers_count || null,
     tier.label?.split(' ')[0]?.replace(/[^A-Z0-9]/gi, '') || 'T1',
-    tier.covers, tier.budget_paise, token
+    tier.covers, tier.budget_paise, slot.id, slot.slot_date, slot.window_code, token
   ).run();
   return token;
 }

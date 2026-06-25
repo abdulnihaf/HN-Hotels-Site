@@ -611,6 +611,10 @@ async function ensureBookingShell(env, profile, tier) {
   `).bind(profile.username).first();
   if (existing && existing.outreach_token) return existing.outreach_token;
 
+  // Pick any seeded slot as a placeholder; the shell is updated when the creator actually books.
+  const slot = await env.DB.prepare(`SELECT id, slot_date, window_code FROM influencer_slots ORDER BY id LIMIT 1`).first();
+  if (!slot) throw new Error('no_influencer_slots_seeded');
+
   // Generate fresh token
   let token;
   for (let i = 0; i < 5; i++) {
@@ -623,7 +627,7 @@ async function ensureBookingShell(env, profile, tier) {
     INSERT INTO influencer_bookings
       (creator_username, creator_name, creator_followers, creator_tier, cover_commitment,
        meal_budget_paise, slot_id, slot_date, window_code, status, outreach_token)
-    VALUES (?, ?, ?, ?, ?, ?, 0, '0000-00-00', 'PENDING', 'pending', ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).bind(
     profile.username,
     profile.full_name || null,
@@ -631,6 +635,7 @@ async function ensureBookingShell(env, profile, tier) {
     tier.name,
     tier.covers,
     tier.budget_paise,
+    slot.id, slot.slot_date, slot.window_code,
     token
   ).run();
 
