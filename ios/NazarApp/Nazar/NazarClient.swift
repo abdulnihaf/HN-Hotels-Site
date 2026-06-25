@@ -64,6 +64,12 @@ actor NazarClient {
         return try await get(url)
     }
 
+    func fetchMetrics() async throws -> NazarMetrics {
+        guard let url = URL(string: "\(NazarURL.appBase)/nazar-metrics.json?_=\(Int(Date().timeIntervalSince1970))") else { throw NazarError.badURL }
+        let data = try await get(url)
+        return try JSONDecoder().decode(NazarMetrics.self, from: data)
+    }
+
     // MARK: - Flag verdicts
 
     func confirmFlag(code: String, verdict: String, label: String?) async throws {

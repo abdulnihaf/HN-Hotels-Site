@@ -204,3 +204,45 @@ struct NazarConfirmation: Codable, Identifiable {
         case at, code, verdict, label
     }
 }
+
+// MARK: - Reconciled per-brand analytics (GET /nazar-metrics.json)
+
+struct NazarMetrics: Codable {
+    let updated: String?
+    let brands: [String: NazarBrandMetrics]?
+}
+
+struct NazarBrandMetrics: Codable {
+    let occupancyNow: Int?
+    let occupancyPeakToday: Int?
+    let occTrust: String?
+    let customersToday: Int?
+    let salesToday: Int?
+    let posTrust: String?
+    let avgSeatDwellMin: Double?
+    let turnsPerSeat: Double?
+    let dwellTrust: String?
+    let occupancyTrend: [NazarTrendPoint]?
+    let open: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case open
+        case occupancyNow = "occupancy_now"
+        case occupancyPeakToday = "occupancy_peak_today"
+        case occTrust = "occ_trust"
+        case customersToday = "customers_today"
+        case salesToday = "sales_today"
+        case posTrust = "pos_trust"
+        case avgSeatDwellMin = "avg_seat_dwell_min"
+        case turnsPerSeat = "turns_per_seat"
+        case dwellTrust = "dwell_trust"
+        case occupancyTrend = "occupancy_trend"
+    }
+}
+
+struct NazarTrendPoint: Codable, Identifiable {
+    private let lid = UUID()
+    var id: String { lid.uuidString }
+    let t: String?
+    let v: Int?
+}
