@@ -3,22 +3,20 @@
  *
  * Lives beside /api/takht-auth on hnhotels.in (the Darbar-identity layer).
  *
- * THE PROBLEM IT SOLVES (proven live 2026-06-25): the NCH slot registry's
- * current_person is a hand-maintained NAME that rots. v_staff_slots still credited
- * Farzaib/Ritiqu/… for ~900 token orders/month while Darbar says those people left
- * and the real active NCH runner is Sabir. Attribution silently flowed to ghosts.
+ * TWO KINDS OF SLOT, on purpose:
+ *  • RUNNERS are identified by their SLOT — RUN01..RUN05 — not by a Darbar person.
+ *    A runner is a position (fixed Odoo partner 64-68); accountability is per-slot.
+ *    No name reconciliation, no ghost-hunting. Kept deliberately simple.
+ *  • NAMED STAFF (cashier / gm / manager / admin) are real people who log into
+ *    Takht with their Darbar PIN. They resolve LIVE from Darbar (hr_employees,
+ *    is_active=1) by darbar_employee_id every read, so a departed cashier's slot
+ *    shows as a ghost instead of silently crediting someone who left.
  *
- * THE FIX (owner law: "the live data is pulled from the Darbar app — you know who
- * is working"): WHO is in a slot is NEVER trusted as a stored string. It is resolved
- * LIVE from Darbar (hr_employees, is_active=1) on every read, by darbar_employee_id.
- * The slot is the permanent POS container (partner_id); the person is a live
- * projection of Darbar. If a runner leaves, their binding goes inactive by itself.
+ *   GET ?action=roster&brand=NCH  → runner slots as RUN01-05, staff slots resolved
+ *                                   live to their Darbar person, with flags.
  *
- *   GET ?action=roster&brand=NCH  → every slot resolved to its live Darbar person,
- *                                   status live|ghost|vacant + roster gaps + flags.
- *
- * Bindings (this repo, hn-hotels-site): DB = hn-hiring (Darbar identity),
- *           NCH_DB = nch-settlements (v_staff_slots / v_runner_slots). READ-ONLY.
+ * Bindings (hn-hotels-site): DB = hn-hiring (Darbar identity),
+ *           NCH_DB = nch-settlements (v_staff_slots). READ-ONLY.
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 const CORS = {
@@ -30,8 +28,7 @@ const CORS = {
 const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: CORS });
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
 
-// Free-text job_name → Takht view. Mirrors /api/takht-auth classifyRole so
-// "who can run / cashier / manage" is decided the SAME way everywhere.
+// Free-text job_name → Takht view. Mirrors /api/takht-auth classifyRole.
 function classifyRole(job) {
   const j = String(job || '').toLowerCase();
   if (/managing director|general manager|\bgm\b|\bmanager\b|cfo|office executive|\badmin\b/.test(j)) return 'manager';
@@ -40,6 +37,11 @@ function classifyRole(job) {
   if (/captain|waiter|steward/.test(j)) return 'captain';
   if (/chai master|tea master|irani chai/.test(j)) return 'counter';
   return 'none';
+}
+// RUN001 -> RUN01 — the clean runner identity (the slot IS the runner).
+function runnerLabel(slotCode) {
+  const n = (String(slotCode).match(/(\d+)$/) || [])[1];
+  return n ? 'RUN' + String(parseInt(n, 10)).padStart(2, '0') : String(slotCode);
 }
 
 export async function onRequest(context) {
@@ -74,9 +76,18 @@ export async function onRequest(context) {
        FROM v_staff_slots ORDER BY role, slot_code`
     ).all()).results || [];
 
-    // 3. Resolve each slot to its LIVE person. ID-bind wins; name-match is a flagged fallback.
+    // 3. Resolve each slot.
     const occupiedIds = new Set();
     const resolved = slots.map(s => {
+      // RUNNERS: identified by their slot (RUN01-05). No Darbar mapping. Simple.
+      if (s.role === 'runner') {
+        return {
+          slot_code: s.slot_code, role: 'runner', partner_id: s.partner_id,
+          person: { id: null, name: runnerLabel(s.slot_code) },
+          resolved_via: 'slot', status: 'slot', durable: true,
+        };
+      }
+      // NAMED STAFF: resolve LIVE from Darbar. ID-bind wins; name-match is flagged fallback.
       let person = null, via = null;
       if (s.darbar_employee_id && byId.has(s.darbar_employee_id)) { person = byId.get(s.darbar_employee_id); via = 'bound_id'; }
       else if (s.current_person && byName.has(norm(s.current_person))) { person = byName.get(norm(s.current_person)); via = 'name_match'; }
@@ -90,27 +101,27 @@ export async function onRequest(context) {
       };
     });
 
-    // 4. Roster gaps — active FOH people Darbar knows who occupy NO slot.
-    const unslotted = roster.filter(r => r.view !== 'none' && !occupiedIds.has(r.id))
+    // 4. Roster gaps — active NAMED-staff Darbar knows of who hold no slot (runners excluded).
+    const unslotted = roster.filter(r => r.view !== 'none' && r.view !== 'runner' && !occupiedIds.has(r.id))
       .map(r => ({ id: r.id, name: r.name, view: r.view, job: r.job }));
 
-    // 5. Plain-language flags — the leak made visible.
+    // 5. Plain-language flags (staff only — runners are slots, never ghosts).
     const flags = [];
     const ghosts = resolved.filter(s => s.status === 'ghost');
-    if (ghosts.length) flags.push({ level: 'red', text: `${ghosts.length} slot(s) still credit people Darbar says are inactive: ${ghosts.map(g => `${g.slot_code}=${g.label_was}`).join(', ')}` });
-    const looseRunners = unslotted.filter(u => u.view === 'runner');
-    if (looseRunners.length) flags.push({ level: 'amber', text: `Active runner(s) with no bound slot: ${looseRunners.map(u => u.name).join(', ')}` });
+    if (ghosts.length) flags.push({ level: 'red', text: `${ghosts.length} staff slot(s) still credit people Darbar says are inactive: ${ghosts.map(g => `${g.slot_code}=${g.label_was}`).join(', ')}` });
     const nameOnly = resolved.filter(s => s.resolved_via === 'name_match');
-    if (nameOnly.length) flags.push({ level: 'amber', text: `${nameOnly.length} slot(s) resolved by NAME only (fragile) — bind by Darbar id.` });
-    if (!flags.length) flags.push({ level: 'green', text: 'Every slot maps to a live Darbar person by id.' });
+    if (nameOnly.length) flags.push({ level: 'amber', text: `${nameOnly.length} staff slot(s) resolved by NAME only (fragile) — bind by Darbar id.` });
+    if (!flags.length) flags.push({ level: 'green', text: 'Runners are RUN01-05; every staff slot maps to a live Darbar person.' });
 
     return json({
       ok: true, brand, resolved_at: new Date().toISOString(),
+      runners: resolved.filter(s => s.role === 'runner').map(s => ({ slot_code: s.slot_code, runner: s.person.name, partner_id: s.partner_id })),
       slots: resolved,
       active_foh: roster.filter(r => r.view !== 'none'),
       unslotted, flags,
-      summary: { slots: resolved.length, live: resolved.filter(s => s.status === 'live').length,
-                 ghost: ghosts.length, durable: resolved.filter(s => s.durable).length },
+      summary: { slots: resolved.length, runners: resolved.filter(s => s.role === 'runner').length,
+                 staff_live: resolved.filter(s => s.status === 'live').length,
+                 staff_ghost: ghosts.length },
     });
   } catch (err) {
     return json({ ok: false, error: err.message }, 500);
