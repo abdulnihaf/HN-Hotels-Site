@@ -1,6 +1,23 @@
 import SwiftUI
 import LocalAuthentication
 
+private struct OrderAuthWitness: Equatable {
+    let ok: Bool
+    let policy: String
+    let biometry: String
+    let detail: String
+    let errorCode: String?
+}
+
+private struct OrderExecutionWitness: Equatable {
+    let tag: String
+    let mode: String
+    var auth: OrderAuthWitness?
+    var server: String
+    var broker: String
+    let timestamp: Date
+}
+
 struct ExecuteView: View {
     @ObservedObject var vm: WealthVM
     @Environment(\.openURL) private var openURL
@@ -15,6 +32,7 @@ struct ExecuteView: View {
     @State private var errorMsg: String?
     @State private var practice = true
     @State private var lastWasPractice = false
+    @State private var orderWitness: OrderExecutionWitness?
 
     private var qty: Int { max(1, Int(qtyText) ?? 1) }
     private var stop: Double { Double(stopText) ?? 0 }
@@ -66,7 +84,7 @@ struct ExecuteView: View {
 
                         let canPlace = formValid && !placing && (practice || kiteOK)
                         Button {
-                            errorMsg = nil; result = nil; showConfirm = true
+                            errorMsg = nil; result = nil; orderWitness = nil; showConfirm = true
                         } label: {
                             Text(placing ? "Placing…" : (practice ? "Place practice order" : (isReal ? "Review & place REAL order" : "Review & place (shadow)")))
                                 .font(.system(size: 15, weight: .bold))
@@ -79,6 +97,7 @@ struct ExecuteView: View {
                     }
 
                     if let r = result { resultCard(r) }
+                    if let w = orderWitness { witnessCard(w) }
                     if let e = errorMsg {
                         Card { Text(e).font(.system(size: 13)).foregroundColor(HK.error) }
                     }
@@ -162,16 +181,56 @@ struct ExecuteView: View {
         return r.error ?? r.reason ?? "Unknown error"
     }
 
+    @ViewBuilder
+    private func witnessCard(_ w: OrderExecutionWitness) -> some View {
+        Card {
+            HStack {
+                Text("Order witness").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
+                Spacer()
+                Pill(text: w.mode, color: w.mode == "REAL" ? HK.error : HK.accent)
+            }
+            Row(label: "Attempt", value: w.tag)
+            Row(label: "Time", value: w.timestamp.formatted(date: .omitted, time: .standard))
+            if let auth = w.auth {
+                Row(label: "iOS auth", value: auth.ok ? "OK" : "FAILED", valueColor: auth.ok ? HK.ready : HK.error)
+                Row(label: "Policy", value: auth.policy)
+                Row(label: "Biometry", value: auth.biometry)
+                Text(auth.detail).font(.system(size: 12)).foregroundColor(auth.ok ? HK.textDim : HK.error)
+                if let code = auth.errorCode {
+                    Text(code).font(.system(size: 11, weight: .semibold)).foregroundColor(HK.textFaint)
+                }
+            } else {
+                Row(label: "iOS auth", value: "Requested", valueColor: HK.running)
+            }
+            Row(label: "Server", value: w.server)
+            Text(w.broker).font(.system(size: 12)).foregroundColor(HK.textDim)
+        }
+    }
+
     private func place() {
         guard !placing else { return }
         placing = true; errorMsg = nil; result = nil
         let tag = "HN_WE_IOS_\(Int(Date().timeIntervalSince1970))"
         let sym = symbol.uppercased()
         let isPractice = practice
+        let mode = isPractice ? "PRACTICE" : (isReal ? "REAL" : "SHADOW")
+        orderWitness = OrderExecutionWitness(tag: tag, mode: mode, auth: nil,
+                                             server: "Waiting for iOS auth", broker: "Not reached",
+                                             timestamp: Date())
         Task {
-            let authed = await biometricOK()
-            if !authed {
-                await MainActor.run { placing = false; errorMsg = "Authorization failed — order not placed." }
+            let auth = await authorizeOrder(isPractice: isPractice)
+            await MainActor.run {
+                updateWitness { w in
+                    w.auth = auth
+                    w.server = auth.ok ? "Authorized; broker request not sent yet" : "Stopped before server"
+                    w.broker = auth.ok ? "Waiting for server result" : "No Zerodha request sent"
+                }
+            }
+            if !auth.ok {
+                await MainActor.run {
+                    placing = false
+                    errorMsg = "Authorization failed — order not placed. \(auth.detail)"
+                }
                 return
             }
             if isPractice {
@@ -181,35 +240,142 @@ struct ExecuteView: View {
                 let gtt = Int(Date().timeIntervalSince1970) % 100000
                 let demo = BracketResult(ok: true, blocked: nil, reason: "practice", error: nil, message: nil,
                                          fill_price: fill, gtt_id: gtt, fallback_used: false, warning: nil, bracket_id: nil)
-                await MainActor.run { result = demo; lastWasPractice = true; placing = false }
+                await MainActor.run {
+                    updateWitness { w in
+                        w.server = "Practice only - not sent to trade.hnhotels.in"
+                        w.broker = "No Zerodha order. Local rehearsal fill \(Money.rupeesFromRupee(fill)); demo GTT #\(gtt)."
+                    }
+                    result = demo
+                    lastWasPractice = true
+                    placing = false
+                }
                 return
             }
             await MainActor.run { lastWasPractice = false }
             do {
                 let r = try await WealthClient.shared.placeBracket(symbol: sym, qty: qty, stop: stop, target: target, tag: tag)
-                await MainActor.run { result = r; placing = false }
+                await MainActor.run {
+                    updateWitness { w in
+                        w.server = serverWitness(r)
+                        w.broker = brokerWitness(r)
+                    }
+                    result = r
+                    placing = false
+                }
                 await vm.refresh()
             } catch {
                 await MainActor.run {
-                    errorMsg = (error as? WealthError)?.errorDescription ?? error.localizedDescription
+                    let text = (error as? WealthError)?.errorDescription ?? error.localizedDescription
+                    updateWitness { w in
+                        w.server = "API threw: \(text)"
+                        w.broker = "No confirmed broker order"
+                    }
+                    errorMsg = text
                     placing = false
                 }
             }
         }
     }
 
-    private func biometricOK() async -> Bool {
-        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+    private func updateWitness(_ mutate: (inout OrderExecutionWitness) -> Void) {
+        guard var witness = orderWitness else { return }
+        mutate(&witness)
+        orderWitness = witness
+    }
+
+    private func serverWitness(_ r: BracketResult) -> String {
+        if r.blocked == true { return "API returned blocked/simulated" }
+        if r.ok == true { return "API returned ok" }
+        return "API returned failure"
+    }
+
+    private func brokerWitness(_ r: BracketResult) -> String {
+        if r.blocked == true {
+            return "Server simulation only. No real broker order placed."
+        }
+        if r.ok == true {
+            var parts = ["Broker order accepted"]
+            if let f = r.fill_price { parts.append("fill \(Money.rupeesFromRupee(f))") }
+            if let g = r.gtt_id { parts.append("GTT #\(g)") }
+            if r.fallback_used == true { parts.append("fallback stop used") }
+            return parts.joined(separator: " · ")
+        }
+        return orderFailureText(r)
+    }
+
+    private func authorizeOrder(isPractice: Bool) async -> OrderAuthWitness {
+        await withCheckedContinuation { (cont: CheckedContinuation<OrderAuthWitness, Never>) in
             let ctx = LAContext()
+            ctx.localizedFallbackTitle = "Use Passcode"
             var err: NSError?
+            let policy = LAPolicy.deviceOwnerAuthentication
             // Allow passcode fallback for this high-stakes action.
-            guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else {
-                cont.resume(returning: true) // no auth available (e.g. simulator) — don't hard-block
+            guard ctx.canEvaluatePolicy(policy, error: &err) else {
+                let reason = Self.authErrorLabel(err)
+                #if targetEnvironment(simulator)
+                if isPractice {
+                    cont.resume(returning: OrderAuthWitness(
+                        ok: true,
+                        policy: "simulator-practice-bypass",
+                        biometry: Self.biometryName(ctx.biometryType),
+                        detail: "Simulator practice bypass only. This is not proof that Face ID works on iPhone.",
+                        errorCode: reason
+                    ))
+                    return
+                }
+                #endif
+                cont.resume(returning: OrderAuthWitness(
+                    ok: false,
+                    policy: "deviceOwnerAuthentication",
+                    biometry: Self.biometryName(ctx.biometryType),
+                    detail: "iOS could not evaluate device-owner authentication: \(reason).",
+                    errorCode: reason
+                ))
                 return
             }
-            ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Authorize this order") { ok, _ in
-                cont.resume(returning: ok)
+            let biometry = Self.biometryName(ctx.biometryType)
+            ctx.evaluatePolicy(policy, localizedReason: "Authorize this order") { ok, error in
+                let detail = ok
+                    ? "iOS accepted device-owner authentication for this order attempt."
+                    : "iOS rejected authorization: \(Self.authErrorLabel(error))."
+                cont.resume(returning: OrderAuthWitness(
+                    ok: ok,
+                    policy: "deviceOwnerAuthentication",
+                    biometry: biometry,
+                    detail: detail,
+                    errorCode: ok ? nil : Self.authErrorLabel(error)
+                ))
             }
         }
+    }
+
+    private static func biometryName(_ type: LABiometryType) -> String {
+        switch type {
+        case .faceID: return "Face ID"
+        case .touchID: return "Touch ID"
+        case .none: return "None"
+        @unknown default: return "Unknown"
+        }
+    }
+
+    private static func authErrorLabel(_ error: Error?) -> String {
+        guard let ns = error as NSError? else { return "no-error" }
+        if ns.domain == LAError.errorDomain, let code = LAError.Code(rawValue: ns.code) {
+            switch code {
+            case .authenticationFailed: return "authenticationFailed (\(ns.code))"
+            case .userCancel: return "userCancel (\(ns.code))"
+            case .userFallback: return "userFallback (\(ns.code))"
+            case .systemCancel: return "systemCancel (\(ns.code))"
+            case .passcodeNotSet: return "passcodeNotSet (\(ns.code))"
+            case .biometryNotAvailable: return "biometryNotAvailable (\(ns.code))"
+            case .biometryNotEnrolled: return "biometryNotEnrolled (\(ns.code))"
+            case .biometryLockout: return "biometryLockout (\(ns.code))"
+            case .appCancel: return "appCancel (\(ns.code))"
+            case .invalidContext: return "invalidContext (\(ns.code))"
+            case .notInteractive: return "notInteractive (\(ns.code))"
+            default: return "\(code) (\(ns.code))"
+            }
+        }
+        return "\(ns.domain) \(ns.code)"
     }
 }
