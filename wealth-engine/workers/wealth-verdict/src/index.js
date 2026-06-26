@@ -1332,6 +1332,301 @@ async function narrateGap(env, today, cfg, decision, picksJson, scan, watch) {
   return { narrative: det, model: 'gap_engine_deterministic', cost_paise: 0 };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SCOUT — the daily LEARNING action (additive; never a real trade)
+//
+// On a NO_EDGE / SIT_OUT day the engine still composes a PAPER scout plan so the
+// owner gets a reasoned daily action + a recorded outcome to learn from — instead
+// of an empty sit-out screen. It writes ONLY to scout_plans / scout_plan_states
+// (migration 0020): never daily_verdicts.decision/picks_json, never paper_trades,
+// never any order path. Notional is a tiny FIXED cap, decoupled from real capital,
+// so a config flip can never inflate it. No Kite/LTP call — off every broker path.
+// HONESTY LAW: a scout is learning + market contact, NOT a proven edge. Gap-ranking
+// alone has not beaten a random pick in our year-long tests; the plan says so plainly.
+// ═══════════════════════════════════════════════════════════════════════════
+const SCOUT_ENABLED = true;
+const SCOUT_NOTIONAL_CAP_PAISE = 5000000;   // ₹50,000 paper notional cap/day (decoupled from real capital)
+const SCOUT_MAX_PICKS = 3;
+
+// Paper-only sizer — capped, NEVER reads real capital config, no live quote.
+function sizeScoutPaper(picks, cfg) {
+  const stopPct = (cfg.stop_pct && cfg.stop_pct < 50) ? cfg.stop_pct : 3.0;
+  const targetPct = +Math.max(stopPct * 1.6, 4.0).toFixed(1);
+  const n = picks.length || 1;
+  const perName = Math.floor(SCOUT_NOTIONAL_CAP_PAISE / n);
+  const out = [];
+  for (const p of picks) {
+    const entry = p.open_paise;
+    if (!entry || entry <= 0) continue;
+    const qty = Math.max(1, Math.floor(perName / entry));
+    const stopPaise = Math.round(entry * (1 - stopPct / 100));
+    const targetPaise = Math.round(entry * (1 + targetPct / 100));
+    out.push({
+      symbol: p.symbol, sector: p.sector || 'OTHER',
+      gap_pct: p.gap_pct, turnover_cr: p.turnover_cr, catalyst: p.catalyst, rank_score: p.rank_score,
+      entry_paise: entry, stop_paise: stopPaise, target_paise: targetPaise,
+      stop_pct: stopPct, target_pct: targetPct, qty,
+      notional_paise: qty * entry,
+      expected_risk_paise: qty * (entry - stopPaise),
+      expected_reward_paise: qty * (targetPaise - entry),
+      rr_ratio: +(targetPct / stopPct).toFixed(2),
+    });
+  }
+  return out;
+}
+
+// Build the "why these, why not the other ~1,200" funnel for the teaching UX.
+function composeScoutWhyNot(scan, candidates, picks) {
+  const pickSet = new Set(picks.map(p => p.symbol));
+  const pickedSectors = new Set(picks.map(p => p.sector));
+  const rejected = candidates.filter(c => !pickSet.has(c.symbol)).slice(0, 5).map(c => ({
+    symbol: c.symbol, gap_pct: c.gap_pct, turnover_cr: c.turnover_cr,
+    reason: (c.sector && pickedSectors.has(c.sector))
+      ? 'same sector as a higher-ranked pick (one per sector)'
+      : `ranked below the top ${picks.length} on gap × liquidity`,
+  }));
+  return {
+    scanned: scan.scanned,            // pre-open universe seen
+    gapped_up: scan.gated,            // cleared the gap threshold
+    liquid_scored: candidates.length, // passed the ₹Cr liquidity gate
+    picked: picks.length,
+    sample_rejected: rejected,
+  };
+}
+
+// EOD fallback candidate source — used when the live pre-open feed is stale/down
+// (so the scout STILL fires every market day). Ranks liquid names by yesterday's
+// close-to-close strength × liquidity. Honest: this is yesterday's data, not a live gap.
+async function scoutEodFallback(db, cfg) {
+  const minTurnover = cfg.min_turnover_cr || 10;
+  const rows = (await db.prepare(`
+    WITH latest AS (SELECT MAX(trade_date) d FROM equity_eod),
+    ranked AS (
+      SELECT symbol, trade_date, close_paise, volume,
+             LAG(close_paise) OVER (PARTITION BY symbol ORDER BY trade_date) prev_c
+      FROM equity_eod
+      WHERE trade_date >= date((SELECT d FROM latest), '-7 days')
+    )
+    SELECT symbol, close_paise, prev_c,
+           (CAST(volume AS REAL)*close_paise/100.0/1e7) AS tov,
+           100.0*(close_paise - prev_c)/prev_c AS chg
+    FROM ranked
+    WHERE trade_date = (SELECT d FROM latest) AND prev_c > 0 AND close_paise > 0
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const cands = rows
+    .filter(r => isTradeableEquity(r.symbol) && r.tov >= minTurnover && r.chg > 0)
+    .map(r => ({
+      symbol: r.symbol, gap_pct: +(+r.chg).toFixed(2), open_paise: r.close_paise,
+      prev_close_paise: r.prev_c, turnover_cr: +(+r.tov).toFixed(1), catalyst: null,
+      rank_score: r.chg * (r.tov >= 100 ? 1.0 : r.tov >= 25 ? 0.9 : 0.8),
+    }))
+    .sort((a, b) => b.rank_score - a.rank_score)
+    .slice(0, 20);
+  return { candidates: cands, scanned: rows.length, gated: cands.length, fresh: false, source: 'eod_fallback' };
+}
+
+// Compose + persist today's daily PAPER scout plan. STANDALONE + idempotent: runs
+// AFTER composeVerdict regardless of which path decided, so the owner always gets a
+// daily learning action — even when the live feed is down (EOD fallback). Fail-CLOSED:
+// writes ONLY to scout_plans / scout_plan_states; never daily_verdicts / picks / orders.
+async function composeScout(env, db, today) {
+  try {
+    if (!SCOUT_ENABLED) return null;
+    const now = Date.now();
+    // idempotent — one PAPER scout per day
+    const exists = await db.prepare(
+      `SELECT id FROM scout_plans WHERE trade_date=? AND mode='PAPER' LIMIT 1`
+    ).bind(today).first().catch(() => null);
+    if (exists) return { scout: 'exists', id: exists.id };
+
+    // the verdict spine this scout shadows
+    const verdict = await db.prepare(
+      `SELECT id, decision FROM daily_verdicts WHERE trade_date=? AND verdict_type='morning' ORDER BY composed_at DESC LIMIT 1`
+    ).bind(today).first().catch(() => null);
+    const verdictId = verdict?.id ?? null;
+    // on a real TRADE day the verdict picks ARE the action — no separate scout needed
+    if (verdict && verdict.decision === 'TRADE') return { scout: 'trade_day_skip' };
+
+    const cfg = (await loadStrategyConfig(db).catch(() => null)) || { strategy: 'gap_up_intraday', verdict: 'NO_EDGE', stop_pct: 3.0, exit_time_ist: '14:30' };
+    const edgeState = cfg.verdict || 'NO_EDGE';
+    const noEdge = edgeState === 'NO_EDGE';
+
+    // candidates: prefer the LIVE pre-open gap scan; if the feed is stale, fall back to EOD.
+    let scan = await scanGapUp(env, db, cfg, today).catch(() => null);
+    let source = 'live_gap';
+    if (!scan || !scan.fresh || !scan.candidates || !scan.candidates.length) {
+      scan = await scoutEodFallback(db, cfg);
+      source = 'eod_fallback';
+    }
+    const featuresJson = JSON.stringify({
+      source, preopen_fresh: source === 'live_gap',
+      scanned: scan?.scanned ?? 0, gapped_up: scan?.gated ?? 0, liquid_scored: scan?.candidates?.length ?? 0,
+      config_oos_exp_pct: cfg.oos_expectancy_pct ?? null, folds_positive: cfg.folds_positive ?? null,
+      edge_vs_null: cfg.edge_vs_null ?? null, edge_state: edgeState,
+    });
+
+    // Nothing to scout at all → honest SKIPPED plan, still on the trail.
+    if (!scan || !scan.candidates || !scan.candidates.length) {
+      const ins = await db.prepare(`
+        INSERT OR IGNORE INTO scout_plans
+          (trade_date, strategy, mode, decision, verdict_id, edge_state,
+           candidate_symbols_json, primary_symbol, rank_reason, why_not_json,
+           features_json, config_oos_exp_pct, honest_expectation,
+           state, state_changed_at, owner_action, composed_at, composed_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `).bind(
+        today, cfg.strategy || 'gap_up_intraday', 'PAPER', 'SIT_OUT', verdictId, edgeState,
+        '[]', null, 'No liquid stock qualified today.',
+        JSON.stringify(composeScoutWhyNot(scan || { scanned: 0, gated: 0 }, [], [])),
+        featuresJson, cfg.oos_expectancy_pct ?? null,
+        'Nothing qualified today. The honest action is to watch the open, take no paper trade, and note why it was a quiet day.',
+        'SKIPPED', now, 'auto', now, 'wealth-verdict',
+      ).run();
+      const pid = ins?.meta?.last_row_id;
+      if (pid) await db.prepare(`INSERT INTO scout_plan_states (plan_id, state, reason, at) VALUES (?,?,?,?)`)
+        .bind(pid, 'SKIPPED', 'no qualifying candidates', now).run().catch(() => {});
+      return { scout: 'SKIPPED', picks: 0, source };
+    }
+
+    const top = await pickSectorSpread(db, scan.candidates, SCOUT_MAX_PICKS);
+    const scoutPicks = sizeScoutPaper(top, cfg);
+    if (!scoutPicks.length) return { scout: 'SKIPPED', picks: 0, source };
+    const primary = scoutPicks[0];
+    const whyNot = composeScoutWhyNot(scan, scan.candidates, scoutPicks);
+    const rankReason = source === 'live_gap'
+      ? `Top gap-up (${primary.gap_pct}%) on ₹${primary.turnover_cr}Cr liquidity${primary.catalyst ? ', news catalyst present' : ''}. Honest: gap-ranking alone has NOT beaten a random pick in our year-long tests — a learning pick, not a proven edge.`
+      : `Live pre-open feed was down — picked from yesterday's strongest liquid close (${primary.gap_pct}% on ₹${primary.turnover_cr}Cr). Honest: this is yesterday's data, a learning watch only.`;
+    const honest = noEdge
+      ? 'Learning scout, not a profit trade. No proven edge today (NO_EDGE) — picking among these names is ~breakeven-to-slightly-negative after costs in our tests. PAPER = zero cash; it records what actually happens so you learn the market each day.'
+      : `Edge is ${edgeState} (~${cfg.oos_expectancy_pct}%/trade OOS) but small — scouting paper to build contact before sizing real money.`;
+    const invalText = `Wrong if it loses the opening level or breaks below VWAP, or doesn't hold its gap by 09:50. Time-stop ${cfg.exit_time_ist || '14:30'} IST.`;
+    const invalJson = JSON.stringify({ vwap_break: true, fail_if_no_gap_hold_by: '09:50', time_stop_ist: cfg.exit_time_ist || '14:30', max_adverse_pct: primary.stop_pct });
+
+    const ins = await db.prepare(`
+      INSERT OR IGNORE INTO scout_plans
+        (trade_date, strategy, mode, decision, verdict_id, config_id, backtest_run_id, edge_state,
+         candidate_symbols_json, primary_symbol, rank_reason, why_not_json,
+         entry_paise, stop_paise, target_paise, qty, rr_ratio,
+         expected_risk_paise, expected_reward_paise, notional_paise,
+         invalidation_text, invalidation_json, features_json, config_oos_exp_pct, honest_expectation,
+         state, state_changed_at, owner_action, composed_at, composed_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).bind(
+      today, cfg.strategy || 'gap_up_intraday', 'PAPER', 'SCOUT', verdictId, cfg.id ?? null, 'gap_edge_nightly', edgeState,
+      JSON.stringify(scoutPicks.map(p => p.symbol)), primary.symbol, rankReason, JSON.stringify(whyNot),
+      primary.entry_paise, primary.stop_paise, primary.target_paise, primary.qty, primary.rr_ratio,
+      primary.expected_risk_paise, primary.expected_reward_paise, scoutPicks.reduce((a, p) => a + p.notional_paise, 0),
+      invalText, invalJson, featuresJson, cfg.oos_expectancy_pct ?? null, honest,
+      'PLANNED', now, 'auto', now, 'wealth-verdict',
+    ).run();
+    const pid = ins?.meta?.last_row_id;
+    if (pid) await db.prepare(`INSERT INTO scout_plan_states (plan_id, state, reason, at) VALUES (?,?,?,?)`)
+      .bind(pid, 'PLANNED', `paper scout composed (${source}): ${scoutPicks.map(p => p.symbol).join(' + ')}`, now).run().catch(() => {});
+    return { scout: 'PLANNED', picks: scoutPicks.length, symbols: scoutPicks.map(p => p.symbol), source };
+  } catch (e) {
+    console.log('composeScout failed (non-fatal):', e?.message || e);
+    return null;
+  }
+}
+
+async function setScoutState(db, planId, state, reason, at) {
+  await db.prepare(`UPDATE scout_plans SET state=?, state_changed_at=? WHERE id=?`).bind(state, at, planId).run().catch(() => {});
+  await db.prepare(`INSERT INTO scout_plan_states (plan_id,state,reason,at) VALUES (?,?,?,?)`).bind(planId, state, reason, at).run().catch(() => {});
+}
+
+// Reconcile prior scout plans into scout_outcomes using EOD OHLC (the worker has no
+// intraday bars). Honest COARSE path: target if the day's high reached it; else stop
+// if the day's low reached it (conservative — stop assumed first if both hit); else
+// time-exit at close. Writes the lesson so the app's learning loop teaches from it.
+async function reconcileScouts(env) {
+  const db = env.DB;
+  const today = istToday();
+  let done = 0;
+  try {
+    const plans = (await db.prepare(`
+      SELECT p.* FROM scout_plans p
+      LEFT JOIN scout_outcomes o ON o.plan_id = p.id
+      WHERE o.id IS NULL AND p.trade_date <= ? AND p.state IN ('PLANNED','ARMED','ENTERED','SKIPPED')
+      ORDER BY p.trade_date ASC LIMIT 60
+    `).bind(today).all().catch(() => ({ results: [] }))).results || [];
+    for (const p of plans) {
+      const now = Date.now();
+      // SKIPPED / no tradable pick → trivial no-trade outcome
+      if (p.decision !== 'SCOUT' || !p.primary_symbol || !p.entry_paise) {
+        await db.prepare(`INSERT OR IGNORE INTO scout_outcomes
+          (plan_id,trade_date,action_taken,win_loss,pnl_net_paise,caught_grade,lesson_text,pattern_label,reconciled_at)
+          VALUES (?,?,?,?,?,?,?,?,?)`)
+          .bind(p.id, p.trade_date, 'sat_out', 'no_trade', 0, 'sat_out',
+            'Quiet day — nothing qualified, no paper trade taken. Sitting out is flat, not a loss.', 'sat_out', now).run().catch(() => {});
+        await setScoutState(db, p.id, 'LEARNED', 'reconciled: sat out', now);
+        done++; continue;
+      }
+      const eod = await db.prepare(
+        `SELECT open_paise,high_paise,low_paise,close_paise FROM equity_eod WHERE symbol=? AND trade_date=? ORDER BY ingested_at DESC LIMIT 1`
+      ).bind(p.primary_symbol, p.trade_date).first().catch(() => null);
+      if (!eod || !eod.close_paise) {
+        // not observable yet — leave today's plan for the next run; only finalize stale past days
+        if (p.trade_date < today) {
+          await db.prepare(`INSERT OR IGNORE INTO scout_outcomes
+            (plan_id,trade_date,action_taken,win_loss,caught_grade,lesson_text,pattern_label,reconciled_at)
+            VALUES (?,?,?,?,?,?,?,?)`)
+            .bind(p.id, p.trade_date, 'not_observed', 'no_trade', 'no_data',
+              'Could not observe the day — no EOD data for the pick.', 'no_data', now).run().catch(() => {});
+          await setScoutState(db, p.id, 'LEARNED', 'reconciled: no EOD', now);
+          done++;
+        }
+        continue;
+      }
+      const entry = p.entry_paise, target = p.target_paise, stop = p.stop_paise, qty = p.qty || 0;
+      const hitStop = stop && eod.low_paise <= stop;
+      const hitTarget = target && eod.high_paise >= target;
+      let exit, reason, falsifier = 0, falsifierCorrect = null;
+      if (hitStop) { exit = stop; reason = 'stop_hit'; falsifier = 1; }   // conservative: stop assumed first if both hit
+      else if (hitTarget) { exit = target; reason = 'target_hit'; }
+      else { exit = eod.close_paise; reason = 'time_exit'; }
+      const gross = qty * (exit - entry);
+      const cost = Math.round(qty * entry * 0.0012);                       // ~0.12% MIS round-trip (research cost floor)
+      const net = gross - cost;
+      const winLoss = net > 0 ? 'win' : net < 0 ? 'loss' : 'flat';
+      const r_mult = p.expected_risk_paise ? +(net / p.expected_risk_paise).toFixed(2) : null;
+      const oracle = await db.prepare(
+        `SELECT symbol, realised_close_pct FROM intraday_winner_daily WHERE trade_date=? AND rank=1 AND source='eod' LIMIT 1`
+      ).bind(p.trade_date).first().catch(() => null);
+      const pickPct = 100.0 * (eod.close_paise - entry) / entry;
+      const caught = pickPct >= 2 ? 'hit' : pickPct >= 0.5 ? 'near' : pickPct <= -1 ? 'far' : 'miss';
+      if (hitStop) falsifierCorrect = (eod.close_paise < stop) ? 1 : 0;
+      const pattern = reason === 'target_hit' ? 'thesis_held'
+        : reason === 'stop_hit' ? 'stop_hit'
+        : (Math.abs(pickPct) < 0.5 ? 'momentum_loss' : (pickPct > 0 ? 'partial_run' : 'faded'));
+      const lesson = reason === 'target_hit'
+        ? `${p.primary_symbol} ran to target. The move held — the kind of day a real edge would catch.`
+        : reason === 'stop_hit'
+        ? `${p.primary_symbol} broke the stop and ${eod.close_paise < stop ? 'kept falling — the stop was right' : 'recovered after stopping us — the stop was too tight'}.`
+        : `${p.primary_symbol} drifted, closed ${pickPct >= 0 ? '+' : ''}${pickPct.toFixed(1)}% from entry. Time-exit, no strong move — a typical no-edge day.`;
+      await db.prepare(`INSERT OR IGNORE INTO scout_outcomes
+        (plan_id,trade_date,action_taken,actual_entry_paise,actual_exit_paise,actual_qty,exit_reason,
+         pnl_gross_paise,pnl_cost_paise,pnl_net_paise,win_loss,r_multiple,
+         oracle_top_symbol,oracle_top_pct,caught_grade,falsifier_fired,falsifier_correct,
+         lesson_text,pattern_label,reconciled_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .bind(p.id, p.trade_date, 'paper_observed', entry, exit, qty, reason,
+          gross, cost, net, winLoss, r_mult,
+          oracle?.symbol || null, oracle?.realised_close_pct ?? null, caught, falsifier, falsifierCorrect,
+          lesson, pattern, now).run().catch(() => {});
+      await setScoutState(db, p.id, 'LEARNED', `reconciled: ${reason} net ${net}p`, now);
+      done++;
+    }
+  } catch (e) { console.log('reconcileScouts(non-fatal):', e?.message || e); }
+  return { rows: done };
+}
+
+// EOD learning + scout reconcile (one post-close pass).
+async function eodLearningWithScoutReconcile(env) {
+  const a = await fireEodLearningAudit(env).catch((e) => ({ error: String(e) }));
+  const s = await reconcileScouts(env).catch((e) => ({ error: String(e) }));
+  return { rows: (a?.rows || 0) + (s?.rows || 0), eod_learning: a, scout_reconcile: s };
+}
+
 // Orchestrates the gap engine: scan → size → narrate → persist. Returns a verdict
 // result, or null to fall through to the legacy compose path (no-regression safety net).
 async function runGapEngine(env, db, today, cfg, carryover) {
@@ -2013,9 +2308,19 @@ async function fireEodLearningAudit(env) {
 // ═══════════════════════════════════════════════════════════════════════════
 // CRON DISPATCH — match cron expression to handler
 // ═══════════════════════════════════════════════════════════════════════════
+// Compose the morning verdict, THEN always compose the daily PAPER scout (idempotent,
+// non-fatal). The scout gives the owner a daily learning action even on no-edge days
+// without ever touching the verdict decision / picks / order path.
+async function composeVerdictWithScout(env, opts = {}) {
+  const v = await composeVerdict(env, opts);
+  let scout = null;
+  try { scout = await composeScout(env, env.DB, istToday()); } catch (e) { console.log('scout(non-fatal):', e?.message || e); }
+  return { ...v, scout };
+}
+
 const CRON_DISPATCH = {
   '0 2 * * 1-5':              { name: 'pre_market', fn: composePreMarketBriefing },  // 07:30 IST
-  '10 4 * * 1-5':             { name: 'compose',    fn: composeVerdict },        // 09:40 IST (after first live signal batch ~09:30)
+  '10 4 * * 1-5':             { name: 'compose',    fn: composeVerdictWithScout },// 09:40 IST (after first live signal batch ~09:30) — verdict + daily scout
   '*/5 * * * *':              { name: 'triage',     fn: triageAlerts },          // every 5 min
   // TZ-7 fix May 6 2026 evening: invalidator now covers EXACTLY 09:15-15:30 IST.
   // 3 dispatch entries → same handler. Was just '0,15,30,45 4-9' (09:30-15:15 IST).
@@ -2024,13 +2329,15 @@ const CRON_DISPATCH = {
   '0 10 * * 1-5':             { name: 'invalidate', fn: invalidateVerdict },     // 15:30 IST market close
   '30 10 * * 1-5':            { name: 'autopsy',    fn: autopsyTrades },         // 16:00 IST
   '0 11 * * 1-5':             { name: 'suit_refresh', fn: suitabilityRefresh },  // 16:30 IST
-  '0 13 * * 1-5':             { name: 'eod_learning', fn: fireEodLearningAudit },// 18:30 IST — daily learning trail
+  '0 13 * * 1-5':             { name: 'eod_learning', fn: eodLearningWithScoutReconcile },// 18:30 IST — daily learning trail + scout reconcile
   '30 3 * * 1':               { name: 'weekly',     fn: composeWeeklyReview },   // Mon 09:00 IST
 };
 
 const HTTP_HANDLERS = {
   pre_market:    composePreMarketBriefing,
-  compose:       composeVerdict,
+  compose:       composeVerdictWithScout,
+  scout:         (env) => composeScout(env, env.DB, istToday()).then(r => ({ rows: r?.picks || 0, ...r })),
+  reconcile_scout: (env) => reconcileScouts(env),
   triage:        triageAlerts,
   invalidate:    invalidateVerdict,
   autopsy:       autopsyTrades,
