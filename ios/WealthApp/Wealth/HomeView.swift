@@ -18,6 +18,8 @@ final class WealthVM: ObservableObject {
     @Published var signals: [SignalScore] = []     // per-stock engine scores (Stocks tab 5-lights)
     @Published var chainHealth: ChainHealth?
     @Published var researchDepth: ResearchDepth?
+    @Published var scoutToday: ScoutToday?         // the daily learning action
+    @Published var scoutTrail: ScoutTrail?         // the learning trail + stats
     @Published var prefill: OrderDraft?            // set by Now/Stocks → consumed by Execute (one-tap engine trade)
     @Published var status: String = ""
     @Published var loading = false
@@ -43,7 +45,13 @@ final class WealthVM: ObservableObject {
         async let sg = WealthClient.shared.signals()
         async let ch = WealthClient.shared.chainHealth()
         async let rd = WealthClient.shared.researchDepth()
+        async let st = WealthClient.shared.scoutToday()
+        async let str = WealthClient.shared.scoutTrail()
         kite = try? await k
+        // The scout is the marquee daily action — resolve it EARLY (fast endpoints),
+        // ahead of the slow briefing/stockPicker awaits, so it never loads last.
+        scoutToday = try? await st
+        scoutTrail = try? await str
         readiness = try? await r
         auto = try? await a
         engine = try? await e

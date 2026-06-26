@@ -299,6 +299,65 @@ struct ResearchDepth: Decodable {
     let config_published_at: Double?
 }
 
+// ── Scout (the daily learning action) ──
+struct ScoutLadderModel: Decodable {
+    let rungs: [String]?
+    let proof_rung: String?
+    let action_rung: String?
+    let token_available: Bool?
+    let to_deployable: String?
+}
+struct ScoutPlanModel: Decodable {
+    let entry_rs: Double?; let stop_rs: Double?; let target_rs: Double?
+    let qty: Int?; let rr_ratio: Double?
+    let expected_risk_rs: Double?; let expected_reward_rs: Double?; let notional_rs: Double?
+}
+struct ScoutReject: Decodable, Identifiable {
+    var id: String { symbol }
+    let symbol: String; let gap_pct: Double?; let turnover_cr: Double?; let reason: String?
+}
+struct ScoutWhyNot: Decodable {
+    let scanned: Int?; let gapped_up: Int?; let liquid_scored: Int?; let picked: Int?
+    let sample_rejected: [ScoutReject]?
+}
+struct ScoutOutcome: Decodable {
+    let action_taken: String?; let exit_reason: String?
+    let pnl_net_rs: Double?; let win_loss: String?; let r_multiple: Double?
+    let caught_grade: String?; let oracle_top_symbol: String?; let oracle_top_pct: Double?
+    let lesson: String?; let pattern: String?
+}
+struct ScoutToday: Decodable {
+    let has_scout: Bool?; let date: String?
+    let mode: String?; let decision: String?; let state: String?; let owner_action: String?
+    let edge_state: String?
+    let ladder: ScoutLadderModel?
+    let headline: String?; let honest_expectation: String?
+    let primary_symbol: String?; let candidates: [String]?
+    let why_this: String?; let why_not: ScoutWhyNot?
+    let plan: ScoutPlanModel?
+    let invalidation: String?; let source: String?
+    let config_oos_exp_pct: Double?
+    let outcome: ScoutOutcome?; let note: String?
+}
+struct ScoutTrailStats: Decodable {
+    let scout_days: Int?; let sit_out_days: Int?; let active_rate: Int?
+    let observed_days: Int?; let wins: Int?; let losses: Int?; let hit_rate_pct: Int?
+    let cum_paper_net_rs: Double?; let worst_day_net_rs: Double?; let avg_r_multiple: Double?
+    let honest_note: String?
+}
+struct ScoutTrailDay: Decodable, Identifiable {
+    var id: String { (date ?? "") + "_" + (symbol ?? "—") }
+    let date: String?; let mode: String?; let decision: String?; let state: String?
+    let symbol: String?; let edge_state: String?
+    let win_loss: String?; let pnl_net_rs: Double?
+    let caught_grade: String?; let exit_reason: String?
+    let lesson: String?; let pattern: String?
+    let oracle_top_symbol: String?; let oracle_top_pct: Double?
+}
+struct ScoutTrail: Decodable {
+    let window_days: Int?; let stats: ScoutTrailStats?; let days: [ScoutTrailDay]?
+}
+
 actor WealthClient {
     static let shared = WealthClient()
     private let base = "https://trade.hnhotels.in"
@@ -376,6 +435,8 @@ actor WealthClient {
     func briefing() async throws -> Briefing { try await get(Briefing.self, action: "briefing_v2") }
     func chainHealth() async throws -> ChainHealth { try await get(ChainHealth.self, action: "chain_health") }
     func researchDepth() async throws -> ResearchDepth { try await get(ResearchDepth.self, action: "research_depth") }
+    func scoutToday() async throws -> ScoutToday { try await get(ScoutToday.self, action: "scout_today") }
+    func scoutTrail() async throws -> ScoutTrail { try await get(ScoutTrail.self, action: "scout_trail") }
 
     /// Guarded config write (used for today's deployable capital). GET-with-side-effects per the API contract.
     @discardableResult

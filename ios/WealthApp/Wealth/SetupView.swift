@@ -12,6 +12,7 @@ struct SetupView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     tradeDayCard
+                    ScoutTrailCard(vm: vm)
                     checklistCard
                     moneyRuleCard
                 }

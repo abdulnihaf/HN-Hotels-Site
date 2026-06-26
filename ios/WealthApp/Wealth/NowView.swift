@@ -59,6 +59,7 @@ struct NowView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     situationHero
+                    ScoutTodayCard(vm: vm)
                     SignalProofCard(vm: vm)
                     if vm.briefing?.llm_narrative != nil { briefingCard }
                     moneyCard
