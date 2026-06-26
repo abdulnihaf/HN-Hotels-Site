@@ -1,0 +1,82 @@
+name: Deploy HN Ops API Staff App
+
+on:
+  push:
+    branches: [codex/sauda-zoya-fixes]
+    paths:
+      - ".github/workflows/deploy-hn-ops-api.yml"
+      - "functions/api/ops.js"
+      - "android/HNStaff/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: hn-ops-api-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build Android staff APK
+        working-directory: android/HNStaff
+        run: ./gradlew assembleDebug
+
+      - name: Prepare Pages artifact
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/hn-ops-api-dist
+          mkdir -p /tmp/hn-ops-api-dist/functions/api /tmp/hn-ops-api-dist/get
+          cp functions/api/ops.js /tmp/hn-ops-api-dist/functions/api/ops.js
+          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff.apk
+          cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
+          {
+            "versionCode": 5,
+            "versionName": "1.4",
+            "url": "https://hn-ops-api.pages.dev/HN-Staff.apk",
+            "notes": "Sauda demand flow for Azeem/Nafees, Zoya purchase bucket, receive proof photos, rates, and payment trail."
+          }
+          JSON
+          cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>HN Staff Android</title>
+            <style>
+              body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#581810;color:#fff;min-height:100vh;display:grid;place-items:center}
+              main{width:min(420px,calc(100vw - 40px))}
+              h1{font-size:30px;margin:0 0 8px}
+              p{color:rgba(255,255,255,.78);line-height:1.45}
+              a{display:block;text-align:center;background:#fff;color:#581810;text-decoration:none;font-weight:800;border-radius:10px;padding:16px;margin-top:22px}
+              small{display:block;margin-top:14px;color:rgba(255,255,255,.62)}
+            </style>
+          </head>
+          <body>
+            <main>
+              <h1>HN Staff</h1>
+              <p>Install the current Android staff app for Sauda purchase work.</p>
+              <a href="/HN-Staff.apk">Download & install</a>
+              <small>Version 1.4 · HN Hotels Pvt Ltd</small>
+            </main>
+          </body>
+          </html>
+          HTML
+
+      - name: Deploy hn-ops-api
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy /tmp/hn-ops-api-dist --project-name=hn-ops-api --branch=main

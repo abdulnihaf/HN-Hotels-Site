@@ -2,8 +2,15 @@ package com.hnhotels.hnstaff
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.compose.ui.platform.LocalContext
 import java.io.File
@@ -13,9 +20,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -37,6 +46,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -64,6 +74,12 @@ fun rupee(paise: Int): String {
 fun todayIst(): String {
     val f = SimpleDateFormat("yyyy-MM-dd", Locale.US); f.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
     return f.format(Date())
+}
+fun defaultPurchaseDateIst(): String {
+    val c = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata"))
+    if (c.get(Calendar.HOUR_OF_DAY) >= 18) c.add(Calendar.DAY_OF_MONTH, 1)
+    val f = SimpleDateFormat("yyyy-MM-dd", Locale.US); f.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+    return f.format(c.time)
 }
 fun stepDate(d: String, days: Int): String {
     val f = SimpleDateFormat("yyyy-MM-dd", Locale.US); f.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
@@ -142,6 +158,7 @@ object Updater {
 // ---- nav model ------------------------------------------------------------
 sealed class Screen {
     object Home : Screen()
+    data class PurchaseDay(val date: String) : Screen()
     data class Day(val outlet: String, val date: String) : Screen()
     data class Card(val id: Int, val outlet: String, val date: String) : Screen()
     data class Place(val outlet: String, val date: String) : Screen()
@@ -215,11 +232,22 @@ fun PinGate(onAuthed: (JSONObject, String) -> Unit) {
 @Composable
 fun StaffShell(me: JSONObject) {
     val chambers = me.optJSONArray("chambers")?.toStrList() ?: emptyList()
+    val caps = me.optJSONArray("capabilities")?.toStrList() ?: emptyList()
+    val demandOnly = caps.contains("sauda.demand") && !caps.contains("sauda.place") && !caps.contains("sauda.receive") && !caps.contains("sauda.raise")
     val nav = remember { mutableStateListOf<Screen>(Screen.Home) }
     val cur = nav.last()
     BackHandler(enabled = nav.size > 1) { nav.removeAt(nav.lastIndex) }
     when (cur) {
-        is Screen.Home -> HomeScreen(me, chambers) { o, d -> nav.add(Screen.Day(o, d)) }
+        is Screen.Home -> HomeScreen(me, chambers) { d ->
+            val outlets = me.optJSONArray("outlets") ?: JSONArray()
+            val outlet = if (outlets.length() > 0) outlets.getJSONObject(0).optString("outlet_id") else ""
+            if (demandOnly && outlet.isNotEmpty()) nav.add(Screen.Place(outlet, d)) else nav.add(Screen.PurchaseDay(d))
+        }
+        is Screen.PurchaseDay -> PurchaseDayScreen(me, cur,
+            back = { nav.removeAt(nav.lastIndex) },
+            openCard = { id, outlet -> nav.add(Screen.Card(id, outlet, cur.date)) },
+            openPlace = { outlet -> nav.add(Screen.Place(outlet, cur.date)) },
+            setDate = { d -> nav[nav.lastIndex] = Screen.PurchaseDay(d) })
         is Screen.Day -> DayScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
             openCard = { id -> nav.add(Screen.Card(id, cur.outlet, cur.date)) },
@@ -232,9 +260,7 @@ fun StaffShell(me: JSONObject) {
 
 // ---- Home: chamber tiles derived from role --------------------------------
 @Composable
-fun HomeScreen(me: JSONObject, chambers: List<String>, openSauda: (String, String) -> Unit) {
-    val outlets = me.optJSONArray("outlets") ?: JSONArray()
-    val firstOutlet = if (outlets.length() > 0) outlets.getJSONObject(0).optString("outlet_id") else ""
+fun HomeScreen(me: JSONObject, chambers: List<String>, openSauda: (String) -> Unit) {
     val ctx = LocalContext.current
     var upd by remember { mutableStateOf<JSONObject?>(null) }
     var updating by remember { mutableStateOf(false) }
@@ -267,7 +293,7 @@ fun HomeScreen(me: JSONObject, chambers: List<String>, openSauda: (String, Strin
             Text("Your work", color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(12.dp))
             if (chambers.contains("sauda"))
-                ChamberTile("Sauda", "Purchase — place & receive", Icons.Filled.ShoppingCart, true) { openSauda(firstOutlet, todayIst()) }
+                ChamberTile("Sauda", "Purchase demand and proof", Icons.Filled.ShoppingCart, true) { openSauda(defaultPurchaseDateIst()) }
             if (chambers.contains("anbar")) { Spacer(Modifier.height(12.dp)); ChamberTile("Anbar", "Stock & inventory", Icons.Filled.Inventory2, false) {} }
             if (chambers.contains("takht")) { Spacer(Modifier.height(12.dp)); ChamberTile("Takht", "Settlement board", Icons.Filled.AccountBalanceWallet, false) {} }
             if (chambers.contains("admin")) { Spacer(Modifier.height(12.dp)); ChamberTile("Roles", "Assign staff roles", Icons.Filled.AdminPanelSettings, false) {} }
@@ -289,6 +315,145 @@ fun ChamberTile(name: String, sub: String, icon: androidx.compose.ui.graphics.ve
             }
             if (enabled) Icon(Icons.Filled.ChevronRight, null, tint = Maroon)
         }
+    }
+}
+
+// ---- Purchase day: owner Sauda map, scoped to staff role -------------------
+@Composable
+fun PurchaseDayScreen(me: JSONObject, s: Screen.PurchaseDay, back: () -> Unit,
+                      openCard: (Int, String) -> Unit, openPlace: (String) -> Unit, setDate: (String) -> Unit) {
+    var brand by remember { mutableStateOf("all") }
+    var data by remember { mutableStateOf<JSONObject?>(null) }
+    var error by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
+    fun load() {
+        data = null; error = ""
+        scope.launch {
+            val r = Api.get("action=purchase_day&date=${s.date}&brand=$brand")
+            if (r.optBoolean("ok")) data = r else error = r.optString("error")
+        }
+    }
+    LaunchedEffect(s.date, brand) { load() }
+    val outlets = data?.optJSONArray("outlets")?.toObjList() ?: emptyList()
+    val cards = data?.optJSONArray("cards")?.toObjList() ?: emptyList()
+    val summary = data?.optJSONObject("summary")
+    val caps = me.optJSONArray("capabilities")?.toStrList() ?: emptyList()
+    val canPlace = caps.contains("sauda.place")
+    val canDemand = caps.contains("sauda.demand")
+    val placeOutlet = when (brand) {
+        "HE" -> outlets.firstOrNull { it.optString("brand") == "HE" }?.optString("outlet_id")
+        "NCH" -> outlets.firstOrNull { it.optString("brand") == "NCH" }?.optString("outlet_id")
+        else -> outlets.firstOrNull()?.optString("outlet_id")
+    } ?: ""
+    Scaffold(
+        topBar = { HnBar("Sauda", subtitle = "Purchase Day · HE + NCH", onBack = back) },
+        floatingActionButton = { if ((canPlace || canDemand) && placeOutlet.isNotEmpty()) ExtendedFloatingActionButton(
+            onClick = { openPlace(placeOutlet) }, containerColor = Maroon, contentColor = Color.White,
+            icon = { Icon(Icons.Filled.Add, null) }, text = { Text(if (canDemand && !canPlace) "Create demand" else "Place order") }) }
+    ) { p ->
+        Column(Modifier.padding(p).fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                IconButton(onClick = { setDate(stepDate(s.date, -1)) }) { Icon(Icons.Filled.ChevronLeft, "prev", tint = Maroon) }
+                Text(prettyDate(s.date), fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp,
+                    modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                IconButton(onClick = { setDate(stepDate(s.date, 1)) }) { Icon(Icons.Filled.ChevronRight, "next", tint = Maroon) }
+            }
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                FilterChip(selected = brand == "all", onClick = { brand = "all" }, label = { Text("All HN") }, modifier = Modifier.padding(end = 8.dp))
+                FilterChip(selected = brand == "HE", onClick = { brand = "HE" }, label = { Text("HE") }, modifier = Modifier.padding(end = 8.dp))
+                FilterChip(selected = brand == "NCH", onClick = { brand = "NCH" }, label = { Text("NCH") })
+                Spacer(Modifier.weight(1f))
+                OutlinedButton(onClick = {
+                    val u = "$BASE?action=purchase_day_pdf&date=${s.date}&brand=$brand&pin=$PIN"
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+                }, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)) {
+                    Icon(Icons.Filled.PictureAsPdf, null, tint = Maroon, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("A4", color = Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            HorizontalDivider(color = Sand, modifier = Modifier.padding(top = 6.dp))
+            when {
+                error.isNotEmpty() -> CenterMsg("⚠ $error") { load() }
+                data == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = Maroon) }
+                cards.isEmpty() -> CenterMsg("No purchase orders for ${prettyDate(s.date)}.\nUse Place order or move to the correct date.", null)
+                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 10.dp, 16.dp, 96.dp)) {
+                    item {
+                        PurchaseDaySummary(summary)
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    items(cards) { c ->
+                        PurchaseDayCard(c) { openCard(c.optInt("id"), c.optString("outlet_id")) }
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PurchaseDaySummary(s: JSONObject?) {
+    val vendors = s?.optInt("vendor_cards") ?: 0
+    val lines = s?.optInt("order_lines") ?: 0
+    val recv = s?.optInt("received_lines") ?: 0
+    val amt = s?.optInt("expected_amount_paise") ?: 0
+    Surface(shape = RoundedCornerShape(10.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            SummaryBit(vendors.toString(), "vendors", Modifier.weight(1f))
+            SummaryBit(lines.toString(), "items", Modifier.weight(1f))
+            SummaryBit(recv.toString(), "received", Modifier.weight(1f))
+            SummaryBit(rupee(amt), "bill basis", Modifier.weight(1.25f))
+        }
+    }
+}
+
+@Composable
+fun SummaryBit(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+        Text(label, color = Muted, fontSize = 10.sp, maxLines = 1)
+    }
+}
+
+@Composable
+fun PurchaseDayCard(c: JSONObject, onClick: () -> Unit) {
+    val brand = c.optString("outlet_brand")
+    Surface(shape = RoundedCornerShape(12.dp), color = Color.White, tonalElevation = 1.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Sand),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BrandPill(brand)
+                    Spacer(Modifier.width(8.dp))
+                    Text(c.optString("vendor_name"), fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                        color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(4.dp))
+                val line = c.optInt("line_count"); val recv = c.optInt("recv_count")
+                Text("$line items" + (if (recv > 0) " · $recv received" else "") +
+                    " · " + vendorTerms(c), color = Muted, fontSize = 12.sp, maxLines = 2)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(rupee(c.optInt("expected_amount_paise")), fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
+                Spacer(Modifier.height(4.dp))
+                StatusPill(c.optString("status"))
+            }
+        }
+    }
+}
+
+@Composable
+fun BrandPill(brand: String) {
+    val bg = if (brand == "HE") Color(0xFFE9EEF8) else Color(0xFFF5EBDD)
+    val fg = if (brand == "HE") Color(0xFF254F88) else Color(0xFF8A4B08)
+    Surface(color = bg, shape = RoundedCornerShape(5.dp)) {
+        Text(if (brand == "HE") "HE" else if (brand == "NCH") "NCH" else "HN",
+            color = fg, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
     }
 }
 
@@ -376,7 +541,9 @@ fun VendorCard(c: JSONObject, onClick: () -> Unit) {
 @Composable
 fun StatusPill(status: String) {
     val pair = when (status) {
+        "REQUESTED" -> Color(0xFFFFF4DB) to WarnA
         "RECEIVED" -> Color(0xFFE6F2E6) to GoodG
+        "RAISED" -> Color(0xFFEAF1FF) to Color(0xFF2563EB)
         "PAID", "RECONCILED" -> Color(0xFFE9E3F5) to Color(0xFF5B3FA0)
         else -> Sand to Muted
     }
@@ -393,7 +560,10 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
     var error by remember { mutableStateOf("") }
     var receiving by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var goodsImage by remember { mutableStateOf("") }
+    var billImage by remember { mutableStateOf("") }
     val recvQty = remember { mutableStateMapOf<Int, String>() }
+    val recvRate = remember { mutableStateMapOf<Int, String>() }
     val scope = rememberCoroutineScope()
     fun load() {
         data = null
@@ -417,21 +587,54 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp)) {
                         items(lines) { l ->
                             val id = l.optInt("id")
-                            LineRow(l, receiving, recvQty[id] ?: numStr(l.optDouble("qty_ordered", 0.0))) { recvQty[id] = it }
+                            LineRow(
+                                l = l,
+                                receiving = receiving,
+                                recvVal = recvQty[id] ?: numStr(l.optDouble("qty_ordered", 0.0)),
+                                rateVal = recvRate[id] ?: rupeeTextFromPaise(l.optInt("unit_cost_paise")),
+                                onRecv = { recvQty[id] = it },
+                                onRate = { recvRate[id] = it }
+                            )
                             HorizontalDivider(color = Sand)
                         }
+                        item { PaymentTrail(me, card, s.id) { load() } }
                     }
-                    if (caps.contains("sauda.receive")) Surface(shadowElevation = 8.dp, color = Color.White) {
-                        Box(Modifier.padding(16.dp)) {
-                            if (!receiving && status == "ORDERED") Button(
-                                onClick = { receiving = true; lines.forEach { recvQty[it.optInt("id")] = numStr(it.optDouble("qty_ordered", 0.0)) } },
+                    if (caps.contains("sauda.place") || caps.contains("sauda.receive")) Surface(shadowElevation = 8.dp, color = Color.White) {
+                        Column(Modifier.padding(16.dp)) {
+                            if (status == "REQUESTED" && caps.contains("sauda.place")) Button(
+                                onClick = {
+                                    if (busy) return@Button; busy = true
+                                    scope.launch {
+                                        val r = Api.post("mark-ordered", JSONObject().put("order_id", s.id))
+                                        busy = false
+                                        if (r.optBoolean("ok")) load() else error = r.optString("error")
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                                modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(10.dp)
+                            ) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(8.dp)); Text("Vendor order placed") }
+                            else if (!receiving && status == "ORDERED" && caps.contains("sauda.receive")) Button(
+                                onClick = {
+                                    receiving = true
+                                    goodsImage = ""; billImage = ""
+                                    lines.forEach {
+                                        recvQty[it.optInt("id")] = numStr(it.optDouble("qty_ordered", 0.0))
+                                        recvRate[it.optInt("id")] = rupeeTextFromPaise(it.optInt("unit_cost_paise"))
+                                    }
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = Maroon),
                                 modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(10.dp)
                             ) { Icon(Icons.Filled.Inventory2, null); Spacer(Modifier.width(8.dp)); Text("Receive goods") }
-                            else if (receiving) Row {
-                                OutlinedButton(onClick = { receiving = false }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Cancel") }
-                                Spacer(Modifier.width(12.dp))
-                                Button(
+                            else if (receiving) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    PhotoCaptureButton("Goods photo", goodsImage.isNotEmpty(), Modifier.weight(1f)) { goodsImage = it }
+                                    PhotoCaptureButton("Bill photo", billImage.isNotEmpty(), Modifier.weight(1f)) { billImage = it }
+                                }
+                                Spacer(Modifier.height(10.dp))
+                                Row {
+                                    OutlinedButton(onClick = { receiving = false }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Cancel") }
+                                    Spacer(Modifier.width(12.dp))
+                                    Button(
                                     onClick = {
                                         if (busy) return@Button; busy = true
                                         scope.launch {
@@ -439,16 +642,22 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                                             lines.forEach { l -> val id = l.optInt("id")
                                                 arr.put(JSONObject().put("line_id", id)
                                                     .put("qty_received", (recvQty[id] ?: "").ifEmpty { "0" })
+                                                    .put("unit_cost_paise", paiseFromRupeeText(recvRate[id] ?: "0"))
                                                     .put("receive_state", "ok")) }
-                                            val r = Api.post("receive", JSONObject().put("order_id", s.id).put("lines", arr))
+                                            val r = Api.post("receive", JSONObject()
+                                                .put("order_id", s.id)
+                                                .put("lines", arr)
+                                                .put("goods_image", goodsImage)
+                                                .put("bill_image", billImage))
                                             busy = false
                                             if (r.optBoolean("ok")) { receiving = false; load() } else error = r.optString("error")
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = GoodG),
                                     modifier = Modifier.weight(1.4f).height(50.dp), shape = RoundedCornerShape(10.dp)
-                                ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                                    else { Icon(Icons.Filled.Check, null); Spacer(Modifier.width(8.dp)); Text("Confirm received") } }
+                                    ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                                        else { Icon(Icons.Filled.Check, null); Spacer(Modifier.width(8.dp)); Text("Save proof") } }
+                                }
                             }
                             else if (status == "RECEIVED") Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.CheckCircle, null, tint = GoodG)
@@ -464,7 +673,7 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
 }
 
 @Composable
-fun LineRow(l: JSONObject, receiving: Boolean, recvVal: String, onRecv: (String) -> Unit) {
+fun LineRow(l: JSONObject, receiving: Boolean, recvVal: String, rateVal: String, onRecv: (String) -> Unit, onRate: (String) -> Unit) {
     val flag = l.optString("flag")
     Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -474,10 +683,17 @@ fun LineRow(l: JSONObject, receiving: Boolean, recvVal: String, onRecv: (String)
             Text("ordered $q $uom" + (if (cost > 0) " · ${rupee(cost)}/$uom" else ""), color = Muted, fontSize = 12.sp)
             if (flag.isNotEmpty()) Text("⚠ $flag", color = WarnA, fontSize = 11.sp)
         }
-        if (receiving) OutlinedTextField(
-            value = recvVal, onValueChange = onRecv, singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.width(92.dp), label = { Text("recv", fontSize = 10.sp) })
+        if (receiving) Column(horizontalAlignment = Alignment.End) {
+            OutlinedTextField(
+                value = recvVal, onValueChange = { onRecv(it.replace(Regex("[^0-9.]"), "")) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.width(92.dp), label = { Text("recv", fontSize = 10.sp) })
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = rateVal, onValueChange = { onRate(it.replace(Regex("[^0-9.]"), "")) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.width(92.dp), label = { Text("₹/${l.optString("uom").ifEmpty { "u" }}", fontSize = 10.sp) })
+        }
         else {
             val qr = l.opt("qty_received")
             Column(horizontalAlignment = Alignment.End) {
@@ -488,12 +704,239 @@ fun LineRow(l: JSONObject, receiving: Boolean, recvVal: String, onRecv: (String)
     }
 }
 
+@Composable
+fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () -> Unit) {
+    if (card == null) return
+    val status = card.optString("status")
+    if (status !in listOf("RECEIVED", "RAISED", "PAID", "RECONCILED")) return
+    val caps = me.optJSONArray("capabilities")?.toStrList() ?: emptyList()
+    val canSave = caps.contains("sauda.raise") || caps.contains("sauda.pay")
+    val canPay = caps.contains("sauda.pay")
+    var amount by remember(orderId, card.optInt("pay_amount_paise"), card.optInt("expected_amount_paise")) {
+        mutableStateOf(rupeeTextFromPaise(card.optInt("pay_amount_paise").takeIf { it > 0 } ?: card.optInt("expected_amount_paise")))
+    }
+    var method by remember(orderId, card.optString("pay_method")) { mutableStateOf(card.optString("pay_method").ifEmpty { "upi" }) }
+    var ref by remember(orderId, card.optString("bank_ref")) { mutableStateOf(card.optString("bank_ref")) }
+    var paid by remember(orderId, status) { mutableStateOf(status == "PAID" || status == "RECONCILED") }
+    var busy by remember { mutableStateOf(false) }
+    var err by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    Surface(shape = RoundedCornerShape(12.dp), color = Color.White, tonalElevation = 1.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Sand),
+        modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Text("Payment trail", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("Save method, amount and proof reference. Cash-to-Tijori adjustment can consume this later.", color = Muted, fontSize = 11.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                listOf("upi", "cash", "bank", "manual").forEach { m ->
+                    FilterChip(selected = method == m, onClick = { method = m }, label = { Text(m.uppercase(Locale.US)) }, modifier = Modifier.padding(end = 8.dp))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = amount, onValueChange = { amount = it.replace(Regex("[^0-9.]"), "") }, singleLine = true,
+                    label = { Text("Amount") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(value = ref, onValueChange = { ref = it }, singleLine = true,
+                    label = { Text("Ref") }, modifier = Modifier.weight(1.1f))
+            }
+            if (canPay) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = paid, onCheckedChange = { paid = it })
+                    Text("Mark paid by Nihaf / owner approval", color = Ink, fontSize = 12.sp)
+                }
+            }
+            if (err.isNotEmpty()) Text("⚠ $err", color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            if (canSave) {
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        if (busy) return@Button
+                        busy = true; err = ""
+                        scope.launch {
+                            val r = Api.post("payment", JSONObject()
+                                .put("order_id", orderId)
+                                .put("pay_method", method)
+                                .put("pay_amount_paise", paiseFromRupeeText(amount))
+                                .put("bank_ref", ref)
+                                .put("paid", paid))
+                            busy = false
+                            if (r.optBoolean("ok")) onSaved() else err = r.optString("error")
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(46.dp)
+                ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text("Save payment trail") }
+            }
+        }
+    }
+}
+
+// ---- Demand: outlet staff item-first order --------------------------------
+@Composable
+fun DemandScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () -> Unit) {
+    var cat by remember { mutableStateOf<JSONObject?>(null) }
+    var itemQuery by remember { mutableStateOf("") }
+    var selectedCat by remember { mutableStateOf("All") }
+    val draft = remember { mutableStateListOf<JSONObject>() }
+    var error by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val speak = rememberItemSpeaker()
+    LaunchedEffect(Unit) {
+        val r = Api.get("action=catalog&outlet=${s.outlet}")
+        if (r.optBoolean("ok")) cat = r else error = r.optString("error")
+    }
+    val allItems = remember(cat) { cat?.optJSONObject("items_by_vendor").catalogItems().sortedBy { it.optString("label") } }
+    val categories = remember(allItems) {
+        listOf("All") + allItems.map { categoryShort(it.optString("category")) }.filter { it.isNotEmpty() }.distinct().take(8)
+    }
+    val q = itemQuery.trim()
+    val displayItems = allItems.filter {
+        (selectedCat == "All" || categoryShort(it.optString("category")) == selectedCat) && (q.isEmpty() || itemMatches(it, q))
+    }.take(80)
+    fun addDemandItem(it2: JSONObject) {
+        val code = it2.optString("item_code")
+        val idx = draft.indexOfFirst { it.optString("item_code") == code }
+        if (idx >= 0) {
+            val old = draft[idx]
+            draft[idx] = JSONObject(old.toString()).put("qty", numStr(old.optDouble("qty", 0.0) + 1.0))
+            return
+        }
+        draft.add(JSONObject()
+            .put("item_code", code)
+            .put("item_label", it2.optString("label"))
+            .put("hindi_label", it2.optString("hindi_label"))
+            .put("qty", "1")
+            .put("uom", it2.optString("unit")))
+    }
+    Scaffold(topBar = { HnBar("Create demand", subtitle = "${me.optString("name")} · ${prettyDate(s.date)}", onBack = back) }) { p ->
+        Column(Modifier.padding(p).fillMaxSize().padding(16.dp)) {
+            if (cat == null && error.isEmpty()) { Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) { CircularProgressIndicator(color = Maroon) }; return@Column }
+            OutlinedTextField(
+                value = itemQuery,
+                onValueChange = { itemQuery = it; error = "" },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, null, tint = Maroon) },
+                trailingIcon = { IconButton(onClick = { speak(q.ifEmpty { "Search item" }, "") }) { Icon(Icons.Filled.VolumeUp, null, tint = Maroon) } },
+                label = { Text("Search item / Hindi name") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(10.dp))
+            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
+                item {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                        categories.forEach { c ->
+                            FilterChip(selected = selectedCat == c, onClick = { selectedCat = c }, label = { Text(c, maxLines = 1) },
+                                modifier = Modifier.padding(end = 8.dp))
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    if (draft.isNotEmpty()) {
+                        Surface(shape = RoundedCornerShape(12.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text("Demand basket · vendor hidden", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text("System routes items to Zoya/Basheer by the item master.", color = Muted, fontSize = 11.sp)
+                                Spacer(Modifier.height(8.dp))
+                                draft.forEachIndexed { idx, d ->
+                                    DemandDraftLine(d,
+                                        onQty = { qv -> draft[idx] = JSONObject(d.toString()).put("qty", qv.ifEmpty { "0" }) },
+                                        onRemove = { draft.removeAt(idx) })
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+                }
+                items(displayItems) { it2 ->
+                    DemandItemRow(it2, inDraft = draft.any { d -> d.optString("item_code") == it2.optString("item_code") },
+                        onSpeak = { speak(it2.optString("label"), it2.optString("hindi_label")) },
+                        onAdd = { addDemandItem(it2) })
+                    HorizontalDivider(color = Sand)
+                }
+                if (displayItems.isEmpty()) item {
+                    Box(Modifier.fillMaxWidth().padding(28.dp), Alignment.Center) {
+                        Text("No matching item. Zoya/Basheer can add missing master items from the purchase bucket.", color = Muted, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+            if (error.isNotEmpty()) Text("⚠ $error", color = WarnA, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+            Button(
+                onClick = {
+                    if (busy || draft.isEmpty()) return@Button
+                    busy = true; error = ""
+                    scope.launch {
+                        val r = Api.post("demand", JSONObject()
+                            .put("outlet", s.outlet).put("for_date", s.date)
+                            .put("lines", JSONArray(draft.toList())))
+                        busy = false
+                        if (r.optBoolean("ok")) placed() else error = r.optString("error")
+                    }
+                },
+                enabled = draft.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(10.dp)
+            ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                else Text("Send to purchase bucket · ${draft.size} items", fontWeight = FontWeight.SemiBold) }
+        }
+    }
+}
+
+@Composable
+fun DemandItemRow(it2: JSONObject, inDraft: Boolean, onSpeak: () -> Unit, onAdd: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(color = categoryColor(categoryShort(it2.optString("category"))), shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.size(54.dp)) { Box(contentAlignment = Alignment.Center) {
+                Text(it2.optString("label").take(1).uppercase(Locale.US), color = Ink, fontWeight = FontWeight.Bold)
+            } }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(it2.optString("label"), fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val hi = it2.optString("hindi_label")
+            Text(listOf(hi.ifEmpty { "Hindi pending" }, it2.optString("unit"), categoryShort(it2.optString("category"))).filter { it.isNotEmpty() }.joinToString(" · "),
+                color = Muted, fontSize = 12.sp, maxLines = 1)
+        }
+        IconButton(onClick = onSpeak) { Icon(Icons.Filled.VolumeUp, "speak", tint = Maroon) }
+        IconButton(onClick = onAdd) { Icon(if (inDraft) Icons.Filled.CheckCircle else Icons.Filled.AddCircleOutline, "add", tint = if (inDraft) GoodG else Maroon) }
+    }
+}
+
+@Composable
+fun DemandDraftLine(line: JSONObject, onQty: (String) -> Unit, onRemove: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(line.optString("item_label"), color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(line.optString("hindi_label").ifEmpty { "Hindi pending" }, color = Muted, fontSize = 11.sp)
+        }
+        OutlinedTextField(
+            value = line.optString("qty").ifEmpty { "1" },
+            onValueChange = { v -> onQty(v.replace(Regex("[^0-9.]"), "")) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.width(78.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
+        )
+        Text(line.optString("uom"), color = Muted, fontSize = 11.sp, modifier = Modifier.width(42.dp).padding(start = 4.dp))
+        IconButton(onClick = onRemove) { Icon(Icons.Filled.Close, "remove", tint = WarnA) }
+    }
+}
+
 // ---- Place: vendor-first --------------------------------------------------
 @Composable
 fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () -> Unit) {
+    val caps = me.optJSONArray("capabilities")?.toStrList() ?: emptyList()
+    if (caps.contains("sauda.demand") && !caps.contains("sauda.place")) {
+        DemandScreen(me, s, back, placed)
+        return
+    }
     var cat by remember { mutableStateOf<JSONObject?>(null) }
     var vendorKey by remember { mutableStateOf("") }
     var vendorMenu by remember { mutableStateOf(false) }
+    var itemQuery by remember { mutableStateOf("") }
     val draft = remember { mutableStateListOf<JSONObject>() }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -503,9 +946,53 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
         if (r.optBoolean("ok")) cat = r else error = r.optString("error")
     }
     val vendors = cat?.optJSONArray("vendors")?.toObjList() ?: emptyList()
+    val vendorByKey = vendors.associateBy { it.optString("vendor_key") }
     val vendorName = vendors.firstOrNull { it.optString("vendor_key") == vendorKey }?.optString("name") ?: "Pick vendor"
     val itemsByVendor = cat?.optJSONObject("items_by_vendor")
+    val allItems = remember(cat) { itemsByVendor.catalogItems() }
     val vendorItems = if (vendorKey.isNotEmpty()) itemsByVendor?.optJSONArray(vendorKey)?.toObjList() ?: emptyList() else emptyList()
+    val historyByItem = cat?.optJSONObject("history_by_item")
+    val searchText = itemQuery.trim()
+    val displayItems = when {
+        searchText.isNotEmpty() -> (if (vendorKey.isNotEmpty()) vendorItems else allItems)
+            .filter { itemMatches(it, searchText) }
+            .take(60)
+        vendorKey.isNotEmpty() -> vendorItems
+        else -> emptyList()
+    }
+    fun addItem(it2: JSONObject) {
+        val code = it2.optString("item_code")
+        val itemVendor = it2.optString("default_vendor").ifEmpty { it2.optString("_vendor_key") }.ifEmpty { "_unrouted" }
+        if (vendorKey.isNotEmpty() && itemVendor != vendorKey && draft.isNotEmpty()) {
+            val active = vendorByKey[vendorKey]?.optString("name") ?: vendorKey
+            val other = vendorByKey[itemVendor]?.optString("name") ?: itemVendor
+            error = "Finish $active first. ${it2.optString("label")} belongs to $other."
+            return
+        }
+        if (vendorKey != itemVendor) {
+            vendorKey = itemVendor
+            if (draft.isEmpty()) error = ""
+        }
+        if (draft.none { d -> d.optString("item_code") == code }) {
+            val unit = it2.optString("unit")
+            val pr = it2.optInt("price_paise")
+            draft.add(JSONObject().put("item_code", code).put("item_label", it2.optString("label"))
+                .put("qty", 1).put("uom", unit)
+                .put("unit_cost_paise", if (it2.optString("price_mode") != "live") pr else 0))
+        }
+    }
+    fun addManualItem() {
+        val label = searchText.ifEmpty { "New item" }
+        if (vendorKey.isEmpty()) {
+            error = "Pick a vendor first, then add the missing item."
+            return
+        }
+        draft.add(JSONObject().put("item_code", "").put("item_label", label)
+            .put("qty", 1).put("uom", "unit").put("unit_cost_paise", 0)
+            .put("flag", "new item - confirm master").put("raw", label))
+        itemQuery = ""
+        error = "Added as a flagged item. Master data can be cleaned later."
+    }
     Scaffold(topBar = { HnBar("Place order", subtitle = prettyDate(s.date), onBack = back) }) { p ->
         Column(Modifier.padding(p).fillMaxSize().padding(16.dp)) {
             if (cat == null && error.isEmpty()) { Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) { CircularProgressIndicator(color = Maroon) }; return@Column }
@@ -517,31 +1004,76 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                 DropdownMenu(expanded = vendorMenu, onDismissRequest = { vendorMenu = false }) {
                     vendors.forEach { v ->
                         DropdownMenuItem(text = { Text(v.optString("name")) }, onClick = {
-                            vendorKey = v.optString("vendor_key"); vendorMenu = false; draft.clear() })
+                            vendorKey = v.optString("vendor_key"); vendorMenu = false; draft.clear(); error = "" })
                     }
                 }
             }
             Spacer(Modifier.height(12.dp))
-            if (vendorKey.isNotEmpty()) {
-                Text("Tap +, then set the quantity", color = Muted, fontSize = 12.sp)
+            vendorByKey[vendorKey]?.let { v ->
+                Text(vendorTerms(v), color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+            }
+            OutlinedTextField(
+                value = itemQuery,
+                onValueChange = { itemQuery = it; error = "" },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, null, tint = Maroon) },
+                label = { Text(if (vendorKey.isNotEmpty()) "Search ${vendorName}" else "Search all items") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(10.dp))
+            if (draft.isNotEmpty()) {
+                Surface(shape = RoundedCornerShape(10.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("Order card · $vendorName", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        Spacer(Modifier.height(6.dp))
+                        draft.forEachIndexed { idx, d ->
+                            DraftLineEditor(
+                                line = d,
+                                onQty = { q -> draft[idx] = JSONObject(d.toString()).put("qty", q.ifEmpty { "0" }) },
+                                onRemove = { draft.removeAt(idx) }
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+            if (displayItems.isNotEmpty()) {
+                if (vendorKey.isNotEmpty()) Text("Tap +, then set the quantity", color = Muted, fontSize = 12.sp)
                 LazyColumn(Modifier.weight(1f)) {
-                    items(vendorItems) { it2 ->
+                    items(displayItems) { it2 ->
                         val code = it2.optString("item_code")
                         val idx = draft.indexOfFirst { d -> d.optString("item_code") == code }
                         val inDraft = if (idx >= 0) draft[idx] else null
                         val unit = it2.optString("unit")
                         val pr = it2.optInt("price_paise")
+                        val itemVendor = it2.optString("default_vendor").ifEmpty { it2.optString("_vendor_key") }
+                        val itemVendorName = vendorByKey[itemVendor]?.optString("name") ?: itemVendor
+                        val h = historyByItem?.optJSONObject(code)
                         Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(it2.optString("label"), fontWeight = FontWeight.Medium, color = Ink, fontSize = 15.sp)
-                                    Text(if (pr > 0) rupee(pr) + "/" + unit else "rate at bill", color = Muted, fontSize = 12.sp)
+                                    Text(
+                                        listOfNotNull(
+                                            when {
+                                                it2.optString("price_mode") == "live" -> "live rate"
+                                                pr > 0 -> "expected ${rupee(pr)}/$unit"
+                                                else -> "rate at bill"
+                                            },
+                                            if (vendorKey.isEmpty() && itemVendorName.isNotEmpty()) itemVendorName else null
+                                        ).joinToString(" · "),
+                                        color = Muted, fontSize = 12.sp
+                                    )
+                                    if (h != null) {
+                                        val hQty = numStr(h.optDouble("last_qty", 0.0))
+                                        val hUom = h.optString("uom").ifEmpty { unit }
+                                        val hRate = h.optInt("unit_cost_paise")
+                                        Text("last $hQty $hUom" + (if (hRate > 0) " · ${rupee(hRate)}/$hUom" else "") +
+                                            (h.optString("last_date").takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
+                                            color = Muted, fontSize = 11.sp)
+                                    }
                                 }
-                                if (inDraft == null) IconButton(onClick = {
-                                    draft.add(JSONObject().put("item_code", code).put("item_label", it2.optString("label"))
-                                        .put("qty", 1).put("uom", unit)
-                                        .put("unit_cost_paise", if (it2.optString("price_mode") != "live") pr else 0))
-                                }) { Icon(Icons.Filled.AddCircleOutline, "add", tint = Maroon) }
+                                if (inDraft == null) IconButton(onClick = { addItem(it2) }) { Icon(Icons.Filled.AddCircleOutline, "add", tint = Maroon) }
                                 else Row(verticalAlignment = Alignment.CenterVertically) {
                                     OutlinedTextField(
                                         value = numStr(inDraft.optDouble("qty", 1.0)),
@@ -549,7 +1081,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                                             val q = v.replace(Regex("[^0-9.]"), "")
                                             draft[idx] = JSONObject(inDraft.toString()).put("qty", q.ifEmpty { "0" }) },
                                         singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         modifier = Modifier.width(88.dp),
                                         textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center))
                                     Spacer(Modifier.width(4.dp))
@@ -561,34 +1093,69 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                         HorizontalDivider(color = Sand)
                     }
                 }
-                if (draft.isNotEmpty()) {
-                    val tot = draft.sumOf { d -> ((d.optDouble("qty", 0.0)) * d.optInt("unit_cost_paise")).toInt() }
-                    Text("${draft.size} items" + (if (tot > 0) " · ${rupee(tot)} expected" else ""),
-                        color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp))
-                }
-                if (error.isNotEmpty()) Text("⚠ $error", color = WarnA, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
-                Button(
-                    onClick = {
-                        if (busy || draft.isEmpty()) return@Button; busy = true; error = ""
-                        scope.launch {
-                            val r = Api.post("place", JSONObject()
-                                .put("outlet", s.outlet).put("vendor_key", vendorKey).put("for_date", s.date)
-                                .put("lines", JSONArray(draft.toList())))
-                            busy = false
-                            if (r.optBoolean("ok")) placed() else error = r.optString("error")
+            } else if (searchText.isNotEmpty()) {
+                Box(Modifier.weight(1f), Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                        Text("No matching items.", color = Muted, fontSize = 15.sp, textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedButton(onClick = { addManualItem() }, shape = RoundedCornerShape(10.dp)) {
+                            Icon(Icons.Filled.AddCircleOutline, null, tint = Maroon)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Add as flagged item", color = Maroon)
                         }
-                    },
-                    enabled = draft.isNotEmpty(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Maroon),
-                    modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(10.dp)
-                ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                    else Text("Place order · ${draft.size} items", fontWeight = FontWeight.SemiBold) }
-            } else CenterMsg("Pick a vendor to start.\nOne vendor = one order card.", null)
+                    }
+                }
+            } else {
+                Box(Modifier.weight(1f)) { CenterMsg("Search an item or pick a vendor.\nOne vendor = one order card.", null) }
+            }
+            if (draft.isNotEmpty()) {
+                val tot = draft.sumOf { d -> ((d.optDouble("qty", 0.0)) * d.optInt("unit_cost_paise")).toInt() }
+                Text("${draft.size} items" + (if (tot > 0) " · ${rupee(tot)} expected" else ""),
+                    color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp))
+            }
+            if (error.isNotEmpty()) Text("⚠ $error", color = WarnA, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+            Button(
+                onClick = {
+                    if (busy || draft.isEmpty()) return@Button; busy = true; error = ""
+                    scope.launch {
+                        val r = Api.post("place", JSONObject()
+                            .put("outlet", s.outlet).put("vendor_key", vendorKey).put("for_date", s.date)
+                            .put("lines", JSONArray(draft.toList())))
+                        busy = false
+                        if (r.optBoolean("ok")) placed() else error = r.optString("error")
+                    }
+                },
+                enabled = draft.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(10.dp)
+            ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                else Text("Place order · ${draft.size} items", fontWeight = FontWeight.SemiBold) }
         }
     }
 }
 
 // ---- shared bits ----------------------------------------------------------
+@Composable
+fun DraftLineEditor(line: JSONObject, onQty: (String) -> Unit, onRemove: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(line.optString("item_label"), color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (line.optString("flag").isNotEmpty()) Text(line.optString("flag"), color = WarnA, fontSize = 10.sp)
+        }
+        OutlinedTextField(
+            value = numStr(line.optDouble("qty", 1.0)),
+            onValueChange = { v -> onQty(v.replace(Regex("[^0-9.]"), "")) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.width(82.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
+        )
+        Text(line.optString("uom"), color = Muted, fontSize = 11.sp, modifier = Modifier.width(42.dp).padding(start = 4.dp))
+        IconButton(onClick = onRemove) { Icon(Icons.Filled.Close, "remove", tint = WarnA) }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HnBar(title: String, subtitle: String? = null, onBack: (() -> Unit)? = null) {
@@ -613,3 +1180,147 @@ fun CenterMsg(msg: String, onRetry: (() -> Unit)?) {
 fun numStr(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else d.toString()
 fun JSONArray.toStrList(): List<String> = (0 until length()).map { optString(it) }
 fun JSONArray.toObjList(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
+fun JSONObject?.catalogItems(): List<JSONObject> {
+    if (this == null) return emptyList()
+    val out = mutableListOf<JSONObject>()
+    val ks = keys()
+    while (ks.hasNext()) {
+        val vendorKey = ks.next()
+        val arr = optJSONArray(vendorKey) ?: continue
+        for (i in 0 until arr.length()) {
+            val item = JSONObject(arr.getJSONObject(i).toString())
+            if (item.optString("_vendor_key").isEmpty()) item.put("_vendor_key", vendorKey)
+            out.add(item)
+        }
+    }
+    return out
+}
+fun softNorm(s: String): String = s.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), " ").trim().replace(Regex("\\s+"), " ")
+fun compactNorm(s: String): String = softNorm(s).replace(" ", "")
+fun itemMatches(item: JSONObject, query: String): Boolean {
+    val q = softNorm(query)
+    if (q.isEmpty()) return true
+    val hay = softNorm(listOf(
+        item.optString("label"),
+        item.optString("item_code"),
+        item.optString("category"),
+        item.optString("unit"),
+        item.optString("search_text")
+    ).joinToString(" "))
+    val termsOk = q.split(" ").filter { it.isNotEmpty() }.all { hay.contains(it) }
+    return termsOk || compactNorm(hay).contains(compactNorm(query))
+}
+fun vendorTerms(v: JSONObject): String {
+    val fulfilment = when (v.optString("fulfilment")) {
+        "deliver" -> "delivery"
+        "collect" -> "collect from shop"
+        "standing" -> "standing supply"
+        "porter" -> "porter pickup"
+        "bus" -> "bus/transport"
+        else -> v.optString("fulfilment").ifEmpty { "fulfilment not set" }
+    }
+    val pay = when (v.optString("pay_behaviour")) {
+        "per" -> "pay per bill"
+        "khata_roll" -> "running khata"
+        "khata_periodic" -> "periodic khata"
+        else -> v.optString("pay_behaviour").ifEmpty { "payment rule not set" }
+    }
+    return "$fulfilment · $pay"
+}
+
+@Composable
+fun rememberItemSpeaker(): (String, String) -> Unit {
+    val ctx = LocalContext.current
+    val ttsState = remember { mutableStateOf<TextToSpeech?>(null) }
+    DisposableEffect(Unit) {
+        val tts = TextToSpeech(ctx) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                ttsState.value?.language = Locale("en", "IN")
+            }
+        }
+        ttsState.value = tts
+        onDispose { tts.stop(); tts.shutdown() }
+    }
+    return speak@ { english: String, hindi: String ->
+        val tts = ttsState.value ?: return@speak
+        val en = english.trim()
+        val hi = hindi.trim()
+        if (en.isNotEmpty()) {
+            tts.language = Locale("en", "IN")
+            tts.speak(en, TextToSpeech.QUEUE_FLUSH, null, "en-${System.currentTimeMillis()}")
+        }
+        if (hi.isNotEmpty()) {
+            tts.language = Locale("hi", "IN")
+            tts.speak(hi, TextToSpeech.QUEUE_ADD, null, "hi-${System.currentTimeMillis()}")
+        }
+    }
+}
+
+fun categoryShort(cat: String): String {
+    val c = cat.lowercase(Locale.US)
+    return when {
+        c.contains("dairy") -> "Dairy"
+        c.contains("fresh") || c.contains("vegetable") || c.contains("veg") -> "Fresh"
+        c.contains("meat") || c.contains("chicken") -> "Meat"
+        c.contains("pack") || c.contains("paper") -> "Packaging"
+        c.contains("water") || c.contains("beverage") -> "Water"
+        c.contains("pantry") || c.contains("dry") || c.contains("spice") -> "Pantry"
+        cat.isNotBlank() -> cat.take(12)
+        else -> "Other"
+    }
+}
+fun categoryColor(cat: String): Color = when (cat) {
+    "Fresh" -> Color(0xFFEAF5EA)
+    "Meat" -> Color(0xFFFDECEC)
+    "Dairy" -> Color(0xFFEAF1FF)
+    "Packaging" -> Color(0xFFFFF4DB)
+    "Water" -> Color(0xFFE6F4F1)
+    "Pantry" -> Color(0xFFF5F0EF)
+    else -> Sand
+}
+fun paiseFromRupeeText(v: String): Int = Math.max(0, Math.round(((v.replace(Regex("[^0-9.]"), "").toDoubleOrNull() ?: 0.0) * 100)).toInt())
+fun rupeeTextFromPaise(paise: Int): String = if (paise <= 0) "" else (paise / 100.0).let { if (it == it.toLong().toDouble()) it.toLong().toString() else String.format(Locale.US, "%.2f", it) }
+
+fun newImageUri(ctx: Context, prefix: String): Uri {
+    val file = File(ctx.externalCacheDir, "${prefix}-${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
+}
+fun uriToDataUrl(ctx: Context, uri: Uri): String {
+    val raw = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+    val bmp = BitmapFactory.decodeByteArray(raw, 0, raw.size)
+    var bytes = raw
+    if (bmp != null) {
+        val out = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, 70, out)
+        bytes = out.toByteArray()
+        if (bytes.size > 2_700_000) {
+            out.reset()
+            bmp.compress(Bitmap.CompressFormat.JPEG, 45, out)
+            bytes = out.toByteArray()
+        }
+    }
+    return "data:image/jpeg;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
+}
+
+@Composable
+fun PhotoCaptureButton(label: String, captured: Boolean, modifier: Modifier = Modifier, onCaptured: (String) -> Unit) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val u = uri
+        if (ok && u != null) onCaptured(uriToDataUrl(ctx, u))
+    }
+    OutlinedButton(
+        onClick = {
+            val u = newImageUri(ctx, label.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "-"))
+            uri = u
+            launcher.launch(u)
+        },
+        shape = RoundedCornerShape(10.dp),
+        modifier = modifier.height(46.dp)
+    ) {
+        Icon(if (captured) Icons.Filled.CheckCircle else Icons.Filled.PhotoCamera, null, tint = if (captured) GoodG else Maroon)
+        Spacer(Modifier.width(6.dp))
+        Text(if (captured) "$label saved" else label, color = if (captured) GoodG else Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
