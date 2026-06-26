@@ -57,6 +57,8 @@ export async function onRequest(context) {
       case 'trail':        return Response.json(await getTrail(db, url), { headers });
       case 'trail_dates':  return Response.json(await getTrailDates(db), { headers });
       case 'trail_day':    return Response.json(await getTrailDay(db, url), { headers });
+      case 'scout_today':  return Response.json(await getScoutToday(db, url), { headers });
+      case 'scout_trail':  return Response.json(await getScoutTrail(db, url), { headers });
       case 'five_lights':  return Response.json(await getFiveLights(db, url), { headers });
       case 'research_depth': return Response.json(await getResearchDepth(db), { headers });
       case 'analysed_universe': return Response.json(await getAnalysedUniverse(db, url), { headers });
@@ -475,6 +477,128 @@ async function getResearchDepth(db) {
     config_published_at: cfg?.published_at || null,
     days_journaled: journalN?.n || 0,
     explain: 'These ~thousand stocks and a year of 5-minute bars are the raw material. The system distils them into one honest daily decision. This card is that depth, shown so you can learn what drives it.',
+  };
+}
+
+// ─── SCOUT — the daily LEARNING action (read side of the scout_plans ledger) ───
+// The owner's 5-rung ladder: REJECTED → PAPER_SCOUT → TOKEN_SCOUT → WATCH_SCOUT → DEPLOYABLE.
+function scoutLadder(edgeState) {
+  const proofRung = (edgeState === 'ROBUST_EDGE') ? 'DEPLOYABLE'
+    : (edgeState === 'THIN_EDGE') ? 'WATCH_SCOUT' : 'REJECTED';
+  return {
+    rungs: ['REJECTED', 'PAPER_SCOUT', 'TOKEN_SCOUT', 'WATCH_SCOUT', 'DEPLOYABLE'],
+    proof_rung: proofRung,              // where the EDGE proof sits today
+    action_rung: 'PAPER_SCOUT',         // today's safe default action (zero cash)
+    token_available: true,              // owner may opt into a tiny capped real probe (Face ID)
+    to_deployable: 'To deploy real ₹1L: out-of-sample expectancy must beat cost, a majority of walk-forward folds positive, random-null z ≥ 2.5, the live chain green, and the order path proven.',
+  };
+}
+function jp(s, d) { try { return JSON.parse(s); } catch { return d; } }
+function rs(paise) { return paise == null ? null : Math.round(paise) / 100; }
+
+// scout_today — today's (or ?date=) paper scout plan + its outcome (if reconciled).
+async function getScoutToday(db, url) {
+  const date = (url.searchParams.get('date') || new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10)).trim();
+  const p = await db.prepare(
+    `SELECT * FROM scout_plans WHERE trade_date=? AND mode='PAPER' ORDER BY composed_at DESC LIMIT 1`
+  ).bind(date).first().catch(() => null);
+  if (!p) {
+    return {
+      ok: true, has_scout: false, date,
+      headline: 'No scout composed yet today.',
+      note: 'The scout is composed at 09:40 IST each market day (or on demand). On a weekend / holiday there is none.',
+      ladder: scoutLadder('NO_EDGE'),
+    };
+  }
+  const outcome = await db.prepare(`SELECT * FROM scout_outcomes WHERE plan_id=? LIMIT 1`).bind(p.id).first().catch(() => null);
+  const features = jp(p.features_json, {});
+  const whyNot = jp(p.why_not_json, {});
+  return {
+    ok: true, has_scout: true, date,
+    mode: p.mode, decision: p.decision, state: p.state, owner_action: p.owner_action,
+    edge_state: p.edge_state,
+    ladder: scoutLadder(p.edge_state),
+    headline: p.decision === 'SCOUT'
+      ? `Paper scout: ${p.primary_symbol}${(jp(p.candidate_symbols_json, []).length > 1) ? ' + ' + (jp(p.candidate_symbols_json, []).length - 1) + ' more' : ''}`
+      : 'Quiet day — nothing qualified, observe only.',
+    honest_expectation: p.honest_expectation,           // THE honesty anchor
+    primary_symbol: p.primary_symbol,
+    candidates: jp(p.candidate_symbols_json, []),
+    why_this: p.rank_reason,                            // why THIS name
+    why_not: whyNot,                                    // the funnel: scanned → liquid → scored → picked + sample rejected
+    plan: p.decision === 'SCOUT' ? {
+      entry_paise: p.entry_paise, entry_rs: rs(p.entry_paise),
+      stop_paise: p.stop_paise, stop_rs: rs(p.stop_paise),
+      target_paise: p.target_paise, target_rs: rs(p.target_paise),
+      qty: p.qty, rr_ratio: p.rr_ratio,
+      expected_risk_paise: p.expected_risk_paise, expected_risk_rs: rs(p.expected_risk_paise),
+      expected_reward_paise: p.expected_reward_paise, expected_reward_rs: rs(p.expected_reward_paise),
+      notional_paise: p.notional_paise, notional_rs: rs(p.notional_paise),
+    } : null,
+    invalidation: p.invalidation_text,                  // what proves it wrong
+    invalidation_triggers: jp(p.invalidation_json, {}),
+    features,                                           // what was known at decision time
+    source: features.source || null,                   // live_gap | eod_fallback
+    config_oos_exp_pct: p.config_oos_exp_pct,
+    outcome: outcome ? {
+      action_taken: outcome.action_taken, exit_reason: outcome.exit_reason,
+      pnl_net_paise: outcome.pnl_net_paise, pnl_net_rs: rs(outcome.pnl_net_paise),
+      win_loss: outcome.win_loss, r_multiple: outcome.r_multiple,
+      caught_grade: outcome.caught_grade,
+      oracle_top_symbol: outcome.oracle_top_symbol, oracle_top_pct: outcome.oracle_top_pct,
+      lesson: outcome.lesson_text, pattern: outcome.pattern_label,
+    } : null,
+    composed_at: p.composed_at,
+  };
+}
+
+// scout_trail — the learning trail across the last N market days + aggregate stats.
+async function getScoutTrail(db, url) {
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '21', 10) || 21, 90);
+  const rows = (await db.prepare(`
+    SELECT p.trade_date, p.mode, p.decision, p.primary_symbol, p.state, p.edge_state,
+           p.expected_risk_paise, p.honest_expectation,
+           o.win_loss, o.pnl_net_paise, o.caught_grade, o.exit_reason, o.r_multiple,
+           o.lesson_text, o.pattern_label, o.oracle_top_symbol, o.oracle_top_pct
+    FROM scout_plans p
+    LEFT JOIN scout_outcomes o ON o.plan_id = p.id
+    WHERE p.mode='PAPER'
+    ORDER BY p.trade_date DESC LIMIT ?
+  `).bind(limit).all().catch(() => ({ results: [] }))).results || [];
+
+  const observed = rows.filter(r => r.win_loss && r.win_loss !== 'no_trade');
+  const wins = observed.filter(r => r.win_loss === 'win').length;
+  const losses = observed.filter(r => r.win_loss === 'loss').length;
+  const scoutDays = rows.filter(r => r.decision === 'SCOUT').length;
+  const sitOutDays = rows.filter(r => r.decision !== 'SCOUT').length;
+  const cumNet = observed.reduce((a, r) => a + (r.pnl_net_paise || 0), 0);
+  const worst = observed.reduce((m, r) => Math.min(m, r.pnl_net_paise || 0), 0);
+  const rMults = observed.map(r => r.r_multiple).filter(x => x != null);
+
+  return {
+    ok: true,
+    window_days: rows.length,
+    stats: {
+      scout_days: scoutDays,                    // days we proposed a learning action
+      sit_out_days: sitOutDays,                 // days nothing qualified
+      active_rate: rows.length ? +(100 * scoutDays / rows.length).toFixed(0) : 0,
+      observed_days: observed.length,
+      wins, losses,
+      hit_rate_pct: observed.length ? +(100 * wins / observed.length).toFixed(0) : null,
+      cum_paper_net_paise: cumNet, cum_paper_net_rs: rs(cumNet),
+      worst_day_net_paise: worst, worst_day_net_rs: rs(worst),
+      avg_r_multiple: rMults.length ? +(rMults.reduce((a, b) => a + b, 0) / rMults.length).toFixed(2) : null,
+      honest_note: 'Paper P&L is learning data, not money earned. The system has no proven edge yet — these numbers track whether daily scouting is getting smarter, and what to fix.',
+    },
+    days: rows.map(r => ({
+      date: r.trade_date, mode: r.mode, decision: r.decision, state: r.state,
+      symbol: r.primary_symbol, edge_state: r.edge_state,
+      win_loss: r.win_loss || (r.decision === 'SCOUT' ? 'pending' : 'no_trade'),
+      pnl_net_paise: r.pnl_net_paise ?? null, pnl_net_rs: rs(r.pnl_net_paise),
+      caught_grade: r.caught_grade, exit_reason: r.exit_reason,
+      lesson: r.lesson_text, pattern: r.pattern_label,
+      oracle_top_symbol: r.oracle_top_symbol, oracle_top_pct: r.oracle_top_pct,
+    })),
   };
 }
 
