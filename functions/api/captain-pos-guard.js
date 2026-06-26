@@ -1,12 +1,12 @@
-// /api/captain-pos-guard — zero-leakage capture + reconciliation + WABA alerting
+// /api/captain-pos-guard — zero-leakage capture + reconciliation.
 // for the HE Captain POS (config 6 on test.hamzahotel.com).
 //
 // Actions:
 //   ingest    (POST, device token) — the tab extension drains its local log here.
 //   reconcile (cron token)         — prove each captured order became a real Odoo bill;
-//                                     anything that didn't => discrepancy => WABA Nihaf.
+//                                     anything that didn't => discrepancy row.
 //                                     Also: stuck drafts, stale session, Razorpay-no-bill.
-//   heartbeat (cron token)         — alert if the captain POS goes silent during open hours.
+//   heartbeat (cron token)         — record if the captain POS goes silent during open hours.
 //   status    (read)               — quick counts.
 //
 // Logs live in D1 (env.DB = hn-hiring): pos_capture, pos_capture_events, pos_discrepancies.
@@ -18,7 +18,7 @@ const POS_DB = 'main', POS_UID = 2;
 const DEFAULTS = {
   captain_config_id: 6, match_grace_seconds: 240, stuck_draft_minutes: 15,
   session_stale_hours: 24, silence_minutes: 40, open_hour_ist: 7, close_hour_ist: 3,
-  reconcile_max_tries: 8, nihaf_phone: '917010426808'
+  reconcile_max_tries: 8, nihaf_phone: '917010426808', owner_waba_enabled: 0
 };
 
 const CORS = {
@@ -259,7 +259,7 @@ async function heartbeat(env) {
   return json({ ok: true, healthy: true, last_capture: lastCap ? istStamp(lastCap) : null });
 }
 
-// ── discrepancy + WABA ──────────────────────────────────────────────────────
+// ── discrepancy + optional owner WABA ────────────────────────────────────────
 async function raise(env, d) {
   let inserted = false;
   try {
@@ -271,6 +271,14 @@ async function raise(env, d) {
   } catch (e) { return; }
   if (!inserted) return; // already known — don't re-spam
   const c = await cfg(env);
+  const ownerWabaEnabled = env.POS_GUARD_OWNER_WABA === '1' || String(c.owner_waba_enabled || '').trim() === '1';
+  if (!ownerWabaEnabled) {
+    try {
+      await env.DB.prepare('UPDATE pos_discrepancies SET notified_at=?, notify_status=?, notify_msg_id=? WHERE fingerprint=?')
+        .bind(nowSec(), 'suppressed_owner_waba', null, d.fingerprint).run();
+    } catch (e) {}
+    return;
+  }
   const phone = env.NIHAF_PHONE || c.nihaf_phone;
   let status = 'failed', msgId = null;
   try {

@@ -1,9 +1,10 @@
-# Captain POS Guard — zero-leakage capture, reconciliation & WABA alerting
+# Captain POS Guard — zero-leakage capture and reconciliation
 
 Guarantees **no captain-POS order is ever silently lost** (the "Session expired" /
 network-drop failure that ate ~2 bills on 2026-05-24), by keeping the order in
-**multiple independent durable logs** and alerting Nihaf on WABA the moment one
-doesn't become a real Odoo bill.
+**multiple independent durable logs**. The default behavior is now quiet
+self-monitoring: discrepancies stay in D1 for audit and dashboards, but owner
+WABA alerts are suppressed unless explicitly re-enabled.
 
 ## How it works (multi-log)
 
@@ -14,13 +15,30 @@ Captain tab (Chrome/Kiwi)                          Cloudflare                   
 │  inject.js  hooks fetch  │                       │  pos-guard       │             └────────────────────┘
 │  content.js IndexedDB ───┼── durable LOCAL log   │  D1: pos_capture  │  + Razorpay payments
 │             (offline-safe)│                      │      events       │
-└──────────────────────────┘                       │      discrepancies│ ──► WABA template
-                                                    └──────────────────┘     captain_pos_discrepancy ──► Nihaf
+└──────────────────────────┘                       │      discrepancies│ ──► D1 discrepancy trail
+                                                    └──────────────────┘
 ```
 
 1. Every rung order is written to the tab's **own IndexedDB the instant it's rung** — before any network call. Survives offline / crash / reload.
 2. When internet returns, the extension **auto-drains** that log to `/api/captain-pos-guard?action=ingest` → D1 `pos_capture`.
-3. The cron (`hn-captain-pos-guard-cron`, every 3 min) runs **reconcile**: proves each capture became a real `pos.order`; anything missing past the grace window, plus stuck drafts, stale sessions, and Razorpay-payment-without-bill → a **discrepancy** → **WABA to Nihaf** via the approved `captain_pos_discrepancy` template. **heartbeat** alerts if the POS goes silent during open hours.
+3. The cron (`hn-captain-pos-guard-cron`, every 3 min) runs **reconcile**: proves each capture became a real `pos.order`; anything missing past the grace window, plus stuck drafts, stale sessions, and Razorpay-payment-without-bill → a **discrepancy row**. **heartbeat** records if the POS goes silent during open hours.
+
+## Owner-alert policy
+
+Owner WABA alerts are **off by default**. This guard had become noise: the live
+trail showed hundreds of repeated `pos_silent`, `stuck_draft`, and
+`session_stale` sends to Nihaf without a useful correction loop. To re-enable
+only after a proper action-button workflow exists, set either:
+
+```
+POS_GUARD_OWNER_WABA=1
+```
+
+or D1 config:
+
+```
+owner_waba_enabled = 1
+```
 
 ## Deploy
 
@@ -36,7 +54,7 @@ Captain tab (Chrome/Kiwi)                          Cloudflare                   
    wrangler pages secret put RAZORPAY_KEY_SECRET  # optional
    # already present: CRON_TOKEN, WA_HE_PHONE_ID, WA_HE_TOKEN, DB binding
    ```
-   Non-secret vars (wrangler.toml [vars] or dashboard): `POS_ODOO_URL=https://test.hamzahotel.com/jsonrpc`, `POS_ODOO_DB=main`, `POS_ODOO_UID=2`, `NIHAF_PHONE=917010426808`.
+   Non-secret vars (wrangler.toml [vars] or dashboard): `POS_ODOO_URL=https://test.hamzahotel.com/jsonrpc`, `POS_ODOO_DB=main`, `POS_ODOO_UID=2`, `NIHAF_PHONE=917010426808`. Keep `POS_GUARD_OWNER_WABA` unset/`0` unless explicitly restarting owner alerts.
    The Function auto-deploys with the Pages project on push to `main`.
 3. **Cron worker:**
    ```
@@ -44,7 +62,7 @@ Captain tab (Chrome/Kiwi)                          Cloudflare                   
    wrangler secret put CRON_TOKEN     # must match Pages CRON_TOKEN
    wrangler deploy
    ```
-4. **WABA template** `captain_pos_discrepancy` (UTILITY, 5 vars) — already submitted (id 5214427278782890), PENDING approval. No action unless rejected.
+4. **WABA template** `captain_pos_discrepancy` (UTILITY, 5 vars) — exists for future use, but the send path is disabled by default.
 
 ## Install the capture extension on the captain tab
 
