@@ -298,6 +298,15 @@ async function placeOrder(env, db, kiteHeaders, body) {
       attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
     };
   }
+  if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
+    await logKite(db, `/orders/${body.variety || 'regular'} preflight`, 'POST', 422, 0, 'market_closed_preflight');
+    return {
+      ok: false,
+      error: 'market_closed_preflight',
+      message: 'NSE regular market is closed. Live order not sent to Kite.',
+      attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
+    };
+  }
 
   const formData = new URLSearchParams({
     exchange: body.exchange,
@@ -590,13 +599,23 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const targetPrice = parseFloat(body.target_price);
   const tag = body.tag || 'HN_WE_BRK';
 
+  // Create bracket-order tracking row before local guards so owner taps that
+  // never reach Kite (shadow mode / pre-market) remain visible in audit trail.
+  const bracketRowId = (await db.prepare(
+    `INSERT INTO kite_bracket_orders
+       (symbol,exchange,qty,intended_stop_paise,intended_target_paise,step,created_at)
+     VALUES (?,?,?,?,?,'starting',?)`
+  ).bind(symbol, exchange, qty, Math.round(stopPrice * 100), Math.round(targetPrice * 100), Date.now()).run()).meta?.last_row_id;
+
   // Pre-launch guard
   const block = await db.prepare(
     `SELECT config_value FROM user_config WHERE config_key='block_real_orders'`
   ).first();
   if (block?.config_value === '1' && !body.bypass_block) {
+    await db.prepare(`UPDATE kite_bracket_orders SET step='blocked_shadow', error=?, completed_at=? WHERE id=?`)
+      .bind('block_real_orders=1 shadow_run', Date.now(), bracketRowId).run();
     return {
-      ok: false, blocked: true,
+      ok: false, blocked: true, bracket_id: bracketRowId,
       reason: 'shadow_run',
       message: 'Real orders blocked. Engine is in shadow mode (CPV pending). Set block_real_orders=0 to unlock.',
       simulated: {
@@ -606,13 +625,16 @@ async function placeBracket(env, db, kiteHeaders, body) {
       },
     };
   }
-
-  // Create bracket-order tracking row
-  const bracketRowId = (await db.prepare(
-    `INSERT INTO kite_bracket_orders
-       (symbol,exchange,qty,intended_stop_paise,intended_target_paise,step,created_at)
-     VALUES (?,?,?,?,?,'starting',?)`
-  ).bind(symbol, exchange, qty, Math.round(stopPrice * 100), Math.round(targetPrice * 100), Date.now()).run()).meta?.last_row_id;
+  if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
+    await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
+      .bind('market_closed_preflight', Date.now(), bracketRowId).run();
+    return {
+      ok: false,
+      bracket_id: bracketRowId,
+      error: 'market_closed_preflight',
+      message: 'NSE regular market is closed. Bracket order not sent to Kite.',
+    };
+  }
 
   const result = { ok: false, bracket_id: bracketRowId, steps: [] };
 
@@ -1119,6 +1141,14 @@ async function pipelineTest(env, db, kiteHeaders, body) {
 // ─────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────
+function isNseRegularMarketOpen(nowMs = Date.now()) {
+  const ist = new Date(nowMs + 5.5 * 3600000);
+  const day = ist.getUTCDay(); // 0 Sun, 6 Sat after IST shift
+  if (day === 0 || day === 6) return false;
+  const hm = ist.getUTCHours() * 100 + ist.getUTCMinutes();
+  return hm >= 915 && hm <= 1530;
+}
+
 async function getActiveToken(db) {
   const r = await db.prepare(
     `SELECT * FROM kite_tokens WHERE is_active=1 ORDER BY obtained_at DESC LIMIT 1`

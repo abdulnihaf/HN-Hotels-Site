@@ -6137,7 +6137,8 @@ async function getTrail(db, url) {
   movers.forEach((m) => { delete m._s; });
 
   const verdicts = (await db.prepare(`
-    SELECT v.trade_date, v.decision, v.picks_json
+    SELECT v.trade_date, v.decision, v.picks_json, v.headline,
+           v.strategy_mode, v.composed_by_model
     FROM daily_verdicts v
     JOIN (SELECT trade_date, MAX(composed_at) AS m FROM daily_verdicts WHERE verdict_type='morning' GROUP BY trade_date) x
       ON v.trade_date = x.trade_date AND v.composed_at = x.m
@@ -6146,6 +6147,7 @@ async function getTrail(db, url) {
   `).all().catch(() => ({ results: [] }))).results || [];
   const dates = verdicts.map((v) => v.trade_date);
   const winnersByDate = {};
+  const executionByDate = {};
   if (dates.length) {
     const ph = dates.map(() => '?').join(',');
     const wRows = (await db.prepare(`
@@ -6153,24 +6155,84 @@ async function getTrail(db, url) {
       FROM intraday_winner_daily WHERE trade_date IN (${ph}) AND source='eod' ORDER BY trade_date, rank
     `).bind(...dates).all().catch(() => ({ results: [] }))).results || [];
     for (const w of wRows) { (winnersByDate[w.trade_date] = winnersByDate[w.trade_date] || []).push(w); }
+
+    const paperRows = (await db.prepare(`
+      SELECT date(created_at/1000,'unixepoch','+5 hours','+30 minutes') AS trade_date,
+             COUNT(*) AS paper_rows,
+             SUM(CASE WHEN auto_managed=1 THEN 1 ELSE 0 END) AS auto_rows,
+             SUM(CASE WHEN trader_state IN ('ENTERED','EXITED','STOPPED','TARGET_HIT') THEN 1 ELSE 0 END) AS live_sim_rows
+      FROM paper_trades
+      WHERE date(created_at/1000,'unixepoch','+5 hours','+30 minutes') IN (${ph})
+      GROUP BY 1
+    `).bind(...dates).all().catch(() => ({ results: [] }))).results || [];
+    for (const r of paperRows) executionByDate[r.trade_date] = { ...(executionByDate[r.trade_date] || {}), ...r };
+
+    const decisionRows = (await db.prepare(`
+      SELECT trade_date,
+             COUNT(*) AS trader_decision_rows,
+             SUM(CASE WHEN decision LIKE '%no-picks-today%' THEN 1 ELSE 0 END) AS no_pick_safety_rows,
+             SUM(CASE WHEN decision LIKE '%safety-net fired%' THEN 1 ELSE 0 END) AS safety_net_rows
+      FROM trader_decisions
+      WHERE trade_date IN (${ph})
+      GROUP BY trade_date
+    `).bind(...dates).all().catch(() => ({ results: [] }))).results || [];
+    for (const r of decisionRows) executionByDate[r.trade_date] = { ...(executionByDate[r.trade_date] || {}), ...r };
   }
+  const classifyNoTradeDay = (v, picks, ws) => {
+    const e = executionByDate[v.trade_date] || {};
+    const headline = (v.headline || '').toLowerCase();
+    const hasOwnerOrTradeAction = (e.paper_rows || 0) > 0 || (e.live_sim_rows || 0) > 0;
+    const hasTraderLoop = (e.trader_decision_rows || 0) > 0;
+    const dataBlind = /data-blind|engine-fallback|empty pool|no clean setup|unavailable|failed|fallback/.test(headline);
+    const noPicksSafety = (e.no_pick_safety_rows || 0) > 0 || (e.safety_net_rows || 0) > 0;
+    const gapEdgeNoTrade = v.strategy_mode === 'intraday_gap_up'
+      && /edge unproven|none cleared|no real edge/.test(headline);
+
+    if (hasOwnerOrTradeAction) {
+      return { caught: 'paper_observed_no_trade', execution_state: 'paper_or_manual_observed', owner_action: 'recorded' };
+    }
+    if (gapEdgeNoTrade) {
+      return { caught: 'edge_no_trade', execution_state: 'engine_edge_rejected', owner_action: 'none_recorded' };
+    }
+    if (dataBlind || noPicksSafety) {
+      return { caught: 'system_gap', execution_state: 'data_or_execution_gap', owner_action: 'none_recorded' };
+    }
+    if (!hasTraderLoop && !ws.length) {
+      return { caught: 'not_observed', execution_state: 'verdict_only_not_observed', owner_action: 'none_recorded' };
+    }
+    return { caught: 'engine_no_trade', execution_state: 'engine_decision_no_trade', owner_action: 'none_recorded' };
+  };
   const daily = verdicts.map((v) => {
     const picks = safe(v.picks_json).map((p) => p && p.symbol).filter(Boolean);
     const ws = winnersByDate[v.trade_date] || [];
     const top = ws[0] || null;
     let caught = ws.length ? 'unknown' : 'no_data';
+    let execution_state = 'unknown';
+    let owner_action = 'none_recorded';
     if (v.decision === 'SIT_OUT') caught = 'sat_out';
     else if (ws.length && picks.length) {
       let best = 999;
       for (const s of picks) { const w = ws.find((x) => x.symbol === s); if (w && w.rank < best) best = w.rank; }
       caught = best === 1 ? 'hit' : best <= 5 ? 'near' : best <= 20 ? 'far' : 'miss';
+      execution_state = 'engine_picked';
+      owner_action = (executionByDate[v.trade_date]?.paper_rows || 0) > 0 ? 'recorded' : 'none_recorded';
+    }
+    if (v.decision === 'SIT_OUT') {
+      const noTrade = classifyNoTradeDay(v, picks, ws);
+      caught = noTrade.caught;
+      execution_state = noTrade.execution_state;
+      owner_action = noTrade.owner_action;
     }
     return {
       date: v.trade_date,
       decision: v.decision,
+      strategy_mode: v.strategy_mode || null,
       picks,
       top_mover: top ? { symbol: top.symbol, pct: top.open_to_high_pct != null ? +top.open_to_high_pct.toFixed(1) : null } : null,
       caught,
+      execution_state,
+      owner_action,
+      learning_countable: caught !== 'not_observed' && caught !== 'system_gap',
     };
   });
 
