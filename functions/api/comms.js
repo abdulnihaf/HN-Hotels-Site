@@ -347,6 +347,8 @@ export async function onRequest(context) {
       // sms
       message,
       route = 'q',
+      sender_id,
+      message_id,
       // voice
       message_text,
       alert_id,
@@ -357,7 +359,7 @@ export async function onRequest(context) {
     const result = await sendAndLog(env, {
       channel, phone, alert_id, tier, brand,
       template, vars, language, buttons,
-      message, route,
+      message, route, sender_id, message_id,
       message_text,
     });
 

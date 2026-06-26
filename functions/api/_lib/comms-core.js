@@ -296,8 +296,9 @@ export async function sendVoice(env, { phone, message_text, alert_id = '' }) {
   if (!env.EXOTEL_SID || !env.EXOTEL_API_KEY || !env.EXOTEL_API_TOKEN || !env.EXOTEL_CALLER_ID) {
     return { ok: false, status: 500, response: { error: 'Exotel not configured' } };
   }
-  const To = toExotelPhone(phone);
-  const From = env.EXOTEL_CALLER_ID;
+  // Exotel app calls use From=recipient and Url=the ExoML app callback.
+  // Do not send To here; To is for connect-two-number flows.
+  const From = toExotelPhone(phone);
   const base = env.PUBLIC_BASE_URL || 'https://hnhotels.in';
   const ttsUrl = new URL(`${base}/api/comms-webhook`);
   ttsUrl.searchParams.set('action', 'exotel-tts');
@@ -315,15 +316,16 @@ export async function sendVoice(env, { phone, message_text, alert_id = '' }) {
   statusUrl.searchParams.set('action', 'exotel-status');
   if (alert_id) statusUrl.searchParams.set('alert_id', alert_id);
 
-  const apiUrl = `https://api.exotel.com/v1/Accounts/${env.EXOTEL_SID}/Calls/connect.json`;
+  const exotelHost = env.EXOTEL_SUBDOMAIN || 'api.exotel.com';
+  const apiUrl = `https://${exotelHost}/v1/Accounts/${env.EXOTEL_SID}/Calls/connect.json`;
   const body = new URLSearchParams({
     From,
-    To,
     CallerId: env.EXOTEL_CALLER_ID,
+    CallType: 'trans',
     Url: ttsUrl.toString(),
     StatusCallback: statusUrl.toString(),
-    StatusCallbackEvents: 'terminal',
     TimeLimit: '60',
+    TimeOut: '30',
     Record: 'false',
   });
 
