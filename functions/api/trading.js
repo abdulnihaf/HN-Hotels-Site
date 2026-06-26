@@ -4205,7 +4205,7 @@ async function getTodayConsolidated(db, env) {
          (SELECT COUNT(*) FROM intraday_suitability) AS pool_total,
          (SELECT COUNT(*) FROM intraday_suitability WHERE avg_up_last_week_pct IS NOT NULL) AS aw_lw_pop`
     ).first().catch(() => null);
-    const yest = ymdHyphen(new Date(nowMs - 86400000));
+    const yest = new Date(nowMs + 5.5 * 3600000 - 86400000).toISOString().slice(0, 10);
     const barCov = await db.prepare(
       `SELECT
          (SELECT COUNT(DISTINCT symbol) FROM intraday_bars WHERE trade_date=? AND interval='5minute') AS bars_yest,
