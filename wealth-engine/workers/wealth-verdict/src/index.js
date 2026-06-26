@@ -1458,6 +1458,9 @@ async function composeScout(env, db, today) {
       scan = await scoutEodFallback(db, cfg);
       source = 'eod_fallback';
     }
+    // Exclude near-circuit names — a ~20% upper-circuit lock cannot actually be bought,
+    // so scouting it teaches the wrong thing. (Both sources.)
+    if (scan && scan.candidates) scan.candidates = scan.candidates.filter(c => Math.abs(c.gap_pct || 0) < 19.5);
     const featuresJson = JSON.stringify({
       source, preopen_fresh: source === 'live_gap',
       scanned: scan?.scanned ?? 0, gapped_up: scan?.gated ?? 0, liquid_scored: scan?.candidates?.length ?? 0,
