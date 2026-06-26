@@ -1,9 +1,0 @@
-{
-  "name": "hn-hotels-site",
-  "version": "1.0.0",
-  "private": true,
-  "description": "HN Hotels site + Naam organic social posting",
-  "dependencies": {
-    "@resvg/resvg-wasm": "^2.6.2"
-  }
-}
