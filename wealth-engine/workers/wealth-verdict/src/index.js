@@ -1047,6 +1047,22 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
     result = { text: JSON.stringify(fb), cost_paise: 0, cached: false, model_id: 'engine_only_fallback' };
   }
 
+  // The legacy LLM compose path is only narrative unless a tested strategy edge
+  // is active. Prevent an unproven-edge LLM response from creating real picks.
+  const activeEdgeCfg = await loadStrategyConfig(db).catch(() => null);
+  const edgeProven = activeEdgeCfg?.verdict && activeEdgeCfg.verdict !== 'NO_EDGE';
+  if (parsed?.decision === 'TRADE' && !edgeProven) {
+    parsed.decision = 'SIT_OUT';
+    parsed.headline = (`SIT_OUT (no proven edge) - ${parsed.headline || 'LLM trade blocked'}`).slice(0, 200);
+    parsed.narrative = `The model suggested a trade, but the active walk-forward strategy config has no proven edge. Trade picks were suppressed. ${parsed.narrative || ''}`.slice(0, 1500);
+    parsed.picks = [];
+    parsed.recommended_symbol = null;
+    parsed.risk_flags = [
+      ...(Array.isArray(parsed.risk_flags) ? parsed.risk_flags : []),
+      'LLM trade suppressed because no active proven edge is published',
+    ];
+  }
+
   // 6. Plan is attached on read by Pages (joins with top_recommendation engine).
   //    Worker just persists Opus's symbol pick — keeps storage minimal + single source of truth.
   const planJson = null;
