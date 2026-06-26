@@ -1,0 +1,5 @@
+# Never commit the embedded dashboard key or build artifacts
+Wealth/Secrets.swift
+build/
+*.xcodeproj/
+DerivedData/
