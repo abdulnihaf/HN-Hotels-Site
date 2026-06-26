@@ -148,10 +148,18 @@ struct ExecuteView: View {
                 }
             } else {
                 Text("Order failed").font(.system(size: 15, weight: .bold)).foregroundColor(HK.error)
-                Text(r.error ?? r.reason ?? "Unknown error").font(.system(size: 12)).foregroundColor(HK.textDim)
+                Text(orderFailureText(r)).font(.system(size: 12)).foregroundColor(HK.textDim)
                 if let w = r.warning { Text(w).font(.system(size: 12, weight: .semibold)).foregroundColor(HK.error) }
             }
         }
+    }
+
+    private func orderFailureText(_ r: BracketResult) -> String {
+        if let message = r.message, !message.isEmpty { return message }
+        if r.error == "market_closed_preflight" {
+            return "NSE regular market is closed. Orders can be placed only Mon-Fri, 09:15-15:30 IST."
+        }
+        return r.error ?? r.reason ?? "Unknown error"
     }
 
     private func place() {
@@ -171,7 +179,7 @@ struct ExecuteView: View {
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
                 let fill = (stop + target) / 2
                 let gtt = Int(Date().timeIntervalSince1970) % 100000
-                let demo = BracketResult(ok: true, blocked: nil, reason: "practice", error: nil,
+                let demo = BracketResult(ok: true, blocked: nil, reason: "practice", error: nil, message: nil,
                                          fill_price: fill, gtt_id: gtt, fallback_used: false, warning: nil, bracket_id: nil)
                 await MainActor.run { result = demo; lastWasPractice = true; placing = false }
                 return

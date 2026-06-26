@@ -249,6 +249,7 @@ struct BracketResult: Decodable {
     let blocked: Bool?
     let reason: String?
     let error: String?
+    let message: String?
     let fill_price: Double?
     let gtt_id: Int?
     let fallback_used: Bool?
@@ -286,11 +287,25 @@ actor WealthClient {
         guard let http = resp as? HTTPURLResponse else { throw WealthError.empty }
         if http.statusCode == 401 || http.statusCode == 403 { throw WealthError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
-            throw WealthError.server(body.isEmpty ? "HTTP \(http.statusCode)" : body)
+            throw WealthError.server(serverErrorMessage(from: data, statusCode: http.statusCode))
         }
         if expectsJSON && data.isEmpty { throw WealthError.empty }
         return data
+    }
+
+    private func serverErrorMessage(from data: Data, statusCode: Int) -> String {
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let message = obj["message"] as? String, !message.isEmpty { return message }
+            if let error = obj["error"] as? String, !error.isEmpty {
+                if error == "market_closed_preflight" {
+                    return "NSE regular market is closed. Orders can be placed only Mon-Fri, 09:15-15:30 IST."
+                }
+                return error
+            }
+            if let reason = obj["reason"] as? String, !reason.isEmpty { return reason }
+        }
+        let body = String(data: data, encoding: .utf8) ?? ""
+        return body.isEmpty ? "HTTP \(statusCode)" : body
     }
 
     private func get<T: Decodable>(_ type: T.Type, action: String, api: String = "/api/trading",

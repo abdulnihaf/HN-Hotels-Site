@@ -53,6 +53,13 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Kite **CONNECTED** (token ~23h), but equity **available cash = ₹0** — the funded ₹1L is NOT reflecting (CPV `cpv_pending_welcome_letter` hold or settlement delay). **No real trade possible at ₹0.**
 - Readiness 5/11; paper win-rate 25%; engine data half-blind (flow/macro/options coverage collapsed).
 
+## Build 10 — TestFlight correction (2026-06-27)
+- Shipped **TestFlight build 10** for `com.hnhotels.wealth`; App Store Connect readback: **VALID** and assigned to the internal TestFlight group.
+- UI wording corrected: `SIT_OUT` is now shown as **"no engine trade"**, not as a manual owner sit-out record.
+- Order failure handling corrected: backend `message` is decoded, and `market_closed_preflight` shows the actual NSE market-hours explanation instead of a raw error code.
+- `project.yml` now explicitly includes gitignored `Wealth/Secrets.swift` so `xcodegen generate` does not drop it from the build.
+- Cloudflare Pages production secrets were aligned so `DASHBOARD_KEY` and `DASHBOARD_API_KEY` match the local canonical 43-character key used by the app. Verified with curl-style client headers against config, Kite status, and trail endpoints.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).

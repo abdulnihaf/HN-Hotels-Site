@@ -32,7 +32,7 @@ struct SetupView: View {
                 return ("Yes — a setup in \(p)", "The engine found a stock worth trading today. Read the 5 lights below to see why.", HK.ready)
             }
             if dec == "SIT_OUT" {
-                return ("No — sit out today", "No clean setup. Doing nothing protects your money — that's a good decision.", HK.idle)
+                return ("No engine trade today", "No proven setup is available right now. The app records this as no engine trade, not as a manual sit-out by you.", HK.idle)
             }
             return ("Not decided yet", "The engine picks today's stock at 8:30 AM. Until then, learn the 5 lights below — that's how every trade is judged.", HK.text)
         }()

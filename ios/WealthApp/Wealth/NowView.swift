@@ -135,8 +135,8 @@ struct NowView: View {
                              tone: HK.ready, action: .place(p))
         }
         if dec == "SIT_OUT" {
-            return Situation(headline: "Today: sit out",
-                             sub: "No clean setup. Not trading protects your capital — that's a good day too.",
+            return Situation(headline: "Today: no engine trade",
+                             sub: "No proven edge is available right now. This is an engine no-trade verdict, not a record that you personally sat out.",
                              tone: HK.idle, action: .none)
         }
         if phase.contains("overnight") || phase.contains("pre") || phase.isEmpty {
@@ -188,7 +188,7 @@ struct NowView: View {
                 Text("Full entry / stop / target opens in Execute. Confidence is unproven — keep it small.")
                     .font(.system(size: 11)).foregroundColor(HK.running)
             } else if vm.verdict?.decision == "SIT_OUT" {
-                Row(label: "Decision", value: "SIT OUT", valueColor: HK.idle)
+                Row(label: "Decision", value: "NO ENGINE TRADE", valueColor: HK.idle)
             } else {
                 Text("Composes at 8:30 AM (Mon–Fri). Until then there's nothing to act on.")
                     .font(.system(size: 12)).foregroundColor(HK.textDim)
