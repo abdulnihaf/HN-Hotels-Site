@@ -27,6 +27,10 @@ how the cockpit's growth is locked in and can never regress.
 # CHECK SRC|ProofStateView.swift|SignalProofCard|Honest proof-state (REJECTED/WATCH/DEPLOYABLE)
 # CHECK SRC|ExecuteView.swift|Order witness|Order-path Face-ID/result witness
 # CHECK SRC|HomeView.swift|StocksView|Stocks tab mounted in the tab bar
+# CHECK SRC|Theme.swift|func hkGlass|Liquid Glass material system (iOS 26) with flat fallback
+# CHECK SRC|Theme.swift|struct HKAurora|Aurora luminance layer behind the glass
+# CHECK SRC|StocksView.swift|hkGlass|Liquid Glass applied to the stock surfaces (tiles/hero/chart/pills)
+# CHECK SRC|StocksView.swift|HKAurora|Per-stock detail sheet floats on the aurora canvas
 
 ## Required live data (endpoints — must respond with the marker field)
 <!-- format: # CHECK API|<action[&param]>|<expected-field>|<what it feeds> -->
