@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  StocksView — the centerpiece. The most relevant intraday stocks, live(-honest),
@@ -187,6 +188,44 @@ struct StocksView: View {
     }
     @State private var segment: Segment = .setups
     @State private var selected: StockIntel?
+    @State private var bucket: String? = nil   // when set → browse the full universe by bucket
+
+    // The bucket front door — every stock visible, organised (not a 1,248-row dump).
+    private let bucketDefs: [(key: String, label: String, icon: String)] = [
+        ("gapped_up", "Gapped up", "arrow.up.forward"),
+        ("up_today", "Up today", "chart.line.uptrend.xyaxis"),
+        ("big_movers", "Big movers", "bolt.fill"),
+        ("big_money", "Big money", "indianrupeesign.circle.fill"),
+        ("fno", "F&O", "f.square.fill"),
+        ("nifty50", "NIFTY 50", "50.square.fill"),
+        ("calm", "Calm", "leaf.fill"),
+        ("volatile", "Volatile", "waveform.path.ecg"),
+        ("all", "All liquid", "square.grid.2x2.fill"),
+    ]
+    private func bucketLabel(_ k: String) -> String { bucketDefs.first { $0.key == k }?.label ?? k }
+    private func inBucket(_ b: String, _ s: AnalysedStock) -> Bool {
+        switch b {
+        case "all": return true
+        case "gapped_up": return s.gap_candidate == true
+        case "up_today": return (s.change_pct ?? 0) > 0
+        case "big_movers": return abs(s.change_pct ?? 0) >= 3
+        case "big_money": return s.big_money == true
+        case "fno": return s.is_fno == true
+        case "nifty50": return s.is_nifty50 == true
+        case "calm": return s.vol_band == "calm"
+        case "moderate": return s.vol_band == "moderate"
+        case "volatile": return s.vol_band == "volatile"
+        default: return true
+        }
+    }
+    private func analysedRows(_ b: String) -> [StockIntel] {
+        (vm.universe?.stocks ?? [])
+            .filter { inBucket(b, $0) }
+            .sorted { ($0.turnover_cr ?? 0) > ($1.turnover_cr ?? 0) }
+            .prefix(120)
+            .map { a in StockIntel(symbol: a.symbol, price: a.asWatchlist, signal: signalMap[a.symbol],
+                                   plan: a.symbol == pickSymbol ? vm.verdict?.plan : nil, marketLive: marketLive) }
+    }
 
     private var marketLive: Bool { vm.intel?.in_market_hours == true }
 
@@ -243,17 +282,33 @@ struct StocksView: View {
             ScrollView {
                 LazyVStack(spacing: 14) {
                     TideCard(vm: vm)
-                    unprovenBanner
-                    segmentPicker
-                    if rows.isEmpty {
-                        Card { Text(vm.loading ? "Loading the board…" : "No stocks to show yet — pull to refresh.")
-                            .font(.system(size: 13)).foregroundColor(HK.textDim) }
-                    } else {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { idx, st in
-                            StockCard(intel: st, rank: segment == .setups ? idx + 1 : nil)
-                                .onTapGesture { selected = st }
+                    bucketGrid
+                    if let b = bucket {
+                        bucketHeader(b)
+                        let arows = analysedRows(b)
+                        if arows.isEmpty {
+                            Card { Text(vm.universe == nil ? "Loading the universe…" : "No stocks in this bucket today.")
+                                .font(.system(size: 13)).foregroundColor(HK.textDim) }
+                        } else {
+                            ForEach(arows) { st in
+                                StockCard(intel: st, rank: nil).onTapGesture { selected = st }
+                            }
+                            Text("Top 120 by traded value. Tap any stock for its graph + the 5 lights.")
+                                .font(.system(size: 10)).foregroundColor(HK.textFaint).multilineTextAlignment(.center)
                         }
-                        footerNote
+                    } else {
+                        unprovenBanner
+                        segmentPicker
+                        if rows.isEmpty {
+                            Card { Text(vm.loading ? "Loading the board…" : "No stocks to show yet — pull to refresh.")
+                                .font(.system(size: 13)).foregroundColor(HK.textDim) }
+                        } else {
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { idx, st in
+                                StockCard(intel: st, rank: segment == .setups ? idx + 1 : nil)
+                                    .onTapGesture { selected = st }
+                            }
+                            footerNote
+                        }
                     }
                     if !vm.status.isEmpty { Text(vm.status).font(.system(size: 12)).foregroundColor(HK.error) }
                 }
@@ -271,6 +326,16 @@ struct StocksView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        // Debug deep-links (env-gated, harmless in prod): jump to a bucket / open a stock's detail.
+        .onChange(of: vm.universe?.count) { _, _ in
+            let env = ProcessInfo.processInfo.environment
+            if let b = env["WEALTH_BUCKET"], bucket == nil { bucket = b }
+            if let sym = env["WEALTH_DETAIL"], selected == nil,
+               let a = vm.universe?.stocks?.first(where: { $0.symbol == sym }) {
+                selected = StockIntel(symbol: a.symbol, price: a.asWatchlist,
+                                      signal: signalMap[a.symbol], plan: nil, marketLive: marketLive)
+            }
+        }
     }
 
     private var segmentPicker: some View {
@@ -279,6 +344,44 @@ struct StocksView: View {
         }
         .pickerStyle(.segmented)
         .tint(HK.accent)
+    }
+
+    // The bucket front door — all ~1,248 analysed stocks, organised into named tiles.
+    private var bucketGrid: some View {
+        let bk = vm.universe?.buckets ?? [:]
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("BROWSE ALL \(vm.universe?.count ?? 0) STOCKS")
+                .font(.system(size: 11, weight: .heavy)).foregroundColor(HK.textFaint)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
+                ForEach(bucketDefs, id: \.key) { d in
+                    let n = bk[d.key] ?? 0
+                    let on = bucket == d.key
+                    Button { withAnimation(.easeInOut(duration: 0.15)) { bucket = on ? nil : d.key } } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: d.icon).font(.system(size: 15)).foregroundColor(on ? HK.accent : HK.textDim)
+                            Text(d.label).font(.system(size: 11, weight: .bold)).foregroundColor(HK.text)
+                                .lineLimit(1).minimumScaleFactor(0.65)
+                            Text("\(n)").font(.system(size: 13, weight: .heavy, design: .rounded))
+                                .foregroundColor(on ? HK.accent : HK.textFaint)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(on ? HK.accent.opacity(0.14) : HK.card))
+                        .overlay(RoundedRectangle(cornerRadius: HK.radiusSm).stroke(on ? HK.accentLine : HK.line, lineWidth: 1))
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func bucketHeader(_ b: String) -> some View {
+        HStack {
+            Button { withAnimation { bucket = nil } } label: {
+                HStack(spacing: 4) { Image(systemName: "chevron.left"); Text("All setups") }
+                    .font(.system(size: 13, weight: .bold)).foregroundColor(HK.accent)
+            }.buttonStyle(.plain)
+            Spacer()
+            Text(bucketLabel(b)).font(.system(size: 14, weight: .heavy)).foregroundColor(HK.text)
+        }
     }
 
     private var unprovenBanner: some View {
@@ -539,12 +642,14 @@ private struct StockDetailSheet: View {
     @ObservedObject var vm: WealthVM
     var goToExecute: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var chartMonths = 3   // 1 / 3 / 6 / 0=MAX
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 moveCard
+                chartCard
                 lightsCard
                 if let plan = intel.plan { planCard(plan) } else { noPlanCard }
                 rationaleCard
@@ -581,6 +686,54 @@ private struct StockDetailSheet: View {
                     .font(.system(size: 11)).foregroundColor(HK.textFaint)
             }
         }
+    }
+
+    // The price GRAPH — daily close line (Swift Charts off action=eod), 1M/3M/6M/MAX.
+    private var chartCard: some View {
+        let all = vm.eodCache[intel.symbol] ?? []
+        let shown = chartMonths == 0 ? all : Array(all.suffix(max(2, chartMonths * 21)))
+        let closes = shown.compactMap { $0.close }
+        let lo = closes.min() ?? 0, hi = closes.max() ?? 1
+        let up = (shown.last?.close ?? 0) >= (shown.first?.close ?? 0)
+        return Card {
+            HStack {
+                Text("Price graph").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
+                Spacer()
+                ForEach([1, 3, 6, 0], id: \.self) { m in
+                    Button { chartMonths = m } label: {
+                        Text(m == 0 ? "MAX" : "\(m)M")
+                            .font(.system(size: 11, weight: chartMonths == m ? .heavy : .semibold))
+                            .foregroundColor(chartMonths == m ? HK.accent : HK.textFaint)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(chartMonths == m ? HK.accent.opacity(0.15) : Color.clear))
+                    }.buttonStyle(.plain)
+                }
+            }
+            if shown.count >= 2 {
+                Chart(shown) { bar in
+                    if let c = bar.close {
+                        LineMark(x: .value("Date", bar.trade_date), y: .value("Close", c))
+                            .foregroundStyle(up ? HK.ready : HK.error)
+                            .interpolationMethod(.monotone)
+                        AreaMark(x: .value("Date", bar.trade_date), yStart: .value("lo", lo), yEnd: .value("Close", c))
+                            .foregroundStyle(LinearGradient(colors: [(up ? HK.ready : HK.error).opacity(0.22), .clear], startPoint: .top, endPoint: .bottom))
+                            .interpolationMethod(.monotone)
+                    }
+                }
+                .chartYScale(domain: (lo * 0.99)...(hi * 1.01))
+                .chartXAxis(.hidden)
+                .frame(height: 160)
+                HStack {
+                    Text("\(shown.count) trading days").font(.system(size: 10)).foregroundColor(HK.textFaint)
+                    Spacer()
+                    Text("₹\(Int(lo)) – ₹\(Int(hi))").font(.system(size: 10)).foregroundColor(HK.textFaint)
+                }
+            } else {
+                Text(vm.eodCache[intel.symbol] == nil ? "Loading the graph…" : "No price history for this stock.")
+                    .font(.system(size: 12)).foregroundColor(HK.textDim).frame(height: 80)
+            }
+        }
+        .task(id: intel.symbol) { await vm.loadEod(intel.symbol) }
     }
 
     private var moveCard: some View {

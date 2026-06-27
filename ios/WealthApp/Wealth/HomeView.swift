@@ -20,6 +20,8 @@ final class WealthVM: ObservableObject {
     @Published var researchDepth: ResearchDepth?
     @Published var scoutToday: ScoutToday?         // the daily learning action
     @Published var scoutTrail: ScoutTrail?         // the learning trail + stats
+    @Published var universe: AnalysedUniverse?     // the full ~1,248-stock analysed universe + buckets
+    @Published var eodCache: [String: [EodBar]] = [:]  // per-symbol daily OHLC for the price graph
     @Published var prefill: OrderDraft?            // set by Now/Stocks → consumed by Execute (one-tap engine trade)
     @Published var status: String = ""
     @Published var loading = false
@@ -47,11 +49,13 @@ final class WealthVM: ObservableObject {
         async let rd = WealthClient.shared.researchDepth()
         async let st = WealthClient.shared.scoutToday()
         async let str = WealthClient.shared.scoutTrail()
+        async let un = WealthClient.shared.analysedUniverse()
         kite = try? await k
         // The scout is the marquee daily action — resolve it EARLY (fast endpoints),
         // ahead of the slow briefing/stockPicker awaits, so it never loads last.
         scoutToday = try? await st
         scoutTrail = try? await str
+        universe = try? await un
         readiness = try? await r
         auto = try? await a
         engine = try? await e
@@ -83,6 +87,14 @@ final class WealthVM: ObservableObject {
     var deployablePaise: Int { Int(config["today_deployable_paise"] ?? "") ?? 0 }
     // Robust: trust EITHER source. A single slow/failed status fetch must not show a false "Connect Kite".
     var kiteConnected: Bool { kite?.connected == true || plan?.state?.kite_connected == true }
+
+    // Lazy-load a stock's daily OHLC for the price graph (cached per symbol).
+    func loadEod(_ symbol: String) async {
+        if eodCache[symbol] != nil { return }
+        if let s = try? await WealthClient.shared.eod(symbol: symbol), let rows = s.rows, !rows.isEmpty {
+            eodCache[symbol] = rows
+        }
+    }
 }
 
 // ───────────────────────── Money + UI helpers ─────────────────────────

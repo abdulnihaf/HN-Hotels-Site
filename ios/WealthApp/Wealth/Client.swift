@@ -224,6 +224,55 @@ struct StockPicker: Decodable {
     let live_ltp_count: Int?
 }
 
+// ── The FULL analysed universe (~1,248 liquid stocks) + named buckets, every row priced.
+//    Backs the Stocks tab bucket-grid front door (all stocks visible). ──
+struct AnalysedStock: Decodable, Identifiable {
+    let symbol: String
+    let name: String?
+    let turnover_cr: Double?
+    let last_close_rupees: Double?
+    let prev_close_rupees: Double?
+    let change_pct: Double?
+    let gap_pct: Double?
+    let gap_candidate: Bool?
+    let atr_pct: Double?
+    let vol_band: String?
+    let delivery_pct: Double?
+    let vol_mult: Double?
+    let big_money: Bool?
+    let is_fno: Bool?
+    let is_nifty50: Bool?
+    var id: String { symbol }
+    // → a price record the existing detail sheet understands
+    var asWatchlist: WatchlistStock {
+        WatchlistStock(symbol: symbol, name: name, last_close_rupees: last_close_rupees,
+                       prev_close_rupees: prev_close_rupees, change_pct: change_pct,
+                       live_ltp_rupees: nil, live_change_pct: nil,
+                       daily_value_cr: turnover_cr, volume: nil, thesis: nil)
+    }
+}
+struct AnalysedUniverse: Decodable {
+    let count: Int?
+    let gap_candidates: Int?
+    let buckets: [String: Int]?
+    let stocks: [AnalysedStock]?
+}
+
+// ── Daily OHLC series for the price graph (Swift Charts off action=eod, prices in paise). ──
+struct EodBar: Decodable, Identifiable {
+    let trade_date: String
+    let open_paise: Int?
+    let high_paise: Int?
+    let low_paise: Int?
+    let close_paise: Int?
+    var id: String { trade_date }
+    var close: Double? { close_paise.map { Double($0) / 100 } }
+    var open: Double? { open_paise.map { Double($0) / 100 } }
+    var high: Double? { high_paise.map { Double($0) / 100 } }
+    var low: Double? { low_paise.map { Double($0) / 100 } }
+}
+struct EodSeries: Decodable { let symbol: String?; let rows: [EodBar]? }
+
 // ── Per-stock engine scores (the 5-lights source). Doubles — most thin dimensions
 //    default to EXACTLY 50, which the UI treats as "no data" (grey), never a fake amber. ──
 struct SignalScore: Decodable, Identifiable {
@@ -437,6 +486,8 @@ actor WealthClient {
     func researchDepth() async throws -> ResearchDepth { try await get(ResearchDepth.self, action: "research_depth") }
     func scoutToday() async throws -> ScoutToday { try await get(ScoutToday.self, action: "scout_today") }
     func scoutTrail() async throws -> ScoutTrail { try await get(ScoutTrail.self, action: "scout_trail") }
+    func analysedUniverse() async throws -> AnalysedUniverse { try await get(AnalysedUniverse.self, action: "analysed_universe") }
+    func eod(symbol: String) async throws -> EodSeries { try await get(EodSeries.self, action: "eod", extra: ["symbol": symbol]) }
 
     /// Guarded config write (used for today's deployable capital). GET-with-side-effects per the API contract.
     @discardableResult
