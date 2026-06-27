@@ -77,4 +77,4 @@ A **⚠ note** on a line (e.g. "price is per box — confirm at bill") means the
 ## What's deliberately **not** here (yet)
 Automatic Tijori cash reduction, khata diary intelligence, and Naqeeb reminder loops are the next layers. This slice closes tomorrow's purchase miss: demand → ordered → received proof → rate/payment trail.
 
-*PINs: Azeem `7341` · Nafees `3160` · Zoya `2026` · Bashir `8523` · owner `0305`. App: HN Staff (Android). Backend: hn-ops-api (Cloudflare).*
+*PINs: Azeem `7341` · Nafees `3160` · Zoya `2026` · Bashir `8523` · Admin Console `5634` · owner `0305`. Admin Console sees all outlets/chambers but does not carry final owner payment approval. App: HN Staff (Android). Backend: hn-ops-api (Cloudflare).*

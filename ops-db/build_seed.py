@@ -89,6 +89,7 @@ S.append("  ('nch-shivajinagar','NCH','Nawabi Chai House','Bangalore','ops.hamza
 # roles
 ROLES = [
  ('owner','Owner / MD', ["sauda.place","sauda.receive","sauda.raise","sauda.pay","anbar.receive","anbar.count","anbar.audit","takht.settle","takht.take","takht.account","takht.fix","admin.assign"],100),
+ ('admin','Admin Console', ["sauda.demand","sauda.place","sauda.receive","sauda.raise","anbar.receive","anbar.count","anbar.audit","takht.settle","takht.take","takht.account","takht.fix","admin.assign","admin.view"],90),
  ('manager','Manager', ["sauda.place","sauda.receive","sauda.raise","anbar.receive","anbar.count","anbar.audit","takht.settle","takht.take","takht.account","takht.fix"],80),
  ('buyer','Buyer', ["sauda.place","sauda.receive","sauda.raise"],50),
  ('cashier','Cashier', ["takht.take","takht.account","takht.fix"],40),
@@ -99,6 +100,9 @@ ROLES = [
 ]
 for rk,lbl,caps,rank in ROLES:
     S.append(f"INSERT INTO roles (role_key,label,capabilities,rank) VALUES ({q(rk)},{q(lbl)},{q(json.dumps(caps))},{rank});")
+
+S.append("INSERT INTO staff (staff_pin,name,role_key,outlet_ids,brand,job_name,source) VALUES "
+         "('5634','HN Admin Console','admin','[]','HQ','Permission audit / admin','system');")
 
 # staff role mapping
 def role_for(job):

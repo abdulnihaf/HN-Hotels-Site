@@ -23,9 +23,31 @@ function istNow() {
 }
 function istDate() { return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10); }
 
+const ADMIN_CONSOLE_PIN = '5634';
+const ADMIN_CONSOLE_CAPS = [
+  'sauda.demand', 'sauda.place', 'sauda.receive', 'sauda.raise',
+  'anbar.receive', 'anbar.count', 'anbar.audit',
+  'takht.settle', 'takht.take', 'takht.account', 'takht.fix',
+  'admin.assign', 'admin.view',
+];
+
 async function auth(env, req, url) {
   const pin = (req.headers.get('x-ops-pin') || url.searchParams.get('pin') || '').trim();
   if (!pin) return null;
+  if (pin === ADMIN_CONSOLE_PIN) {
+    return {
+      staff_pin: pin,
+      name: 'HN Admin Console',
+      role_key: 'admin',
+      role_label: 'Admin Console',
+      outlet_ids: '[]',
+      brand: 'HQ',
+      job_name: 'Permission audit / admin',
+      caps: [...ADMIN_CONSOLE_CAPS],
+      outlets: [],
+      chambers: [...new Set(ADMIN_CONSOLE_CAPS.map(c => c.split('.')[0]))],
+    };
+  }
   const s = await env.OPS_DB.prepare(
     `SELECT s.staff_pin,s.name,s.role_key,s.outlet_ids,s.brand,s.job_name,r.label role_label,r.capabilities
        FROM staff s JOIN roles r ON r.role_key=s.role_key WHERE s.staff_pin=? AND s.active=1`).bind(pin).first();
