@@ -477,9 +477,14 @@ private struct TideCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(18)
-        // Liquid Glass marquee — tinted to the tide direction so it refracts warm/cool.
-        .hkGlass(cornerRadius: HK.radius, tint: tideUp ? HK.accent : HK.error,
-                 fallbackFill: HK.accentSoft, fallbackStroke: HK.accentLine, fallbackStrokeWidth: 1.5)
+        // Liquid Glass marquee — NEUTRAL glass (a colour wash washed out the same-colour
+        // headline; orange clashed). Direction is carried by the headline colour + breadth bar;
+        // a thin tide-coloured edge keeps the hero hint without killing contrast.
+        .hkGlass(cornerRadius: HK.radius,
+                 fallbackFill: HK.card,
+                 fallbackStroke: (tideUp ? HK.ready : HK.error).opacity(0.55), fallbackStrokeWidth: 1.5)
+        .overlay(RoundedRectangle(cornerRadius: HK.radius, style: .continuous)
+                    .stroke((tideUp ? HK.ready : HK.error).opacity(0.45), lineWidth: 1))
     }
 
     private func tideStat(_ label: String, _ value: String, _ color: Color, sub: String? = nil) -> some View {
@@ -505,6 +510,7 @@ private struct TideCard: View {
 
     private var marketLabel: (String, Color) {
         if vm.intel?.in_market_hours == true { return ("MARKET OPEN", HK.ready) }
+        if !vm.isMarketDay { return (MarketCalendar.closedLabel, HK.idle) }
         let p = (vm.plan?.phase ?? "").lowercased()
         if p.contains("pre") { return ("PRE-MARKET", HK.running) }
         if p.contains("overnight") || p.isEmpty { return ("CLOSED", HK.idle) }

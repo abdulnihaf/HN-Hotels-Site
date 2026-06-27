@@ -29,6 +29,12 @@ struct SetupView: View {
         let dec = vm.verdict?.decision
         let pick = vm.verdict?.recommended_symbol
         let (head, sub, tone): (String, String, Color) = {
+            if !vm.isMarketDay {
+                let next = MarketCalendar.nextTradingDay()
+                return ("No — markets are closed",
+                        "It's \(MarketCalendar.weekday()); NSE trades Mon–Fri. Next trading day is \(MarketCalendar.dayShort(next)). Last session was \(MarketCalendar.dayShort(MarketCalendar.lastTradingDay())). Use the quiet day to learn the 5 lights below.",
+                        HK.idle)
+            }
             if dec == "TRADE", let p = pick {
                 return ("Yes — a setup in \(p)", "The engine found a stock worth trading today. Read the 5 lights below to see why.", HK.ready)
             }

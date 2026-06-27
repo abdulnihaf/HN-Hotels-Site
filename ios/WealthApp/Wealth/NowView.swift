@@ -121,6 +121,14 @@ struct NowView: View {
         let phase = (vm.plan?.phase ?? "").lowercased()
         let dec = vm.verdict?.decision
         let pick = vm.verdict?.recommended_symbol
+        // Weekend / holiday FIRST: no "pick at 8:30" framing on a non-market day.
+        if !vm.isMarketDay {
+            let next = MarketCalendar.nextTradingDay()
+            return Situation(
+                headline: "Markets closed — \(MarketCalendar.weekday())",
+                sub: "NSE is shut today. Last session was \(MarketCalendar.dayShort(MarketCalendar.lastTradingDay())); it reopens \(MarketCalendar.dayShort(next)) 9:15 AM and the engine composes its next call \(MarketCalendar.weekday(next)) 8:30. Nothing to do — rest.",
+                tone: HK.idle, action: .none)
+        }
         if !kiteOK {
             return Situation(headline: "Connect Kite to begin",
                              sub: "Your broker link powers live prices and orders. It's a 30-second login each morning — tokens reset overnight.",
@@ -183,8 +191,12 @@ struct NowView: View {
     // ── The pick (only meaningful detail) ──
     private var pickCard: some View {
         Card {
-            Text("Today's call").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
-            if vm.verdict?.decision == "TRADE", let p = vm.verdict?.recommended_symbol {
+            Text(vm.isMarketDay ? "Today's call" : "Next call").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
+            if !vm.isMarketDay {
+                let next = MarketCalendar.nextTradingDay()
+                Text("Markets are closed (\(MarketCalendar.weekday())). The engine's next call composes \(MarketCalendar.weekday(next)) 8:30 AM — see Friday's on the Today tab's trail.")
+                    .font(.system(size: 12)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
+            } else if vm.verdict?.decision == "TRADE", let p = vm.verdict?.recommended_symbol {
                 Row(label: "Decision", value: "TRADE", valueColor: HK.ready)
                 Row(label: "Stock", value: p)
                 Text("Full entry / stop / target opens in Execute. Confidence is unproven — keep it small.")
@@ -333,6 +345,7 @@ struct NowView: View {
 
     private var marketLabel: (String, Color) {
         if vm.intel?.in_market_hours == true { return ("MARKET OPEN", HK.ready) }
+        if !vm.isMarketDay { return (MarketCalendar.closedLabel, HK.idle) }
         let p = (vm.plan?.phase ?? "").lowercased()
         if p.contains("pre") { return ("PRE-MARKET", HK.running) }
         if p.contains("overnight") || p.isEmpty { return ("CLOSED", HK.idle) }

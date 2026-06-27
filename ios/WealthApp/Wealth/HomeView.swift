@@ -88,6 +88,10 @@ final class WealthVM: ObservableObject {
     // Robust: trust EITHER source. A single slow/failed status fetch must not show a false "Connect Kite".
     var kiteConnected: Bool { kite?.connected == true || plan?.state?.kite_connected == true }
 
+    // Business-day truth: the engine's is_market_day is authoritative (knows holidays);
+    // fall back to local weekday so the weekend framing shows instantly before the plan loads.
+    var isMarketDay: Bool { plan?.state?.is_market_day ?? !MarketCalendar.isWeekend() }
+
     // Lazy-load a stock's daily OHLC for the price graph (cached per symbol).
     func loadEod(_ symbol: String) async {
         if eodCache[symbol] != nil { return }

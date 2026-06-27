@@ -68,17 +68,21 @@ struct ScoutTodayCard: View {
         Card {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("TODAY'S SCOUT").font(.system(size: 12, weight: .heavy)).foregroundColor(HK.textFaint)
-                    Text(s?.headline ?? "No scout composed yet today")
+                    Text(vm.isMarketDay ? "TODAY'S SCOUT" : "MARKETS CLOSED")
+                        .font(.system(size: 12, weight: .heavy)).foregroundColor(HK.textFaint)
+                    Text(vm.isMarketDay ? (s?.headline ?? "No scout composed yet today")
+                                        : "Closed — \(MarketCalendar.weekday())")
                         .font(.system(size: 19, weight: .heavy, design: .rounded))
                         .foregroundColor(HK.text)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                if let mode = s?.mode { Pill(text: mode, color: mode == "TOKEN" ? HK.running : HK.idle) }
+                if vm.isMarketDay, let mode = s?.mode { Pill(text: mode, color: mode == "TOKEN" ? HK.running : HK.idle) }
             }
 
-            if let s, s.has_scout == true {
+            if !vm.isMarketDay {
+                weekendBlock
+            } else if let s, s.has_scout == true {
                 if let ladder = s.ladder { ScoutLadderStrip(ladder: ladder) }
 
                 // HONEST anchor — the most important line on the screen.
@@ -124,6 +128,24 @@ struct ScoutTodayCard: View {
                     .font(.system(size: 12)).foregroundColor(HK.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    // Weekend / holiday: no scout today — frame it (last Friday, next Monday) + show the last scout.
+    @ViewBuilder private var weekendBlock: some View {
+        let next = MarketCalendar.nextTradingDay()
+        Text("No scout on \(MarketCalendar.weekday()) — NSE is closed Sat/Sun. The next composes \(MarketCalendar.weekday(next)) at 09:40 IST. Last market day: \(MarketCalendar.dayShort(MarketCalendar.lastTradingDay())).")
+            .font(.system(size: 12)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
+        if let last = vm.scoutTrail?.days?.first {
+            Divider().background(HK.line)
+            HStack(spacing: 6) {
+                Text("LAST SCOUT").font(.system(size: 10, weight: .heavy)).foregroundColor(HK.accent)
+                Text(String((last.date ?? "").suffix(5))).font(.system(size: 11, weight: .bold)).foregroundColor(HK.textFaint)
+                Text(last.symbol ?? (last.decision == "SCOUT" ? "—" : "sat out")).font(.system(size: 12, weight: .bold)).foregroundColor(HK.text)
+                if let wl = last.win_loss { Pill(text: wl.uppercased(), color: wl == "win" ? HK.ready : wl == "loss" ? HK.error : HK.idle) }
+                if let p = last.pnl_net_rs { Text(rupee(p)).font(.system(size: 11, weight: .semibold)).foregroundColor(p >= 0 ? HK.ready : HK.error) }
+            }
+            if let l = last.lesson { Text(l).font(.system(size: 11)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true) }
         }
     }
 

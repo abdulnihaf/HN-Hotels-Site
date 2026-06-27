@@ -41,6 +41,45 @@ extension Color {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  MARKET CALENDAR — business-day awareness (IST). The engine's `is_market_day`
+//  is authoritative (it also knows holidays); this derives the human framing the
+//  cockpit shows on a non-market day: "today is Saturday, last was Friday, next is
+//  Monday." NO surface should say "Today's pick at 8:30" on a weekend.
+// ─────────────────────────────────────────────────────────────────────────────
+enum MarketCalendar {
+    static var ist: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "Asia/Kolkata") ?? .current
+        return c
+    }
+    /// Sat (7) / Sun (1) in Gregorian. (Holidays are the backend's `is_market_day` job.)
+    static func isWeekend(_ d: Date = Date()) -> Bool {
+        let wd = ist.component(.weekday, from: d)
+        return wd == 1 || wd == 7
+    }
+    static func lastTradingDay(from d: Date = Date()) -> Date {
+        var day = ist.date(byAdding: .day, value: -1, to: d) ?? d
+        while isWeekend(day) { day = ist.date(byAdding: .day, value: -1, to: day) ?? day }
+        return day
+    }
+    static func nextTradingDay(from d: Date = Date()) -> Date {
+        var day = ist.date(byAdding: .day, value: 1, to: d) ?? d
+        while isWeekend(day) { day = ist.date(byAdding: .day, value: 1, to: day) ?? day }
+        return day
+    }
+    static func weekday(_ d: Date = Date()) -> String { fmt("EEEE", d) }
+    static func dayShort(_ d: Date = Date()) -> String { fmt("EEE d MMM", d) }
+    private static func fmt(_ pattern: String, _ d: Date) -> String {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        f.dateFormat = pattern
+        return f.string(from: d)
+    }
+    /// "WEEKEND" on Sat/Sun, else "MARKET CLOSED" (a weekday holiday).
+    static var closedLabel: String { isWeekend() ? "WEEKEND" : "MARKET CLOSED" }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  LIQUID GLASS (iOS 26) — with a flat warm-brown fallback for iOS < 26.
 //  The whole point: glass is the FLOATING control/hero layer that refracts the
 //  light behind it. It is NOT a skin for dense teaching text (that stays solid
