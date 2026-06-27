@@ -352,22 +352,26 @@ struct StocksView: View {
         return VStack(alignment: .leading, spacing: 8) {
             Text("BROWSE ALL \(vm.universe?.count ?? 0) STOCKS")
                 .font(.system(size: 11, weight: .heavy)).foregroundColor(HK.textFaint)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
-                ForEach(bucketDefs, id: \.key) { d in
-                    let n = bk[d.key] ?? 0
-                    let on = bucket == d.key
-                    Button { withAnimation(.easeInOut(duration: 0.15)) { bucket = on ? nil : d.key } } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: d.icon).font(.system(size: 15)).foregroundColor(on ? HK.accent : HK.textDim)
-                            Text(d.label).font(.system(size: 11, weight: .bold)).foregroundColor(HK.text)
-                                .lineLimit(1).minimumScaleFactor(0.65)
-                            Text("\(n)").font(.system(size: 13, weight: .heavy, design: .rounded))
-                                .foregroundColor(on ? HK.accent : HK.textFaint)
-                        }
-                        .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(on ? HK.accent.opacity(0.14) : HK.card))
-                        .overlay(RoundedRectangle(cornerRadius: HK.radiusSm).stroke(on ? HK.accentLine : HK.line, lineWidth: 1))
-                    }.buttonStyle(.plain)
+            HKGlassGroup(spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
+                    ForEach(bucketDefs, id: \.key) { d in
+                        let n = bk[d.key] ?? 0
+                        let on = bucket == d.key
+                        Button { withAnimation(.easeInOut(duration: 0.15)) { bucket = on ? nil : d.key } } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: d.icon).font(.system(size: 15)).foregroundColor(on ? HK.accent : HK.textDim)
+                                Text(d.label).font(.system(size: 11, weight: .bold)).foregroundColor(HK.text)
+                                    .lineLimit(1).minimumScaleFactor(0.65)
+                                Text("\(n)").font(.system(size: 13, weight: .heavy, design: .rounded))
+                                    .foregroundColor(on ? HK.accent : HK.textFaint)
+                            }
+                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                            // Liquid Glass tile: tinted + interactive (flexes on press) when selected.
+                            .hkGlass(cornerRadius: HK.radiusSm, tint: on ? HK.accent : nil, interactive: true,
+                                     fallbackFill: on ? HK.accent.opacity(0.14) : HK.card,
+                                     fallbackStroke: on ? HK.accentLine : HK.line)
+                        }.buttonStyle(.plain)
+                    }
                 }
             }
         }
@@ -473,8 +477,9 @@ private struct TideCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(18)
-        .background(RoundedRectangle(cornerRadius: HK.radius).fill(HK.accentSoft))
-        .overlay(RoundedRectangle(cornerRadius: HK.radius).stroke(HK.accentLine, lineWidth: 1.5))
+        // Liquid Glass marquee — tinted to the tide direction so it refracts warm/cool.
+        .hkGlass(cornerRadius: HK.radius, tint: tideUp ? HK.accent : HK.error,
+                 fallbackFill: HK.accentSoft, fallbackStroke: HK.accentLine, fallbackStrokeWidth: 1.5)
     }
 
     private func tideStat(_ label: String, _ value: String, _ color: Color, sub: String? = nil) -> some View {
@@ -658,7 +663,8 @@ private struct StockDetailSheet: View {
             }
             .padding(18)
         }
-        .background(HK.bg.ignoresSafeArea())
+        // Aurora canvas — the light the floating glass cards refract.
+        .background(HKAurora(tint: (intel.changePct ?? 0) >= 0 ? HK.ready : HK.error).ignoresSafeArea())
     }
 
     private var header: some View {
@@ -695,18 +701,25 @@ private struct StockDetailSheet: View {
         let closes = shown.compactMap { $0.close }
         let lo = closes.min() ?? 0, hi = closes.max() ?? 1
         let up = (shown.last?.close ?? 0) >= (shown.first?.close ?? 0)
-        return Card {
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Price graph").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
                 Spacer()
-                ForEach([1, 3, 6, 0], id: \.self) { m in
-                    Button { chartMonths = m } label: {
-                        Text(m == 0 ? "MAX" : "\(m)M")
-                            .font(.system(size: 11, weight: chartMonths == m ? .heavy : .semibold))
-                            .foregroundColor(chartMonths == m ? HK.accent : HK.textFaint)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(chartMonths == m ? HK.accent.opacity(0.15) : Color.clear))
-                    }.buttonStyle(.plain)
+                // Liquid Glass timeframe pills — grouped so the selection morphs between them.
+                HKGlassGroup(spacing: 4) {
+                    HStack(spacing: 4) {
+                        ForEach([1, 3, 6, 0], id: \.self) { m in
+                            Button { withAnimation(.easeInOut(duration: 0.2)) { chartMonths = m } } label: {
+                                Text(m == 0 ? "MAX" : "\(m)M")
+                                    .font(.system(size: 11, weight: chartMonths == m ? .heavy : .semibold))
+                                    .foregroundColor(chartMonths == m ? HK.accent : HK.textFaint)
+                                    .padding(.horizontal, 9).padding(.vertical, 4)
+                                    .hkGlass(Capsule(), tint: chartMonths == m ? HK.accent : nil, interactive: true,
+                                             fallbackFill: chartMonths == m ? HK.accent.opacity(0.15) : Color.clear,
+                                             fallbackStroke: .clear, fallbackStrokeWidth: 0)
+                            }.buttonStyle(.plain)
+                        }
+                    }
                 }
             }
             if shown.count >= 2 {
@@ -733,6 +746,10 @@ private struct StockDetailSheet: View {
                     .font(.system(size: 12)).foregroundColor(HK.textDim).frame(height: 80)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        // The showcase: a glass panel floating over the trend-tinted aurora.
+        .hkGlass(cornerRadius: HK.radius)
         .task(id: intel.symbol) { await vm.loadEod(intel.symbol) }
     }
 
