@@ -1,5 +1,12 @@
 # HN Hotels — Repo Context for Claude
 
+<!-- Root constitution (the person, above every venture; HN Hotels is ONE node under it,
+     alongside Visa Medicals, Wealth, Personal). Byte-identical mirror of the Mac canonical
+     ~/.ai-coordination/NIHAF-BRAIN.md, committed here so iPhone Claude Code (cloud sandbox,
+     which can only read committed repo files) inherits the same root. When the canonical
+     changes, re-copy it here. -->
+@NIHAF-BRAIN.md
+
 This file auto-loads in every Claude Code session opened in this repo. It exists
 because the owner (Nihaf) does marketing-strategy thinking on iPhone Claude Code,
 and the iPhone sandbox cannot reach our private domains. Live business data must
