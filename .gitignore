@@ -17,6 +17,7 @@ node_modules/
 # Large binary research assets (keep local only)
 *.pdf
 *.xlsx
+*.zip
 hn-asset*.xlsx
 !package.json
 

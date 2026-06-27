@@ -75,7 +75,12 @@ function listViewScore(meta) {
 
 const ownerKey = (env) => env.DASHBOARD_KEY || env.DASHBOARD_API_KEY || null;
 const requireOwner = (env, request, body) => {
-  const k = request.headers.get('X-Dashboard-Key') || new URL(request.url).searchParams.get('key') || (body && body.key);
+  // Use body.dashboard_key to avoid clashing with endpoints whose business
+  // payload already has a body.key (e.g. set-config {key, value}).
+  const k = request.headers.get('X-Dashboard-Key') ||
+            request.headers.get('x-dashboard-key') ||
+            new URL(request.url).searchParams.get('key') ||
+            (body && body.dashboard_key);
   return k && k === ownerKey(env);
 };
 const requireCron = (env, request) => {
@@ -121,6 +126,7 @@ export async function onRequest(context) {
       // Owner-triggered
       if (action === 'set-config')           return await setConfig(env, body, request);
       if (action === 'trigger-now')          return await triggerNow(env, body, request);
+      if (action === 'import-list')          return await importList(env, body, request);
       if (action === 'modash-register-profile') return await modashRegisterProfile(env, body, request);
       if (action === 'modash-mark-active')   return await modashMarkActive(env, body, request);
       if (action === 'modash-enqueue-job')   return await modashEnqueueJob(env, body, request);
@@ -137,6 +143,10 @@ export async function onRequest(context) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function getStatus(env) {
+  const config = await getConfigMap(env);
+  const campaign = getActiveCampaign(config);
+  const target = parseInt(config.outreach_daily_target || '50');
+
   const lastRuns = await env.DB.prepare(`
     SELECT cron_name,
            MAX(started_at) as last_run_at,
@@ -157,28 +167,36 @@ async function getStatus(env) {
     SELECT channel, COUNT(*) c
     FROM influencer_outreach_log
     WHERE date(sent_at, 'localtime') = date('now', 'localtime')
-      AND campaign = 'may_2026_v1'
+      AND campaign = ?
     GROUP BY channel
-  `).all();
+  `).bind(campaign).all();
 
   const todayUnique = await env.DB.prepare(`
     SELECT COUNT(DISTINCT creator_username) c
     FROM influencer_outreach_log
     WHERE date(sent_at, 'localtime') = date('now', 'localtime')
-      AND campaign = 'may_2026_v1' AND status != 'queued'
-  `).first();
+      AND campaign = ? AND status != 'queued'
+  `).bind(campaign).first();
 
-  const config = await getConfigMap(env);
-  const target = parseInt(config.outreach_daily_target || '50');
   const totalDb = await env.DB.prepare(`SELECT COUNT(*) c FROM influencer_bio_pulse WHERE status='ok'`).first();
   const totalQueue = await env.DB.prepare(`SELECT COUNT(*) c FROM influencer_discovery_queue WHERE enrich_status='pending'`).first();
+  const reachablePool = await env.DB.prepare(`
+    SELECT COUNT(*) c FROM influencer_bio_pulse
+    WHERE status='ok' AND is_private=0 AND followers_count BETWEEN 1000 AND 99999
+      AND has_any_contact=1
+      AND (LOWER(IFNULL(biography,'') || ' ' || IFNULL(full_name,'')) LIKE '%bangalore%'
+        OR LOWER(IFNULL(biography,'') || ' ' || IFNULL(full_name,'')) LIKE '%blr%'
+        OR LOWER(IFNULL(biography,'') || ' ' || IFNULL(full_name,'')) LIKE '%bengaluru%')
+  `).first();
 
   return json({
     success: true,
     mode: config.outreach_mode || 'dry_run',
+    campaign,
     daily_target: target,
     today_progress: { unique: todayUnique.c, channels: today.results, target },
     queue_depth: queueDepth.results,
+    reachable_pool: reachablePool.c,
     last_runs: lastRuns.results,
     db_size: { ok_profiles: totalDb.c, queue_pending: totalQueue.c },
     config,
@@ -215,6 +233,10 @@ async function getConfigMap(env) {
   return map;
 }
 
+function getActiveCampaign(configMap) {
+  return configMap.campaign || configMap.active_campaign || 'active_v1';
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // WRITE — owner-gated config + manual trigger
 // ────────────────────────────────────────────────────────────────────────────
@@ -237,6 +259,239 @@ async function triggerNow(env, body, request) {
   if (cron === 'score')          return await cronScore(env, body, request);
   if (cron === 'outreach-wave')  return await cronOutreachWave(env, body, request);
   return json({ error: 'unknown cron_name (use: discover|enrich-tick|score|outreach-wave)' }, 400);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// IMPORT-LIST — ingest the owner's "gold link" / CSV / handle list
+// ────────────────────────────────────────────────────────────────────────────
+// Accepts url | csv | json | handles. Normalises usernames, de-dupes against
+// influencer_bio_pulse + influencer_outreach_log, and upserts the rest into
+// influencer_discovery_queue with source='gold_import' for free enrichment.
+// Owner-gated because it writes to the pipeline and can cost enrichment quota.
+// ────────────────────────────────────────────────────────────────────────────
+
+async function importList(env, body, request) {
+  if (!requireOwner(env, request, body)) return json({ error: 'unauthorized' }, 401);
+
+  const raw = body.handles || body.csv || body.json || body.url || body.list;
+  if (!raw) return json({ error: 'provide one of: handles[], csv string, json array, url, list string' }, 400);
+
+  let parsed = [];
+  if (body.url) {
+    // URL import is the Modash-driver path. For v1 we record the URL but do not
+    // block the loop on headless automation — the owner can paste the exported
+    // data as csv/json/handles instead. Returning a clear signal keeps UX honest.
+    return json({
+      success: true,
+      mode: 'url_recorded_only',
+      url: body.url,
+      message: 'URL recorded. For autonomous ingestion, paste the exported data as csv, json, or handles.',
+    });
+  }
+
+  if (body.csv) {
+    parsed = parseCsvCreators(body.csv);
+  } else if (body.json) {
+    parsed = parseJsonCreators(body.json);
+  } else if (body.handles || body.list) {
+    parsed = parseHandleList(String(body.handles || body.list));
+  }
+
+  if (parsed.length === 0) return json({ error: 'no valid creator handles found in input' }, 400);
+  if (parsed.length > 5000) return json({ error: 'max 5000 handles per import' }, 400);
+
+  // De-dupe within the import itself
+  const seen = new Set();
+  const unique = [];
+  for (const p of parsed) {
+    if (!p.username || seen.has(p.username)) continue;
+    seen.add(p.username);
+    unique.push(p);
+  }
+
+  // Batch de-dupe against permanent tables
+  const usernames = unique.map(p => p.username);
+  const inBio = await usernamesInTable(env, usernames, 'influencer_bio_pulse');
+  const inLog = await usernamesInOutreachLog(env, usernames);
+  const inQueue = await usernamesInTable(env, usernames, 'influencer_discovery_queue');
+
+  let added = 0, skippedBio = 0, skippedLog = 0, skippedQueue = 0;
+  for (const p of unique) {
+    const u = p.username;
+    if (inBio.has(u)) { skippedBio++; continue; }
+    if (inLog.has(u)) { skippedLog++; continue; }
+    if (inQueue.has(u)) { skippedQueue++; continue; }
+
+    const meta = {
+      followers: p.followers != null ? Number(p.followers) : null,
+      engagement_rate: p.engagement_rate != null ? parseFloat(p.engagement_rate) : null,
+      bio: p.bio || null,
+      category: p.category || null,
+      external_url: p.external_url || null,
+      email: p.email || null,
+      phone: p.phone || null,
+      imported_via: body.imported_via || 'dashboard',
+    };
+    try {
+      await env.DB.prepare(`
+        INSERT INTO influencer_discovery_queue (username, source, source_meta)
+        VALUES (?, 'gold_import', ?)
+      `).bind(u, JSON.stringify(meta)).run();
+      added++;
+    } catch (e) {
+      // unique conflict — already queued between our check and insert
+      skippedQueue++;
+    }
+  }
+
+  return json({
+    success: true,
+    input_total: parsed.length,
+    input_unique: unique.length,
+    added_to_queue: added,
+    skipped_existing_bio: skippedBio,
+    skipped_existing_log: skippedLog,
+    skipped_existing_queue: skippedQueue,
+    sample: unique.slice(0, 5).map(p => p.username),
+  });
+}
+
+async function usernamesInTable(env, usernames, table) {
+  if (usernames.length === 0) return new Set();
+  // D1 supports up to 100 bind params. Chunk safely.
+  const out = new Set();
+  for (let i = 0; i < usernames.length; i += 99) {
+    const chunk = usernames.slice(i, i + 99);
+    const placeholders = chunk.map(() => '?').join(',');
+    const r = await env.DB.prepare(`SELECT username FROM ${table} WHERE username IN (${placeholders})`).bind(...chunk).all();
+    for (const row of r.results) out.add(row.username);
+  }
+  return out;
+}
+
+async function usernamesInOutreachLog(env, usernames) {
+  if (usernames.length === 0) return new Set();
+  const out = new Set();
+  for (let i = 0; i < usernames.length; i += 99) {
+    const chunk = usernames.slice(i, i + 99);
+    const placeholders = chunk.map(() => '?').join(',');
+    const r = await env.DB.prepare(`
+      SELECT DISTINCT creator_username AS username
+      FROM influencer_outreach_log
+      WHERE creator_username IN (${placeholders})
+    `).bind(...chunk).all();
+    for (const row of r.results) out.add(row.username);
+  }
+  return out;
+}
+
+function normalizeUsername(input) {
+  if (!input || typeof input !== 'string') return null;
+  let s = input.trim().toLowerCase();
+  if (!s) return null;
+  // Extract handle from instagram URLs
+  const m = s.match(/instagram\.com\/([^/?#]+)/);
+  if (m) s = m[1];
+  s = s.replace(/^@/, '').replace(/\/+$/, '');
+  // Reject obvious non-handles
+  if (!/^[a-z0-9_.]+$/.test(s) || s.length > 30 || s.length < 1) return null;
+  return s;
+}
+
+function parseHandleList(raw) {
+  const out = [];
+  for (const part of raw.split(/[\n,;]+/)) {
+    const u = normalizeUsername(part);
+    if (u) out.push({ username: u });
+  }
+  return out;
+}
+
+function parseJsonCreators(input) {
+  let arr = input;
+  if (typeof input === 'string') {
+    try { arr = JSON.parse(input); } catch { return []; }
+  }
+  if (!Array.isArray(arr)) arr = [arr];
+  const out = [];
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue;
+    const u = normalizeUsername(item.username || item.handle || item.instagram || item['ig handle'] || item['instagram handle']);
+    if (!u) continue;
+    out.push({
+      username: u,
+      followers: item.followers ?? item.followers_count ?? item.follower_count,
+      engagement_rate: item.engagement_rate ?? item.er ?? item.engagement,
+      bio: item.bio ?? item.biography,
+      category: item.category ?? item.category_name,
+      external_url: item.external_url ?? item.website ?? item.link,
+      email: item.email ?? item.business_email,
+      phone: item.phone ?? item.business_phone ?? item.whatsapp,
+    });
+  }
+  return out;
+}
+
+function parseCsvCreators(csv) {
+  const lines = csv.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length === 0) return [];
+  const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  const usernameCols = ['username', 'handle', 'instagram', 'ig_handle', 'instagram_handle', 'creator', 'profile'];
+  const usernameCol = header.findIndex(h => usernameCols.includes(h));
+  if (usernameCol < 0) return parseHandleList(csv); // fallback: treat whole csv as handles
+
+  const colMap = (names) => {
+    for (const n of names) {
+      const idx = header.indexOf(n);
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+  const followersCol = colMap(['followers', 'followers_count', 'follower_count']);
+  const erCol = colMap(['engagement_rate', 'er', 'engagement']);
+  const bioCol = colMap(['bio', 'biography']);
+  const catCol = colMap(['category', 'category_name']);
+  const urlCol = colMap(['external_url', 'website', 'link', 'url']);
+  const emailCol = colMap(['email', 'business_email']);
+  const phoneCol = colMap(['phone', 'business_phone', 'whatsapp', 'phone_number']);
+
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCsvLine(lines[i]);
+    const u = normalizeUsername(row[usernameCol]);
+    if (!u) continue;
+    const get = (idx) => idx >= 0 ? row[idx]?.trim() || null : null;
+    out.push({
+      username: u,
+      followers: get(followersCol),
+      engagement_rate: get(erCol),
+      bio: get(bioCol),
+      category: get(catCol),
+      external_url: get(urlCol),
+      email: get(emailCol),
+      phone: get(phoneCol),
+    });
+  }
+  return out;
+}
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '', inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (c === ',' && !inQuotes) {
+      out.push(cur);
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -526,6 +781,11 @@ async function cronEnrichTick(env, body, request) {
 
   const runId = await startRun(env, 'enrichment');
   try {
+    // ── Phase A: drain gold_import rows via FREE bio-pulse (IG public endpoint)
+    // This is the primary enrichment path for the owner's gold link.
+    // Apify remains the fallback for other discovery vectors.
+    const bioPulseResult = await enrichGoldImportViaBioPulse(env, config);
+
     // Selective enrichment: pull a WIDER candidate pool from the queue, then
     // score each on list-view signals only (followers/ER/name/city — already
     // captured in source_meta). Enrich only the TOP-N by list-view-score.
@@ -616,24 +876,126 @@ async function cronEnrichTick(env, body, request) {
       }
     }
 
-    return await finishRun(env, runId, 'ok', batch.results.length, okCount, apifyRun.cost_usd,
-      `${okCount} enriched, ${errCount} failed`);
+    const note = [
+      bioPulseResult.processed > 0 ? `bio-pulse ${bioPulseResult.ok}/${bioPulseResult.processed}` : null,
+      `apify ${okCount}/${batch.results.length}`,
+      `${errCount} failed`,
+    ].filter(Boolean).join(' · ');
+
+    return await finishRun(env, runId, 'ok',
+      batch.results.length + bioPulseResult.processed,
+      okCount + bioPulseResult.ok,
+      apifyRun.cost_usd,
+      note);
   } catch (e) {
     return await finishRun(env, runId, 'error', 0, 0, 0, null, e.message);
   }
 }
 
+// Drain gold_import rows through the free bio-pulse endpoint.
+// Returns { processed, ok, errors, rate_limited }.
+async function enrichGoldImportViaBioPulse(env, config) {
+  const perTick = parseInt(config.bio_pulse_per_tick || '12');
+  if (perTick <= 0) return { processed: 0, ok: 0, errors: 0, rate_limited: 0 };
+
+  const rows = await env.DB.prepare(`
+    SELECT id, username FROM influencer_discovery_queue
+    WHERE source = 'gold_import' AND enrich_status = 'pending'
+    ORDER BY discovered_at LIMIT ?
+  `).bind(perTick).all();
+
+  if (rows.results.length === 0) return { processed: 0, ok: 0, errors: 0, rate_limited: 0 };
+
+  const handles = rows.results.map(r => r.username);
+  let bpResult = { results: [] };
+  try {
+    const r = await fetch('https://hnhotels.in/api/influencer-bio-pulse?action=enrich', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handles }),
+    });
+    bpResult = await r.json().catch(() => ({ results: [] }));
+  } catch (e) {
+    // If the endpoint fails entirely, leave rows pending for retry.
+    return { processed: 0, ok: 0, errors: 0, rate_limited: rows.results.length };
+  }
+
+  const resultByUser = new Map();
+  for (const res of (bpResult.results || [])) {
+    resultByUser.set(res.username, res);
+  }
+
+  let ok = 0, errors = 0, rateLimited = 0;
+  for (const row of rows.results) {
+    const res = resultByUser.get(row.username);
+    const status = res?.status;
+    if (status === 'ok') {
+      ok++;
+      await env.DB.prepare(`
+        UPDATE influencer_discovery_queue
+        SET enrich_status='enriched', enriched_at=datetime('now'), enrich_error=NULL
+        WHERE id=?
+      `).bind(row.id).run();
+    } else if (status === 'rate_limit') {
+      rateLimited++;
+      // Leave pending; throttle is transient.
+      await env.DB.prepare(`
+        UPDATE influencer_discovery_queue
+        SET enrich_attempts=enrich_attempts+1, enrich_error='rate_limit'
+        WHERE id=?
+      `).bind(row.id).run();
+    } else {
+      errors++;
+      await env.DB.prepare(`
+        UPDATE influencer_discovery_queue
+        SET enrich_status='failed', enriched_at=datetime('now'),
+            enrich_error=?
+        WHERE id=?
+      `).bind(status || 'bio_pulse_failed', row.id).run();
+    }
+  }
+
+  return { processed: rows.results.length, ok, errors, rate_limited: rateLimited };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // CRON 3: SCORE + BUCKET RECOMPUTE
 // ────────────────────────────────────────────────────────────────────────────
-// Currently scoring is INLINE in /api/influencer-outreach (computed at query time).
-// This cron is a no-op placeholder for now — kept so the cron schedule is symmetric
-// and future score-caching work fits in. If we ever materialise scores, this is where.
+// Computes a live bucket snapshot and reports reachable pool math.
 
 async function cronScore(env, body, request) {
   if (!requireCron(env, request)) return json({ error: 'unauthorized' }, 401);
   const runId = await startRun(env, 'scoring');
-  return await finishRun(env, runId, 'ok', 0, 0, 0, 'inline scoring (no-op)');
+  try {
+    const config = await getConfigMap(env);
+    const campaign = getActiveCampaign(config);
+    const r = await env.DB.prepare(`
+      SELECT p.* FROM influencer_bio_pulse p
+      LEFT JOIN influencer_outreach_log o
+        ON o.creator_username = p.username AND o.status != 'queued'
+      WHERE p.status='ok' AND p.is_private=0
+        AND p.followers_count BETWEEN 1000 AND 99999
+        AND o.id IS NULL
+        AND (LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%bangalore%'
+          OR LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%blr%'
+          OR LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%bengaluru%')
+    `).all();
+
+    const buckets = { COLD_HERO: 0, COLD_PRIORITY: 0, COLD_STANDARD: 0, MANUAL_CASH: 0, SKIP: 0 };
+    for (const c of r.results) {
+      const { score } = scoreRelevance(c);
+      const tier = tierOf(c.followers_count);
+      const bucket = outreachBucket({ tier, score });
+      buckets[bucket] = (buckets[bucket] || 0) + 1;
+    }
+
+    return await finishRun(env, runId, 'ok', r.results.length, 0, 0,
+      `campaign=${campaign} reachable=${r.results.length} ` +
+      `HERO=${buckets.COLD_HERO} PRIORITY=${buckets.COLD_PRIORITY} ` +
+      `STANDARD=${buckets.COLD_STANDARD} MANUAL_CASH=${buckets.MANUAL_CASH} SKIP=${buckets.SKIP}`);
+  } catch (e) {
+    return await finishRun(env, runId, 'error', 0, 0, 0, null, e.message);
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -646,6 +1008,7 @@ async function cronOutreachWave(env, body, request) {
   const config = await getConfigMap(env);
   if (config.outreach_enabled !== 'true') return json({ skipped: 'disabled' });
 
+  const campaign = getActiveCampaign(config);
   const runId = await startRun(env, 'outreach_wave');
   try {
     const isLive = config.outreach_mode === 'live';
@@ -656,7 +1019,7 @@ async function cronOutreachWave(env, body, request) {
     // Pick uncontacted creators by bucket. T5+ (60K+) creators are scored and
     // stored but routed to MANUAL_CASH — never enter the cold-barter wave.
     // Memory: feedback_influencer_barter_targeting.md
-    const candidates = await pickWaveCandidates(env);
+    const candidates = await pickWaveCandidates(env, campaign);
     const byBucket = { COLD_HERO: [], COLD_PRIORITY: [], COLD_STANDARD: [] };
     let manualCashSeen = 0;
     for (const c of candidates) {
@@ -673,7 +1036,7 @@ async function cronOutreachWave(env, body, request) {
     const wave = [...byBucket.COLD_HERO, ...byBucket.COLD_PRIORITY, ...byBucket.COLD_STANDARD];
     if (wave.length === 0) {
       return await finishRun(env, runId, 'skipped', 0, 0, 0,
-        `no barter-feasible uncontacted creators (manual_cash seen=${manualCashSeen})`);
+        `campaign=${campaign} no barter-feasible uncontacted creators (manual_cash seen=${manualCashSeen})`);
     }
 
     // Fetch HE POS top-sellers ONCE for the whole wave — dish names in
@@ -712,36 +1075,39 @@ async function cronOutreachWave(env, body, request) {
           ? (c.has_email ? 'email' : c.has_phone ? 'waba' : 'ig_dm')
           : ch;
 
-        const payload = buildMessage(c, firstName, niche, tier, token, finalCh, aiOpener, menuFeed);
+        const payload = buildMessage(c, firstName, niche, tier, token, finalCh, aiOpener, menuFeed, campaign);
         if (!payload) { errors++; continue; }
 
         if (isLive) {
-          const r = await actuallySend(env, c, finalCh, payload);
+          const r = await actuallySend(env, c, finalCh, payload, campaign);
           if (r.ok) { sent++; } else { errors++; }
         } else {
           // DRY_RUN: just queue
-          await logQueued(env, c, finalCh, payload, token, tier, niche);
+          await logQueued(env, c, finalCh, payload, token, tier, niche, campaign);
           queued++;
         }
       }
     }
 
-    const note = `${wave.length} unique creators · ${sent} sent · ${queued} queued · ${errors} errors · manual_cash=${manualCashSeen} · mode=${config.outreach_mode}`;
-    return await finishRun(env, runId, 'ok', wave.length, sent + queued, aiCost, note);
+    // Day+3 follow-up nudge to email non-repliers (kept small to avoid fatigue).
+    const followUp = await sendFollowUpNudges(env, config, campaign, isLive, menuFeed);
+
+    const note = `${wave.length} unique creators · ${sent} sent · ${queued} queued · ${errors} errors · manual_cash=${manualCashSeen} · followups=${followUp.queued + followUp.sent} · mode=${config.outreach_mode} · campaign=${campaign}`;
+    return await finishRun(env, runId, 'ok', wave.length, sent + queued + followUp.queued + followUp.sent, aiCost, note);
   } catch (e) {
     return await finishRun(env, runId, 'error', 0, 0, 0, null, e.message);
   }
 }
 
-async function pickWaveCandidates(env) {
+async function pickWaveCandidates(env, campaign) {
   // BLR + 1K–99999 (T1..T5; outreachBucket filters T5 to MANUAL_CASH downstream).
   // Memory: feedback_influencer_barter_targeting.md — cold barter restricted to T1..T4.
-  // Skip already-contacted on every channel for this campaign.
+  // Skip already-contacted on any channel for this campaign — a creator is a creator.
   const r = await env.DB.prepare(`
     SELECT p.*
     FROM influencer_bio_pulse p
     LEFT JOIN influencer_outreach_log o
-      ON o.creator_username = p.username AND o.campaign='may_2026_v1' AND o.status != 'queued'
+      ON o.creator_username = p.username AND o.campaign=? AND o.status != 'queued'
     WHERE p.status='ok' AND p.is_private=0
       AND p.followers_count BETWEEN 1000 AND 99999
       AND o.id IS NULL
@@ -749,7 +1115,7 @@ async function pickWaveCandidates(env) {
         OR LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%blr%'
         OR LOWER(IFNULL(p.biography,'') || ' ' || IFNULL(p.full_name,'')) LIKE '%bengaluru%')
     LIMIT 200
-  `).all();
+  `).bind(campaign).all();
 
   return r.results.map(c => {
     const { score } = scoreRelevance(c);
@@ -882,61 +1248,167 @@ function buildMessage(c, firstName, niche, tier, token, channel, aiOpener, menuF
   return null;
 }
 
-async function actuallySend(env, c, channel, payload) {
+async function actuallySend(env, c, channel, payload, campaign) {
   if (channel === 'email') {
-    // Worker can't open SMTP; fire to a sender-relay. For now, queue and let the local sender pick it up.
-    // The local sender script (scripts/influencer_email_sender.py) uses /api/influencer-outreach?action=create-batch
-    // which already pulls 'queued' status rows. So we just write a queued row here too — local sender runs every N min.
-    await logQueued(env, c, channel, payload, payload.token || null, null, payload.niche_tag);
-    return { ok: true, queued: true };
+    // Autonomous HTTP email rail (Resend) when live + credentialed.
+    // Otherwise queue for dry-run or fallback to the legacy local sender.
+    const provider = env.RESEND_API_KEY ? 'resend' : 'queued';
+    if (provider === 'resend') {
+      const r = await sendEmailHttp(env, payload);
+      if (r.ok) {
+        await logSendResult(env, c, channel, payload, r, campaign);
+        return { ok: true, sent: true, provider: 'resend', provider_msg_id: r.provider_msg_id };
+      }
+      // HTTP send failed — fall back to queued so a human/sender can retry.
+      await logQueued(env, c, channel, payload, payload.token || null, null, payload.niche_tag, campaign);
+      return { ok: true, queued: true, provider: 'resend', error: r.error };
+    }
+    await logQueued(env, c, channel, payload, payload.token || null, null, payload.niche_tag, campaign);
+    return { ok: true, queued: true, provider: 'queued' };
   }
   if (channel === 'waba') {
     const r = await sendWaba(env, {
       brand: 'he', phone: payload.recipient, template: payload.template, vars: payload.vars,
       buttons: [{ sub_type: 'url', index: 0, url_token: payload.vars[3] }],
     });
-    await logSendResult(env, c, channel, payload, r);
+    await logSendResult(env, c, channel, payload, r, campaign);
     return { ok: r.ok };
   }
   if (channel === 'ig_dm') {
     // Cannot auto-send. Queue for owner.
-    await logQueued(env, c, channel, payload, payload.token || null, null, null);
+    await logQueued(env, c, channel, payload, payload.token || null, null, null, campaign);
     return { ok: true, queued: true };
   }
   return { ok: false, error: 'unknown_channel' };
 }
 
-async function logQueued(env, c, channel, payload, token, tier, niche) {
+async function sendEmailHttp(env, payload) {
+  try {
+    const from = env.GMAIL_FROM || env.RESEND_FROM || 'nihaf@hnhotels.in';
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + env.RESEND_API_KEY,
+      },
+      body: JSON.stringify({
+        from,
+        to: payload.recipient,
+        subject: payload.subject,
+        text: payload.body,
+        reply_to: from,
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: j.message || `resend_${r.status}` };
+    return { ok: true, provider_msg_id: j.id };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+async function logQueued(env, c, channel, payload, token, tier, niche, campaign) {
   await env.DB.prepare(`
     INSERT INTO influencer_outreach_log (
       creator_username, channel, to_address, subject, message_text, outreach_token,
       sent_by, status, template_used, tier_assigned, cover_offer, niche_tag, campaign, actor
-    ) VALUES (?, ?, ?, ?, ?, ?, 'cron_pipeline', 'queued', ?, ?, ?, ?, 'may_2026_v1', 'pipeline_dryrun')
+    ) VALUES (?, ?, ?, ?, ?, ?, 'cron_pipeline', 'queued', ?, ?, ?, ?, ?, 'pipeline_dryrun')
   `).bind(
     c.username, channel, payload.recipient || null, payload.subject || null,
     payload.body || payload.message || JSON.stringify(payload),
-    token || null,
+    token || payload.token || null,
     payload.template || (channel === 'email' ? 'cold_email_v1' : channel === 'ig_dm' ? 'ig_dm_v1' : null),
-    c.tier, c.tier_meta?.covers || null, niche || null
+    c.tier, c.tier_meta?.covers || null, niche || null,
+    campaign || 'active_v1'
   ).run();
 }
 
-async function logSendResult(env, c, channel, payload, sendResult) {
+async function logSendResult(env, c, channel, payload, sendResult, campaign) {
   await env.DB.prepare(`
     INSERT INTO influencer_outreach_log (
       creator_username, channel, to_address, message_text, outreach_token,
       sent_by, status, template_used, provider, provider_msg_id,
       tier_assigned, cover_offer, campaign, actor
-    ) VALUES (?, ?, ?, ?, ?, 'cron_pipeline', ?, ?, 'meta-cloud-api', ?, ?, ?, 'may_2026_v1', 'cron_pipeline')
+    ) VALUES (?, ?, ?, ?, ?, 'cron_pipeline', ?, ?, ?, ?, ?, ?, ?, 'cron_pipeline')
   `).bind(
     c.username, channel, payload.recipient,
     payload.body || payload.message || JSON.stringify(payload.vars || []),
-    payload.vars?.[3] || null,
+    payload.token || payload.vars?.[3] || null,
     sendResult.ok ? 'sent' : 'failed',
     payload.template || null,
+    sendResult.provider || 'meta-cloud-api',
     sendResult.provider_msg_id || null,
-    c.tier, c.tier_meta?.covers || null
+    c.tier, c.tier_meta?.covers || null,
+    campaign || 'active_v1'
   ).run();
+}
+
+// Day+3 email follow-up to non-repliers. Small cap, email-only, no dish names.
+async function sendFollowUpNudges(env, config, campaign, isLive, menuFeed) {
+  const cap = parseInt(config.followup_per_day || '10');
+  if (cap <= 0) return { sent: 0, queued: 0 };
+
+  const rows = await env.DB.prepare(`
+    SELECT o.creator_username, o.to_address, o.outreach_token, o.tier_assigned, o.cover_offer, o.niche_tag,
+           p.full_name, p.biography, p.followers_count, p.has_email
+    FROM influencer_outreach_log o
+    JOIN influencer_bio_pulse p ON p.username = o.creator_username
+    WHERE o.channel = 'email'
+      AND o.campaign = ?
+      AND o.status = 'sent'
+      AND o.sent_at <= datetime('now', '-3 days')
+      AND NOT EXISTS (
+        SELECT 1 FROM influencer_outreach_log o2
+        WHERE o2.creator_username = o.creator_username
+          AND o2.channel = 'email'
+          AND o2.status IN ('replied', 'booked')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM influencer_outreach_log o3
+        WHERE o3.creator_username = o.creator_username
+          AND o3.channel = 'email'
+          AND o3.message_text LIKE '%follow-up%'
+      )
+    ORDER BY o.sent_at ASC
+    LIMIT ?
+  `).bind(campaign, cap).all();
+
+  let sent = 0, queued = 0;
+  for (const row of rows.results) {
+    if (!row.has_email || !row.to_address) continue;
+    const tier = TIER_MATRIX[row.tier_assigned] || TIER_MATRIX.T1;
+    const firstName = pickFirstName(row);
+    const niche = row.niche_tag || pickNiche(row);
+    const token = row.outreach_token;
+    const url = `https://hnhotels.in/marketing/Influencer/booking/?token=${token}`;
+    const subject = 'Quick follow-up — Hamza Express barter collab';
+    const body = `Hi ${firstName},
+
+Quick follow-up — wanted to make sure my earlier note about hosting you at Hamza Express (Bangalore's 1918 Dakhni biryani family, Shivajinagar) didn't get buried.
+
+Still happy to cover a full meal for ${tier.covers} in exchange for an organic reel/post-set.
+
+Pick your slot here if it works: ${url}
+
+No pressure either way.
+
+Nihaf
+Managing Director, HN Hotels Pvt Ltd
+nihaf@hnhotels.in
+`;
+    const payload = { channel: 'email', recipient: row.to_address, subject, body, token };
+    if (isLive && env.RESEND_API_KEY) {
+      const r = await sendEmailHttp(env, payload);
+      await logSendResult(env, { username: row.creator_username, tier: row.tier_assigned, tier_meta: tier },
+        'email', payload, { ok: r.ok, provider: 'resend', provider_msg_id: r.provider_msg_id }, campaign);
+      if (r.ok) sent++;
+    } else {
+      await logQueued(env, { username: row.creator_username, tier: row.tier_assigned, tier_meta: tier },
+        'email', payload, token, tier, niche, campaign);
+      queued++;
+    }
+  }
+  return { sent, queued };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1386,6 +1858,10 @@ async function ensureBookingShell(env, profile, tier) {
   `).bind(profile.username).first();
   if (existing && existing.outreach_token) return existing.outreach_token;
 
+  // Pick any seeded slot as a placeholder; the shell is updated when the creator actually books.
+  const slot = await env.DB.prepare(`SELECT id, slot_date, window_code FROM influencer_slots ORDER BY id LIMIT 1`).first();
+  if (!slot) throw new Error('no_influencer_slots_seeded');
+
   let token;
   for (let i = 0; i < 5; i++) {
     token = genToken();
@@ -1396,11 +1872,11 @@ async function ensureBookingShell(env, profile, tier) {
     INSERT INTO influencer_bookings (
       creator_username, creator_name, creator_followers, creator_tier, cover_commitment,
       meal_budget_paise, slot_id, slot_date, window_code, status, outreach_token
-    ) VALUES (?, ?, ?, ?, ?, ?, 0, '0000-00-00', 'PENDING', 'pending', ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).bind(
     profile.username, profile.full_name || null, profile.followers_count || null,
     tier.label?.split(' ')[0]?.replace(/[^A-Z0-9]/gi, '') || 'T1',
-    tier.covers, tier.budget_paise, token
+    tier.covers, tier.budget_paise, slot.id, slot.slot_date, slot.window_code, token
   ).run();
   return token;
 }

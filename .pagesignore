@@ -1,0 +1,22 @@
+# Cloudflare Pages upload exclusions
+# Keep large research assets out of the edge deployment.
+
+*.zip
+*.pdf
+*.xlsx
+*.xls
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.mp3
+*.wav
+_context/
+.claude/worktrees/
+.hukum-uploads/
+node_modules/
+.wrangler/
+*.log
+.env
+.env.*
+.secrets/

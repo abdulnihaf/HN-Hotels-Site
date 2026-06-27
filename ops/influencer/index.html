@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0f1a">
+<title>Influencer · 50/day Outreach · HN Hotels</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1a; --card:#111826; --card2:#1a2234; --line:#273042;
+  --text:#e6edf7; --mute:#8b95a8; --dim:#5a6477;
+  --gold:#fbbf24; --tan:#D2B48C; --sienna:#713520;
+  --green:#22c55e; --green-d:#16a34a; --red:#ef4444; --orange:#f59e0b; --blue:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+button,input,textarea,select{font-family:inherit;font-size:14px}
+
+/* PIN gate */
+#gate{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+#gate h1{font-size:28px;font-weight:800;margin-bottom:8px}
+#gate p{color:var(--mute);font-size:13px;margin-bottom:24px;text-align:center}
+.pin-row{display:flex;gap:10px;margin-bottom:16px}
+.pin-row input{width:56px;height:64px;background:var(--card);border:1px solid var(--line);border-radius:12px;color:var(--text);font-size:28px;font-family:'JetBrains Mono',monospace;text-align:center;caret-color:transparent}
+.pin-row input:focus{outline:none;border-color:var(--tan)}
+#gate .err{color:var(--red);font-size:13px;height:18px}
+
+/* App */
+#app{display:none;min-height:100vh}
+.hdr{position:sticky;top:0;z-index:50;background:rgba(10,15,26,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.hdr h1{font-size:17px;font-weight:800;display:flex;align-items:center;gap:8px}
+.hdr h1::before{content:'';width:4px;height:18px;background:var(--gold);border-radius:2px}
+.hdr .sub{font-size:11px;color:var(--mute);font-weight:500}
+.modepill{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;padding:4px 10px;border-radius:99px;letter-spacing:.06em;text-transform:uppercase}
+.mode-dry_run{background:rgba(245,158,11,.18);color:#fcd34d;border:1px solid rgba(245,158,11,.4)}
+.mode-live{background:rgba(34,197,94,.18);color:#4ade80;border:1px solid rgba(34,197,94,.4)}
+.keybox input{background:var(--card);border:1px solid var(--line);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:'JetBrains Mono',monospace;width:120px}
+.keybox button{margin-left:6px;padding:6px 10px;background:var(--sienna);border:1px solid var(--tan);color:#fff5e6;border-radius:6px;font-size:12px;cursor:pointer;font-weight:700}
+
+.wrap{padding:16px 18px 80px;max-width:900px;margin:0 auto}
+
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}
+@media(min-width:640px){.tiles{grid-template-columns:repeat(4,1fr)}}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.tile-h{font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px}
+.tile-v{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:24px;line-height:1.1}
+.tile-v.green{color:var(--green)}
+.tile-v.gold{color:var(--gold)}
+.tile-v.tan{color:var(--tan)}
+.tile-v.red{color:var(--red)}
+.tile-sub{font-size:11px;color:var(--mute);margin-top:4px}
+
+.section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.section-h{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+.section-h .actions{display:flex;gap:6px;flex-wrap:wrap}
+.section-h .actions button{background:var(--card2);border:1px solid var(--line);color:var(--text);padding:6px 12px;border-radius:7px;font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;font-weight:700}
+.section-h .actions button:hover{border-color:var(--tan)}
+.section-h .actions button.primary{background:var(--green-d);border-color:var(--green);color:#fff5e6}
+.section-h .actions button.danger{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4);color:#fca5a5}
+
+.import-tabs{display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid var(--line)}
+.import-tabs button{padding:8px 12px;background:transparent;border:none;color:var(--mute);font-size:13px;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+.import-tabs button.on{color:var(--text);border-color:var(--tan)}
+.import-box{display:none}
+.import-box.on{display:block}
+.import-box textarea, .import-box input[type=text]{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:12px;font-size:13px;min-height:110px}
+.import-box input[type=text]{min-height:auto}
+.import-box textarea:focus{outline:none;border-color:var(--tan)}
+.import-meta{font-size:11px;color:var(--mute);margin-top:8px;line-height:1.5}
+.import-actions{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.import-actions button{padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;border:none}
+.import-actions .primary{background:linear-gradient(135deg,var(--sienna),var(--tan));color:var(--bg)}
+.import-actions .secondary{background:var(--card2);border:1px solid var(--line);color:var(--text)}
+
+.cash-list{max-height:320px;overflow:auto}
+.cash-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.cash-row:last-child{border-bottom:none}
+.cash-row .pic{width:40px;height:40px;border-radius:50%;background:var(--card2);object-fit:cover;flex-shrink:0}
+.cash-row .info{flex:1;min-width:0}
+.cash-row .handle{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--tan)}
+.cash-row .meta{font-size:11px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cash-row .tier{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;padding:3px 8px;border-radius:99px;background:rgba(245,158,11,.15);color:#fbbf24}
+.cash-row a{color:var(--text);text-decoration:none}
+
+.run-log{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mute);line-height:1.6;max-height:200px;overflow:auto;white-space:pre-wrap}
+
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}
+@media(max-width:640px){.config-grid{grid-template-columns:1fr}}
+.config-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.config-key{flex:1;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mute)}
+.config-val{font-weight:600;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--green);color:#fff5e6;padding:12px 20px;border-radius:8px;font-size:13px;z-index:300;display:none;font-weight:700}
+.toast.error{border-color:var(--red)}
+.toast.show{display:block}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h1>Influencer Outreach</h1>
+  <p>Enter owner PIN to open the 50/day command deck.</p>
+  <div class="pin-row" id="pin-row">
+    <input type="password" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input type="password" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input type="password" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input type="password" maxlength="1" inputmode="numeric" autocomplete="off">
+  </div>
+  <div class="err" id="pin-err"></div>
+</div>
+
+<div id="app">
+  <div class="hdr">
+    <div>
+      <h1>Influencer <span class="sub">50/day autonomous outreach</span></h1>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="mode-pill" class="modepill mode-dry_run">DRY RUN</span>
+      <div class="keybox">
+        <input id="key" placeholder="Dashboard key" type="password">
+        <button onclick="saveKey()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="tiles">
+      <div class="tile">
+        <div class="tile-h">Today outreach</div>
+        <div class="tile-v green" id="t-today">—</div>
+        <div class="tile-sub" id="t-target">target —</div>
+      </div>
+      <div class="tile">
+        <div class="tile-h">Reachable pool</div>
+        <div class="tile-v tan" id="t-pool">—</div>
+        <div class="tile-sub">enriched + contactable</div>
+      </div>
+      <div class="tile">
+        <div class="tile-h">Queue pending</div>
+        <div class="tile-v" id="t-queue">—</div>
+        <div class="tile-sub">gold_import / other</div>
+      </div>
+      <div class="tile">
+        <div class="tile-h">Manual cash</div>
+        <div class="tile-v red" id="t-manual">—</div>
+        <div class="tile-sub">T5+ need owner pitch</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-h">
+        <span>Import gold link / creators</span>
+        <div class="actions"><button onclick="refresh()" class="secondary">↻ Refresh</button></div>
+      </div>
+      <div class="import-tabs">
+        <button class="on" onclick="setTab('handles')">Handles</button>
+        <button onclick="setTab('csv')">CSV</button>
+        <button onclick="setTab('json')">JSON</button>
+        <button onclick="setTab('url')">URL</button>
+      </div>
+      <div class="import-box on" id="tab-handles">
+        <textarea id="in-handles" placeholder="Paste Instagram handles, one per line or comma-separated&#10;e.g.&#10;bangalorefoodie&#10;blr_bites"></textarea>
+      </div>
+      <div class="import-box" id="tab-csv">
+        <textarea id="in-csv" placeholder="Paste CSV with a 'username' or 'handle' column"></textarea>
+      </div>
+      <div class="import-box" id="tab-json">
+        <textarea id="in-json" placeholder="Paste JSON array of creator objects"></textarea>
+      </div>
+      <div class="import-box" id="tab-url">
+        <input type="text" id="in-url" placeholder="https://modash.co/discover/list/...">
+        <div class="import-meta">URL imports are recorded for now. For autonomous ingestion, export the list and paste as CSV or handles.</div>
+      </div>
+      <div class="import-actions">
+        <button class="primary" onclick="doImport()">Import creators</button>
+        <button class="secondary" onclick="triggerCron('enrich-tick')">Run enrichment</button>
+        <button class="secondary" onclick="triggerCron('score')">Run scoring</button>
+      </div>
+      <div class="import-meta" id="import-result" style="display:none"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-h">
+        <span>Manual cash shortlist (T5+)</span>
+        <div class="actions"><button onclick="loadManualCash()">↻ Refresh</button></div>
+      </div>
+      <div class="cash-list" id="cash-list"><div class="import-meta">Loading...</div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-h">
+        <span>Wave control</span>
+        <div class="actions">
+          <button onclick="triggerCron('outreach-wave')">Run outreach wave</button>
+          <button onclick="toggleMode()" class="primary" id="mode-toggle">Switch to LIVE</button>
+        </div>
+      </div>
+      <div class="run-log" id="run-log">Waiting for first refresh...</div>
+    </div>
+
+    <div class="section">
+      <div class="section-h"><span>Config</span></div>
+      <div class="config-grid" id="config-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/influencer-pipeline';
+const OUTREACH_API = '/api/influencer-outreach';
+const OWNER_PIN = '0305';
+let STATUS = null;
+let currentTab = 'handles';
+
+const pinInputs = document.querySelectorAll('#pin-row input');
+pinInputs.forEach((inp, i) => {
+  inp.addEventListener('input', e => {
+    const v = inp.value.replace(/\D/g, '');
+    inp.value = v ? v[0] : '';
+    if (v && i < 3) pinInputs[i + 1].focus();
+    checkPin();
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !inp.value && i > 0) pinInputs[i - 1].focus();
+  });
+});
+
+function checkPin(){
+  const pin = Array.from(pinInputs).map(i => i.value).join('');
+  if (pin.length === 4) {
+    if (pin === OWNER_PIN) {
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      localStorage.setItem('hn_inf_pin_ok', '1');
+      loadKey();
+      refresh();
+    } else {
+      document.getElementById('pin-err').textContent = 'Wrong PIN';
+      pinInputs.forEach(i => i.value = '');
+      pinInputs[0].focus();
+    }
+  }
+}
+
+function getKey(){ return localStorage.getItem('hn_dashkey') || ''; }
+function saveKey(){
+  const v = document.getElementById('key').value.trim();
+  if (v) { localStorage.setItem('hn_dashkey', v); toast('Key saved'); refresh(); }
+}
+function loadKey(){ document.getElementById('key').value = getKey(); }
+
+function toast(msg, isErr=false){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isErr ? ' error' : '') + ' show';
+  setTimeout(()=> t.classList.remove('show'), 2400);
+}
+
+function setTab(tab){
+  currentTab = tab;
+  document.querySelectorAll('.import-tabs button').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.import-tabs button').forEach(b => { if(b.textContent.toLowerCase().includes(tab)) b.classList.add('on'); });
+  document.querySelectorAll('.import-box').forEach(b => b.classList.remove('on'));
+  document.getElementById('tab-' + tab).classList.add('on');
+}
+
+async function refresh(){
+  try {
+    const r = await fetch(API + '?action=status');
+    STATUS = await r.json();
+    renderTiles();
+    renderConfig();
+    loadManualCash();
+    loadRuns();
+  } catch (e) { toast('Load failed: ' + e.message, true); }
+}
+
+function renderTiles(){
+  const s = STATUS || {};
+  const mode = s.mode || 'dry_run';
+  const pill = document.getElementById('mode-pill');
+  pill.className = 'modepill mode-' + mode;
+  pill.textContent = mode === 'live' ? '● LIVE' : 'DRY RUN';
+  document.getElementById('mode-toggle').textContent = mode === 'live' ? 'Switch to DRY RUN' : 'Switch to LIVE';
+  document.getElementById('mode-toggle').className = mode === 'live' ? 'danger' : 'primary';
+
+  document.getElementById('t-today').textContent = fmt(s.today_progress?.unique);
+  document.getElementById('t-target').textContent = 'target ' + (s.daily_target || '—');
+  document.getElementById('t-pool').textContent = fmt(s.reachable_pool);
+  document.getElementById('t-queue').textContent = fmt(s.db_size?.queue_pending);
+}
+
+async function loadManualCash(){
+  const el = document.getElementById('cash-list');
+  try {
+    const r = await fetch(OUTREACH_API + '?action=buckets');
+    const j = await r.json();
+    const list = (j.buckets?.MANUAL_CASH || []).slice(0, 50);
+    document.getElementById('t-manual').textContent = fmt(list.length);
+    if (!list.length) { el.innerHTML = '<div class="import-meta">No T5+ creators in the current reachable pool.</div>'; return; }
+    el.innerHTML = list.map(c => `
+      <div class="cash-row">
+        <img class="pic" src="${escapeHtml(c.profile_pic_url || '')}" onerror="this.style.display='none'" alt="">
+        <div class="info">
+          <div class="handle"><a href="https://instagram.com/${escapeHtml(c.username)}/" target="_blank">@${escapeHtml(c.username)}</a></div>
+          <div class="meta">${fmt(c.followers_count)} followers · ${escapeHtml(c.full_name || '')}</div>
+        </div>
+        <span class="tier">${escapeHtml(c.tier || '')}</span>
+      </div>
+    `).join('');
+  } catch (e) { el.innerHTML = '<div class="import-meta">Failed to load shortlist</div>'; }
+}
+
+async function loadRuns(){
+  try {
+    const r = await fetch(API + '?action=runs&limit=8');
+    const j = await r.json();
+    const lines = (j.runs || []).map(run => {
+      const t = run.started_at ? run.started_at.replace('T',' ').slice(5,16) : '—';
+      return `${t} · ${run.cron_name} · ${run.status} · in=${run.count_in||0} out=${run.count_out||0} · ${run.notes || run.error_msg || ''}`;
+    });
+    document.getElementById('run-log').textContent = lines.join('\n') || 'No runs yet.';
+  } catch (e) { document.getElementById('run-log').textContent = 'Run log unavailable'; }
+}
+
+function renderConfig(){
+  const c = STATUS?.config || {};
+  const keys = ['outreach_mode','outreach_daily_target','hero_per_day','priority_per_day','standard_per_day','bio_pulse_per_tick','followup_per_day','email_provider','campaign','active_campaign','ai_personalization','enrichment_enabled','outreach_enabled'];
+  document.getElementById('config-grid').innerHTML = keys.map(k => `
+    <div class="config-row">
+      <span class="config-key">${k}</span>
+      <span class="config-val">${escapeHtml(c[k] ?? '—')}</span>
+    </div>
+  `).join('');
+}
+
+async function doImport(){
+  const k = getKey();
+  if (!k) return toast('Set dashboard key first', true);
+  const body = {};
+  if (currentTab === 'handles') body.handles = document.getElementById('in-handles').value;
+  else if (currentTab === 'csv') body.csv = document.getElementById('in-csv').value;
+  else if (currentTab === 'json') body.json = document.getElementById('in-json').value;
+  else if (currentTab === 'url') body.url = document.getElementById('in-url').value;
+
+  try {
+    const r = await fetch(API + '?action=import-list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Key': k },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    const res = document.getElementById('import-result');
+    res.style.display = 'block';
+    res.innerHTML = `Added <b>${j.added_to_queue || 0}</b> · skipped bio=${j.skipped_existing_bio || 0} log=${j.skipped_existing_log || 0} queue=${j.skipped_existing_queue || 0}`;
+    toast('Import done');
+    refresh();
+  } catch (e) { toast('Import failed: ' + e.message, true); }
+}
+
+async function triggerCron(action){
+  const k = getKey();
+  if (!k) return toast('Set dashboard key first', true);
+  try {
+    const r = await fetch(API + '?action=trigger-now', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Key': k },
+      body: JSON.stringify({ cron_name: action }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    toast('✓ Triggered · ' + (d.notes || d.status));
+    setTimeout(refresh, 600);
+  } catch (e) { toast('Failed: ' + e.message, true); }
+}
+
+async function toggleMode(){
+  const cur = STATUS?.mode || 'dry_run';
+  const next = cur === 'live' ? 'dry_run' : 'live';
+  if (next === 'live' && !confirm('Flip pipeline to LIVE? This will auto-send email via Resend and WABA on the next outreach wave.\n\nConfirm only after you have added RESEND_API_KEY to Pages env and owner has approved the first outward send.')) return;
+  const k = getKey();
+  if (!k) return toast('Set dashboard key first', true);
+  try {
+    const r = await fetch(API + '?action=set-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Key': k },
+      body: JSON.stringify({ key: 'outreach_mode', value: next }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    toast('Mode → ' + next);
+    setTimeout(refresh, 600);
+  } catch (e) { toast('Failed: ' + e.message, true); }
+}
+
+function fmt(n){ return n == null ? '—' : Number(n).toLocaleString(); }
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+if (localStorage.getItem('hn_inf_pin_ok') === '1') {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadKey();
+  refresh();
+}
+</script>
+
+</body>
+</html>
