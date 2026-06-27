@@ -72,6 +72,14 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - The card also shows live chain status and Kite/order-path state, so a future candidate cannot look deployable unless data coverage, causality, OOS proof, live freshness, and order path all pass.
 - Verified with simulator screenshots on Now and Ops plus generic simulator compile, Release archive, IPA export, upload, and App Store Connect/TestFlight group readback.
 
+## Build 13 — daily scout teaching surface (2026-06-27, Claude ultracode)
+- Shipped **TestFlight build 13** for `com.hnhotels.wealth`; ASC readback **VALID**, build id `94ea1033-19be-4845-8e16-9226e6ebdb46`, assigned to internal group `0cd3994a-c901-4cbd-9fc8-2f892bcdbdbf` (HTTP 204).
+- NEW `ScoutView.swift`: `ScoutTodayCard` (marquee daily action on **Now**, above the proof card) + `ScoutTrailCard` (learning trail on **Today**) + `ScoutLadderStrip` (5-rung REJECTED→PAPER_SCOUT→TOKEN_SCOUT→WATCH_SCOUT→DEPLOYABLE).
+- Reads the NEW server endpoints `scout_today` + `scout_trail` (added to `Client.swift` + `WealthVM`; scout resolved EARLY in `refresh()` so the marquee action never loads last).
+- ScoutTodayCard answers the owner's questions on one screen: WHY this name, the plan (entry/stop/target/qty + "most you'd risk"), WHY NOT the other ~1,200 (the scanned→liquid→scored→picked funnel + sample rejects), what proves it wrong, the post-bell outcome+lesson, and the honesty anchor ("learning scout, not a profit trade — NO_EDGE").
+- Sim-verified vs LIVE data (iOS 26 sim): ScoutTodayCard renders today's SAKSOFT plan + ladder + honesty box; ScoutTrailCard renders Active 100% / ₹0 paper P&L / SAKSOFT PENDING. Source: branch `codex/wealth-proof-state-surface` commit `c61b993` (UI) + this build bump.
+- This directly closes the build-12 "Now tab" gap below: the daily action + why/why-not/learning is now the first card on Now.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).
