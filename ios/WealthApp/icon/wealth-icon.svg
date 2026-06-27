@@ -1,0 +1,57 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#23130b"/>
+      <stop offset="0.55" stop-color="#160c06"/>
+      <stop offset="1" stop-color="#0c0603"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#c8642d" stop-opacity="0.42"/>
+      <stop offset="0.45" stop-color="#9a3f15" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#9a3f15" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="candle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3b970"/>
+      <stop offset="0.5" stop-color="#c8642d"/>
+      <stop offset="1" stop-color="#9a3f15"/>
+    </linearGradient>
+    <linearGradient id="candleHi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe6bf"/>
+      <stop offset="0.45" stop-color="#f0a44e"/>
+      <stop offset="1" stop-color="#d2701f"/>
+    </linearGradient>
+    <filter id="coreGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="28"/>
+    </filter>
+  </defs>
+
+  <!-- background -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <circle cx="512" cy="512" r="470" fill="url(#glow)"/>
+  <!-- glow behind the winning candle -->
+  <circle cx="710" cy="440" r="150" fill="#f0a44e" opacity="0.32" filter="url(#coreGlow)"/>
+
+  <!-- candlesticks ascending (wick = thin rect, body = rounded rect) -->
+  <g>
+    <rect x="297" y="548" width="10" height="150" rx="5" fill="#c8642d" opacity="0.85"/>
+    <rect x="266" y="568" width="72" height="106" rx="14" fill="url(#candle)"/>
+
+    <rect x="437" y="486" width="10" height="172" rx="5" fill="#d2701f" opacity="0.9"/>
+    <rect x="406" y="506" width="72" height="128" rx="14" fill="url(#candle)"/>
+
+    <rect x="577" y="420" width="10" height="196" rx="5" fill="#e07a22"/>
+    <rect x="546" y="446" width="72" height="150" rx="14" fill="url(#candle)"/>
+
+    <!-- winner candle (brightest) -->
+    <rect x="718" y="328" width="11" height="246" rx="5" fill="#f0a44e"/>
+    <rect x="685" y="360" width="78" height="196" rx="15" fill="url(#candleHi)"/>
+    <rect x="685" y="360" width="78" height="196" rx="15" fill="none" stroke="#ffe6bf" stroke-width="2.5" opacity="0.55"/>
+  </g>
+
+  <!-- up-trend line through the wick tops -->
+  <path d="M302 545 L442 483 L582 417 L724 327"
+        stroke="#ffe6bf" stroke-width="15" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.97"/>
+  <!-- arrowhead pointing up-right -->
+  <path d="M724 327 L666 333 M724 327 L718 387"
+        stroke="#ffe6bf" stroke-width="15" fill="none" stroke-linecap="round"/>
+</svg>
