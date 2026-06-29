@@ -741,10 +741,44 @@ async function placeBracket(env, db, kiteHeaders, body) {
     }
   }
   if (!fillPrice) {
-    await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, buy_status='UNFILLED', completed_at=? WHERE id=?`)
-      .bind('Fill timeout — order still pending', Date.now(), bracketRowId).run();
-    result.steps.push({ step: 'fill_polling', ok: false, error: 'fill_timeout' });
-    return { ...result, error: 'Order placed but fill not confirmed in 12s — check Kite manually' };
+    // ─── Fix #4a: never walk away from a possibly-naked position ──────────────
+    // A MARKET order can fill just after the 12s poll window; the old code gave up
+    // here, which could strand a filled position with NO stop. Do one authoritative
+    // status check, then: recover a (full/partial) late fill and protect it; else
+    // cancel the still-pending buy so it can't fill later unprotected; else, if we
+    // can confirm neither, surface a LOUD "check / square off now" state.
+    const fin = await kiteFetch(db, `${KITE_BASE}/orders/${encodeURIComponent(buyOrderId)}`, { headers: kiteHeaders });
+    const finLast = (fin.ok && fin.body?.data) ? fin.body.data[fin.body.data.length - 1] : null;
+    if (finLast && (finLast.filled_quantity || 0) > 0) {
+      fillPrice = finLast.average_price;
+      filledQty = finLast.filled_quantity;
+      if (filledQty < qty) await cancelOrder(db, kiteHeaders, buyOrderId).catch(() => {}); // kill unfilled remainder
+      result.steps.push({ step: 'late_fill_recovered', ok: true, recovered: 'after_timeout', fill_price: fillPrice, filled_qty: filledQty });
+    } else {
+      // Nothing filled yet — cancel the pending buy, then re-check for a fill that raced the cancel.
+      const cancel = await cancelOrder(db, kiteHeaders, buyOrderId).catch(() => ({ ok: false }));
+      const rc = await kiteFetch(db, `${KITE_BASE}/orders/${encodeURIComponent(buyOrderId)}`, { headers: kiteHeaders });
+      const rcLast = (rc.ok && rc.body?.data) ? rc.body.data[rc.body.data.length - 1] : null;
+      if (rcLast && (rcLast.filled_quantity || 0) > 0) {
+        fillPrice = rcLast.average_price;
+        filledQty = rcLast.filled_quantity;
+        result.steps.push({ step: 'late_fill_recovered', ok: true, recovered: 'after_cancel', fill_price: fillPrice, filled_qty: filledQty });
+      } else if (cancel.ok || ['CANCELLED', 'REJECTED'].includes(rcLast?.status)) {
+        await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, buy_status='UNFILLED_CANCELLED', completed_at=? WHERE id=?`)
+          .bind('Fill timeout — pending buy cancelled, no position taken', Date.now(), bracketRowId).run();
+        result.steps.push({ step: 'fill_timeout_cancelled', ok: true });
+        return { ...result, ok: false, error: 'Fill not confirmed in 12s; pending buy was cancelled — no position taken.' };
+      } else {
+        await db.prepare(`UPDATE kite_bracket_orders SET step='unconfirmed_no_stop', error=?, buy_status='UNCONFIRMED', completed_at=? WHERE id=?`)
+          .bind('Fill timeout — neither fill nor cancel confirmed', Date.now(), bracketRowId).run();
+        result.steps.push({ step: 'fill_unconfirmed', ok: false, error: 'fill_unconfirmed' });
+        return {
+          ...result, ok: false, error: 'fill_unconfirmed_check_now',
+          naked_risk: true, action_required: 'CHECK_AND_SQUAREOFF', buy_order_id: buyOrderId,
+          warning: `⚠️ ${symbol}: buy ${buyOrderId} was neither confirmed filled NOR cancelled in time. If it fills you will hold ~${qty} with NO stop. Open Kite NOW — square off or place a stop.`,
+        };
+      }
+    }
   }
   result.steps.push({ step: 'filled', ok: true, fill_price: fillPrice, filled_qty: filledQty });
   await db.prepare(`UPDATE kite_bracket_orders SET buy_status='COMPLETE', fill_price_paise=?, fill_qty=?, step='filled' WHERE id=?`)
@@ -788,41 +822,54 @@ async function placeBracket(env, db, kiteHeaders, body) {
     return { ...result, ok: true, fill_price: fillPrice, gtt_id: gttId, fallback_used: false };
   }
 
-  // ─── Step 4: GTT failed — fallback to single-leg SL-M ─────
+  // ─── Step 4: GTT failed — fallback to single-leg SL-M (2 attempts) ─────────
+  // Fix #4b: a filled position with no stop is the worst outcome, so retry the
+  // SL-M once, and if it STILL fails surface a loud, structured naked-position
+  // state the app can act on — not just a warning string.
   result.steps.push({ step: 'gtt_failed', ok: false, error: gttLastError });
   await db.prepare(`UPDATE kite_bracket_orders SET gtt_attempts=3, gtt_last_error=?, step='gtt_failed_fallback_sl' WHERE id=?`)
     .bind(gttLastError, bracketRowId).run();
 
-  const slForm = new URLSearchParams({
-    exchange, tradingsymbol: symbol,
-    transaction_type: 'SELL', quantity: String(filledQty),
-    product: body.product,
-    order_type: 'SL-M',
-    validity: 'DAY',
-    trigger_price: String(stopPrice),
-    tag: tag + '_SL',
-  });
-  const slR = await kiteFetch(db, `${KITE_BASE}/orders/regular`, {
-    method: 'POST',
-    headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: slForm.toString(),
-  });
-  const slOk = slR.ok && slR.body?.status === 'success';
-  const slOrderId = slOk ? slR.body.data.order_id : null;
-  result.steps.push({ step: 'fallback_sl_m', ok: slOk, order_id: slOrderId, error: slOk ? null : slR.body?.message });
+  let slOk = false, slOrderId = null, slLastError = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const slForm = new URLSearchParams({
+      exchange, tradingsymbol: symbol,
+      transaction_type: 'SELL', quantity: String(filledQty),
+      product: body.product,
+      order_type: 'SL-M', validity: 'DAY',
+      trigger_price: String(stopPrice),
+      tag: tag + '_SL',
+    });
+    const slR = await kiteFetch(db, `${KITE_BASE}/orders/regular`, {
+      method: 'POST',
+      headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: slForm.toString(),
+    });
+    slOk = slR.ok && slR.body?.status === 'success';
+    if (slOk) { slOrderId = slR.body.data.order_id; break; }
+    slLastError = slR.body?.message || `HTTP ${slR.status}`;
+    if (attempt < 2) await new Promise(res => setTimeout(res, 1000));
+  }
+  result.steps.push({ step: 'fallback_sl_m', ok: slOk, order_id: slOrderId, error: slOk ? null : slLastError });
   await db.prepare(`UPDATE kite_bracket_orders SET fallback_sl_order_id=?, step=?, completed_at=? WHERE id=?`)
     .bind(slOrderId, slOk ? 'complete_with_fallback' : 'failed_no_stop', Date.now(), bracketRowId).run();
 
+  if (slOk) {
+    return {
+      ...result, ok: true, fill_price: fillPrice, gtt_id: null,
+      fallback_used: true, fallback_sl_order_id: slOrderId,
+      warning: `GTT failed (${gttLastError}). Fallback SL-M stop placed at ₹${stopPrice}. NO target leg — set a target in Kite if you want one.`,
+    };
+  }
+  // Both GTT and SL-M failed → a REAL position now exists with NO stop. Loud + actionable.
   return {
-    ...result,
-    ok: slOk,
-    fill_price: fillPrice,
-    gtt_id: null,
-    fallback_used: true,
-    fallback_sl_order_id: slOrderId,
-    warning: slOk
-      ? `GTT failed (${gttLastError}). Fallback SL-M placed. NO target — manually set target in Kite if desired.`
-      : `GTT failed AND fallback SL-M failed. POSITION HAS NO STOP. Place stop manually in Kite immediately.`,
+    ...result, ok: false, fill_price: fillPrice, gtt_id: null,
+    fallback_used: true, fallback_sl_order_id: null,
+    naked_position: true,
+    action_required: 'PLACE_STOP_OR_SQUAREOFF',
+    position: { tradingsymbol: symbol, exchange, qty: filledQty, fill_price: fillPrice, product: body.product },
+    error: 'no_stop_naked_position',
+    warning: `⚠️ BOUGHT ${filledQty} ${symbol} at ₹${fillPrice} but BOTH the GTT and the SL-M stop FAILED (${gttLastError}; ${slLastError}). You are holding an UNPROTECTED position — open Kite NOW and square off or place a stop.`,
   };
 }
 
