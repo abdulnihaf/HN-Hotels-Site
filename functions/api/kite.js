@@ -122,7 +122,22 @@ export async function onRequest(context) {
     // ─────────────────────────────────────────────────────
     if (action === 'place_bracket') {
       if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
-      return Response.json(await placeBracket(env, db, kiteHeaders, await request.json()), { headers });
+      const body = await request.json().catch(() => ({}));
+      const out = await placeBracket(env, db, kiteHeaders, body);
+      await recordRun(db, {
+        scenario: body.scenario || 'E5', kind: 'bracket', surface: body.surface,
+        mode: body.bypass_block === true ? 'tiny_real' : 'sim',
+        symbol: body.tradingsymbol, qty: body.quantity, tag: body.tag || 'HN_WE_BRK',
+        status: out.naked_position ? 'failed_no_stop'
+              : out.blocked ? 'blocked'
+              : out.deduped ? 'deduped'
+              : out.ok ? (out.fallback_used ? 'complete_with_fallback' : 'complete') : 'error',
+        intent: body, steps: out.steps,
+        rawError: out.error || out.warning || null,
+        actionRequired: out.action_required || (out.naked_position ? 'naked_position' : null),
+        bracketId: out.bracket_id,
+      }).catch(() => {});
+      return Response.json(out, { headers });
     }
 
     // ─────────────────────────────────────────────────────
@@ -136,7 +151,18 @@ export async function onRequest(context) {
       if (url.searchParams.get('simulate') === '1') body.simulate = true;
       if (url.searchParams.get('symbol')) body.symbol = url.searchParams.get('symbol');
       if (url.searchParams.get('qty')) body.qty = url.searchParams.get('qty');
-      return Response.json(await pipelineTest(env, db, kiteHeaders, body), { headers });
+      const out = await pipelineTest(env, db, kiteHeaders, body);
+      await recordRun(db, {
+        scenario: body.scenario || 'E1', kind: 'equity_roundtrip', surface: body.surface,
+        mode: (body.simulate === true || body.simulate === '1') ? 'sim' : 'tiny_real',
+        symbol: out.symbol, qty: out.qty, tag: 'HN_WE_PIPETEST',
+        status: out.overall === 'pass' || out.overall === 'pass_simulated' ? 'complete'
+              : out.overall === 'blocked' ? 'blocked'
+              : out.overall === 'partial' ? 'partial' : 'error',
+        intent: body, steps: out.steps,
+        rawError: out.failed_step ? (out.summary || out.failed_step) : null,
+      }).catch(() => {});
+      return Response.json(out, { headers });
     }
 
     // ─────────────────────────────────────────────────────
@@ -157,7 +183,8 @@ export async function onRequest(context) {
       return Response.json(await instrumentLookup(db, symbol, exch), { headers });
     }
     if (action === 'sync_instruments') {
-      return Response.json(await syncInstruments(env, db, kiteHeaders), { headers });
+      // ?exchange=NSE|NFO syncs just one; omitted → both NSE + NFO.
+      return Response.json(await syncInstruments(env, db, kiteHeaders, url.searchParams.get('exchange')), { headers });
     }
 
     // ─────────────────────────────────────────────────────
@@ -197,9 +224,39 @@ export async function onRequest(context) {
       return Response.json({ holdings: h, funds: f, orders: o, trades: t, positions: p }, { headers });
     }
     // Square off a live position (owner one-tap exit) — opposite MARKET order, box-proxied.
+    // Supports partial exit via body.quantity (sell part of the net, rest stays open).
     if (action === 'square_off') {
       if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
-      return Response.json(await squareOff(env, db, kiteHeaders, await request.json()), { headers });
+      const body = await request.json().catch(() => ({}));
+      const out = await squareOff(env, db, kiteHeaders, body);
+      await recordRun(db, {
+        scenario: body.scenario || '', kind: 'partial_exit', surface: body.surface,
+        mode: body.bypass_block === true ? 'tiny_real' : 'sim',
+        symbol: body.tradingsymbol, qty: out.squared?.qty,
+        tag: out.order?.kite_response ? body.tag : body.tag, status: out.ok ? 'complete' : 'error',
+        intent: body, steps: [{ name: 'square_off', ok: out.ok, detail: out.message || null, raw: out.order }],
+        rawError: out.order?.error || null, actionRequired: out.order?.naked_position ? 'naked_position' : null,
+      }).catch(() => {});
+      return Response.json(out, { headers });
+    }
+    // Square off EVERYTHING (panic) — both MIS and CNC/NRML, per-leg retry, loud remaining list.
+    if (action === 'square_off_all') {
+      if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
+      const body = await request.json().catch(() => ({}));
+      const out = await squareOffAll(env, db, kiteHeaders, body);
+      await recordRun(db, {
+        scenario: body.scenario || 'X2', kind: 'square_off_all', surface: body.surface,
+        mode: body.bypass_block === true ? 'tiny_real' : 'sim',
+        status: out.flat ? 'complete' : 'failed_no_stop',
+        intent: body,
+        steps: [
+          ...out.squared.map((s, i) => ({ name: `squared_${s.tradingsymbol}`, ok: true, detail: `${s.qty} ${s.product}`, raw: s.order })),
+          ...out.remaining.map((s) => ({ name: `remaining_${s.tradingsymbol}`, ok: false, detail: `${s.qty} ${s.product}`, raw: { error: s.error } })),
+        ],
+        rawError: out.remaining.length ? out.message : null,
+        actionRequired: out.remaining.length ? 'square_off_all_incomplete' : null,
+      }).catch(() => {});
+      return Response.json(out, { headers });
     }
 
     // ─────────────────────────────────────────────────────
@@ -207,7 +264,65 @@ export async function onRequest(context) {
     // ─────────────────────────────────────────────────────
     if (action === 'place_order') {
       if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
-      return Response.json(await placeOrder(env, db, kiteHeaders, await request.json()), { headers });
+      const body = await request.json().catch(() => ({}));
+      if (url.searchParams.get('simulate') === '1') body.simulate = true;
+      const out = await placeOrder(env, db, kiteHeaders, body);
+      // Derive a max-loss for the trail: qty × ref (entry) — exits are flattening.
+      const refR = body.ref_price != null ? Number(body.ref_price) : (body.price != null ? Number(body.price) : null);
+      await recordRun(db, {
+        scenario: body.scenario || '', kind: 'place_order', surface: body.surface,
+        mode: (body.simulate === true || body.simulate === '1') ? 'sim' : 'tiny_real',
+        symbol: body.tradingsymbol, qty: body.quantity, tag: body.tag,
+        status: out.blocked ? 'blocked'
+              : out.deduped ? 'deduped'
+              : out.simulated ? 'complete'
+              : out.ok ? 'placed' : 'error',
+        maxLossPaise: (refR != null && body.transaction_type === 'BUY') ? Math.round(body.quantity * refR * 100) : null,
+        intent: body,
+        steps: [{ name: 'place_order', ok: out.ok === true, detail: out.message || out.error || null, raw: out.kite_response || out }],
+        rawError: out.error || (out.kite_response && out.kite_response.message) || null,
+      }).catch(() => {});
+      return Response.json(out, { headers });
+    }
+    // ── Exec-Lab run history (the app reads its own trail; you diagnose via D1) ──
+    if (action === 'lab_runs') {
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200);
+      const scenario = url.searchParams.get('scenario');
+      const rows = scenario
+        ? await db.prepare(`SELECT * FROM lab_runs WHERE scenario=? ORDER BY id DESC LIMIT ?`).bind(scenario, limit).all()
+        : await db.prepare(`SELECT * FROM lab_runs ORDER BY id DESC LIMIT ?`).bind(limit).all();
+      return Response.json({ ok: true, runs: rows.results || [] }, { headers });
+    }
+    if (action === 'lab_run') {
+      const runId = url.searchParams.get('run_id');
+      if (!runId) return Response.json({ error: 'run_id required' }, { status: 400, headers });
+      const run = await db.prepare(`SELECT * FROM lab_runs WHERE id=?`).bind(runId).first();
+      const steps = await db.prepare(`SELECT * FROM lab_steps WHERE run_id=? ORDER BY seq`).bind(runId).all();
+      return Response.json({ ok: !!run, run: run || null, steps: steps.results || [] }, { headers });
+    }
+    // §6.2: TIME-EXIT CRON SCAFFOLD — SIM/DRY ONLY, NOT ARMED against real orders.
+    // This proves the wiring (what would be squared at the configured IST time) WITHOUT
+    // sending anything. It refuses to fire a real square-off unless BOTH time_exit_enabled=1
+    // AND ?arm=1 are set — neither is true for tomorrow. The real arming is a deliberate
+    // Stage-2 decision (a Cloudflare Cron Worker), never a momentum step out of tomorrow.
+    if (action === 'time_exit_cron') {
+      const armCfg = await db.prepare(`SELECT config_value FROM user_config WHERE config_key='time_exit_enabled' LIMIT 1`).first().catch(() => null);
+      const armed = armCfg?.config_value === '1' && url.searchParams.get('arm') === '1';
+      const r = await fetch(`${KITE_BASE}/portfolio/positions`, { headers: kiteHeaders });
+      const j = await r.json().catch(() => ({}));
+      const open = ((j.data && j.data.net) || []).filter(p => (p.quantity || 0) !== 0);
+      const wouldSquare = open.map(p => ({ tradingsymbol: p.tradingsymbol, product: p.product, qty: Math.abs(p.quantity) }));
+      if (!armed) {
+        await recordRun(db, {
+          scenario: 'X3', kind: 'time_exit_dry', surface: 'cron', mode: 'sim', status: 'complete',
+          intent: { armed: false }, steps: wouldSquare.map((w, i) => ({ name: `would_square_${w.tradingsymbol}`, ok: true, detail: `${w.qty} ${w.product}`, raw: w })),
+        }).catch(() => {});
+        return Response.json({ ok: true, armed: false, dry_run: true, would_square: wouldSquare,
+          message: `DRY RUN (time-exit not armed). Would square ${wouldSquare.length} MIS position(s) at the configured IST time. Real arming is a deliberate Stage-2 step — time_exit_enabled=1 AND ?arm=1 both required.` }, { headers });
+      }
+      // armed path (NOT reachable tomorrow): real square_off_all.
+      const out = await squareOffAll(env, db, kiteHeaders, { bypass_block: false });
+      return Response.json({ ok: out.ok, armed: true, ...out }, { headers });
     }
     if (action === 'place_gtt') {
       if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
@@ -230,6 +345,13 @@ export async function onRequest(context) {
       const orderId = url.searchParams.get('order_id');
       if (!orderId) return Response.json({ error: 'order_id required' }, { status: 400, headers });
       return Response.json(await modifyOrder(db, kiteHeaders, orderId, await request.json()), { headers });
+    }
+    // §6.4: GTT MODIFY (PUT /gtt/triggers/:id) — trail / resize a stop in place.
+    if (action === 'modify_gtt') {
+      if (request.method !== 'POST' && request.method !== 'PUT') return Response.json({ error: 'POST/PUT required' }, { status: 405, headers });
+      const gttId = url.searchParams.get('gtt_id');
+      if (!gttId) return Response.json({ error: 'gtt_id required' }, { status: 400, headers });
+      return Response.json(await modifyGtt(db, kiteHeaders, gttId, await request.json()), { headers });
     }
 
     // ─────────────────────────────────────────────────────
@@ -291,6 +413,26 @@ export async function onRequest(context) {
 //   { exchange, tradingsymbol, transaction_type, quantity,
 //     product, order_type, price?, trigger_price?, validity?, tag? }
 // product is REQUIRED (MIS|CNC|NRML|MTF — no default). Defaults: order_type=MARKET, validity=DAY, variety=regular
+//
+// ═══ THE SINGLE HARDENED DOOR (Exec-Lab §6.1) ═════════════════════════════════
+// placeOrder is now the ONE order primitive every entry/exit flows through:
+//   placeBracket's buy leg + squareOff call it, so iOS AND the future auto-bridge
+//   inherit every guard from one place. The guards it now carries, all
+//   DIRECTION-AWARE (entry = BUY-to-open, exit = SELL / square-off):
+//     • kiteFetch  — circuit breaker + kite_endpoint_health writes (was raw fetch).
+//     • Idempotency tag — 120s dedupe window keyed on the client tag, so a retry
+//       never double-fires a real order (lifted from placeBracket's pattern).
+//     • Fund-check — DIRECTION-AWARE: an ENTRY (BUY) runs the live free-cash
+//       fail-safe; an EXIT (SELL / square-off) SKIPS it (bypass_funds_check) so a
+//       flatten is never wrongly refused at cash=0.
+//     • max_order_notional_paise cap — refuse if qty × ref_price exceeds the
+//       per-test ceiling. A fat-finger is structurally impossible, not caught.
+//     • Orphan recovery — surfaced via recordRun on the choke path (see action=*).
+//
+// Internal callers (placeBracket buy leg) pass _internal:true to SKIP the dedupe
+// and fund-check here (the bracket already ran BOTH upstream once), so the bracket
+// normal path stays byte-for-byte identical: same single fund-check, same single
+// kiteFetch BUY. is_exit / bypass_funds_check make the direction explicit.
 async function placeOrder(env, db, kiteHeaders, body) {
   const required = ['exchange', 'tradingsymbol', 'transaction_type', 'quantity'];
   for (const f of required) {
@@ -299,6 +441,13 @@ async function placeOrder(env, db, kiteHeaders, body) {
   if (!['BUY','SELL'].includes(body.transaction_type)) throw new Error('transaction_type must be BUY or SELL');
   if (!Number.isInteger(body.quantity) || body.quantity < 1) throw new Error('quantity must be positive integer');
   assertProduct(body);   // Fix #3: no silent CNC default
+
+  const variety = body.variety || 'regular';
+  const internal = body._internal === true;     // called by placeBracket buy leg
+  // Direction: an EXIT (SELL / square-off) skips the fund-check; an ENTRY (BUY)
+  // runs it. Caller can also force the bypass explicitly.
+  const isExit = body.is_exit === true || body.transaction_type === 'SELL';
+  const skipFundCheck = internal || body.bypass_funds_check === true || isExit;
 
   // ─── Pre-launch / CPV-pending safety guard ──────────────
   // If user_config.block_real_orders = 1, refuse to place real orders.
@@ -316,13 +465,236 @@ async function placeOrder(env, db, kiteHeaders, body) {
     };
   }
   if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
-    await logKite(db, `/orders/${body.variety || 'regular'} preflight`, 'POST', 422, 0, 'market_closed_preflight');
+    await logKite(db, `/orders/${variety} preflight`, 'POST', 422, 0, 'market_closed_preflight');
     return {
       ok: false,
       error: 'market_closed_preflight',
       message: 'NSE regular market is closed. Live order not sent to Kite.',
       attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
     };
+  }
+
+  // ─── §6.1 max_order_notional_paise cap (fat-finger made impossible) ─────────
+  // Refuse if qty × ref_price exceeds the per-test ceiling. ref_price preference:
+  // explicit ref_price (rupees) → LIMIT price → trigger_price → instrument last_price.
+  // If no reference price can be derived (a MARKET order with no price hint and no
+  // cached LTP), we cannot bound the spend → refuse on the fail-safe side rather
+  // than place an unbounded order.
+  //
+  // NO-REGRESSION: the cap is OPT-IN (body.enforce_notional_cap === true) so it
+  // does NOT break the existing Execute-tab bracket, which sizes real orders against
+  // the engine's tranches (₹1000s) and would otherwise be refused by the ₹500 Lab
+  // ceiling. The Lab sets enforce_notional_cap:true on every tiny test order, making
+  // a fat-finger structurally impossible THERE; production sizing is untouched.
+  if (body.enforce_notional_cap === true) {
+    const capRow = await db.prepare(
+      `SELECT config_value FROM user_config WHERE config_key='max_order_notional_paise' LIMIT 1`
+    ).first();
+    const capPaise = capRow ? parseInt(capRow.config_value, 10) : NaN;
+    if (Number.isFinite(capPaise) && capPaise > 0) {
+      let refRupees = null;
+      if (body.ref_price != null) refRupees = Number(body.ref_price);
+      else if (body.price != null) refRupees = Number(body.price);
+      else if (body.trigger_price != null) refRupees = Number(body.trigger_price);
+      else {
+        // MARKET with no hint — look up the instrument's cached last_price.
+        try {
+          const inst = await db.prepare(
+            `SELECT last_price FROM kite_instruments WHERE tradingsymbol=? AND exchange=? LIMIT 1`
+          ).bind(body.tradingsymbol, body.exchange).first();
+          if (inst && inst.last_price != null) refRupees = Number(inst.last_price);
+        } catch { refRupees = null; }
+      }
+      // Exits are flattening an existing position; the cap is an ENTRY guard
+      // (it bounds money put AT RISK). Never let the cap block a square-off.
+      if (!isExit) {
+        if (refRupees == null || !Number.isFinite(refRupees) || refRupees <= 0) {
+          return {
+            ok: false, error: 'notional_unbounded',
+            message: `Cannot bound order spend: no reference price for ${body.exchange}:${body.tradingsymbol} (MARKET order, no price hint, no cached last_price). Order refused (fail-safe). Pass ref_price or sync_instruments first.`,
+            attempted_order: { tradingsymbol: body.tradingsymbol, quantity: body.quantity },
+          };
+        }
+        const notionalPaise = Math.round(body.quantity * refRupees * 100);
+        if (notionalPaise > capPaise) {
+          return {
+            ok: false, error: 'over_notional_cap',
+            notional_paise: notionalPaise, cap_paise: capPaise,
+            message: `Refused: this order is ~₹${Math.round(notionalPaise / 100)} (${body.quantity} × ₹${refRupees}) which exceeds the per-test ceiling of ₹${Math.round(capPaise / 100)}. Max you can lose this run is capped — raise max_order_notional_paise deliberately to allow a bigger order.`,
+            attempted_order: { tradingsymbol: body.tradingsymbol, quantity: body.quantity },
+          };
+        }
+      }
+    }
+  }
+
+  // ─── §6.1 Idempotency / double-fire guard (lifted from placeBracket) ────────
+  // A network timeout mid-order + a client retry (or a double tap) must NOT fire a
+  // SECOND real order. Window-keyed dedupe on (symbol, transaction_type, tag): a
+  // non-error lab_runs row for the same symbol+side+tag inside the window means an
+  // order is already in-flight/placed → return it, suppress the duplicate.
+  // Internal bracket buys skip this (the bracket already deduped on kite_bracket_orders).
+  const DEDUPE_WINDOW_MS = 120000;
+  const idemTag = body.tag ? String(body.tag).slice(0, 20) : null;
+  const isSim = body.simulate === true || body.simulate === '1';
+  if (!internal && idemTag) {
+    // Fix 1B — SIM must NEVER poison the real dedupe. A simulate=1 order records a
+    // lab_runs row with mode='sim'; if those rows were dedupe-eligible, a SIM test
+    // then a real order with the same symbol+side+tag inside the window would
+    // SILENTLY suppress the real order. We run SIM then TINY-REAL with the SAME tag
+    // by design, so the dedupe query EXCLUDES mode='sim' rows — only a prior REAL
+    // (mode='tiny_real') in-flight/placed order suppresses a duplicate.
+    const dupe = await db.prepare(
+      `SELECT id, status, raw_error, steps_json, created_at
+         FROM lab_runs
+        WHERE symbol = ? AND tag = ?
+          AND kind = 'place_order'
+          AND mode != 'sim'
+          AND status NOT IN ('error','blocked','market_closed','over_notional_cap','notional_unbounded')
+          AND json_extract(intent_json, '$.transaction_type') = ?
+          AND created_at > ?
+        ORDER BY id DESC LIMIT 1`
+    ).bind(body.tradingsymbol, idemTag, body.transaction_type,
+           new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString()).first().catch(() => null);
+    if (dupe) {
+      return {
+        ok: true, deduped: true, lab_run_id: dupe.id,
+        message: `Duplicate suppressed — a ${body.transaction_type} ${body.tradingsymbol} (tag ${idemTag}) was placed ${Math.round((Date.now() - Date.parse(dupe.created_at)) / 1000)}s ago (run ${dupe.id}, status ${dupe.status}). No second order sent.`,
+      };
+    }
+  }
+
+  // ─── §6.1 DIRECTION-AWARE fund-check (entry only; exit skips) ───────────────
+  // An ENTRY (BUY-to-open) runs the live free-cash fail-safe: refresh funds, ask
+  // Kite's margin calc for this order's requirement, refuse if free cash can't
+  // cover it (or can't be verified). An EXIT (SELL / square-off) SKIPS this — else
+  // a flatten is wrongly refused at cash=0 and the position can't be closed.
+  //
+  // NFO (options) orders SKIP the equity free-cash check here — their margin is
+  // validated by nfoBuyerGate (order_margins ≤ ₹2k cap) below, and equity cash is
+  // the wrong segment for an option buyer's premium debit. Avoids a false
+  // insufficient_free_cash refusal on a valid capped-premium option buy.
+  const isNfo = String(body.exchange).toUpperCase() === 'NFO';
+  if (!skipFundCheck && !isNfo && body.transaction_type === 'BUY') {
+    let availableCashPaise = null;
+    try {
+      const rf = await reconcileFunds(env, db, kiteHeaders);
+      if (rf && rf.ok === true) {
+        const f = await db.prepare(
+          `SELECT available_cash_paise FROM kite_funds_live WHERE segment='equity'`
+        ).first();
+        availableCashPaise = f ? Number(f.available_cash_paise) : null;
+      }
+    } catch { availableCashPaise = null; }
+
+    let requiredPaise = null;
+    try {
+      const m = await orderMargins(env, db, kiteHeaders, {
+        orders: [{
+          exchange: body.exchange, tradingsymbol: body.tradingsymbol, transaction_type: 'BUY',
+          variety, product: body.product,
+          order_type: body.order_type || 'MARKET', quantity: body.quantity,
+          price: body.price != null ? Number(body.price) : 0,
+        }],
+      });
+      const leg = (m && m.ok && Array.isArray(m.data)) ? m.data[0] : null;
+      if (leg && leg.total != null) requiredPaise = Math.round(Number(leg.total) * 100);
+    } catch { requiredPaise = null; }
+    if (requiredPaise == null) {
+      const refRupees = body.ref_price != null ? Number(body.ref_price)
+        : (body.price != null ? Number(body.price)
+        : (body.trigger_price != null ? Number(body.trigger_price) : 0));
+      requiredPaise = Math.round(body.quantity * refRupees * 100);
+    }
+
+    if (availableCashPaise == null || requiredPaise > availableCashPaise) {
+      const reason = availableCashPaise == null ? 'funds_unverified' : 'insufficient_free_cash';
+      return {
+        ok: false, error: reason,
+        required_paise: requiredPaise, available_cash_paise: availableCashPaise,
+        message: availableCashPaise == null
+          ? 'Could not verify live free cash with Kite — real order NOT sent (fail-safe). Retry once funds are confirmed, or pass bypass_funds_check to override.'
+          : `Insufficient free cash: this order needs about ₹${Math.round(requiredPaise / 100)} but only ₹${Math.round(availableCashPaise / 100)} is free. No order sent.`,
+      };
+    }
+  }
+
+  // ─── §6.3 NFO buyer-only gate (options: index weeklies only, buyer-only) ────
+  // Three hard rules, applied to any NFO order. Index options are cash-settled
+  // (safe); stock options are physically settled (lakhs of delivery risk) → index
+  // whitelist only. Writing (opening SELL) needs SPAN margin → blocked. qty must be
+  // an exact multiple of the instrument's lot_size. Runs BEFORE simulate so SIM
+  // proves the gate too (O5 writing-blocked is provable at ₹0).
+  if (String(body.exchange).toUpperCase() === 'NFO' && !body.bypass_nfo_gate) {
+    const gate = await nfoBuyerGate(env, db, kiteHeaders, body);
+    if (!gate.ok) return gate;   // refused-by-construction; verbatim reason inside
+  }
+
+  // ─── SIM rung: every guard above ran for real (block, market-hours, cap,
+  // dedupe, fund-check) but NOTHING is sent to Kite — ₹0 risk software path. This
+  // is how the Lab SIM-proves a raw order and its reject/validation paths. A SIM
+  // order returns a synthetic accept so a SIM round-trip can complete.
+  if (body.simulate === true || body.simulate === '1') {
+    return {
+      ok: true, simulated: true,
+      order_id: `SIM_${body.transaction_type}_${body.tradingsymbol}_${Date.now()}`,
+      message: `Simulated ${body.transaction_type} ${body.quantity} ${body.exchange}:${body.tradingsymbol} (${body.product} ${body.order_type || 'MARKET'}) — passed all guards, nothing sent to broker.`,
+    };
+  }
+
+  // ─── Fix 1A: concurrency anchor — pre-flight in-flight CLAIM before the POST ──
+  // The read-dedupe above only catches SEQUENTIAL retries (a request whose lab_runs
+  // row was already written by recordRun, which runs AFTER placeOrder returns). Two
+  // TRULY CONCURRENT retries (network timeout mid-order + client retry) both pass
+  // that read — neither has written its row yet — and both would fire a real order.
+  // Mirror placeBracket's pre-insert of kite_bracket_orders step='starting': INSERT a
+  // claim row into lab_order_anchors keyed (symbol, txn, tag, 120s window_bucket)
+  // with a UNIQUE PRIMARY KEY. The FIRST concurrent insert wins; the SECOND fails the
+  // unique constraint → that loser treats itself as a duplicate and NEVER POSTs.
+  // Committed to D1 BEFORE the Kite subrequest (this await resolves first). Skipped
+  // for internal bracket buys (the bracket already anchored on kite_bracket_orders),
+  // for SIM (a SIM must never block a later real order), and when there is no tag.
+  // anchorClaim holds OUR winning claim so a DEFINITIVE broker rejection below can
+  // release it — a corrected retry after a rejection must not be falsely suppressed for
+  // 120s. It is NEVER released on a network/timeout failure where the order's fate is
+  // unknown; that preserves at-most-once (Fix 1A must never trade its no-double-fire
+  // guarantee for retry convenience).
+  let anchorClaim = null;
+  const releaseAnchor = async () => {
+    if (!anchorClaim) return;
+    try {
+      await db.prepare(
+        `DELETE FROM lab_order_anchors WHERE symbol=? AND transaction_type=? AND tag=? AND window_bucket=?`
+      ).bind(anchorClaim.symbol, anchorClaim.transaction_type, anchorClaim.tag, anchorClaim.window_bucket).run();
+    } catch { /* best-effort; a stale anchor only over-suppresses, never double-fires */ }
+    anchorClaim = null;
+  };
+  if (!internal && !isSim && idemTag) {
+    const windowBucket = Math.floor(Date.now() / DEDUPE_WINDOW_MS);
+    let claimed = false;
+    try {
+      const ins = await db.prepare(
+        `INSERT OR IGNORE INTO lab_order_anchors
+           (symbol, transaction_type, tag, window_bucket, created_at)
+         VALUES (?,?,?,?,?)`
+      ).bind(body.tradingsymbol, body.transaction_type, idemTag, windowBucket,
+             new Date().toISOString()).run();
+      // INSERT OR IGNORE: changes===1 means WE won the claim; changes===0 means a
+      // concurrent request already holds it (unique collision) → suppress this order.
+      claimed = (ins?.meta?.changes ?? 0) === 1;
+      if (claimed) anchorClaim = { symbol: body.tradingsymbol, transaction_type: body.transaction_type, tag: idemTag, window_bucket: windowBucket };
+    } catch {
+      // Anchor table missing (migration not yet applied) → fall through and place.
+      // The read-dedupe still guards the sequential case; pre-migration prod simply
+      // keeps prior behaviour. Once 0022 is applied the concurrent hole is closed.
+      claimed = true;
+    }
+    if (!claimed) {
+      return {
+        ok: true, deduped: true, dedupe_reason: 'concurrent_anchor',
+        message: `Duplicate suppressed — a concurrent ${body.transaction_type} ${body.tradingsymbol} (tag ${idemTag}) is already in-flight in this window. No second order sent.`,
+      };
+    }
   }
 
   const formData = new URLSearchParams({
@@ -339,20 +711,33 @@ async function placeOrder(env, db, kiteHeaders, body) {
   if (body.disclosed_quantity != null) formData.set('disclosed_quantity', String(body.disclosed_quantity));
   if (body.tag) formData.set('tag', String(body.tag).slice(0, 20));
 
-  const variety = body.variety || 'regular';
-  const url = `${KITE_BASE}/orders/${variety}`;
-  const t0 = Date.now();
-  const [pu, po] = routeOrder(url, {
-    method: 'POST',
-    headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: formData.toString(),
-  });
-  const res = await fetch(pu, po);
-  const j = await res.json();
-  await logKite(db, `/orders/${variety} POST`, 'POST', res.status, Date.now() - t0, res.ok ? null : (j.message || j.error_type));
+  // §6.1: route through kiteFetch (circuit breaker + kite_endpoint_health writes)
+  // instead of raw fetch — so a Lab order trips the breaker and stamps
+  // last_success_ts like every other call. Returns { ok, status, body }.
+  // kiteFetch THROWS only on an OPEN circuit — i.e. BEFORE any POST is sent — so the
+  // order definitively never reached the broker: release the claim and surface it.
+  let r;
+  try {
+    r = await kiteFetch(db, `${KITE_BASE}/orders/${variety}`, {
+      method: 'POST',
+      headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    });
+  } catch (e) {
+    await releaseAnchor();
+    return { ok: false, error: String(e?.message || e), kite_response: null, http_status: 0 };
+  }
+  const j = r.body || {};
 
-  if (!res.ok || j.status !== 'success') {
-    return { ok: false, error: j.message || 'Order failed', kite_response: j, http_status: res.status };
+  if (!r.ok || j.status !== 'success') {
+    // Release the concurrency claim ONLY on a DEFINITIVE broker rejection — an HTTP
+    // error response (4xx/5xx WITH a body) was received, so the order did NOT execute
+    // and a corrected retry must be allowed. On a network/timeout failure (no HTTP
+    // response: status 0 or no body) the order's fate is UNKNOWN → KEEP the claim so a
+    // retry can never re-fire a possibly-live order (at-most-once).
+    const brokerRejected = r.status >= 400 && r.status < 600 && r.body && typeof r.body === 'object';
+    if (brokerRejected) await releaseAnchor();
+    return { ok: false, error: j.message || r.error || 'Order failed', kite_response: j, http_status: r.status, anchor_held: !brokerRejected };
   }
   return { ok: true, order_id: j.data.order_id, kite_response: j };
 }
@@ -467,6 +852,61 @@ async function deleteGtt(db, kiteHeaders, gttId) {
     return { ok: false, error: j.message || 'GTT delete failed' };
   }
   return { ok: true };
+}
+
+// §6.4: GTT MODIFY (PUT /gtt/triggers/:id) — for trailing / resizing a stop without
+// delete+replace. Same body shape as place_gtt (type, condition legs); rebuilds the
+// trigger in place. Used by partial-exit (resize GTT qty to the held remainder) and
+// the future trailing-stop cron. Routes through routeOrder (static-IP egress).
+async function modifyGtt(db, kiteHeaders, gttId, body) {
+  const required = ['tradingsymbol', 'exchange', 'last_price', 'quantity'];
+  for (const f of required) {
+    if (!body[f]) throw new Error(`Missing required field: ${f}`);
+  }
+  assertProduct(body);   // GTT legs carry an explicit product
+  const isOco = body.type === 'two-leg' || (body.stop_trigger && body.target_trigger);
+  let condition, orders;
+  if (isOco) {
+    if (!body.stop_trigger || !body.target_trigger) throw new Error('OCO requires stop_trigger and target_trigger');
+    condition = {
+      exchange: body.exchange, tradingsymbol: body.tradingsymbol,
+      last_price: Number(body.last_price),
+      trigger_values: [Number(body.stop_trigger), Number(body.target_trigger)],
+    };
+    orders = [
+      { exchange: body.exchange, tradingsymbol: body.tradingsymbol, transaction_type: body.transaction_type || 'SELL',
+        quantity: body.quantity, order_type: 'LIMIT', product: body.product, price: Number(body.stop_price || body.stop_trigger) },
+      { exchange: body.exchange, tradingsymbol: body.tradingsymbol, transaction_type: body.transaction_type || 'SELL',
+        quantity: body.quantity, order_type: 'LIMIT', product: body.product, price: Number(body.target_price || body.target_trigger) },
+    ];
+  } else {
+    if (!body.trigger_value || body.price == null) throw new Error('single-leg GTT requires trigger_value and price');
+    condition = {
+      exchange: body.exchange, tradingsymbol: body.tradingsymbol,
+      last_price: Number(body.last_price), trigger_values: [Number(body.trigger_value)],
+    };
+    orders = [{ exchange: body.exchange, tradingsymbol: body.tradingsymbol, transaction_type: body.transaction_type || 'SELL',
+      quantity: body.quantity, order_type: 'LIMIT', product: body.product, price: Number(body.price) }];
+  }
+  const formData = new URLSearchParams({
+    type: isOco ? 'two-leg' : 'single',
+    condition: JSON.stringify(condition),
+    orders: JSON.stringify(orders),
+  });
+  const url = `${KITE_BASE}/gtt/triggers/${encodeURIComponent(gttId)}`;
+  const t0 = Date.now();
+  const [gu, go] = routeOrder(url, {
+    method: 'PUT',
+    headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: formData.toString(),
+  });
+  const res = await fetch(gu, go);
+  const j = await res.json();
+  await logKite(db, `/gtt/triggers PUT`, 'PUT', res.status, Date.now() - t0, res.ok ? null : (j.message || j.error_type));
+  if (!res.ok || j.status !== 'success') {
+    return { ok: false, error: j.message || 'GTT modify failed', kite_response: j, http_status: res.status };
+  }
+  return { ok: true, gtt_id: j.data?.trigger_id || gttId, kite_response: j };
 }
 
 async function modifyOrder(db, kiteHeaders, orderId, body) {
@@ -753,29 +1193,38 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const result = { ok: false, bracket_id: bracketRowId, steps: [] };
 
   // ─── Step 1: place market buy ─────────────────────────────
-  const buyForm = new URLSearchParams({
+  // §6.1: route the buy leg through the unified placeOrder so it inherits
+  // kiteFetch + the notional cap from the one door. The bracket already ran BOTH
+  // the dedupe (on kite_bracket_orders) and the fund-check above, so we pass
+  // _internal:true (skip placeOrder's dedupe + fund-check) and ref_price (so the
+  // notional cap can bound a MARKET buy without a price). This keeps the bracket
+  // normal path byte-for-byte identical: one fund-check, one kiteFetch BUY, same
+  // form fields — only the call site moved into the shared primitive.
+  const refRupeesBuy = body.price != null ? Number(body.price) : Math.max(targetPrice, stopPrice);
+  const buyRes = await placeOrder(env, db, kiteHeaders, {
     exchange, tradingsymbol: symbol,
-    transaction_type: 'BUY', quantity: String(qty),
+    transaction_type: 'BUY', quantity: qty,
     product: body.product,
     order_type: body.order_type || 'MARKET',
     validity: 'DAY', tag,
+    price: body.price != null ? body.price : undefined,
+    variety: 'regular',
+    ref_price: refRupeesBuy,
+    _internal: true,            // bracket already deduped + fund-checked upstream
+    bypass_block: true,         // the bracket's own block guard already passed above
+    bypass_market_hours: true,  // the bracket's own market-hours guard already passed above
   });
-  if (body.price != null) buyForm.set('price', String(body.price));
+  const buyJ = buyRes.kite_response || {};
+  const buyOk = buyRes.ok === true && !!buyRes.order_id;
+  result.steps.push({ step: 'place_buy', ok: buyOk, http: buyRes.http_status, ...buyJ });
 
-  const buyR = await kiteFetch(db, `${KITE_BASE}/orders/regular`, {
-    method: 'POST',
-    headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: buyForm.toString(),
-  });
-  const buyJ = buyR.body || {};
-  result.steps.push({ step: 'place_buy', ok: buyR.ok && buyJ.status === 'success', http: buyR.status, ...buyJ });
-
-  if (!buyR.ok || buyJ.status !== 'success') {
+  if (!buyOk) {
+    const errMsg = buyRes.error || buyJ.message || 'Buy order failed';
     await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
-      .bind(buyJ.message || `HTTP ${buyR.status}`, Date.now(), bracketRowId).run();
-    return { ...result, error: buyJ.message || 'Buy order failed' };
+      .bind(errMsg, Date.now(), bracketRowId).run();
+    return { ...result, error: errMsg };
   }
-  const buyOrderId = buyJ.data.order_id;
+  const buyOrderId = buyRes.order_id;
   await db.prepare(`UPDATE kite_bracket_orders SET buy_order_id=?, step='fill_polling' WHERE id=?`)
     .bind(buyOrderId, bracketRowId).run();
 
@@ -842,24 +1291,124 @@ async function placeBracket(env, db, kiteHeaders, body) {
   await db.prepare(`UPDATE kite_bracket_orders SET buy_status='COMPLETE', fill_price_paise=?, fill_qty=?, step='filled' WHERE id=?`)
     .bind(Math.round(fillPrice * 100), filledQty, bracketRowId).run();
 
+  // ─── Fix 4: arm a TRUE gap-proof SL-M protective stop FROM THE MOMENT OF FILL ─
+  // The GTT stop leg is a 0.5%-buffered LIMIT (GTT can't hold SL-M as a leg type).
+  // A HARD gap-down > the buffer trades THROUGH that resting limit → the position is
+  // left NAKED (the exact 9-failure history). A LIMIT can be gap-skipped; an SL-M
+  // (market-on-trigger) CANNOT — it converts to a MARKET sell the instant price
+  // touches the trigger, so it always exits even on a violent gap. So we arm a true
+  // SL-M (order_type=SL-M) immediately on fill, BEFORE/alongside the GTT, not only as
+  // the step-4 GTT-failure fallback. This is the gap-proof primary stop.
+  //
+  // OCO mechanism (cancel-the-opposite-leg): with the SL-M armed, the GTT below
+  // becomes a TARGET-ONLY take-profit (a single SELL LIMIT at target) — NOT a second
+  // stop leg — so the two protective orders are the SL-M stop and the GTT target,
+  // never two stops that could double-sell. When ONE fills the other must be
+  // cancelled: both ids are persisted (fallback_sl_order_id = the SL-M, gtt_id = the
+  // target GTT), and our reconcile (reconcilePositions + the delete_gtt/cancel_order
+  // endpoints) cancels the now-stale opposite leg once the position reads flat. A
+  // stale resting leg on a flat book cannot re-open a position (an SL-M trigger sits
+  // BELOW market and a target LIMIT sits ABOVE — neither fires on a flat book), so the
+  // worst case is a harmless resting order the reconcile sweeps, never a naked gap.
+  // Config-gated (bracket_protective_slm, default 1); set 0 for the legacy GTT-only
+  // two-leg OCO (no-regression escape, gap-skippable — only for a deliberate revert).
+  const protRow = await db.prepare(
+    `SELECT config_value FROM user_config WHERE config_key='bracket_protective_slm' LIMIT 1`
+  ).first().catch(() => null);
+  const protectiveSlmOn = protRow ? protRow.config_value === '1' : true;   // default ON
+  let protectiveSlId = null, protectiveSlErr = null;
+  if (protectiveSlmOn) {
+    for (let attempt = 1; attempt <= 2 && !protectiveSlId; attempt++) {
+      const psForm = new URLSearchParams({
+        exchange, tradingsymbol: symbol,
+        transaction_type: 'SELL', quantity: String(filledQty),
+        product: body.product,
+        order_type: 'SL-M', validity: 'DAY',
+        trigger_price: String(stopPrice),
+        tag: (tag + '_PSL').slice(0, 20),
+      });
+      const psR = await kiteFetch(db, `${KITE_BASE}/orders/regular`, {
+        method: 'POST',
+        headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: psForm.toString(),
+      });
+      if (psR.ok && psR.body?.status === 'success') { protectiveSlId = psR.body.data.order_id; break; }
+      protectiveSlErr = psR.body?.message || `HTTP ${psR.status}`;
+      if (attempt < 2) await new Promise(res => setTimeout(res, 800));
+    }
+    result.steps.push({ step: 'protective_slm', ok: !!protectiveSlId, order_id: protectiveSlId, error: protectiveSlId ? null : protectiveSlErr });
+    if (protectiveSlId) {
+      await db.prepare(`UPDATE kite_bracket_orders SET fallback_sl_order_id=?, step='protective_slm_armed' WHERE id=?`)
+        .bind(protectiveSlId, bracketRowId).run();
+    }
+    // If the SL-M could not be armed, do NOT silently continue gap-exposed — fall
+    // through to the GTT two-leg path below (its buffered stop is the next-best
+    // protection), and the all-fail terminal state stays loud (Rail 4). The gap-proof
+    // guarantee holds ONLY when protectiveSlId is set; that is surfaced in the result.
+  }
+
   // ─── Step 3: place GTT OCO with up to 3 retries ────────────
+  // §6.4 stop-leg hardening. Kite's GTT trigger-orders accept ONLY order_type:LIMIT
+  // (SL-M is NOT a valid GTT leg type — Kite rejects it), so a true SL-M cannot live
+  // inside the GTT. A plain stop-LIMIT at the trigger price can be TRADED THROUGH on a
+  // fast adverse gap → naked position (the 9-failure history). The fix that stays
+  // within the GTT constraint: place the STOP leg's LIMIT price a buffer BELOW its
+  // trigger (a marketable sell-limit) so when the stop fires it fills through a normal
+  // gap instead of resting unfilled — SL-M-like behaviour. The TARGET leg stays a
+  // plain LIMIT at target (we WANT it to rest for the better price). The buffer is
+  // config-driven (gtt_stop_slip_pct, default 0.5%). The true SL-M order_type still
+  // lives in the step-4 standalone fallback, where Kite DOES accept it.
+  // Trade-off named: the stop fills near (not exactly at) the trigger on a gap — that
+  // is the cost of guaranteeing the exit vs. risking an unfilled rest. Acceptable; an
+  // unprotected naked position is the worse outcome.
+  const slipRow = await db.prepare(
+    `SELECT config_value FROM user_config WHERE config_key='gtt_stop_slip_pct' LIMIT 1`
+  ).first().catch(() => null);
+  const stopSlipPct = slipRow ? (parseFloat(slipRow.config_value) || 0.5) : 0.5;
+  const tickSize = 0.05;   // NSE/NFO default tick; rounding keeps the price valid.
+  const rawStopLimit = stopPrice * (1 - stopSlipPct / 100);
+  const stopLimitPrice = Math.max(tickSize, Math.round(rawStopLimit / tickSize) * tickSize);
   let gttId = null;
   let gttLastError = null;
+  // When the gap-proof SL-M stop is already armed, the GTT carries the TARGET ONLY
+  // (a single-leg take-profit) — NOT a duplicate stop leg — so we never have two
+  // resting stops that could double-sell. When the SL-M is NOT armed (config off, or
+  // it failed), fall back to the legacy two-leg OCO (buffered stop + target) so the
+  // position still has SOME protection while step-4 retries a standalone SL-M.
+  const gttTargetOnly = !!protectiveSlId;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const gttForm = new URLSearchParams({
-      type: 'two-leg',
-      condition: JSON.stringify({
-        exchange, tradingsymbol: symbol,
-        last_price: fillPrice,
-        trigger_values: [stopPrice, targetPrice],
-      }),
-      orders: JSON.stringify([
-        { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
-          order_type: 'LIMIT', product: body.product, price: stopPrice },
-        { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
-          order_type: 'LIMIT', product: body.product, price: targetPrice },
-      ]),
-    });
+    const gttForm = new URLSearchParams(
+      gttTargetOnly
+      ? {
+          type: 'single',
+          condition: JSON.stringify({
+            exchange, tradingsymbol: symbol,
+            last_price: fillPrice,
+            trigger_values: [targetPrice],
+          }),
+          orders: JSON.stringify([
+            // TARGET-ONLY take-profit (the gap-proof SL-M stop covers the downside).
+            { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
+              order_type: 'LIMIT', product: body.product, price: targetPrice },
+          ]),
+        }
+      : {
+          type: 'two-leg',
+          condition: JSON.stringify({
+            exchange, tradingsymbol: symbol,
+            last_price: fillPrice,
+            trigger_values: [stopPrice, targetPrice],
+          }),
+          orders: JSON.stringify([
+            // STOP leg: LIMIT priced BELOW the trigger (SL-M-emulating marketable limit).
+            { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
+              order_type: 'LIMIT', product: body.product, price: Number(stopLimitPrice.toFixed(2)) },
+            // TARGET leg: plain LIMIT at target (rests for the better price).
+            { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
+              order_type: 'LIMIT', product: body.product, price: targetPrice },
+          ]),
+        }
+    );
     const r = await kiteFetch(db, `${KITE_BASE}/gtt/triggers`, {
       method: 'POST',
       headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -877,10 +1426,34 @@ async function placeBracket(env, db, kiteHeaders, body) {
   if (gttId) {
     await db.prepare(`UPDATE kite_bracket_orders SET gtt_id=?, gtt_attempts=?, step='complete', completed_at=? WHERE id=?`)
       .bind(gttId, 3, Date.now(), bracketRowId).run();
-    return { ...result, ok: true, fill_price: fillPrice, gtt_id: gttId, fallback_used: false };
+    return {
+      ...result, ok: true, fill_price: fillPrice, gtt_id: gttId, fallback_used: false,
+      protective_sl_order_id: protectiveSlId || null,
+      gap_proof: !!protectiveSlId,   // true SL-M downside stop is armed → cannot gap-skip
+      ...(protectiveSlId
+        ? { stop_type: 'SL-M', target_type: 'GTT_LIMIT', oco: 'reconcile_cancels_opposite' }
+        : { stop_type: 'GTT_LIMIT_buffered', warning: 'Protective SL-M not armed — stop is the buffered GTT LIMIT (can gap-skip on a hard gap). Downside is GTT-only.' }),
+    };
   }
 
-  // ─── Step 4: GTT failed — fallback to single-leg SL-M (2 attempts) ─────────
+  // ─── GTT failed, but the gap-proof SL-M stop IS already armed ───────────────
+  // Fix 4: if the protective SL-M was armed on fill, a GTT failure only loses the
+  // TARGET take-profit leg — the DOWNSIDE is still protected by the live SL-M, so the
+  // position is NOT naked. Surface that honestly (a missing target is not an
+  // emergency) instead of dropping into the naked-position terminal state.
+  if (protectiveSlId) {
+    await db.prepare(`UPDATE kite_bracket_orders SET gtt_attempts=3, gtt_last_error=?, step='complete_slm_no_target', completed_at=? WHERE id=?`)
+      .bind(gttLastError, Date.now(), bracketRowId).run();
+    result.steps.push({ step: 'gtt_failed_but_slm_armed', ok: true, error: gttLastError });
+    return {
+      ...result, ok: true, fill_price: fillPrice, gtt_id: null,
+      protective_sl_order_id: protectiveSlId, gap_proof: true,
+      stop_type: 'SL-M', target_type: 'none',
+      warning: `Protective SL-M stop is armed at ₹${stopPrice} (gap-proof) but the GTT TARGET leg failed (${gttLastError}). You are protected on the downside; set a target in Kite if you want one.`,
+    };
+  }
+
+  // ─── Step 4: GTT failed AND no protective SL-M — fallback single-leg SL-M ───
   // Fix #4b: a filled position with no stop is the worst outcome, so retry the
   // SL-M once, and if it STILL fails surface a loud, structured naked-position
   // state the app can act on — not just a warning string.
@@ -951,6 +1524,131 @@ async function orderMargins(env, db, kiteHeaders, body) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// §6.3 NFO buyer-only gate — the three hard rules that close the catastrophic
+// options space by construction. Returns { ok:true } to allow, or { ok:false, … }
+// with a verbatim reason to REFUSE. Never throws (so a SIM run sees the refusal,
+// not a 500).
+// ═══════════════════════════════════════════════════════════════════════════
+async function nfoBuyerGate(env, db, kiteHeaders, body) {
+  const symbol = String(body.tradingsymbol || '').toUpperCase();
+
+  // Rule 0 — resolve the instrument so we know lot_size + expiry + type. Without
+  // it we cannot enforce qty=N×lot or the expiry-day reject → refuse (fail-safe).
+  const lk = await instrumentLookup(db, body.tradingsymbol, 'NFO').catch(() => ({ ok: false }));
+  if (!lk.ok || !lk.instrument) {
+    return {
+      ok: false, error: 'nfo_instrument_unresolved',
+      message: `NFO instrument ${symbol} not found in kite_instruments. Run sync_instruments (now pulls NFO) then retry. No order sent.`,
+    };
+  }
+  const inst = lk.instrument;
+  const instType = String(inst.instrument_type || '').toUpperCase();   // CE | PE | FUT
+  const lotSize = Number(inst.lot_size) || 0;
+  const name = String(inst.name || '').toUpperCase();
+
+  // Rule 3a — index weeklies only (cash-settled). Whitelist by underlying NAME
+  // prefix (NIFTY/BANKNIFTY/…); a stock option's name is the stock → rejected.
+  const wlRow = await db.prepare(
+    `SELECT config_value FROM user_config WHERE config_key='nfo_index_whitelist' LIMIT 1`
+  ).first().catch(() => null);
+  const whitelist = (wlRow?.config_value || 'NIFTY,BANKNIFTY,FINNIFTY,MIDCPNIFTY')
+    .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  const isIndex = whitelist.some(w => name === w || symbol.startsWith(w));
+  if (!isIndex) {
+    return {
+      ok: false, error: 'nfo_not_index_whitelist',
+      message: `${symbol} (underlying '${inst.name}') is not a whitelisted index weekly. Stock options are physically settled (delivery risk in lakhs) — index options only. Allowed: ${whitelist.join(', ')}. No order sent.`,
+    };
+  }
+
+  // Rule 2 — buyer-only: refuse an OPENING SELL on NFO unless a matching long is
+  // held (selling to CLOSE an existing long is fine; opening a short = writing).
+  if (body.transaction_type === 'SELL') {
+    let heldLong = 0;
+    try {
+      const r = await fetch(`${KITE_BASE}/portfolio/positions`, { headers: kiteHeaders });
+      const j = await r.json().catch(() => ({}));
+      const pos = ((j.data && j.data.net) || []).find(p => p.tradingsymbol === body.tradingsymbol);
+      if (pos) heldLong = pos.quantity || 0;
+    } catch { heldLong = 0; }
+    if (heldLong <= 0) {
+      return {
+        ok: false, error: 'nfo_opening_sell_blocked',
+        message: `Refused: opening SELL on ${symbol} = option WRITING (unbounded risk, needs SPAN margin). Buyer-only. A SELL is allowed only to close a held long (held: ${heldLong}). No order sent.`,
+      };
+    }
+    if (Math.abs(body.quantity) > heldLong) {
+      return {
+        ok: false, error: 'nfo_sell_exceeds_long',
+        message: `Refused: SELL ${body.quantity} exceeds the held long of ${heldLong} ${symbol} — the excess would open a naked short. No order sent.`,
+      };
+    }
+  }
+
+  // Rule — qty must be an exact multiple of lot_size (Nifty 65 / BankNifty 30 etc.,
+  // read LIVE from kite_instruments, never hardcoded).
+  if (lotSize > 0 && (body.quantity % lotSize) !== 0) {
+    return {
+      ok: false, error: 'nfo_qty_not_lot_multiple',
+      lot_size: lotSize,
+      message: `Refused: quantity ${body.quantity} is not a multiple of the lot size ${lotSize} for ${symbol}. Order qty on NFO must be N × ${lotSize}. No order sent.`,
+    };
+  }
+
+  // Rule 3b — never trade into expiry day (an OTM weekly can decay to ₹0 in-session).
+  if (inst.expiry) {
+    const istNow = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+    const expiry = String(inst.expiry).slice(0, 10);
+    if (expiry === istNow && !body.bypass_expiry_day) {
+      return {
+        ok: false, error: 'nfo_expiry_day_blocked',
+        expiry, message: `Refused: ${symbol} expires TODAY (${expiry}). An expiry-day OTM option can decay to ₹0 in-session — use a next-week expiry. No order sent.`,
+      };
+    }
+  }
+
+  // Rule 1 — order_margins.total cap: > ₹2k blocks (catches writing / wrong product
+  // that demands SPAN margin; a single capped-premium long lot is well under). Only
+  // enforced for entries (BUY). On any margin-calc failure, fail-safe REFUSE.
+  if (body.transaction_type === 'BUY') {
+    const capRow = await db.prepare(
+      `SELECT config_value FROM user_config WHERE config_key='nfo_option_margin_cap_paise' LIMIT 1`
+    ).first().catch(() => null);
+    const capPaise = capRow ? parseInt(capRow.config_value, 10) : 200000;   // ₹2000
+    let totalPaise = null;
+    try {
+      const m = await orderMargins(env, db, kiteHeaders, {
+        orders: [{
+          exchange: 'NFO', tradingsymbol: body.tradingsymbol, transaction_type: 'BUY',
+          variety: body.variety || 'regular', product: body.product,
+          order_type: body.order_type || 'MARKET', quantity: body.quantity,
+          price: body.price != null ? Number(body.price) : 0,
+        }],
+      });
+      const leg = (m && m.ok && Array.isArray(m.data)) ? m.data[0] : null;
+      if (leg && leg.total != null) totalPaise = Math.round(Number(leg.total) * 100);
+    } catch { totalPaise = null; }
+    // In SIM with no live token we may not get a margin; allow SIM through ONLY
+    // when explicitly simulating, since the real-order path will re-run this gate.
+    if (totalPaise == null && !(body.simulate === true || body.simulate === '1')) {
+      return {
+        ok: false, error: 'nfo_margin_unverified',
+        message: `Could not verify option margin with Kite for ${symbol} — real order NOT sent (fail-safe). Retry once the margin check succeeds.`,
+      };
+    }
+    if (totalPaise != null && totalPaise > capPaise) {
+      return {
+        ok: false, error: 'nfo_margin_over_cap',
+        total_paise: totalPaise, cap_paise: capPaise,
+        message: `Refused: ${symbol} order margin is ₹${Math.round(totalPaise / 100)} which exceeds the ₹${Math.round(capPaise / 100)} option cap. A high margin means this is NOT a simple capped-premium long buy (likely writing / wrong product). No order sent.`,
+      };
+    }
+  }
+
+  return { ok: true, lot_size: lotSize, instrument_type: instType, expiry: inst.expiry || null };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // P3: instrument_lookup + sync_instruments
 // ═══════════════════════════════════════════════════════════════════════════
 async function instrumentLookup(db, symbol, exchange) {
@@ -961,13 +1659,29 @@ async function instrumentLookup(db, symbol, exchange) {
   return { ok: false, error: `Instrument not found: ${exchange}:${symbol}. Run /api/kite?action=sync_instruments to refresh.` };
 }
 
-async function syncInstruments(env, db, kiteHeaders) {
-  // Pull NSE instruments CSV from Kite
-  const r = await fetch(`${KITE_BASE}/instruments/NSE`, { headers: kiteHeaders });
-  if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+// §6.3: sync instruments for NSE (equity) AND NFO (options/futures) so option
+// symbols + lot_size + expiry are resolvable. Default pulls both; pass an explicit
+// exchange (?exchange=NSE) to sync just one. NFO is large (~80–100k rows) but the
+// 7-row batched insert keeps each statement under the D1 param cap; a single CSV
+// fetch + batched writes stays within the Worker subrequest limit.
+async function syncInstruments(env, db, kiteHeaders, only) {
+  const exchanges = only ? [String(only).toUpperCase()] : ['NSE', 'NFO'];
+  const perExchange = {};
+  let totalWritten = 0;
+  for (const exch of exchanges) {
+    const res = await syncOneExchange(env, db, kiteHeaders, exch);
+    perExchange[exch] = res;
+    if (res.ok) totalWritten += res.written || 0;
+  }
+  return { ok: Object.values(perExchange).some(r => r.ok), written: totalWritten, exchanges: perExchange };
+}
+
+async function syncOneExchange(env, db, kiteHeaders, exchange) {
+  const r = await fetch(`${KITE_BASE}/instruments/${exchange}`, { headers: kiteHeaders });
+  if (!r.ok) return { ok: false, error: `HTTP ${r.status}`, exchange };
   const csv = await r.text();
   const lines = csv.split('\n');
-  if (lines.length < 2) return { ok: false, error: 'empty CSV' };
+  if (lines.length < 2) return { ok: false, error: 'empty CSV', exchange };
 
   // Parse header
   const headers = lines[0].split(',').map(s => s.trim());
@@ -987,7 +1701,7 @@ async function syncInstruments(env, db, kiteHeaders) {
 
   const refreshedAt = Date.now();
   let written = 0;
-  // Batch 50 rows per insert (D1 param limit)
+  // Batch rows per insert (D1 param limit)
   const BATCH = 7;  // D1 param cap ~100 → 7 rows × 13 cols = 91 params
   for (let s = 1; s < lines.length; s += BATCH) {
     const batch = lines.slice(s, s + BATCH).filter(l => l.trim());
@@ -1012,18 +1726,18 @@ async function syncInstruments(env, db, kiteHeaders) {
         parseInt(c[iLot]) || null,
         c[iType] || null,
         c[iSeg] || null,
-        c[iExch] || 'NSE',
+        c[iExch] || exchange,
         refreshedAt
       );
     }
     try {
-      const r = await db.prepare(sql).bind(...params).run();
-      written += r.meta?.changes || 0;
+      const ins = await db.prepare(sql).bind(...params).run();
+      written += ins.meta?.changes || 0;
     } catch (e) {
       // continue with next batch
     }
   }
-  return { ok: true, written, total_lines: lines.length - 1 };
+  return { ok: true, written, total_lines: lines.length - 1, exchange };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1193,28 +1907,151 @@ async function reconcilePositions(env, db, kiteHeaders) {
 
 // Square off a live position — opposite MARKET order for the net qty (owner one-tap exit).
 // Respects the same block_real_orders gate as a manual buy; routes through the box proxy.
+// §6.2: PARTIAL exit — pass body.quantity to sell only part of the net (the rest
+// stays open + its GTT must be resized by the caller via modify_order). A square-off
+// is an EXIT, so it routes with is_exit + bypass_funds_check default true (else a
+// flatten is wrongly refused at cash=0). Pass bypass_funds_check:false to force the check.
 async function squareOff(env, db, kiteHeaders, body) {
   const { tradingsymbol, exchange = 'NSE', product = 'MIS' } = body || {};
   if (!tradingsymbol) return { ok: false, error: 'tradingsymbol required' };
-  let qty = body.quantity;
-  if (!qty) {
+  let netQty = null;          // signed net for direction
+  let qty = body.quantity ? Math.abs(Number(body.quantity)) : null;   // requested (partial) magnitude
+  // Always resolve the live net so we know the direction and can validate the partial qty.
+  {
     const r = await fetch(`${KITE_BASE}/portfolio/positions`, { headers: kiteHeaders });
-    const j = await r.json();
+    const j = await r.json().catch(() => ({}));
     const pos = ((j.data && j.data.net) || []).find(
       p => p.tradingsymbol === tradingsymbol && p.product === product && (p.quantity || 0) !== 0
     );
-    if (!pos) return { ok: false, error: 'no_open_position', tradingsymbol };
-    qty = pos.quantity;
+    if (pos) netQty = pos.quantity;
+  }
+  // If no explicit qty was given, flatten the whole net.
+  if (qty == null) {
+    if (netQty == null || netQty === 0) return { ok: false, error: 'no_open_position', tradingsymbol };
+    qty = Math.abs(netQty);
+  } else {
+    // Partial: cap the requested magnitude at the live net so we never oversell.
+    if (netQty != null && qty > Math.abs(netQty)) qty = Math.abs(netQty);
   }
   if (!qty || qty === 0) return { ok: false, error: 'no_qty', tradingsymbol };
-  const side = qty > 0 ? 'SELL' : 'BUY';            // opposite of the net position
+  // Direction = opposite of the net (long→SELL, short→BUY). If net is unknown
+  // (positions read failed), fall back to SELL — the common long-exit case.
+  const side = (netQty != null ? netQty : 1) > 0 ? 'SELL' : 'BUY';
+  const partial = netQty != null && qty < Math.abs(netQty);
   const res = await placeOrder(env, db, kiteHeaders, {
-    exchange, tradingsymbol, transaction_type: side, quantity: Math.abs(qty),
-    product, order_type: 'MARKET', validity: 'DAY', tag: 'HN_WE_SQOFF',
+    exchange, tradingsymbol, transaction_type: side, quantity: qty,
+    product, order_type: 'MARKET', validity: 'DAY', tag: body.tag || 'HN_WE_SQOFF',
+    is_exit: true,                                                   // direction-aware: skip fund-check
+    bypass_funds_check: body.bypass_funds_check !== false,           // default true for exits
     bypass_block: body.bypass_block === true,
+    bypass_market_hours: body.bypass_market_hours === true,          // for SIM proving; Kite still gates real off-hours
+    simulate: body.simulate === true || body.simulate === '1',
   });
   await reconcilePositions(env, db, kiteHeaders).catch(() => {});
-  return { ok: !res.blocked && !res.error, squared: { tradingsymbol, qty: Math.abs(qty), side }, order: res };
+  // ok when the order was accepted (or a dedupe suppressed a genuine double-fire);
+  // not-ok when blocked or errored — same contract as before, plus deduped=success.
+  const ok = res.deduped === true || (!res.blocked && !res.error && res.ok !== false);
+  return {
+    ok,
+    squared: { tradingsymbol, qty, side, partial, net_before: netQty },
+    order: res,
+  };
+}
+
+// §6.2: square_off_all — the panic button. Loop the LIVE net positions (BOTH MIS
+// and CNC/NRML — squareOff defaults MIS, so a CNC/NRML holding is missed otherwise)
+// and fire an opposite MARKET for each non-zero net, with one per-leg retry. Returns
+// exactly which positions were squared and which REMAIN open (the loud list). Exits
+// skip the fund-check by construction (via squareOff), so cash=0 never blocks a flatten.
+async function squareOffAll(env, db, kiteHeaders, body = {}) {
+  const r = await fetch(`${KITE_BASE}/portfolio/positions`, { headers: kiteHeaders });
+  const j = await r.json().catch(() => ({}));
+  await logKite(db, '/portfolio/positions', 'GET', r.status, 0, r.ok ? null : 'square_off_all read');
+  const net = (j.data && j.data.net) || [];
+  const open = net.filter(p => (p.quantity || 0) !== 0);
+  const squared = [];
+  const remaining = [];
+  for (const p of open) {
+    let done = false, lastErr = null, lastOrder = null;
+    for (let attempt = 1; attempt <= 2 && !done; attempt++) {
+      const so = await squareOff(env, db, kiteHeaders, {
+        tradingsymbol: p.tradingsymbol,
+        exchange: p.exchange,
+        product: p.product,
+        bypass_block: body.bypass_block === true,
+        bypass_market_hours: body.bypass_market_hours === true,
+        simulate: body.simulate === true || body.simulate === '1',
+        // distinct tag per attempt-symbol so the dedupe in placeOrder does not
+        // suppress a genuine retry of a DIFFERENT symbol, but DOES suppress an
+        // accidental double-fire of the same leg within the window.
+        tag: `HN_WE_SQALL_${p.tradingsymbol}`.slice(0, 20),
+      });
+      lastOrder = so;
+      if (so.ok === true || so.order?.deduped) { done = true; break; }
+      lastErr = so.order?.error || so.error || 'unknown';
+      if (attempt < 2) await new Promise(res => setTimeout(res, 800));
+    }
+    if (done) squared.push({ tradingsymbol: p.tradingsymbol, product: p.product, qty: Math.abs(p.quantity), order: lastOrder, book: 'positions' });
+    else remaining.push({ tradingsymbol: p.tradingsymbol, product: p.product, qty: Math.abs(p.quantity), error: lastErr, book: 'positions' });
+  }
+
+  // ─── Fix 3: also flatten SETTLED CNC delivery HOLDINGS ──────────────────────
+  // The panic button must flatten EVERYTHING. positions.net holds intraday + same-day
+  // settled net only; a multi-day delivery holding (bought yesterday, settled) lives
+  // in /portfolio/holdings, NOT positions.net — so the loop above would MISS it and
+  // leave the owner long. Scan holdings and SELL each sellable settled qty (holdings
+  // are long-only delivery → opposite is always SELL), opposite MARKET, product from
+  // the holding (CNC). Kite's holdings `quantity` is the freely-sellable settled qty
+  // (T1/collateral are not sellable today, so we use `quantity` only). Merged into the
+  // SAME squared[]/remaining[] report so the kill-switch result is the whole book.
+  let holdings = [];
+  try {
+    const hr = await fetch(`${KITE_BASE}/portfolio/holdings`, { headers: kiteHeaders });
+    const hj = await hr.json().catch(() => ({}));
+    await logKite(db, '/portfolio/holdings', 'GET', hr.status, 0, hr.ok ? null : 'square_off_all holdings read');
+    holdings = (hj.data || []).filter(h => (h.quantity || 0) > 0);
+  } catch { holdings = []; }
+  for (const h of holdings) {
+    const sellQty = Math.abs(h.quantity);
+    const prod = h.product || 'CNC';
+    let done = false, lastErr = null, lastOrder = null;
+    for (let attempt = 1; attempt <= 2 && !done; attempt++) {
+      // Direct opposite-MARKET SELL of the settled holding. We pass the explicit
+      // quantity (squareOff's positions.net lookup would not find a holding), is_exit
+      // so the fund-check is skipped (a flatten must never be refused at cash=0), and
+      // a per-symbol holdings tag distinct from the positions tag.
+      const so = await placeOrder(env, db, kiteHeaders, {
+        exchange: h.exchange, tradingsymbol: h.tradingsymbol,
+        transaction_type: 'SELL', quantity: sellQty, product: prod,
+        order_type: 'MARKET', validity: 'DAY',
+        tag: `HN_WE_SQH_${h.tradingsymbol}`.slice(0, 20),
+        is_exit: true, bypass_funds_check: true,
+        bypass_block: body.bypass_block === true,
+        bypass_market_hours: body.bypass_market_hours === true,
+        simulate: body.simulate === true || body.simulate === '1',
+      });
+      lastOrder = so;
+      if (so.ok === true || so.deduped === true) { done = true; break; }
+      lastErr = so.error || 'unknown';
+      if (attempt < 2) await new Promise(res => setTimeout(res, 800));
+    }
+    if (done) squared.push({ tradingsymbol: h.tradingsymbol, product: prod, qty: sellQty, order: lastOrder, book: 'holdings' });
+    else remaining.push({ tradingsymbol: h.tradingsymbol, product: prod, qty: sellQty, error: lastErr, book: 'holdings' });
+  }
+
+  await reconcilePositions(env, db, kiteHeaders).catch(() => {});
+  const totalOpen = open.length + holdings.length;   // positions book + settled holdings
+  return {
+    ok: remaining.length === 0,
+    flat: remaining.length === 0,
+    total_open: totalOpen,
+    open_positions: open.length,
+    open_holdings: holdings.length,
+    squared, remaining,
+    message: remaining.length === 0
+      ? (totalOpen === 0 ? 'Book already flat — no open positions or holdings.' : `Squared ${squared.length} position(s)/holding(s). Book is flat.`)
+      : `⚠️ ${remaining.length} position(s)/holding(s) STILL OPEN after square-off-all: ${remaining.map(x => `${x.tradingsymbol}(${x.product})`).join(', ')}. Retry or square manually in Kite NOW.`,
+  };
 }
 
 // ── ONE-TIME PIPELINE SMOKE TEST ──────────────────────────────────────────────
@@ -1255,9 +2092,14 @@ async function pipelineTest(env, db, kiteHeaders, body) {
   }
 
   // 1 — BUY (real, tiny)
+  // No-regression: pipelineTest is the 1-share headline-fill probe; it previously
+  // reached Kite directly with no fund-check. Keep that exact behavior — bypass the
+  // new entry fund-check here (the order is already bounded to ~₹14 and is the sacred
+  // first-fill path). It still flows through the unified door (kiteFetch + logging).
   const buy = await placeOrder(env, db, kiteHeaders, {
     exchange: 'NSE', tradingsymbol: symbol, transaction_type: 'BUY', quantity: qty,
     product: 'MIS', order_type: 'MARKET', validity: 'DAY', tag: 'HN_WE_PIPETEST',
+    bypass_funds_check: true,
   });
   if (buy.blocked) { add('place_buy', false, 'Real orders are OFF (practice mode). Turn on real orders to run the live test.', buy);
     return { ok: false, overall: 'blocked', symbol, qty, steps, summary: 'Real orders are blocked — this is the practice setting.' }; }
@@ -1297,6 +2139,80 @@ async function pipelineTest(env, db, kiteHeaders, body) {
     summary: pass
       ? `Pipeline works end to end — bought and exited ${qty} ${symbol}. You're clear to trade. This check is now done and will disappear.`
       : `Order sent but the fill wasn't confirmed in time. Check the position card before trading.` };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// §6.5 — Execution Lab run/step recorder (diagnostics-first, one trail for all paths)
+// ═══════════════════════════════════════════════════════════════════════════
+// Every order path leaves the SAME structured, replayable trail in lab_runs +
+// lab_steps. Generalizes pipelineTest's steps[] shape: { name, ok, detail, raw }.
+// Written once at the choke point (the action handlers). Best-effort: a recorder
+// failure must NEVER break the order itself, so every call site wraps in .catch.
+//
+//   recordRun(db, { scenario, kind, surface, mode, rung, symbol, qty, tag,
+//                   status, maxLossPaise, intent, steps, rawError, actionRequired,
+//                   bracketId, iosAuthOk })  → run_id
+//   recordStep(db, runId, seq, step)  // step = { name, ok, detail, raw }
+async function recordRun(db, r) {
+  const now = new Date().toISOString();
+  const steps = Array.isArray(r.steps) ? r.steps : [];
+  // Derive a verbatim raw_error from the steps if not given (first failing step's raw).
+  let rawError = r.rawError != null ? r.rawError : null;
+  if (rawError == null) {
+    const bad = steps.find(s => s && s.ok === false);
+    if (bad) {
+      const raw = bad.raw;
+      rawError = (raw && (raw.message || raw.error)) || bad.detail || null;
+    }
+  }
+  let runId = null;
+  try {
+    const ins = await db.prepare(
+      `INSERT INTO lab_runs
+        (scenario, kind, surface, mode, rung, symbol, qty, tag, status, max_loss_paise,
+         intent_json, steps_json, raw_error, action_required, bracket_id, ios_auth_ok,
+         created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      String(r.scenario || ''), String(r.kind || 'unknown'), r.surface || null,
+      String(r.mode || 'sim'), r.rung || (r.mode === 'tiny_real' ? 'tiny_real' : 'sim'),
+      r.symbol || null, r.qty != null ? Number(r.qty) : null, r.tag || null,
+      String(r.status || 'unknown'), r.maxLossPaise != null ? Number(r.maxLossPaise) : null,
+      r.intent != null ? JSON.stringify(r.intent).slice(0, 8000) : null,
+      steps.length ? JSON.stringify(steps).slice(0, 12000) : null,
+      rawError != null ? String(rawError).slice(0, 2000) : null,
+      r.actionRequired || null,
+      r.bracketId != null ? Number(r.bracketId) : null,
+      r.iosAuthOk != null ? (r.iosAuthOk ? 1 : 0) : null,
+      now, now
+    ).run();
+    runId = ins.meta?.last_row_id ?? null;
+  } catch (e) { return null; }
+  // Persist each step row too (so a query can join, not just parse JSON).
+  if (runId != null && steps.length) {
+    let seq = 0;
+    for (const s of steps) {
+      seq++;
+      await recordStep(db, runId, seq, s).catch(() => {});
+    }
+  }
+  return runId;
+}
+
+async function recordStep(db, runId, seq, step) {
+  try {
+    await db.prepare(
+      `INSERT INTO lab_steps (run_id, seq, name, ok, detail, raw_json, at)
+       VALUES (?,?,?,?,?,?,?)`
+    ).bind(
+      runId, seq,
+      step?.name || step?.step || null,
+      step?.ok === true ? 1 : (step?.ok === false ? 0 : null),
+      step?.detail != null ? String(step.detail).slice(0, 1000) : null,
+      step?.raw != null ? JSON.stringify(step.raw).slice(0, 4000) : null,
+      new Date().toISOString()
+    ).run();
+  } catch (e) {}
 }
 
 // ─────────────────────────────────────────────────────────
