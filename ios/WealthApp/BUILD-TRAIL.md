@@ -84,6 +84,13 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Verified before upload: `ship-check.sh` passed 18/18 live/source checks; simulator compile passed; simulator unlocked snapshot showed Now rendering "Pre-market — engine composes at 09:40", PAPER scout, and current live data. Release archive, IPA export, altool upload, ASC VALID polling, and internal-group assignment all succeeded.
 - Same execution repaired the RTX learning loop: Jun 29 5-minute bars were manually backfilled to 94,678 rows / 1,263 symbols, gap-edge was republished with date range through 2026-06-29, and `daily_topup_full.py` + `daily.sh` now fail hard instead of publishing stale configs when historical bars fail.
 
+## Build 18 — proof-state startup honesty + nested verdict decode (2026-06-29, Codex)
+- Shipped **TestFlight build 18** for `com.hnhotels.wealth`; ASC readback **VALID**, delivery/build id `50067e86-75ec-4c72-8571-c76fb67c6085`, assigned to internal group `0cd3994a-c901-4cbd-9fc8-2f892bcdbdbf` (HTTP 204).
+- Fixed false/slow startup states found in the simulator audit for the Tuesday first-trade cockpit: Now/Today/Ops/Execute no longer show false empty broker, proof, verdict, or Kite states while live endpoints are still resolving.
+- `VerdictToday` now decodes the current nested `/api/trading?action=verdict_today` shape (`verdict.decision`, nested plans) as well as the older top-level shape, so `SIT_OUT` renders as "No engine trade today" instead of "Reading today's engine verdict."
+- `WealthVM.refresh()` now publishes action-critical witnesses before slower narrative/board reads: config first, then verdict/Kite/plan/scout/chain/research/intelligence, then Stocks/briefing/secondary data. Loading cards remain honest when a source is still pending.
+- Simulator verification after the patch: Now shows **Today: no engine trade** + PAPER scout VIKRAN; Today shows **No engine trade today**; Ops shows **50% Attention**, data coverage PASS, causality PASS, OOS `NO_EDGE`, live chain WARN, order path KITE OK; Execute shows **REAL ORDERS UNBLOCKED** with Practice ON by default.
+
 ## Build 13 — daily scout teaching surface (2026-06-27, Claude ultracode)
 - Shipped **TestFlight build 13** for `com.hnhotels.wealth`; ASC readback **VALID**, build id `94ea1033-19be-4845-8e16-9226e6ebdb46`, assigned to internal group `0cd3994a-c901-4cbd-9fc8-2f892bcdbdbf` (HTTP 204).
 - NEW `ScoutView.swift`: `ScoutTodayCard` (marquee daily action on **Now**, above the proof card) + `ScoutTrailCard` (learning trail on **Today**) + `ScoutLadderStrip` (5-rung REJECTED→PAPER_SCOUT→TOKEN_SCOUT→WATCH_SCOUT→DEPLOYABLE).

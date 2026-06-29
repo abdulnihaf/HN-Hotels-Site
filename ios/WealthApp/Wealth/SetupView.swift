@@ -29,6 +29,9 @@ struct SetupView: View {
         let dec = vm.verdict?.decision
         let pick = vm.verdict?.recommended_symbol
         let (head, sub, tone): (String, String, Color) = {
+            if vm.loading && vm.verdict == nil {
+                return ("Reading today's engine verdict", "Checking whether the 09:40 engine has produced a trade, paper scout, or no-trade call. Do not act until this resolves.", HK.running)
+            }
             if dec == "TRADE", let p = pick {
                 return ("Yes — a setup in \(p)", "The engine found a stock worth trading today. Read the 5 lights below to see why.", HK.ready)
             }

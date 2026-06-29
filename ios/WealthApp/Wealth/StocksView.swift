@@ -349,8 +349,9 @@ struct StocksView: View {
     // The bucket front door — all ~1,248 analysed stocks, organised into named tiles.
     private var bucketGrid: some View {
         let bk = vm.universe?.buckets ?? [:]
+        let loadingUniverse = vm.loading && vm.universe == nil
         return VStack(alignment: .leading, spacing: 8) {
-            Text("BROWSE ALL \(vm.universe?.count ?? 0) STOCKS")
+            Text(loadingUniverse ? "LOADING STOCK UNIVERSE" : "BROWSE ALL \(vm.universe?.count ?? 0) STOCKS")
                 .font(.system(size: 11, weight: .heavy)).foregroundColor(HK.textFaint)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
                 ForEach(bucketDefs, id: \.key) { d in
@@ -361,7 +362,7 @@ struct StocksView: View {
                             Image(systemName: d.icon).font(.system(size: 15)).foregroundColor(on ? HK.accent : HK.textDim)
                             Text(d.label).font(.system(size: 11, weight: .bold)).foregroundColor(HK.text)
                                 .lineLimit(1).minimumScaleFactor(0.65)
-                            Text("\(n)").font(.system(size: 13, weight: .heavy, design: .rounded))
+                            Text(loadingUniverse ? "…" : "\(n)").font(.system(size: 13, weight: .heavy, design: .rounded))
                                 .foregroundColor(on ? HK.accent : HK.textFaint)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
@@ -388,7 +389,7 @@ struct StocksView: View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.shield.fill").font(.system(size: 18)).foregroundColor(HK.running)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Edge unproven — \(vm.readiness?.passing ?? "—") ready")
+                Text(vm.loading && vm.readiness == nil ? "Checking proof gates…" : "Edge unproven — \(vm.readiness?.passing ?? "—") ready")
                     .font(.system(size: 13, weight: .heavy)).foregroundColor(HK.running)
                 Text("These are the engine's candidates, not sure things. Learn the lights. Keep sizes small until the proof ladder graduates.")
                     .font(.system(size: 11)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
@@ -434,6 +435,7 @@ private struct TideCard: View {
         let vix = vm.engine?.regime?.evidence?.india_vix
         let nifty20 = Double(vm.engine?.regime?.evidence?.nifty_20d_pct ?? "")
         let tideUp = up >= down
+        let loadingTide = vm.loading && vm.engine == nil
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Pill(text: marketLabel.0, color: marketLabel.1)
@@ -442,9 +444,12 @@ private struct TideCard: View {
             }
 
             // Headline: tide direction in plain words
-            Text(tideUp ? "Tide is with the buyers" : "Tide is against you")
-                .font(.system(size: 20, weight: .heavy)).foregroundColor(tideUp ? HK.ready : HK.error)
-            if up > 0 || down > 0 {
+            Text(loadingTide ? "Reading the market tide" : (tideUp ? "Tide is with the buyers" : "Tide is against you"))
+                .font(.system(size: 20, weight: .heavy)).foregroundColor(loadingTide ? HK.running : (tideUp ? HK.ready : HK.error))
+            if loadingTide {
+                Text("Waiting for regime, breadth and VIX from the live engine.")
+                    .font(.system(size: 13)).foregroundColor(HK.textDim)
+            } else if up > 0 || down > 0 {
                 Text("\(fmt(up)) stocks trending up vs \(fmt(down)) down across the market.")
                     .font(.system(size: 13)).foregroundColor(HK.textDim)
                 breadthBar(up: up, down: down)
@@ -452,16 +457,16 @@ private struct TideCard: View {
 
             // Numbers row
             HStack(spacing: 12) {
-                tideStat("REGIME", regime?.capitalized ?? "—", HK.text)
+                tideStat("REGIME", loadingTide ? "…" : (regime?.capitalized ?? "—"), loadingTide ? HK.running : HK.text)
                 Spacer()
                 if let v = vix {
                     tideStat("VIX", String(format: "%.1f", v), v < 15 ? HK.ready : (v < 20 ? HK.running : HK.error),
                              sub: v < 15 ? "calm" : (v < 20 ? "moderate" : "volatile"))
-                } else { tideStat("VIX", "—", HK.textDim) }
+                } else { tideStat("VIX", loadingTide ? "…" : "—", loadingTide ? HK.running : HK.textDim) }
                 Spacer()
                 if let n = nifty20 {
                     tideStat("NIFTY 20d", String(format: "%+.1f%%", n), n >= 0 ? HK.ready : HK.error)
-                } else { tideStat("NIFTY 20d", "—", HK.textDim) }
+                } else { tideStat("NIFTY 20d", loadingTide ? "…" : "—", loadingTide ? HK.running : HK.textDim) }
             }
 
             if let d = desc {

@@ -103,7 +103,15 @@ struct NowView: View {
             case .connectKite:
                 KiteConnectButton(vm: vm, label: "Connect Kite")
             case .place(let sym):
-                Button { vm.prefill = WealthVM.OrderDraft(symbol: sym, stop: "", target: "", qty: ""); goToExecute() } label: {
+                Button {
+                    let plan = vm.verdict?.plan
+                    vm.prefill = WealthVM.OrderDraft(
+                        symbol: sym,
+                        stop: plan?.stop.map { String(format: "%.2f", $0) } ?? "",
+                        target: plan?.target.map { String(format: "%.2f", $0) } ?? "",
+                        qty: plan?.qty.map(String.init) ?? "")
+                    goToExecute()
+                } label: {
                     Text("Review & place \(sym) →").font(.system(size: 15, weight: .bold)).foregroundColor(HK.bg)
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(HK.accent))
@@ -121,10 +129,20 @@ struct NowView: View {
         let phase = (vm.plan?.phase ?? "").lowercased()
         let dec = vm.verdict?.decision
         let pick = vm.verdict?.recommended_symbol
+        if vm.loading && vm.kite == nil && vm.plan == nil {
+            return Situation(headline: "Reading broker + market state",
+                             sub: "Checking Kite, today's phase and proof witnesses. No trade should be placed until this finishes.",
+                             tone: HK.running, action: .none)
+        }
         if !kiteOK {
             return Situation(headline: "Connect Kite to begin",
                              sub: "Your broker link powers live prices and orders. It's a 30-second login each morning — tokens reset overnight.",
                              tone: HK.running, action: .connectKite)
+        }
+        if vm.loading && vm.verdict == nil {
+            return Situation(headline: "Reading today's call",
+                             sub: "Checking whether the engine has a trade, paper scout, or no-trade verdict. Do not act until this resolves.",
+                             tone: HK.running, action: .none)
         }
         if positions > 0 {
             return Situation(headline: "You're in a trade",
@@ -204,8 +222,12 @@ struct NowView: View {
             HStack {
                 Text("Setup").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
                 Spacer()
-                Pill(text: kiteOK ? "KITE OK" : "KITE OFF", color: kiteOK ? HK.ready : HK.running)
-                Pill(text: vm.config["block_real_orders"] == "1" ? "SHADOW" : "REAL", color: vm.config["block_real_orders"] == "1" ? HK.ready : HK.error)
+                let kiteLoading = vm.loading && vm.kite == nil && vm.plan == nil
+                let modeLoading = vm.loading && vm.config.isEmpty
+                Pill(text: kiteLoading ? "KITE…" : (kiteOK ? "KITE OK" : "KITE OFF"),
+                     color: kiteLoading ? HK.running : (kiteOK ? HK.ready : HK.running))
+                Pill(text: modeLoading ? "MODE…" : (vm.config["block_real_orders"] == "1" ? "SHADOW" : "REAL"),
+                     color: modeLoading ? HK.running : (vm.config["block_real_orders"] == "1" ? HK.ready : HK.error))
             }
             Text("Today's size").font(.system(size: 12)).foregroundColor(HK.textDim)
             HStack(spacing: 8) {

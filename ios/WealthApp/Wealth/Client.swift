@@ -112,22 +112,46 @@ struct VerdictToday: Decodable {
     let reason: String?
     let plan: VerdictPlan?
 
-    enum CodingKeys: String, CodingKey { case ok, decision, recommended_symbol, reason, recommended_plan_json }
+    enum CodingKeys: String, CodingKey { case ok, decision, recommended_symbol, reason, recommended_plan_json, verdict }
+    enum VerdictKeys: String, CodingKey { case decision, recommended_symbol, reason, headline, narrative, recommended_plan, recommended_plan_json }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        ok = try? c.decode(Bool.self, forKey: .ok)
-        decision = try? c.decode(String.self, forKey: .decision)
-        recommended_symbol = try? c.decode(String.self, forKey: .recommended_symbol)
-        reason = try? c.decode(String.self, forKey: .reason)
+        let topOk = try? c.decode(Bool.self, forKey: .ok)
+        var decodedDecision = try? c.decode(String.self, forKey: .decision)
+        var decodedSymbol = try? c.decodeIfPresent(String.self, forKey: .recommended_symbol)
+        var decodedReason = try? c.decode(String.self, forKey: .reason)
+        var decodedPlan: VerdictPlan?
         if let obj = try? c.decode(VerdictPlan.self, forKey: .recommended_plan_json) {
-            plan = obj
+            decodedPlan = obj
         } else if let s = try? c.decode(String.self, forKey: .recommended_plan_json),
                   let d = s.data(using: .utf8),
                   let p = try? JSONDecoder().decode(VerdictPlan.self, from: d) {
-            plan = p
-        } else {
-            plan = nil
+            decodedPlan = p
         }
+
+        if let nested = try? c.nestedContainer(keyedBy: VerdictKeys.self, forKey: .verdict) {
+            decodedDecision = decodedDecision ?? (try? nested.decode(String.self, forKey: .decision))
+            decodedSymbol = decodedSymbol ?? (try? nested.decodeIfPresent(String.self, forKey: .recommended_symbol))
+            decodedReason = decodedReason
+                ?? (try? nested.decode(String.self, forKey: .reason))
+                ?? (try? nested.decode(String.self, forKey: .headline))
+                ?? (try? nested.decode(String.self, forKey: .narrative))
+            if decodedPlan == nil, let obj = try? nested.decode(VerdictPlan.self, forKey: .recommended_plan) {
+                decodedPlan = obj
+            } else if decodedPlan == nil, let obj = try? nested.decode(VerdictPlan.self, forKey: .recommended_plan_json) {
+                decodedPlan = obj
+            } else if decodedPlan == nil,
+                      let s = try? nested.decode(String.self, forKey: .recommended_plan_json),
+                      let d = s.data(using: .utf8),
+                      let p = try? JSONDecoder().decode(VerdictPlan.self, from: d) {
+                decodedPlan = p
+            }
+        }
+        ok = topOk
+        decision = decodedDecision
+        recommended_symbol = decodedSymbol
+        reason = decodedReason
+        plan = decodedPlan
     }
 }
 

@@ -68,18 +68,19 @@ struct SignalProofCard: View {
 
     var body: some View {
         let state = proofState
+        let loadingProof = vm.loading && vm.researchDepth == nil
         Card {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Signal state")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(HK.textFaint)
-                    Text(state.headline)
+                    Text(loadingProof ? "Reading proof state" : state.headline)
                         .font(.system(size: 20, weight: .heavy, design: .rounded))
-                        .foregroundColor(state.color)
+                        .foregroundColor(loadingProof ? HK.running : state.color)
                 }
                 Spacer()
-                Pill(text: state.label, color: state.color)
+                Pill(text: loadingProof ? "LOADING" : state.label, color: loadingProof ? HK.running : state.color)
             }
 
             Text(summaryText(for: state))
@@ -137,6 +138,9 @@ struct SignalProofCard: View {
     }
 
     private func summaryText(for state: WealthProofState) -> String {
+        if vm.loading && vm.researchDepth == nil {
+            return "Reading the latest RTX research, live chain and broker witnesses. No trade should be placed until this finishes."
+        }
         switch state {
         case .rejected:
             return "The research stack found opportunity, but the tested selection did not beat the required OOS, fold, and random-null gates."
@@ -152,6 +156,9 @@ struct SignalProofCard: View {
     private var witnesses: [ProofWitness] {
         let rd = vm.researchDepth
         let chain = vm.chainHealth
+        let loadingProof = vm.loading && rd == nil
+        let loadingChain = vm.loading && chain == nil
+        let loadingKite = vm.loading && vm.kite == nil && vm.plan == nil
         let universe = rd?.universe_syms ?? 0
         let bars = rd?.bars_total ?? 0
         let verdict = (rd?.verdict ?? "missing").uppercased()
@@ -182,39 +189,41 @@ struct SignalProofCard: View {
             ProofWitness(
                 id: "data",
                 label: "Data coverage",
-                value: dataStatus == .pass ? "PASS" : "CHECK",
-                detail: "\(formatCount(universe)) stocks, \(formatCount(bars)) five-minute bars, \(rd?.date_range?.joined(separator: " -> ") ?? "no range")",
+                value: loadingProof ? "LOADING" : (dataStatus == .pass ? "PASS" : "CHECK"),
+                detail: loadingProof ? "Reading RTX backtest depth…" : "\(formatCount(universe)) stocks, \(formatCount(bars)) five-minute bars, \(rd?.date_range?.joined(separator: " -> ") ?? "no range")",
                 status: dataStatus
             ),
             ProofWitness(
                 id: "causal",
                 label: "Causality",
-                value: causalStatus == .pass ? "PASS" : "AUDIT",
-                detail: rd?.method ?? "No method returned by the server.",
+                value: loadingProof ? "LOADING" : (causalStatus == .pass ? "PASS" : "AUDIT"),
+                detail: loadingProof ? "Waiting for the research method witness." : (rd?.method ?? "No method returned by the server."),
                 status: causalStatus
             ),
             ProofWitness(
                 id: "oos",
                 label: "OOS / random-null",
-                value: verdict,
-                detail: "OOS \(pct(rd?.oos_expectancy_pct)) per trade, folds \(folds), random-null z \(z.map { String(format: "%.2f", $0) } ?? "n/a").",
-                status: oosStatus
+                value: loadingProof ? "LOADING" : verdict,
+                detail: loadingProof ? "Waiting for OOS and random-null witnesses." : "OOS \(pct(rd?.oos_expectancy_pct)) per trade, folds \(folds), random-null z \(z.map { String(format: "%.2f", $0) } ?? "n/a").",
+                status: loadingProof ? .unknown : oosStatus
             ),
             ProofWitness(
                 id: "live",
                 label: "Live chain",
-                value: overall,
-                detail: (chain?.checks ?? []).map { "\($0.name): \($0.status ?? "?")" }.prefix(4).joined(separator: " · "),
-                status: liveStatus
+                value: loadingChain ? "LOADING" : overall,
+                detail: loadingChain ? "Waiting for box loop, engine, pre-open feed and broker token checks." : (chain?.checks ?? []).map { "\($0.name): \($0.status ?? "?")" }.prefix(4).joined(separator: " · "),
+                status: loadingChain ? .unknown : liveStatus
             ),
             ProofWitness(
                 id: "order",
                 label: "Order path",
-                value: vm.kiteConnected ? "KITE OK" : "KITE OFF",
-                detail: vm.kiteConnected
+                value: loadingKite ? "LOADING" : (vm.kiteConnected ? "KITE OK" : "KITE OFF"),
+                detail: loadingKite
+                    ? "Checking the daily Kite token before asking you to reconnect."
+                    : (vm.kiteConnected
                     ? "Broker connection is live. A real order still needs the Execute screen's Face ID witness."
-                    : "No real order path without the daily Kite token.",
-                status: orderStatus
+                    : "No real order path without the daily Kite token."),
+                status: loadingKite ? .unknown : orderStatus
             ),
         ]
     }

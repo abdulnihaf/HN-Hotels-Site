@@ -38,6 +38,7 @@ struct ExecuteView: View {
     private var stop: Double { Double(stopText) ?? 0 }
     private var target: Double { Double(targetText) ?? 0 }
     private var kiteOK: Bool { vm.kiteConnected }
+    private var kiteLoading: Bool { vm.loading && vm.kite == nil && vm.plan == nil }
     private var isReal: Bool { vm.config["block_real_orders"] == "0" }
     private var formValid: Bool { !symbol.isEmpty && qty >= 1 && stop > 0 && target > 0 }
 
@@ -48,7 +49,16 @@ struct ExecuteView: View {
                 VStack(spacing: 14) {
                     ModeBanner(vm: vm)
 
-                    if !kiteOK {
+                    if kiteLoading {
+                        Card {
+                            Text("Checking Kite connection")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(HK.running)
+                            Text("Waiting for the broker token witness. Do not reconnect unless this finishes and still says Kite is off.")
+                                .font(.system(size: 12))
+                                .foregroundColor(HK.textDim)
+                        }
+                    } else if !kiteOK {
                         Card {
                             Text("Kite not connected").font(.system(size: 14, weight: .bold)).foregroundColor(HK.running)
                             Text("Connect Kite to place orders. Until then no order can fire (the server rejects with kite_expired).")
@@ -354,6 +364,7 @@ struct ExecuteView: View {
         case .faceID: return "Face ID"
         case .touchID: return "Touch ID"
         case .none: return "None"
+        case .opticID: return "Optic ID"
         @unknown default: return "Unknown"
         }
     }

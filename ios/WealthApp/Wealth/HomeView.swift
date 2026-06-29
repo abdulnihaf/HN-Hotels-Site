@@ -33,41 +33,44 @@ final class WealthVM: ObservableObject {
         status = "Refreshing…"
         // Safety-critical: load config FIRST so the real-money mode banner is correct ASAP.
         if let cfg = try? await WealthClient.shared.config() { config = cfg }
-        // The rest run concurrently: one failure must not blank the others.
+
+        // Action-critical reads first. Do not let the heavy stocks/briefing/universe
+        // endpoints keep Now showing false "unknown" proof while they finish.
         async let k = WealthClient.shared.kiteStatus()
+        async let p = WealthClient.shared.todaysPlan()
+        async let ch = WealthClient.shared.chainHealth()
+        async let rd = WealthClient.shared.researchDepth()
+        async let st = WealthClient.shared.scoutToday()
+        async let v = WealthClient.shared.verdictToday()
+        async let ia = WealthClient.shared.intelAudit()
+        verdict = try? await v
+        kite = try? await k
+        plan = try? await p
+        scoutToday = try? await st
+        chainHealth = try? await ch
+        researchDepth = try? await rd
+        intel = try? await ia
+        if intel == nil { intel = try? await WealthClient.shared.intelAudit() }
+
+        // Secondary reads can fill in after the cockpit is already honest.
         async let r = WealthClient.shared.readiness()
         async let a = WealthClient.shared.autoTrader()
         async let e = WealthClient.shared.engineState()
-        async let v = WealthClient.shared.verdictToday()
-        async let p = WealthClient.shared.todaysPlan()
-        async let ia = WealthClient.shared.intelAudit()
         async let sh = WealthClient.shared.systemHealth()
         async let sp = WealthClient.shared.stockPicker()
         async let br = WealthClient.shared.briefing()
         async let sg = WealthClient.shared.signals()
-        async let ch = WealthClient.shared.chainHealth()
-        async let rd = WealthClient.shared.researchDepth()
-        async let st = WealthClient.shared.scoutToday()
         async let str = WealthClient.shared.scoutTrail()
         async let un = WealthClient.shared.analysedUniverse()
-        kite = try? await k
-        // The scout is the marquee daily action — resolve it EARLY (fast endpoints),
-        // ahead of the slow briefing/stockPicker awaits, so it never loads last.
-        scoutToday = try? await st
-        scoutTrail = try? await str
+        engine = try? await e
         universe = try? await un
         readiness = try? await r
-        auto = try? await a
-        engine = try? await e
-        verdict = try? await v
-        plan = try? await p
-        intel = try? await ia
-        sysHealth = try? await sh
-        stockPicker = try? await sp
-        briefing = try? await br
         signals = (try? await sg) ?? []
-        chainHealth = try? await ch
-        researchDepth = try? await rd
+        stockPicker = try? await sp
+        auto = try? await a
+        sysHealth = try? await sh
+        scoutTrail = try? await str
+        briefing = try? await br
         loading = false
         status = (kite == nil && readiness == nil && config.isEmpty) ? "Couldn't reach trade.hnhotels.in" : ""
     }
@@ -212,7 +215,9 @@ struct HeaderBar: View {
 struct ModeBanner: View {
     @ObservedObject var vm: WealthVM
     var body: some View {
+        let loadingMode = vm.loading && vm.config.isEmpty
         let (text, color): (String, Color) = {
+            if loadingMode { return ("READING ORDER MODE", HK.running) }
             switch vm.mode {
             case .armedAuto:       return ("REAL — AUTO-TRADING ARMED", HK.error)
             case .ordersUnblocked: return ("REAL ORDERS UNBLOCKED", HK.running)
@@ -220,9 +225,11 @@ struct ModeBanner: View {
             case .unknown:         return ("MODE UNKNOWN — verify", HK.running)
             }
         }()
-        let sub = vm.mode == .unknown
+        let sub = loadingMode
+            ? "Checking block_real_orders and engine_mode before any order can be trusted."
+            : (vm.mode == .unknown
             ? "Couldn't read engine config"
-            : "block_real_orders=\(vm.config["block_real_orders"] ?? "?") · engine_mode=\(vm.config["engine_mode"] ?? "?")"
+            : "block_real_orders=\(vm.config["block_real_orders"] ?? "?") · engine_mode=\(vm.config["engine_mode"] ?? "?")")
         return HStack(spacing: 12) {
             Image(systemName: vm.mode == .paper ? "shield.lefthalf.filled" : "exclamationmark.triangle.fill")
                 .font(.system(size: 22)).foregroundColor(color)
@@ -497,19 +504,25 @@ struct OpsView: View {
                 VStack(spacing: 14) {
                     // Health score
                     Card {
-                        let score = vm.intel?.summary?.health_score_pct ?? 0
+                        let audit = vm.intel?.summary
+                        let score = audit?.health_score_pct ?? 0
+                        let loadingAudit = vm.loading && vm.intel == nil
+                        let auditMissing = !loadingAudit && audit == nil
                         HStack(alignment: .firstTextBaseline) {
-                            Text("\(score)%").font(.system(size: 32, weight: .heavy, design: .rounded)).foregroundColor(scoreColor(score))
+                            Text(loadingAudit ? "…" : (auditMissing ? "—" : "\(score)%"))
+                                .font(.system(size: 32, weight: .heavy, design: .rounded))
+                                .foregroundColor(loadingAudit || auditMissing ? HK.running : scoreColor(score))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(score >= 70 ? "Healthy" : (score >= 40 ? "Attention" : "Degraded"))
-                                    .font(.system(size: 14, weight: .bold)).foregroundColor(scoreColor(score))
+                                Text(loadingAudit ? "Checking" : (auditMissing ? "Audit unavailable" : (score >= 70 ? "Healthy" : (score >= 40 ? "Attention" : "Degraded"))))
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(loadingAudit || auditMissing ? HK.running : scoreColor(score))
                                 Text("data integrity").font(.system(size: 11)).foregroundColor(HK.textFaint)
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text("\(vm.intel?.summary?.fresh ?? 0) fresh").font(.system(size: 12)).foregroundColor(HK.ready)
-                                Text("\(vm.intel?.summary?.stale ?? 0) stale").font(.system(size: 12)).foregroundColor(HK.running)
-                                Text("\((vm.intel?.sources ?? []).filter { !$0.hasData }.count) no-data").font(.system(size: 12)).foregroundColor(HK.error)
+                                Text((loadingAudit || auditMissing) ? "fresh —" : "\(audit?.fresh ?? 0) fresh").font(.system(size: 12)).foregroundColor(HK.ready)
+                                Text((loadingAudit || auditMissing) ? "stale —" : "\(audit?.stale ?? 0) stale").font(.system(size: 12)).foregroundColor(HK.running)
+                                Text((loadingAudit || auditMissing) ? "no-data —" : "\((vm.intel?.sources ?? []).filter { !$0.hasData }.count) no-data").font(.system(size: 12)).foregroundColor(HK.error)
                             }
                         }
                     }
@@ -548,7 +561,8 @@ struct OpsView: View {
                             }
                         }
                         if (vm.intel?.sources ?? []).isEmpty {
-                            Text("No audit yet.").font(.system(size: 12)).foregroundColor(HK.textDim)
+                            Text(vm.loading ? "Reading source audit…" : "Audit unavailable — pull to retry.")
+                                .font(.system(size: 12)).foregroundColor(HK.textDim)
                         }
                     }
 
@@ -593,7 +607,12 @@ struct OpsView: View {
     private func actionItems() -> [OpsAction] {
         var out: [OpsAction] = []
         // Kite connection
-        if vm.kite?.connected != true {
+        let kiteLoading = vm.loading && vm.kite == nil && vm.plan == nil
+        if kiteLoading {
+            out.append(OpsAction(title: "Checking Kite connection",
+                                 detail: "Waiting for the broker token witness before asking you to reconnect.",
+                                 color: HK.running))
+        } else if vm.kiteConnected != true {
             let reason = vm.kite?.reason ?? "not connected"
             out.append(OpsAction(title: reason == "expired" ? "Reconnect Kite (token expired)" : "Connect Kite",
                                  detail: "Kite tokens die daily ~6am IST. Tap Connect Kite on the Now tab. No live data/orders without it.",

@@ -69,7 +69,7 @@ struct ScoutTodayCard: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("TODAY'S SCOUT").font(.system(size: 12, weight: .heavy)).foregroundColor(HK.textFaint)
-                    Text(s?.headline ?? "No scout composed yet today")
+                    Text(s?.headline ?? (vm.loading ? "Loading today's scout…" : "No scout composed yet today"))
                         .font(.system(size: 19, weight: .heavy, design: .rounded))
                         .foregroundColor(HK.text)
                         .fixedSize(horizontal: false, vertical: true)
@@ -120,7 +120,9 @@ struct ScoutTodayCard: View {
                         .font(.system(size: 10)).foregroundColor(HK.textFaint)
                 }
             } else {
-                Text(s?.note ?? "The scout is composed at 09:40 IST each market day. On a weekend or holiday there is none.")
+                Text(s?.note ?? (vm.loading
+                                 ? "Reading the 09:40 scout and latest lesson from trade.hnhotels.in."
+                                 : "The scout is composed at 09:40 IST each market day. On a weekend or holiday there is none."))
                     .font(.system(size: 12)).foregroundColor(HK.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -264,7 +266,9 @@ struct ScoutTrailCard: View {
                 .padding(.vertical, 2)
             }
             if (t?.days ?? []).isEmpty {
-                Text("No scout days yet. The first lesson lands after the next market day's close.")
+                Text(vm.loading && t == nil
+                     ? "Reading the learning trail from trade.hnhotels.in…"
+                     : "No scout days yet. The first lesson lands after the next market day's close.")
                     .font(.system(size: 12)).foregroundColor(HK.textDim)
             }
         }
