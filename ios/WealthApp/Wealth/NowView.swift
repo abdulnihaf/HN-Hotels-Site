@@ -121,12 +121,12 @@ struct NowView: View {
         let phase = (vm.plan?.phase ?? "").lowercased()
         let dec = vm.verdict?.decision
         let pick = vm.verdict?.recommended_symbol
-        // Weekend / holiday FIRST: no "pick at 8:30" framing on a non-market day.
+        // Weekend / holiday FIRST: no "pick at 09:40" framing on a non-market day.
         if !vm.isMarketDay {
             let next = MarketCalendar.nextTradingDay()
             return Situation(
                 headline: "Markets closed — \(MarketCalendar.weekday())",
-                sub: "NSE is shut today. Last session was \(MarketCalendar.dayShort(MarketCalendar.lastTradingDay())); it reopens \(MarketCalendar.dayShort(next)) 9:15 AM and the engine composes its next call \(MarketCalendar.weekday(next)) 8:30. Nothing to do — rest.",
+                sub: "NSE is shut today. Last session was \(MarketCalendar.dayShort(MarketCalendar.lastTradingDay())); it reopens \(MarketCalendar.dayShort(next)) 9:15 AM and the engine composes its next call \(MarketCalendar.weekday(next)) 09:40. Nothing to do — rest.",
                 tone: HK.idle, action: .none)
         }
         if !kiteOK {
@@ -141,7 +141,7 @@ struct NowView: View {
         }
         if dec == "TRADE", let p = pick {
             return Situation(headline: "Today: trade \(p)",
-                             sub: "The engine found a setup. Review the plan and place it — or skip. (Unproven: 25% paper win-rate — treat as practice.)",
+                             sub: "The engine found a setup. Review the exact entry, stop, target and quantity before placing it. Treat it as unproven until the proof ladder graduates.",
                              tone: HK.ready, action: .place(p))
         }
         if dec == "SIT_OUT" {
@@ -150,8 +150,8 @@ struct NowView: View {
                              tone: HK.idle, action: .none)
         }
         if phase.contains("overnight") || phase.contains("pre") || phase.isEmpty {
-            return Situation(headline: "Pre-market — pick comes at 8:30",
-                             sub: "Nothing to do yet. The engine composes today's call at 8:30 AM. You're connected and set.",
+            return Situation(headline: "Pre-market — engine composes at 09:40",
+                             sub: "Nothing to do yet. The engine waits for the opening bars and composes today's call around 09:40 AM. You're connected and set.",
                              tone: HK.text, action: .none)
         }
         return Situation(headline: "Watching the market",
@@ -194,7 +194,7 @@ struct NowView: View {
             Text(vm.isMarketDay ? "Today's call" : "Next call").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
             if !vm.isMarketDay {
                 let next = MarketCalendar.nextTradingDay()
-                Text("Markets are closed (\(MarketCalendar.weekday())). The engine's next call composes \(MarketCalendar.weekday(next)) 8:30 AM — see Friday's on the Today tab's trail.")
+                Text("Markets are closed (\(MarketCalendar.weekday())). The engine's next call composes \(MarketCalendar.weekday(next)) 09:40 AM — see Friday's on the Today tab's trail.")
                     .font(.system(size: 12)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
             } else if vm.verdict?.decision == "TRADE", let p = vm.verdict?.recommended_symbol {
                 Row(label: "Decision", value: "TRADE", valueColor: HK.ready)
@@ -204,7 +204,7 @@ struct NowView: View {
             } else if vm.verdict?.decision == "SIT_OUT" {
                 Row(label: "Decision", value: "NO ENGINE TRADE", valueColor: HK.idle)
             } else {
-                Text("Composes at 8:30 AM (Mon–Fri). Until then there's nothing to act on.")
+                Text("Composes around 09:40 AM (Mon–Fri), after the opening bars. Until then there's nothing to act on.")
                     .font(.system(size: 12)).foregroundColor(HK.textDim)
             }
         }
