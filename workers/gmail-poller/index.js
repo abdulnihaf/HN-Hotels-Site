@@ -30,6 +30,7 @@ const SOURCE = 'hdfc';
 const INSTR_COMPANY  = 'hdfc_ca_4680';
 const INSTR_PERSONAL = 'hdfc_sa_4005';
 const PROCESSED_LABEL = 'bank-feed-processed';
+const INFLUENCER_LABEL = 'influencer-reply-processed';
 const HDFC_FROM = '(alerts@hdfcbank.bank.in OR alerts@hdfcbank.net OR InstaAlert@hdfcbank.net OR instaalerts@hdfcbank.net)';
 const TAIL_COMPANY  = '("XX4680" OR "**4680" OR "ending 4680" OR "A/c 4680" OR "ending 7103" OR "ending xx7103" OR "ending XX7103")';
 const TAIL_PERSONAL = '("XX4005" OR "ending 4005" OR "A/c 4005" OR "ending 8891" OR "ending xx8891" OR "ending XX8891")';
@@ -40,6 +41,7 @@ const TAIL_PERSONAL = '("XX4005" OR "ending 4005" OR "A/c 4005" OR "ending 8891"
 // share one invocation budget, so cap at 6 per pipe = ~40 total. Bumps
 // to 25 once on Workers Paid (1000 subreqs/invocation).
 const MAX_PER_POLL = 25;
+const MAX_INFLUENCER_REPLIES = 10;
 
 export default {
   async scheduled(event, env, ctx) {
@@ -86,13 +88,16 @@ export default {
 async function runPoll(env, debug = false) {
   const t0 = Date.now();
   const access = await getAccessToken(env);
-  const labelId = await ensureLabel(access, PROCESSED_LABEL);
-  const company  = await processQuery(access, env.DB,          INSTR_COMPANY,  TAIL_COMPANY,  labelId, debug);
-  const personal = await processQuery(access, env.DB_PERSONAL, INSTR_PERSONAL, TAIL_PERSONAL, labelId, debug);
+  const bankLabelId = await ensureLabel(access, PROCESSED_LABEL);
+  const infLabelId  = await ensureLabel(access, INFLUENCER_LABEL);
+  const company  = await processQuery(access, env.DB,          INSTR_COMPANY,  TAIL_COMPANY,  bankLabelId, debug);
+  const personal = await processQuery(access, env.DB_PERSONAL, INSTR_PERSONAL, TAIL_PERSONAL, bankLabelId, debug);
+  const influencer = await processInfluencerReplies(access, env, infLabelId, debug);
   return {
     elapsed_ms: Date.now() - t0,
     company,
     personal,
+    influencer,
   };
 }
 
@@ -191,6 +196,75 @@ async function processQuery(access, db, instrument, tailFilter, labelId, debug =
   const summary = { matched: ids.length, inserted, dupes, snapshots, partials, failed };
   if (debug) summary.reasons = reasons;
   return summary;
+}
+
+// ━━━ Influencer reply ingestion ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Looks for replies to cold outreach emails and flips the matching
+// influencer_outreach_log row to status='replied'.
+
+async function processInfluencerReplies(access, env, labelId, debug = false) {
+  if (!env.DASHBOARD_KEY) return { skipped: 'no_dashboard_key' };
+
+  // Replies to nihaf@hnhotels.in with subject containing our outreach subject.
+  const q = `to:nihaf@hnhotels.in subject:("Barter collab" OR "Quick follow-up") -label:${INFLUENCER_LABEL} newer_than:7d`;
+  const ids = await listMessages(access, q, MAX_INFLUENCER_REPLIES);
+  let matched = 0, recorded = 0, failed = 0, skipped = 0;
+  const reasons = [];
+
+  for (const id of ids) {
+    try {
+      const raw = await getRawMessage(access, id);
+      const { from, subject, body } = parseRfc822(raw);
+      const replyEmail = extractReplyEmail(from);
+      if (!replyEmail) {
+        skipped++;
+        if (debug) reasons.push({ id, subject: (subject || '').slice(0, 80), reason: 'no_reply_email' });
+        await applyLabel(access, id, labelId);
+        continue;
+      }
+
+      const snippet = (body || '').replace(/\s+/g, ' ').slice(0, 500);
+      const r = await recordReplyHttp(env, replyEmail, snippet);
+      if (r.success) {
+        recorded++;
+        if (debug) reasons.push({ id, subject: (subject || '').slice(0, 80), reason: 'recorded ' + (r.creator_username || '') });
+      } else {
+        skipped++;
+        if (debug) reasons.push({ id, subject: (subject || '').slice(0, 80), reason: 'not_matched: ' + (r.reason || '') });
+      }
+      await applyLabel(access, id, labelId);
+    } catch (e) {
+      failed++;
+      if (debug) reasons.push({ id, reason: 'exception: ' + String(e).slice(0, 200) });
+      console.error('influencer reply failed', id, String(e).slice(0, 300));
+    }
+  }
+
+  const summary = { matched: ids.length, recorded, skipped, failed };
+  if (debug) summary.reasons = reasons;
+  return summary;
+}
+
+function extractReplyEmail(fromHeader) {
+  if (!fromHeader) return null;
+  const m = fromHeader.match(/<([^>]+)>/);
+  return m ? m[1].toLowerCase().trim() : fromHeader.toLowerCase().trim();
+}
+
+async function recordReplyHttp(env, email, replyText) {
+  try {
+    const r = await fetch('https://hnhotels.in/api/influencer-outreach?action=record-reply', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Dashboard-Key': env.DASHBOARD_KEY,
+      },
+      body: JSON.stringify({ email, reply_text: replyText }),
+    });
+    return await r.json().catch(() => ({ success: false, reason: 'json_parse' }));
+  } catch (e) {
+    return { success: false, reason: e.message };
+  }
 }
 
 // HDFC sends a "View: Account update" mail every morning whose body says

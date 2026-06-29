@@ -32,12 +32,24 @@ const json = (b, s = 200) => new Response(JSON.stringify(b), {
 
 const dashboardKey = (env) => env.DASHBOARD_KEY || env.DASHBOARD_API_KEY || null;
 
+async function getActiveCampaign(env) {
+  try {
+    const r = await env.DB.prepare(`SELECT value FROM influencer_pipeline_config WHERE key = 'campaign' OR key = 'active_campaign' ORDER BY key LIMIT 1`).first();
+    return r?.value || 'active_v1';
+  } catch {
+    return 'active_v1';
+  }
+}
+
 const requireKey = (env, request, body) => {
+  // Use body.dashboard_key so endpoints with a business body.key (record-reply,
+  // update-status, etc.) do not accidentally override the auth key.
   const key =
     request.headers.get('X-Dashboard-Key') ||
+    request.headers.get('x-dashboard-key') ||
     request.headers.get('x-api-key') ||
     new URL(request.url).searchParams.get('key') ||
-    (body && body.key);
+    (body && body.dashboard_key);
   const expected = dashboardKey(env);
   return expected && key === expected;
 };
@@ -198,12 +210,13 @@ async function getBuckets(env, url) {
 }
 
 async function getStats(env) {
+  const campaign = await getActiveCampaign(env);
   const stats = await env.DB.prepare(`
     SELECT channel, status, COUNT(*) c
     FROM influencer_outreach_log
-    WHERE campaign = 'may_2026_v1'
+    WHERE campaign = ?
     GROUP BY channel, status
-  `).all();
+  `).bind(campaign).all();
 
   const totals = await env.DB.prepare(`
     SELECT
@@ -213,24 +226,25 @@ async function getStats(env) {
       SUM(CASE WHEN status='bounced' THEN 1 ELSE 0 END) bounced,
       COUNT(DISTINCT creator_username) unique_creators_contacted
     FROM influencer_outreach_log
-    WHERE campaign = 'may_2026_v1'
-  `).first();
+    WHERE campaign = ?
+  `).bind(campaign).first();
 
   const today = await env.DB.prepare(`
     SELECT channel, COUNT(*) c
     FROM influencer_outreach_log
     WHERE date(sent_at, 'localtime') = date('now', 'localtime')
-      AND campaign = 'may_2026_v1'
+      AND campaign = ?
     GROUP BY channel
-  `).all();
+  `).bind(campaign).all();
 
-  return json({ success: true, totals, by_channel_status: stats.results, today: today.results });
+  return json({ success: true, campaign, totals, by_channel_status: stats.results, today: today.results });
 }
 
 async function getQueue(env, url) {
   const channel = url.searchParams.get('channel');
   const limit = parseInt(url.searchParams.get('limit') || '20');
   if (!channel) return json({ error: 'channel required' }, 400);
+  const campaign = await getActiveCampaign(env);
 
   const contactCol =
     channel === 'email' ? 'p.has_email' :
@@ -244,7 +258,7 @@ async function getQueue(env, url) {
            p.category_name, p.has_email, p.has_phone
     FROM influencer_bio_pulse p
     LEFT JOIN influencer_outreach_log o
-           ON o.creator_username = p.username AND o.channel = ? AND o.campaign = 'may_2026_v1'
+           ON o.creator_username = p.username AND o.channel = ? AND o.campaign = ?
     WHERE p.status='ok' AND p.is_private=0
       AND p.followers_count BETWEEN 5000 AND 100000
       AND ${contactCol} = 1
@@ -261,20 +275,21 @@ async function getQueue(env, url) {
        + p.contact_channels) DESC,
       p.followers_count DESC
     LIMIT ?
-  `).bind(channel, limit).all();
+  `).bind(channel, campaign, limit).all();
 
-  return json({ success: true, channel, count: r.results.length, queue: r.results });
+  return json({ success: true, channel, campaign, count: r.results.length, queue: r.results });
 }
 
 async function getHistory(env, url) {
   const username = url.searchParams.get('username');
   if (!username) return json({ error: 'username required' }, 400);
+  const campaign = await getActiveCampaign(env);
   const r = await env.DB.prepare(`
     SELECT * FROM influencer_outreach_log
-    WHERE creator_username = ? AND campaign = 'may_2026_v1'
+    WHERE creator_username = ? AND campaign = ?
     ORDER BY sent_at DESC
-  `).bind(username.toLowerCase()).all();
-  return json({ success: true, history: r.results });
+  `).bind(username.toLowerCase(), campaign).all();
+  return json({ success: true, campaign, history: r.results });
 }
 
 async function getIgDmPayload(env, url) {
@@ -373,7 +388,7 @@ async function logOutreach(env, body, request) {
     body.tier_assigned || null,
     body.cover_offer || null,
     body.niche_tag || null,
-    body.campaign || 'may_2026_v1',
+    body.campaign || 'active_v1',
     body.delivered_at || null,
     body.read_at || null,
     body.replied_at || null,
@@ -417,19 +432,21 @@ async function actionSendWaba(env, body, request) {
   });
 
   const txt = `Hi ${firstName}, Hamza Express here — Bangalore's 1918 Dakhni biryani (Shivajinagar). Saw your ${niche} content. Barter collab — full meal for ${tier.covers}. Pick your slot: hnhotels.in/marketing/Influencer/booking/?token=${token}`;
+  const campaign = await getActiveCampaign(env);
 
   const ins = await env.DB.prepare(`
     INSERT INTO influencer_outreach_log (
       creator_username, channel, to_address, message_text, outreach_token,
       sent_by, status, template_used, provider, provider_msg_id,
       tier_assigned, cover_offer, niche_tag, campaign, actor
-    ) VALUES (?, 'waba', ?, ?, ?, 'system', ?, ?, 'meta-cloud-api', ?, ?, ?, ?, 'may_2026_v1', 'system')
+    ) VALUES (?, 'waba', ?, ?, ?, 'system', ?, ?, 'meta-cloud-api', ?, ?, ?, ?, ?, 'system')
   `).bind(
     p.username, phone, txt, token,
     sendResult.ok ? 'sent' : 'failed',
     body.template,
     sendResult.provider_msg_id || null,
-    tier.name, tier.covers, niche
+    tier.name, tier.covers, niche,
+    campaign
   ).run();
 
   return json({
@@ -443,28 +460,58 @@ async function actionSendWaba(env, body, request) {
 
 async function recordReply(env, body, request) {
   if (!requireKey(env, request, body)) return json({ error: 'unauthorized' }, 401);
-  if (!body.username || !body.channel) return json({ error: 'username + channel required' }, 400);
+  const campaign = await getActiveCampaign(env);
+
+  if (body.outreach_token) {
+    await env.DB.prepare(`
+      UPDATE influencer_outreach_log
+      SET status='replied', reply_at=datetime('now'), replied_at=datetime('now'),
+          reply_text=COALESCE(?, reply_text)
+      WHERE outreach_token=? AND campaign=?
+    `).bind(body.reply_text || null, body.outreach_token, campaign).run();
+    return json({ success: true, by: 'token' });
+  }
+
+  if (body.email) {
+    const email = String(body.email).toLowerCase().trim();
+    const row = await env.DB.prepare(`
+      SELECT id, creator_username FROM influencer_outreach_log
+      WHERE channel='email' AND LOWER(to_address)=? AND campaign=? AND status='sent'
+      ORDER BY sent_at DESC LIMIT 1
+    `).bind(email, campaign).first();
+    if (!row) return json({ success: false, reason: 'no_matching_sent_row' }, 404);
+    await env.DB.prepare(`
+      UPDATE influencer_outreach_log
+      SET status='replied', reply_at=datetime('now'), replied_at=datetime('now'),
+          reply_text=COALESCE(?, reply_text)
+      WHERE id=?
+    `).bind(body.reply_text || null, row.id).run();
+    return json({ success: true, by: 'email', creator_username: row.creator_username });
+  }
+
+  if (!body.username || !body.channel) return json({ error: 'username + channel, outreach_token, or email required' }, 400);
   await env.DB.prepare(`
     UPDATE influencer_outreach_log
     SET status='replied', reply_at=datetime('now'), replied_at=datetime('now'),
         reply_text=COALESCE(?, reply_text)
-    WHERE creator_username=? AND channel=? AND campaign='may_2026_v1'
+    WHERE creator_username=? AND channel=? AND campaign=?
       AND id = (SELECT MAX(id) FROM influencer_outreach_log
-                WHERE creator_username=? AND channel=? AND campaign='may_2026_v1')
-  `).bind(body.reply_text || null, body.username, body.channel, body.username, body.channel).run();
-  return json({ success: true });
+                WHERE creator_username=? AND channel=? AND campaign=?)
+  `).bind(body.reply_text || null, body.username, body.channel, campaign, body.username, body.channel, campaign).run();
+  return json({ success: true, by: 'username_channel' });
 }
 
 async function markBounce(env, body, request) {
   if (!requireKey(env, request, body)) return json({ error: 'unauthorized' }, 401);
+  const campaign = await getActiveCampaign(env);
   if (!body.username || !body.channel) return json({ error: 'username + channel required' }, 400);
   await env.DB.prepare(`
     UPDATE influencer_outreach_log
     SET status='bounced', bounce_reason=?
-    WHERE creator_username=? AND channel=? AND campaign='may_2026_v1'
+    WHERE creator_username=? AND channel=? AND campaign=?
       AND id = (SELECT MAX(id) FROM influencer_outreach_log
-                WHERE creator_username=? AND channel=? AND campaign='may_2026_v1')
-  `).bind(body.reason || 'unknown', body.username, body.channel, body.username, body.channel).run();
+                WHERE creator_username=? AND channel=? AND campaign=?)
+  `).bind(body.reason || 'unknown', body.username, body.channel, campaign, body.username, body.channel, campaign).run();
   return json({ success: true });
 }
 
@@ -472,6 +519,7 @@ async function createBatch(env, body, request) {
   if (!requireKey(env, request, body)) return json({ error: 'unauthorized' }, 401);
   const channel = body.channel || 'email';
   const limit = body.limit || 20;
+  const campaign = await getActiveCampaign(env);
 
   // Barter band only (1K–60K = T1..T4). T5+ require cash-component pitch,
   // never auto-batched. Memory: feedback_influencer_barter_targeting.md
@@ -481,7 +529,7 @@ async function createBatch(env, body, request) {
            p.extracted_emails_json, p.extracted_phones_json, p.extracted_whatsapp_json
     FROM influencer_bio_pulse p
     LEFT JOIN influencer_outreach_log o
-      ON o.creator_username = p.username AND o.channel = ? AND o.campaign='may_2026_v1'
+      ON o.creator_username = p.username AND o.channel = ? AND o.campaign=?
     WHERE p.status='ok' AND p.is_private=0
       AND p.followers_count BETWEEN 1000 AND 59999
       AND ${channel === 'email' ? 'p.has_email=1' : channel === 'waba' ? 'p.has_phone=1' : '1=1'}
@@ -495,7 +543,7 @@ async function createBatch(env, body, request) {
        + CASE WHEN p.followers_count BETWEEN 5000 AND 15000 THEN 1 ELSE 0 END) DESC,
       p.followers_count DESC
     LIMIT ?
-  `).bind(channel, limit).all();
+  `).bind(channel, campaign, limit).all();
 
   // Pull POS top-sellers once for the whole batch — dish names in copy
   // come from live POS, never hardcoded. Memory: feedback_never_invent_menu_items.md
@@ -536,14 +584,14 @@ async function createBatch(env, body, request) {
         INSERT INTO influencer_outreach_log (
           creator_username, channel, to_address, message_text, outreach_token,
           sent_by, status, tier_assigned, cover_offer, niche_tag, campaign, actor
-        ) VALUES (?, ?, ?, '', ?, 'system', 'queued', ?, ?, ?, 'may_2026_v1', 'batch_creator')
-      `).bind(r.username, channel, payload.recipient, token, tier.name, tier.covers, niche).run();
+        ) VALUES (?, ?, ?, '', ?, 'system', 'queued', ?, ?, ?, ?, 'batch_creator')
+      `).bind(r.username, channel, payload.recipient, token, tier.name, tier.covers, niche, campaign).run();
 
       batch.push(payload);
     }
   }
 
-  return json({ success: true, batch_size: batch.length, batch });
+  return json({ success: true, campaign, batch_size: batch.length, batch });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -563,6 +611,10 @@ async function ensureBookingShell(env, profile, tier) {
   `).bind(profile.username).first();
   if (existing && existing.outreach_token) return existing.outreach_token;
 
+  // Pick any seeded slot as a placeholder; the shell is updated when the creator actually books.
+  const slot = await env.DB.prepare(`SELECT id, slot_date, window_code FROM influencer_slots ORDER BY id LIMIT 1`).first();
+  if (!slot) throw new Error('no_influencer_slots_seeded');
+
   // Generate fresh token
   let token;
   for (let i = 0; i < 5; i++) {
@@ -575,7 +627,7 @@ async function ensureBookingShell(env, profile, tier) {
     INSERT INTO influencer_bookings
       (creator_username, creator_name, creator_followers, creator_tier, cover_commitment,
        meal_budget_paise, slot_id, slot_date, window_code, status, outreach_token)
-    VALUES (?, ?, ?, ?, ?, ?, 0, '0000-00-00', 'PENDING', 'pending', ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).bind(
     profile.username,
     profile.full_name || null,
@@ -583,6 +635,7 @@ async function ensureBookingShell(env, profile, tier) {
     tier.name,
     tier.covers,
     tier.budget_paise,
+    slot.id, slot.slot_date, slot.window_code,
     token
   ).run();
 
