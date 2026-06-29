@@ -334,19 +334,31 @@ async function composeVerdict(env, opts = {}) {
     if (existing) return { rows: 0, skipped: 'already-composed-today', id: existing.id, carryover: carryoverResult };
   }
 
-  // 1b. ★ GAP-UP EDGE ENGINE (PRIMARY 09:40 PATH) — deterministic scan of today's
-  // actual gap-ups, gated by the nightly-tuned rule the RTX box publishes into
-  // wealth_strategy_config. When a config exists it OWNS the decision (a real TRADE
-  // with exact entry/stop/time-exit, or an HONEST SIT_OUT when the edge is unproven
-  // or nothing clears). The picks are MATH (a coordinate), the LLM only narrates.
-  // This is ADDITIVE: if no config is published yet, or the live scan genuinely can't
-  // run, we fall through to the legacy LLM-selection path below — no regression.
+  // 1b. Gap intelligence path (primary 09:40 path).
+  //
+  // Initial Wealth stage should not wait for a prior-success trail.
+  // The market already emits live structure: gap, liquidity, catalyst, sector
+  // concentration, recent behavior, and live quote. Use that machine-readable
+  // structure to produce the best current intelligence and execution-shaped plan.
+  // The config is calibration/audit context, not a permission switch for output.
+  //
+  // Real TRADE output is allowed only when the execution contract explicitly
+  // authorizes broker-facing picks. Until then, picks_json stays empty because
+  // another worker treats that field as an order surface. The full machine plan
+  // still persists under alternatives/context for UI + learning.
   try {
-    const stratCfg = await loadStrategyConfig(db);
-    if (stratCfg) {
-      const gap = await runGapEngine(env, db, today, stratCfg, carryoverResult);
-      if (gap) return gap;
-    }
+    const stratCfg = await loadStrategyConfig(db) || {
+      strategy: 'gap_up_intraday',
+      verdict: 'MARKET_DATA_ONLY',
+      gap_min_pct: 2.5,
+      stop_pct: 2.0,
+      exit_time_ist: '14:30',
+      min_turnover_cr: 25,
+      max_picks: 3,
+      derived_from: 'live pre-open + EOD market data; no internal config row',
+    };
+    const gap = await runGapEngine(env, db, today, stratCfg, carryoverResult);
+    if (gap) return gap;
   } catch (e) {
     console.warn('[gap-engine] failed, falling back to legacy compose:', e.message);
   }
@@ -416,7 +428,7 @@ async function composeVerdict(env, opts = {}) {
   //   • liquidity supports ₹3-4L positions without slippage
   // The +5% hit-rate is a TARGET BAND check, not a primary ranking input
   // (we'd rather pick high-R:R consistent earners than rare big-mover lottery tickets).
-  // RECENCY-WEIGHTED RANKING — combines 90-day backtest with last-week intraday metrics.
+  // RECENCY-WEIGHTED RANKING — combines 90-day market behavior with last-week intraday metrics.
   // last-week metrics from intraday_bars (computed by weekly_enrich cron) reveal
   // CURRENT regime per stock, not just 90-day average. Stocks that are HOT THIS WEEK
   // get boosted; cooling stocks get discounted.
@@ -545,7 +557,7 @@ async function composeVerdict(env, opts = {}) {
         composite_score: p.composite_score ? +p.composite_score?.toFixed(1) : null,
         intraday_score: p.intraday_score,
         hybrid_score: p.hybrid_score,
-        // 90-day historical intraday stats — the BACKBONE of pick selection
+        // 90-day market-behavior stats — one input into machine selection.
         intraday_history: {
           hit_2pct_pct_of_days: p.hit_2pct_rate,
           hit_3pct_pct_of_days: p.hit_3pct_rate,
@@ -853,7 +865,7 @@ Owner's stated target: 5% min / 10% best-case daily on ₹10L.
 Reality: 5%/day on pure cash is ~edge of feasible. Same surgical selection × MIS 5× leverage = 5-10%/day band realistic. Tonight we validate selection on paper at 1×, leverage layer comes after 30-day validation.
 
 SELECTION RULE — pick from the candidates I provide. They're filtered to:
-  • Historically hit +2% intraday on ≥50% of days (90-day backtest)
+  • Market history shows +2% intraday reach on ≥50% of sampled days
   • ≥₹25 Cr daily turnover (fillable at ₹3-4L)
   • MTF alignment NOT against_macro/aligned_down (vetoed by engine)
   • Hybrid score (70% intraday-suitability + 30% today's regime/catalyst)
@@ -960,7 +972,7 @@ Be honest about uncertainty. If candidates are weak, say SIT_OUT or OBSERVE. Don
 ${JSON.stringify(dataContext, null, 2)}
 
 CANDIDATES — pre-filtered + plan parameters pre-computed:
-(These are from the 90-day intraday-suitability backtest, ranked by reward/risk × green-rate × liquidity.
+(These are machine-extracted from 90-day intraday market behavior, ranked by reward/risk × green-rate × liquidity.
 USE the stop_pct / target_pct / trail values exactly as provided. They're math, not opinion.)
 
 ${JSON.stringify(candidatePlans, null, 2)}
@@ -1047,19 +1059,22 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
     result = { text: JSON.stringify(fb), cost_paise: 0, cached: false, model_id: 'engine_only_fallback' };
   }
 
-  // The legacy LLM compose path is only narrative unless a tested strategy edge
-  // is active. Prevent an unproven-edge LLM response from creating real picks.
+  // The legacy LLM compose path can still generate useful machine intelligence,
+  // but picks_json is an execution surface. If the execution contract is not
+  // explicitly authorized, preserve the plan in alternatives_json and publish
+  // OBSERVE instead of emitting broker-facing picks.
   const activeEdgeCfg = await loadStrategyConfig(db).catch(() => null);
-  const edgeProven = activeEdgeCfg?.verdict && activeEdgeCfg.verdict !== 'NO_EDGE';
-  if (parsed?.decision === 'TRADE' && !edgeProven) {
-    parsed.decision = 'SIT_OUT';
-    parsed.headline = (`SIT_OUT (no proven edge) - ${parsed.headline || 'LLM trade blocked'}`).slice(0, 200);
-    parsed.narrative = `The model suggested a trade, but the active walk-forward strategy config has no proven edge. Trade picks were suppressed. ${parsed.narrative || ''}`.slice(0, 1500);
+  const executionAuthorized = isBrokerExecutionAuthorized(activeEdgeCfg);
+  if (parsed?.decision === 'TRADE' && !executionAuthorized) {
+    parsed.machine_execution_plan = Array.isArray(parsed.picks) ? parsed.picks : [];
+    parsed.decision = 'OBSERVE';
+    parsed.headline = (`OBSERVE — machine market plan staged: ${parsed.headline || 'live setup'}`).slice(0, 200);
+    parsed.narrative = `The system derived an execution-shaped plan from the market data, but this worker will not emit broker-facing picks_json without an explicit execution contract. Plan details are preserved for UI, review, and learning. ${parsed.narrative || ''}`.slice(0, 1500);
     parsed.picks = [];
     parsed.recommended_symbol = null;
     parsed.risk_flags = [
       ...(Array.isArray(parsed.risk_flags) ? parsed.risk_flags : []),
-      'LLM trade suppressed because no active proven edge is published',
+      'Broker-facing picks_json intentionally empty; machine execution plan is stored as intelligence only',
     ];
   }
 
@@ -1090,6 +1105,8 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
       rejected_setups: parsed.rejected_setups || [],
       risk_flags: parsed.risk_flags || [],
       expected_day_pnl_pct_range: parsed.expected_day_pnl_pct_range || null,
+      machine_execution_plan: parsed.machine_execution_plan || [],
+      execution_authority: executionAuthorized ? 'broker_facing_picks_authorized' : 'intelligence_plan_only',
       tier_used: tierUsed,
       attempts: attempts.slice(0, 4),
     }),
@@ -1119,10 +1136,10 @@ Compose the verdict JSON. Pick 2-3 from candidates. Do not invent stops or targe
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GAP-UP EDGE ENGINE — the self-learning intraday loop's live decision-maker.
-//   nightly: RTX box walk-forward backtest → wealth_strategy_config (the tuned rule)
-//   09:40  : scanGapUp(preopen_snapshot) → point-in-time liquidity gate → exact plan
-//   decision: TRADE (edge proven + setup clears) | SIT_OUT (no edge / no setup) — HONEST
+// LIVE MARKET INTELLIGENCE ENGINE — the intraday loop's machine decision-maker.
+//   09:40: scanGapUp(preopen_snapshot) → liquidity/catalyst/sector gates → exact plan
+//   output: TRADE only when broker-facing execution is authorized; otherwise OBSERVE
+//   with a full execution-shaped machine plan stored outside picks_json.
 // The pick is a coordinate (deterministic). The LLM only writes the narrative.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1130,6 +1147,11 @@ async function loadStrategyConfig(db, strategy = 'gap_up_intraday') {
   return await db.prepare(
     `SELECT * FROM wealth_strategy_config WHERE strategy=? AND is_active=1 ORDER BY published_at DESC LIMIT 1`
   ).bind(strategy).first().catch(() => null);
+}
+
+function isBrokerExecutionAuthorized(cfg) {
+  const v = String(cfg?.verdict || '').toUpperCase();
+  return !!v && !['NO_EDGE', 'MARKET_DATA_ONLY', 'OBSERVE_ONLY'].includes(v);
 }
 
 async function loadUserCfg(db, keys) {
@@ -1169,7 +1191,7 @@ async function scanGapUp(env, db, cfg, today) {
 
   // point-in-time liquidity: trailing-20d avg turnover (Cr) from equity_eod.
   // Check ALL gappers (not just the biggest-gap ones — those skew illiquid small-caps);
-  // the liquid survivors are what the tested edge is actually about.
+  // the liquid survivors are where live market structure is actionable.
   const syms = gappers.slice(0, 80).map(r => r.symbol);
   const ph = syms.map(() => '?').join(',');
   const liqRows = (await db.prepare(`
@@ -1268,7 +1290,7 @@ async function refineEntries(env, picks) {
 }
 
 // Size each pick to the owner's in-play capital, bounded by max risk-per-trade.
-// Strategy = WIDE stop + TIME exit (backtest-proven: tight stops whipsaw out).
+// Strategy = WIDE stop + TIME exit, driven by the current machine-selected setup.
 function sizePicks(picks, cfg, deployablePaise, totalCapPaise, maxRiskPct) {
   const stopPct = cfg.stop_pct || 3.0;
   const targetPct = +Math.max(stopPct * 1.6, 4.0).toFixed(1); // informational ceiling; real exit is time
@@ -1315,14 +1337,33 @@ function sizePicks(picks, cfg, deployablePaise, totalCapPaise, maxRiskPct) {
   return out;
 }
 
-// LLM narration ONLY (picks are fixed). Honest about the edge. Deterministic fallback.
+function buildMachineExecutionPlan(plans, cfg) {
+  return plans.map((p, idx) => ({
+    ...p,
+    rank: idx + 1,
+    mode: 'LIVE_MARKET_EDGE',
+    execution_scope: 'intelligence_plan',
+    data_basis: [
+      'preopen_gap_pct',
+      'trailing_20d_turnover',
+      'sector_concentration_cap',
+      'recent_news_catalyst',
+      p.live_quote ? 'live_ltp_refined_entry' : 'preopen_iep_entry',
+    ],
+    invalidation: `Fails gap-hold/opening-level or VWAP by 09:50; hard time exit ${p.hard_exit_ist || cfg.exit_time_ist || '14:30'} IST.`,
+  }));
+}
+
+// LLM narration ONLY (plans are fixed). Deterministic fallback.
 async function narrateGap(env, today, cfg, decision, picksJson, scan, watch) {
   const det = decision === 'TRADE'
-    ? `Engine picked ${picksJson.map(p => p.symbol).join(' + ')} — each gapped up at the open on real liquidity. Plan: enter ~09:40, hold to ${cfg.exit_time_ist}, wide ${cfg.stop_pct}% stop (tight stops whipsaw out — the backtest proved that). Honest: the tested edge is ${cfg.verdict === 'ROBUST_EDGE' ? 'confirmed but small' : 'thin'} (~${cfg.oos_expectancy_pct}%/trade out-of-sample) — size small.`
-    : `${scan.gated || 0} stocks gapped up today, but ${cfg.verdict === 'NO_EDGE' ? 'the walk-forward backtest shows no real edge over a random gap pick on this data' : 'none cleared the tuned rule'}. Sitting out is the honest call.${watch.length ? ' Watching: ' + watch.map(w => w.symbol).join(', ') + '.' : ''}`;
+    ? `Execution-authorized plan: ${picksJson.map(p => p.symbol).join(' + ')} from live gap, liquidity, sector, catalyst, and quote data. Enter around 09:40, use the wide stop, and exit by ${cfg.exit_time_ist || '14:30'} IST.`
+    : watch.length
+      ? `Machine market plan staged for ${watch.map(w => w.symbol).join(' + ')} from live gap, liquidity, sector, catalyst, and quote data. This worker stores the plan as intelligence and keeps picks_json empty until the broker execution contract is explicitly authorized.`
+      : `${scan.gated || 0} stocks gapped up today, but no liquid setup cleared the machine filters. Observe the market; no plan is emitted.`;
   try {
-    const sys = `You are narrating an ALREADY-DECIDED intraday gap-up verdict for a non-technical owner. The picks and the decision are FIXED — do NOT change, add, or remove anything. Write a 2-3 sentence plain-English narrative (≤70 words). Be HONEST about the edge: it is ${cfg.verdict} with ~${cfg.oos_expectancy_pct}%/trade out-of-sample expectancy (${cfg.folds_positive} folds positive, p=${cfg.oos_p}). Never fake confidence. Output STRICT JSON: {"narrative":"..."}`;
-    const usr = `Decision: ${decision}\nTuned rule: gap≥${cfg.gap_min_pct}%, ${cfg.stop_pct}% stop, exit ${cfg.exit_time_ist}, liquidity≥₹${cfg.min_turnover_cr}Cr.\nPicks: ${JSON.stringify(picksJson.map(p => ({ symbol: p.symbol, gap_pct: p.gap_pct, qty: p.qty, turnover_cr: p.turnover_cr, catalyst: !!p.catalyst })))}\nWatch (if sit-out): ${JSON.stringify(watch)}\nScan: ${scan.scanned} symbols, ${scan.gated} gapped up.`;
+    const sys = `You are narrating an ALREADY-DECIDED intraday market-intelligence verdict for a non-technical owner. The decision and symbols are FIXED — do NOT change, add, or remove anything. Write a 2-3 sentence plain-English narrative (≤70 words). Describe the machine-derived market structure: live gap, liquidity, sector cap, catalyst, and execution levels. Do not mention prior manual results or a prior-performance trail. Output STRICT JSON: {"narrative":"..."}`;
+    const usr = `Decision: ${decision}\nMachine rule: gap≥${cfg.gap_min_pct}%, ${cfg.stop_pct}% stop, exit ${cfg.exit_time_ist}, liquidity≥₹${cfg.min_turnover_cr}Cr.\nBroker-facing picks: ${JSON.stringify(picksJson.map(p => ({ symbol: p.symbol, gap_pct: p.gap_pct, qty: p.qty, turnover_cr: p.turnover_cr, catalyst: !!p.catalyst })))}\nMachine plan / observe list: ${JSON.stringify(watch)}\nScan: ${scan.scanned} symbols, ${scan.gated} gapped up.`;
     const r = await callOpus(env, { prompt: usr, system: sys, max_tokens: 220, purpose: 'gap_narrate', worker: WORKER_NAME, cache_key: `gap_narr_${today}_${decision}_${picksJson.map(p => p.symbol).join('_')}`, cache_ttl_ms: 6 * 3600 * 1000 });
     const p = parseJsonOutput(r.text);
     if (p && typeof p.narrative === 'string' && p.narrative.length > 10) {
@@ -1333,16 +1374,14 @@ async function narrateGap(env, today, cfg, decision, picksJson, scan, watch) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SCOUT — the daily LEARNING action (additive; never a real trade)
+// SCOUT — the daily market-contact action (additive; never a broker order)
 //
-// On a NO_EDGE / SIT_OUT day the engine still composes a PAPER scout plan so the
-// owner gets a reasoned daily action + a recorded outcome to learn from — instead
-// of an empty sit-out screen. It writes ONLY to scout_plans / scout_plan_states
-// (migration 0020): never daily_verdicts.decision/picks_json, never paper_trades,
-// never any order path. Notional is a tiny FIXED cap, decoupled from real capital,
-// so a config flip can never inflate it. No Kite/LTP call — off every broker path.
-// HONESTY LAW: a scout is learning + market contact, NOT a proven edge. Gap-ranking
-// alone has not beaten a random pick in our year-long tests; the plan says so plainly.
+// When broker-facing execution is not authorized, the engine still composes a
+// PAPER scout plan so the owner gets a reasoned daily action + recorded outcome
+// instead of an empty screen. It writes ONLY to scout_plans / scout_plan_states
+// (migration 0020): never daily_verdicts.picks_json, never paper_trades, never
+// any order path. The scout is AI-native market contact: live gap/liquidity/
+// catalyst structure plus a falsifiable execution plan, reconciled after EOD.
 // ═══════════════════════════════════════════════════════════════════════════
 const SCOUT_ENABLED = true;
 const SCOUT_NOTIONAL_CAP_PAISE = 5000000;   // ₹50,000 paper notional cap/day (decoupled from real capital)
@@ -1395,8 +1434,8 @@ function composeScoutWhyNot(scan, candidates, picks) {
 }
 
 // EOD fallback candidate source — used when the live pre-open feed is stale/down
-// (so the scout STILL fires every market day). Ranks liquid names by yesterday's
-// close-to-close strength × liquidity. Honest: this is yesterday's data, not a live gap.
+// (so the scout still fires every market day). Ranks liquid names by yesterday's
+// close-to-close strength × liquidity and marks the source clearly.
 async function scoutEodFallback(db, cfg) {
   const minTurnover = cfg.min_turnover_cr || 10;
   const rows = (await db.prepare(`
@@ -1427,7 +1466,7 @@ async function scoutEodFallback(db, cfg) {
 
 // Compose + persist today's daily PAPER scout plan. STANDALONE + idempotent: runs
 // AFTER composeVerdict regardless of which path decided, so the owner always gets a
-// daily learning action — even when the live feed is down (EOD fallback). Fail-CLOSED:
+// daily market-contact action — even when the live feed is down (EOD fallback). Fail-CLOSED:
 // writes ONLY to scout_plans / scout_plan_states; never daily_verdicts / picks / orders.
 async function composeScout(env, db, today) {
   try {
@@ -1447,9 +1486,8 @@ async function composeScout(env, db, today) {
     // on a real TRADE day the verdict picks ARE the action — no separate scout needed
     if (verdict && verdict.decision === 'TRADE') return { scout: 'trade_day_skip' };
 
-    const cfg = (await loadStrategyConfig(db).catch(() => null)) || { strategy: 'gap_up_intraday', verdict: 'NO_EDGE', stop_pct: 3.0, exit_time_ist: '14:30' };
-    const edgeState = cfg.verdict || 'NO_EDGE';
-    const noEdge = edgeState === 'NO_EDGE';
+    const cfg = (await loadStrategyConfig(db).catch(() => null)) || { strategy: 'gap_up_intraday', verdict: 'MARKET_DATA_ONLY', stop_pct: 3.0, exit_time_ist: '14:30' };
+    const edgeState = cfg.verdict || 'MARKET_DATA_ONLY';
 
     // candidates: prefer the LIVE pre-open gap scan; if the feed is stale, fall back to EOD.
     let scan = await scanGapUp(env, db, cfg, today).catch(() => null);
@@ -1466,6 +1504,7 @@ async function composeScout(env, db, today) {
       scanned: scan?.scanned ?? 0, gapped_up: scan?.gated ?? 0, liquid_scored: scan?.candidates?.length ?? 0,
       config_oos_exp_pct: cfg.oos_expectancy_pct ?? null, folds_positive: cfg.folds_positive ?? null,
       edge_vs_null: cfg.edge_vs_null ?? null, edge_state: edgeState,
+      intelligence_basis: ['gap_or_strength', 'liquidity', 'sector_spread', 'catalyst_if_available', 'falsifiable_exit_plan'],
     });
 
     // Nothing to scout at all → honest SKIPPED plan, still on the trail.
@@ -1482,7 +1521,7 @@ async function composeScout(env, db, today) {
         '[]', null, 'No liquid stock qualified today.',
         JSON.stringify(composeScoutWhyNot(scan || { scanned: 0, gated: 0 }, [], [])),
         featuresJson, cfg.oos_expectancy_pct ?? null,
-        'Nothing qualified today. The honest action is to watch the open, take no paper trade, and note why it was a quiet day.',
+        'Nothing liquid qualified today. The machine action is flat observation: no paper entry, no broker order, and the absence of candidates is recorded.',
         'SKIPPED', now, 'auto', now, 'wealth-verdict',
       ).run();
       const pid = ins?.meta?.last_row_id;
@@ -1497,11 +1536,9 @@ async function composeScout(env, db, today) {
     const primary = scoutPicks[0];
     const whyNot = composeScoutWhyNot(scan, scan.candidates, scoutPicks);
     const rankReason = source === 'live_gap'
-      ? `Top gap-up (${primary.gap_pct}%) on ₹${primary.turnover_cr}Cr liquidity${primary.catalyst ? ', news catalyst present' : ''}. Honest: gap-ranking alone has NOT beaten a random pick in our year-long tests — a learning pick, not a proven edge.`
-      : `Live pre-open feed was down — picked from yesterday's strongest liquid close (${primary.gap_pct}% on ₹${primary.turnover_cr}Cr). Honest: this is yesterday's data, a learning watch only.`;
-    const honest = noEdge
-      ? 'Learning scout, not a profit trade. No proven edge today (NO_EDGE) — picking among these names is ~breakeven-to-slightly-negative after costs in our tests. PAPER = zero cash; it records what actually happens so you learn the market each day.'
-      : `Edge is ${edgeState} (~${cfg.oos_expectancy_pct}%/trade OOS) but small — scouting paper to build contact before sizing real money.`;
+      ? `Machine-ranked live gap-up (${primary.gap_pct}%) on ₹${primary.turnover_cr}Cr liquidity${primary.catalyst ? ', news catalyst present' : ''}; sector spread and fillability filters kept the list tight.`
+      : `Live pre-open feed was down, so the machine used yesterday's strongest liquid close (${primary.gap_pct}% on ₹${primary.turnover_cr}Cr) as a fallback scout source.`;
+    const honest = `AI-native market-derived scout. Config state is ${edgeState}, but output quality is driven by current market data and system filters; PAPER means no broker order while the outcome is recorded for calibration.`;
     const invalText = `Wrong if it loses the opening level or breaks below VWAP, or doesn't hold its gap by 09:50. Time-stop ${cfg.exit_time_ist || '14:30'} IST.`;
     const invalJson = JSON.stringify({ vwap_break: true, fail_if_no_gap_hold_by: '09:50', time_stop_ist: cfg.exit_time_ist || '14:30', max_adverse_pct: primary.stop_pct });
 
@@ -1515,7 +1552,7 @@ async function composeScout(env, db, today) {
          state, state_changed_at, owner_action, composed_at, composed_by)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(
-      today, cfg.strategy || 'gap_up_intraday', 'PAPER', 'SCOUT', verdictId, cfg.id ?? null, 'gap_edge_nightly', edgeState,
+      today, cfg.strategy || 'gap_up_intraday', 'PAPER', 'SCOUT', verdictId, cfg.id ?? null, 'market_live_scan', edgeState,
       JSON.stringify(scoutPicks.map(p => p.symbol)), primary.symbol, rankReason, JSON.stringify(whyNot),
       primary.entry_paise, primary.stop_paise, primary.target_paise, primary.qty, primary.rr_ratio,
       primary.expected_risk_paise, primary.expected_reward_paise, scoutPicks.reduce((a, p) => a + p.notional_paise, 0),
@@ -1643,26 +1680,29 @@ async function runGapEngine(env, db, today, cfg, carryover) {
   const maxRiskPct = parseFloat(uc.max_risk_per_trade_pct || '2.0');
   const maxPicks = Math.min(cfg.max_picks || 3, parseInt(uc.max_active_positions || '3', 10));
 
-  const tradable = cfg.verdict && cfg.verdict !== 'NO_EDGE';
+  const executionAuthorized = isBrokerExecutionAuthorized(cfg);
   const top = await pickSectorSpread(db, scan.candidates, maxPicks);
-  if (tradable && top.length) await refineEntries(env, top);
+  if (top.length) await refineEntries(env, top);
 
-  let decision, picksJson = [], headline, watch = [];
-  if (tradable && top.length) {
-    picksJson = sizePicks(top, cfg, deployable, totalCap, maxRiskPct);
-  }
-  if (picksJson.length) {
+  let decision, picksJson = [], headline;
+  const sizedPlan = top.length ? sizePicks(top, cfg, deployable, totalCap, maxRiskPct) : [];
+  const machinePlan = buildMachineExecutionPlan(sizedPlan, cfg);
+  let watch = machinePlan;
+  if (executionAuthorized && machinePlan.length) {
+    picksJson = sizedPlan;
     decision = 'TRADE';
     headline = `${picksJson.map(p => p.symbol).join(' + ')} — gap-up ≥${cfg.gap_min_pct}%, hold to ${cfg.exit_time_ist}, wide ${cfg.stop_pct}% stop`;
+  } else if (machinePlan.length) {
+    decision = 'OBSERVE';
+    headline = `OBSERVE — live machine plan: ${machinePlan.map(p => p.symbol).join(' + ')} (execution staged)`;
   } else {
-    decision = 'SIT_OUT';
+    decision = 'OBSERVE';
     watch = scan.candidates.slice(0, 6).map(c => ({ symbol: c.symbol, gap_pct: c.gap_pct, turnover_cr: c.turnover_cr, catalyst: !!c.catalyst }));
-    headline = !tradable
-      ? `SIT OUT — gap-up edge unproven on the tested data (${scan.gated} gappers, but no real edge yet)`
-      : `SIT OUT — ${scan.gated} gappers, none cleared the rule today`;
+    headline = `OBSERVE — ${scan.gated} gappers, none cleared liquidity/sector/execution filters`;
   }
 
   const narr = await narrateGap(env, today, cfg, decision, picksJson, scan, watch);
+  const recommendedSymbol = picksJson[0]?.symbol || machinePlan[0]?.symbol || watch[0]?.symbol || null;
 
   await db.prepare(`
     INSERT INTO daily_verdicts
@@ -1676,27 +1716,39 @@ async function runGapEngine(env, db, today, cfg, carryover) {
     today, 'morning', decision,
     headline.slice(0, 200),
     (narr.narrative || '').slice(0, 1500),
-    picksJson[0]?.symbol || null,
+    recommendedSymbol,
     null,
     JSON.stringify({
-      engine: 'gap_up',
-      edge_verdict: cfg.verdict,
-      oos_expectancy_pct: cfg.oos_expectancy_pct,
-      oos_trades: cfg.oos_trades,
-      folds_positive: cfg.folds_positive,
-      edge_vs_null: cfg.edge_vs_null,
-      watch,
+      engine: 'live_market_intelligence',
+      market_live_edge: {
+        source: 'preopen_snapshot + EOD liquidity + news catalyst + sector map + optional live quote',
+        symbols: (machinePlan.length ? machinePlan : watch).map(p => p.symbol),
+        candidates_scanned: scan.scanned,
+        gappers: scan.gated,
+        liquid_ranked: scan.candidates.length,
+      },
+      execution_authority: executionAuthorized ? 'broker_facing_picks_authorized' : 'intelligence_plan_only',
+      calibration_context: {
+        config_verdict: cfg.verdict,
+        oos_expectancy_pct: cfg.oos_expectancy_pct,
+        oos_trades: cfg.oos_trades,
+        folds_positive: cfg.folds_positive,
+        edge_vs_null: cfg.edge_vs_null,
+      },
+      machine_execution_plan: machinePlan,
       risk_flags: [
-        `Edge is ${cfg.verdict} (~${cfg.oos_expectancy_pct}%/trade OOS) — size small, this is honest not hype`,
+        executionAuthorized
+          ? 'Broker-facing picks_json authorized by active config'
+          : 'picks_json intentionally empty; full machine plan stored as intelligence outside the order surface',
         `Daily loss limit ${Math.round((parseFloat(uc.max_risk_per_trade_pct || '2') / 100) * totalCap / 100)} — stop for the day if hit`,
       ],
       tier_used: narr.model,
     }),
     JSON.stringify({
-      engine: 'gap_up_intraday',
+      engine: 'live_market_intelligence',
       config_date: cfg.config_date,
-      tuned_rule: { gap_min_pct: cfg.gap_min_pct, stop_pct: cfg.stop_pct, exit_time_ist: cfg.exit_time_ist, min_turnover_cr: cfg.min_turnover_cr, vol_mult_min: cfg.vol_mult_min },
-      scan: { scanned: scan.scanned, gapped_up: scan.gated, cleared: picksJson.length },
+      machine_rule: { gap_min_pct: cfg.gap_min_pct, stop_pct: cfg.stop_pct, exit_time_ist: cfg.exit_time_ist, min_turnover_cr: cfg.min_turnover_cr, vol_mult_min: cfg.vol_mult_min },
+      scan: { scanned: scan.scanned, gapped_up: scan.gated, liquid_ranked: scan.candidates.length, plan_count: machinePlan.length, broker_picks: picksJson.length },
       deployable_paise: deployable, carryover: carryover ? 'reviewed' : null,
     }),
     Date.now(),
@@ -1706,15 +1758,17 @@ async function runGapEngine(env, db, today, cfg, carryover) {
     '09:40 IST',
     'intraday', 1, null,
     JSON.stringify(picksJson),
-    'intraday_gap_up',
+    executionAuthorized ? 'intraday_gap_up' : 'market_live_edge_observe',
     deployable,
   ).run();
 
   return {
     rows: 1, engine: 'gap_up', decision,
     picks: picksJson.length, scanned: scan.scanned, gapped_up: scan.gated,
+    machine_plan: machinePlan.length,
+    execution_authority: executionAuthorized ? 'broker_facing_picks_authorized' : 'intelligence_plan_only',
     edge_verdict: cfg.verdict, oos_expectancy_pct: cfg.oos_expectancy_pct,
-    symbols: picksJson.map(p => p.symbol),
+    symbols: (picksJson.length ? picksJson : machinePlan).map(p => p.symbol),
   };
 }
 
