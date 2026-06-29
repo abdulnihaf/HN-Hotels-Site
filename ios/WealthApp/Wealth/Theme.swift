@@ -44,7 +44,7 @@ extension Color {
 //  MARKET CALENDAR — business-day awareness (IST). The engine's `is_market_day`
 //  is authoritative (it also knows holidays); this derives the human framing the
 //  cockpit shows on a non-market day: "today is Saturday, last was Friday, next is
-//  Monday." NO surface should say "Today's pick at 8:30" on a weekend.
+//  Monday." NO surface should say "Today's pick at 09:40" on a weekend.
 // ─────────────────────────────────────────────────────────────────────────────
 enum MarketCalendar {
     static var ist: Calendar {

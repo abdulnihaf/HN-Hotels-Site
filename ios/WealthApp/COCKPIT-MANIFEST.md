@@ -33,7 +33,7 @@ how the cockpit's growth is locked in and can never regress.
 # CHECK SRC|StocksView.swift|HKAurora|Per-stock detail sheet floats on the aurora canvas
 # CHECK SRC|Theme.swift|enum MarketCalendar|Business-day awareness (weekend/holiday → last Fri / next Mon)
 # CHECK SRC|HomeView.swift|var isMarketDay|VM exposes market-day truth to every surface
-# CHECK SRC|NowView.swift|Markets closed —|Now reframes the weekend (no "pick at 8:30" on Sat/Sun)
+# CHECK SRC|NowView.swift|Markets closed —|Now reframes the weekend (no "pick at 09:40" on Sat/Sun)
 # CHECK SRC|ScoutView.swift|weekendBlock|Scout card shows the weekend state + last scout
 
 ## Required live data (endpoints — must respond with the marker field)
