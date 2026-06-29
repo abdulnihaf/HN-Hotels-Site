@@ -36,6 +36,13 @@ how the cockpit's growth is locked in and can never regress.
 # CHECK SRC|NowView.swift|Markets closed —|Now reframes the weekend (no "pick at 09:40" on Sat/Sun)
 # CHECK SRC|ScoutView.swift|weekendBlock|Scout card shows the weekend state + last scout
 
+## Execution Lab (one-tap order-path testing cockpit — must never regress)
+# CHECK SRC|LabView.swift|private var killBar|Execution Lab kill-switch (square-off-all) present
+# CHECK SRC|LabView.swift|equityRoundTrip|Execution Lab equity round-trip scenario
+# CHECK SRC|LabView.swift|tinyReal|Execution Lab SIM/TINY-REAL mode toggle
+# CHECK SRC|LabClient.swift|func labSquareOffAll|Execution Lab client wired to the hardened door
+# CHECK SRC|HomeView.swift|LabView(vm: vm)|Execution Lab tab wired into the TabView
+
 ## Required live data (endpoints — must respond with the marker field)
 <!-- format: # CHECK API|<action[&param]>|<expected-field>|<what it feeds> -->
 # CHECK API|scout_today|ladder|Daily scout plan
