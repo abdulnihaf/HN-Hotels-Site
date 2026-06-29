@@ -323,6 +323,7 @@
 <div id="gate" class="pin-gate">
   <h2>Execute</h2>
   <input id="pin" type="password" placeholder="Dashboard key" />
+  <input id="execKey" type="password" placeholder="Execution key (only needed to place / modify orders)" style="margin-top:8px" />
   <button onclick="login()">Unlock</button>
   <div id="gateErr" style="color:var(--red);font-size:13px;margin-top:8px;min-height:18px"></div>
 </div>
@@ -587,13 +588,37 @@
 
 <script>
 const STORE_KEY = 'wealth_dashboard_key';
+const EXEC_STORE_KEY = 'wealth_exec_key';
 let DASHBOARD_KEY = localStorage.getItem(STORE_KEY) || '';
+let EXEC_KEY = localStorage.getItem(EXEC_STORE_KEY) || '';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXEC-KEY SHIM — order-MUTATING /api/kite calls (place_order, place_bracket,
+// place_gtt, cancel_order, delete_gtt, modify_order) require a separate
+// execution key (server-side KITE_EXEC_KEY), so a leaked dashboard key can read
+// dashboards but never place a real order. Rather than thread the key through
+// the ~11 individual call sites, we centralise here: append exec_key to exactly
+// those six actions. Every other fetch (reads, /api/trading) passes untouched.
+// ─────────────────────────────────────────────────────────────────────────────
+const _KITE_EXEC_RE = /\/api\/kite\?action=(place_order|place_bracket|place_gtt|cancel_order|delete_gtt|modify_order)(?=$|[&#])/;
+const _origFetch = window.fetch.bind(window);
+window.fetch = function(input, init) {
+  try {
+    if (typeof input === 'string' && _KITE_EXEC_RE.test(input) && !/[?&]exec_key=/.test(input)) {
+      input = input + '&exec_key=' + encodeURIComponent(EXEC_KEY || '');
+    }
+  } catch (_) { /* never let the shim break a request */ }
+  return _origFetch(input, init);
+};
+
 if (DASHBOARD_KEY) tryAutoLogin();
 
 function login() {
   const v = document.getElementById('pin').value.trim();
   if (!v) return;
   DASHBOARD_KEY = v;
+  const ek = (document.getElementById('execKey')?.value || '').trim();
+  if (ek) { EXEC_KEY = ek; localStorage.setItem(EXEC_STORE_KEY, ek); }
   loadAll().then(j => {
     if (j.error) { document.getElementById('gateErr').textContent = j.error; DASHBOARD_KEY = ''; return; }
     localStorage.setItem(STORE_KEY, v);
