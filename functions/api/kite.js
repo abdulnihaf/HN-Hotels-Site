@@ -599,13 +599,50 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const targetPrice = parseFloat(body.target_price);
   const tag = body.tag || 'HN_WE_BRK';
 
+  // ─── Fix #1: idempotency / double-buy guard ───────────────────────────────
+  // The hole: kite_bracket_orders had no tag column and placeBracket had no
+  // dedupe, so a network timeout mid-BUY + a client retry (or a double tap)
+  // could fire a SECOND market order. Refuse a new bracket when a NON-failed row
+  // for this symbol already exists inside the dedupe window — that row is either
+  // an in-flight execution or a just-placed order, so a retry must NOT buy again;
+  // we return the existing row and treat the retry as the original request.
+  // 'failed' / 'blocked_shadow' / 'market_closed' rows never reached Kite, so a
+  // genuine retry after one of those SHOULD proceed (they're excluded here).
+  // Window-based (not tag-based) because every current caller sends a CONSTANT
+  // tag (HN_WE_BRK / HN_WE_AUTO / app tag); a same-symbol re-entry after the
+  // window is still allowed. (The tag is stored for audit + a future per-intent
+  // idempotency key, which could widen this to a symbol+tag match.)
+  const DEDUPE_WINDOW_MS = 120000; // 2 min — covers Kite's 15s call timeout +
+                                   // any client retry with wide margin.
+  const dupe = await db.prepare(
+    `SELECT id, step, buy_order_id, gtt_id, fallback_sl_order_id, fill_price_paise, created_at
+       FROM kite_bracket_orders
+      WHERE symbol = ?
+        AND step NOT IN ('failed','blocked_shadow','market_closed')
+        AND created_at > ?
+      ORDER BY id DESC LIMIT 1`
+  ).bind(symbol, Date.now() - DEDUPE_WINDOW_MS).first();
+  if (dupe) {
+    return {
+      ok: true,                 // request honored — an order for this symbol is
+      deduped: true,            // already in-flight/placed; we prevented a 2nd buy
+      bracket_id: dupe.id,
+      step: dupe.step,
+      buy_order_id: dupe.buy_order_id || null,
+      gtt_id: dupe.gtt_id || null,
+      fallback_sl_order_id: dupe.fallback_sl_order_id || null,
+      fill_price: dupe.fill_price_paise != null ? dupe.fill_price_paise / 100 : null,
+      message: `Duplicate suppressed — a bracket for ${symbol} placed ${Math.round((Date.now() - dupe.created_at) / 1000)}s ago is already ${dupe.step} (id ${dupe.id}). No second order sent.`,
+    };
+  }
+
   // Create bracket-order tracking row before local guards so owner taps that
   // never reach Kite (shadow mode / pre-market) remain visible in audit trail.
   const bracketRowId = (await db.prepare(
     `INSERT INTO kite_bracket_orders
-       (symbol,exchange,qty,intended_stop_paise,intended_target_paise,step,created_at)
-     VALUES (?,?,?,?,?,'starting',?)`
-  ).bind(symbol, exchange, qty, Math.round(stopPrice * 100), Math.round(targetPrice * 100), Date.now()).run()).meta?.last_row_id;
+       (symbol,exchange,qty,intended_stop_paise,intended_target_paise,step,tag,created_at)
+     VALUES (?,?,?,?,?,'starting',?,?)`
+  ).bind(symbol, exchange, qty, Math.round(stopPrice * 100), Math.round(targetPrice * 100), tag, Date.now()).run()).meta?.last_row_id;
 
   // Pre-launch guard
   const block = await db.prepare(
