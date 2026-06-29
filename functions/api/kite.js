@@ -692,6 +692,64 @@ async function placeBracket(env, db, kiteHeaders, body) {
     };
   }
 
+  // ─── Fix #2: live free-cash gate (size against available.cash, not net) ────
+  // The engine's deployable is a STATIC notional (today_deployable_paise, ₹1L
+  // default) and never checks real free cash. Live Kite available.cash can be 0
+  // while net still shows ₹1L, so an EDGE verdict could size a real order against
+  // money that isn't free → a margin reject or an oversized (leveraged) position.
+  // Refuse unless freshly-verified free cash covers this order's actual margin.
+  // Trade-off: adds ~1 Kite round-trip (~0.3–0.8s) before the buy. Acceptable —
+  // correctness > sub-second latency on the money path, and well within the 20s
+  // auto-bridge ceiling (the 12s fill poll dominates). bypass_funds_check escapes.
+  if (!body.bypass_funds_check) {
+    // Refresh funds FIRST — never trust a stale snapshot. If the refresh fails,
+    // free cash is treated as unverified and the order is refused (fail-safe).
+    let availableCashPaise = null;
+    try {
+      const rf = await reconcileFunds(env, db, kiteHeaders);
+      if (rf && rf.ok === true) {
+        const f = await db.prepare(
+          `SELECT available_cash_paise FROM kite_funds_live WHERE segment='equity'`
+        ).first();
+        availableCashPaise = f ? Number(f.available_cash_paise) : null;
+      }
+    } catch { availableCashPaise = null; }
+
+    // This order's actual cash requirement — ask Kite's margin calculator; on any
+    // failure fall back to a CONSERVATIVE notional (qty × highest reference price).
+    let requiredPaise = null;
+    try {
+      const m = await orderMargins(env, db, kiteHeaders, {
+        orders: [{
+          exchange, tradingsymbol: symbol, transaction_type: 'BUY',
+          variety: 'regular', product: body.product,
+          order_type: body.order_type || 'MARKET', quantity: qty,
+          price: body.price != null ? Number(body.price) : 0,
+        }],
+      });
+      const leg = (m && m.ok && Array.isArray(m.data)) ? m.data[0] : null;
+      if (leg && leg.total != null) requiredPaise = Math.round(Number(leg.total) * 100);
+    } catch { requiredPaise = null; }
+    if (requiredPaise == null) {
+      const refRupees = Math.max(targetPrice, stopPrice, body.price != null ? Number(body.price) : 0);
+      requiredPaise = Math.round(qty * refRupees * 100);   // conservative notional upper bound
+    }
+
+    if (availableCashPaise == null || requiredPaise > availableCashPaise) {
+      const reason = availableCashPaise == null ? 'funds_unverified' : 'insufficient_free_cash';
+      await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
+        .bind(reason, Date.now(), bracketRowId).run();
+      return {
+        ok: false, bracket_id: bracketRowId, error: reason,
+        required_paise: requiredPaise,
+        available_cash_paise: availableCashPaise,
+        message: availableCashPaise == null
+          ? 'Could not verify live free cash with Kite — real order NOT sent (fail-safe). Retry once funds are confirmed, or pass bypass_funds_check to override.'
+          : `Insufficient free cash: this order needs about ₹${Math.round(requiredPaise / 100)} but only ₹${Math.round(availableCashPaise / 100)} is free. No order sent — the engine sizes against a fixed ₹1L notional, but real free cash is the real limit.`,
+      };
+    }
+  }
+
   const result = { ok: false, bracket_id: bracketRowId, steps: [] };
 
   // ─── Step 1: place market buy ─────────────────────────────
