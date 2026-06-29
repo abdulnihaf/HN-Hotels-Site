@@ -80,9 +80,9 @@ struct EngineState: Decodable {
     let cards_today: Int?
 }
 
-// The 8:30 IST plan numbers. recommended_plan_json may arrive as a JSON object OR a
+// The 09:40 IST plan numbers. recommended_plan_json may arrive as a JSON object OR a
 // stringified JSON (the repo's `_json` convention), and qty/prices may be num-or-string —
-// so decode defensively. (Verdict is {ok:false} before 08:30, so this is unobservable now.)
+// so decode defensively. (Verdict is {ok:false} before the compose, so this is unobservable then.)
 struct VerdictPlan: Decodable {
     let entry: Double?
     let stop: Double?

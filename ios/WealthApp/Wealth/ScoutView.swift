@@ -49,7 +49,7 @@ struct ScoutLadderStrip: View {
             HStack(spacing: 6) {
                 Text("Proof: \(short(proof))").font(.system(size: 10, weight: .bold)).foregroundColor(HK.error)
                 Text("·").foregroundColor(HK.textFaint)
-                Text("Today: \(short(action)) — zero cash").font(.system(size: 10, weight: .bold)).foregroundColor(HK.accent)
+                Text("Today: \(short(action)) — \(action == "PAPER_SCOUT" ? "paper only" : "proof mode")").font(.system(size: 10, weight: .bold)).foregroundColor(HK.accent)
             }
             if let cond = ladder.to_deployable {
                 Text(cond).font(.system(size: 10)).foregroundColor(HK.textFaint)

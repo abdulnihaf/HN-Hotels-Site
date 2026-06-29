@@ -157,8 +157,9 @@ def walk_forward(cands, cost):
     t, p = tstat(oos_rets)
     # most-chosen param set = the published rule
     rule = max(chosen, key=chosen.get) if chosen else None
+    p_rounded = round(p, 4)
     return {"oos_n": len(oos_rets), "oos_exp": round(mean(oos_rets), 4) if oos_rets else None,
-            "t": round(t, 3), "p": round(p, 4), "folds": fold_log,
+            "t": round(t, 3), "p": p_rounded, "oos_p": p_rounded, "folds": fold_log,
             "folds_positive": sum(1 for f in fold_log if f["oos_exp"] and f["oos_exp"] > 0),
             "folds_total": len(fold_log), "rule": rule,
             "rule_votes": {",".join(map(str, k)): v for k, v in chosen.items()}}
@@ -199,10 +200,15 @@ def main():
     # A positive raw return that doesn't beat a same-day random gap pick is just beta, not alpha.
     beats_null = bool(null and null["edge_vs_null"] is not None and null["edge_vs_null"] > 0)
     pos = base and base["oos_exp"] is not None and base["oos_exp"] > 0
-    robust = bool(pos and base["oos_n"] >= 200 and base["folds_positive"] >= max(3, base["folds_total"] - 1)
-                  and beats_null and base["oos_p"] is not None and base["oos_p"] < 0.05)
-    thin = bool(pos and base["oos_n"] >= 100 and beats_null
-                and base["oos_p"] is not None and base["oos_p"] < 0.15)
+    base_p = base.get("oos_p", base.get("p")) if base else None
+    null_z = null.get("z_vs_null") if null else None
+    folds_needed = max(3, math.ceil((base["folds_total"] if base else 0) * 0.6))
+    robust = bool(pos and base["oos_n"] >= 200 and base["folds_positive"] >= max(4, base["folds_total"] - 1)
+                  and beats_null and null_z is not None and null_z >= 3.0
+                  and base_p is not None and base_p < 0.05)
+    thin = bool(pos and base["oos_n"] >= 100 and base["folds_positive"] >= folds_needed
+                and beats_null and null_z is not None and null_z >= 2.0
+                and base_p is not None and base_p < 0.15)
     verdict = ("ROBUST_EDGE" if robust else "THIN_EDGE" if thin else "NO_EDGE")
     c2 = sqlite3.connect(DB)
     bars_total = c2.execute("SELECT COUNT(*) FROM bars5m").fetchone()[0]

@@ -7,6 +7,7 @@
 #   4. journal yesterday's pick-vs-outcome -> wealth_pick_journal (learn from own results)
 # The 09:40 Cloudflare engine reads the published rule next morning. The loop gets
 # smarter from its own track record and is honest when there's no edge to trade.
+set -euo pipefail
 cd "$(dirname "$0")" || exit 1
 {
   echo "=== NIGHTLY $(date '+%F %T') ==="

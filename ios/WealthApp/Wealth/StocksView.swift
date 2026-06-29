@@ -18,8 +18,8 @@ import Charts
 //     flow has real data for ~11/20, macro 4/20, sentiment/quality/retail ~0.)
 //   - Pre-market / when live LTP == last close, we show YESTERDAY'S CLOSE and say
 //     "live at open" — never a faked live tick.
-//   - The engine edge is UNPROVEN (25% paper win-rate). Every actionable surface
-//     says so. These are candidates to learn from, not sure things.
+//   - The engine edge is UNPROVEN. Every actionable surface says so. These are
+//     candidates to learn from, not sure things.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // MARK: - Light model
@@ -390,7 +390,7 @@ struct StocksView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Edge unproven — \(vm.readiness?.passing ?? "—") ready")
                     .font(.system(size: 13, weight: .heavy)).foregroundColor(HK.running)
-                Text("These are the engine's candidates, not sure things (25% paper win-rate so far). Learn the lights. Keep sizes small.")
+                Text("These are the engine's candidates, not sure things. Learn the lights. Keep sizes small until the proof ladder graduates.")
                     .font(.system(size: 11)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
@@ -653,7 +653,7 @@ private struct StockDetailSheet: View {
                 lightsCard
                 if let plan = intel.plan { planCard(plan) } else { noPlanCard }
                 rationaleCard
-                Text("The engine's edge is unproven (25% paper win-rate). Treat this as a teaching tool first.")
+                Text("The engine's edge is unproven. Treat this as a teaching tool first until the proof ladder graduates.")
                     .font(.system(size: 11)).foregroundColor(HK.textFaint)
             }
             .padding(18)
@@ -832,7 +832,7 @@ private struct StockDetailSheet: View {
     private var noPlanCard: some View {
         Card {
             Text("Not today's engine pick").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
-            Text("The engine composes ONE plan a day (8:30 AM) for its single best setup — and that's \(vm.verdict?.recommended_symbol ?? "decided then"). You can still trade this manually, but set your own stop and target first.")
+            Text("The engine composes ONE plan a day around 09:40 AM, after the opening bars — and that's \(vm.verdict?.recommended_symbol ?? "decided then"). You can still trade this manually, but set your own stop and target first.")
                 .font(.system(size: 12)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
             Button {
                 vm.prefill = WealthVM.OrderDraft(symbol: intel.symbol, stop: "", target: "", qty: "")

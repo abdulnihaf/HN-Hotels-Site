@@ -35,7 +35,7 @@ struct SetupView: View {
             if dec == "SIT_OUT" {
                 return ("No engine trade today", "No proven setup is available right now. The app records this as no engine trade, not as a manual sit-out by you.", HK.idle)
             }
-            return ("Not decided yet", "The engine picks today's stock at 8:30 AM. Until then, learn the 5 lights below — that's how every trade is judged.", HK.text)
+            return ("Not decided yet", "The engine picks today's stock around 09:40 AM, after the opening bars. Until then, learn the 5 lights below — that's how every trade is judged.", HK.text)
         }()
         return VStack(alignment: .leading, spacing: 8) {
             Text("Is today a trade day?").font(.system(size: 12, weight: .heavy)).foregroundColor(HK.accent)
@@ -59,7 +59,7 @@ struct SetupView: View {
             qRow(3, "Is big money in?",        "Banks and funds buying = wind in your sails. They move the price.", q3())
             qRow(4, "Is there a reason?",      "News, results, a big order, a hot sector — moves with a reason last longer.", .pending)
             qRow(5, "What's my risk?",         "Where you cut the loss vs take profit. Risk ₹1 to make ₹2 — never the reverse.", .pending)
-            Text("More green = better trade. The lights fill in as today's data arrives (some need the market open + the 8:30 pick).")
+            Text("More green = better trade. The lights fill in as today's data arrives (some need the market open + the 09:40 pick).")
                 .font(.system(size: 11)).foregroundColor(HK.textFaint)
         }
     }
@@ -111,5 +111,5 @@ struct SetupView: View {
         .padding(.vertical, 4)
     }
     private func lightColor(_ l: Light) -> Color { switch l { case .green: return HK.ready; case .amber: return HK.running; case .pending: return HK.idle } }
-    private func lightLabel(_ l: Light) -> String { switch l { case .green: return "GOOD"; case .amber: return "CAUTION"; case .pending: return "AT 8:30" } }
+    private func lightLabel(_ l: Light) -> String { switch l { case .green: return "GOOD"; case .amber: return "CAUTION"; case .pending: return "AT 09:40" } }
 }

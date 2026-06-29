@@ -133,7 +133,7 @@ struct NowView: View {
         }
         if dec == "TRADE", let p = pick {
             return Situation(headline: "Today: trade \(p)",
-                             sub: "The engine found a setup. Review the plan and place it — or skip. (Unproven: 25% paper win-rate — treat as practice.)",
+                             sub: "The engine found a setup. Review the exact entry, stop, target and quantity before placing it. Treat it as unproven until the proof ladder graduates.",
                              tone: HK.ready, action: .place(p))
         }
         if dec == "SIT_OUT" {
@@ -142,8 +142,8 @@ struct NowView: View {
                              tone: HK.idle, action: .none)
         }
         if phase.contains("overnight") || phase.contains("pre") || phase.isEmpty {
-            return Situation(headline: "Pre-market — pick comes at 8:30",
-                             sub: "Nothing to do yet. The engine composes today's call at 8:30 AM. You're connected and set.",
+            return Situation(headline: "Pre-market — engine composes at 09:40",
+                             sub: "Nothing to do yet. The engine waits for the opening bars and composes today's call around 09:40 AM. You're connected and set.",
                              tone: HK.text, action: .none)
         }
         return Situation(headline: "Watching the market",
@@ -192,7 +192,7 @@ struct NowView: View {
             } else if vm.verdict?.decision == "SIT_OUT" {
                 Row(label: "Decision", value: "NO ENGINE TRADE", valueColor: HK.idle)
             } else {
-                Text("Composes at 8:30 AM (Mon–Fri). Until then there's nothing to act on.")
+                Text("Composes around 09:40 AM (Mon–Fri), after the opening bars. Until then there's nothing to act on.")
                     .font(.system(size: 12)).foregroundColor(HK.textDim)
             }
         }

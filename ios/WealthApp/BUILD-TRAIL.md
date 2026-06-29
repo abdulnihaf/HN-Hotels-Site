@@ -78,6 +78,12 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Sim-verified: bucket grid renders 1,248 across buckets; RELIANCE detail shows the 1M/3M/6M/MAX graph. **Source COMMITTED (155860b)** — can't be lost as untracked again.
 - Shipped: TestFlight build **14** VALID + internal-group assigned (id `0fd513ab-05ba-47a7-b8cf-4a076b368dad`) AND devicectl-installed directly to the iPhone 17 Pro (0EEE75EE). Debug env hooks: `WEALTH_BUCKET`, `WEALTH_DETAIL` (gated, harmless in prod).
 
+## Build 17 — pre-live trading copy + worker hardening (2026-06-29, Codex)
+- Shipped **TestFlight build 17** for `com.hnhotels.wealth`; ASC readback **VALID**, delivery/build id `8be48fc6-a131-40ee-a846-7c4303570c21`, assigned to internal group `0cd3994a-c901-4cbd-9fc8-2f892bcdbdbf` (HTTP 204).
+- UX fixes for tomorrow's live-trading cockpit: all owner-visible iOS timing copy now says the gap engine composes around **09:40** after the opening bars, not 08:30; stale "25% paper win-rate" strings were removed; the scout ladder says "paper only" for PAPER_SCOUT instead of the misleading blanket "zero cash".
+- Verified before upload: `ship-check.sh` passed 18/18 live/source checks; simulator compile passed; simulator unlocked snapshot showed Now rendering "Pre-market — engine composes at 09:40", PAPER scout, and current live data. Release archive, IPA export, altool upload, ASC VALID polling, and internal-group assignment all succeeded.
+- Same execution repaired the RTX learning loop: Jun 29 5-minute bars were manually backfilled to 94,678 rows / 1,263 symbols, gap-edge was republished with date range through 2026-06-29, and `daily_topup_full.py` + `daily.sh` now fail hard instead of publishing stale configs when historical bars fail.
+
 ## Build 13 — daily scout teaching surface (2026-06-27, Claude ultracode)
 - Shipped **TestFlight build 13** for `com.hnhotels.wealth`; ASC readback **VALID**, build id `94ea1033-19be-4845-8e16-9226e6ebdb46`, assigned to internal group `0cd3994a-c901-4cbd-9fc8-2f892bcdbdbf` (HTTP 204).
 - NEW `ScoutView.swift`: `ScoutTodayCard` (marquee daily action on **Now**, above the proof card) + `ScoutTrailCard` (learning trail on **Today**) + `ScoutLadderStrip` (5-rung REJECTED→PAPER_SCOUT→TOKEN_SCOUT→WATCH_SCOUT→DEPLOYABLE).
