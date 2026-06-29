@@ -76,10 +76,7 @@ fun todayIst(): String {
     return f.format(Date())
 }
 fun defaultPurchaseDateIst(): String {
-    val c = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata"))
-    if (c.get(Calendar.HOUR_OF_DAY) >= 18) c.add(Calendar.DAY_OF_MONTH, 1)
-    val f = SimpleDateFormat("yyyy-MM-dd", Locale.US); f.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
-    return f.format(c.time)
+    return todayIst()
 }
 fun stepDate(d: String, days: Int): String {
     val f = SimpleDateFormat("yyyy-MM-dd", Locale.US); f.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
@@ -558,6 +555,7 @@ fun StatusPill(status: String) {
 fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
     var data by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf("") }
+    var actionError by remember { mutableStateOf("") }
     var receiving by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var goodsImage by remember { mutableStateOf("") }
@@ -567,6 +565,8 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
     val scope = rememberCoroutineScope()
     fun load() {
         data = null
+        error = ""
+        actionError = ""
         scope.launch {
             val r = Api.get("action=card&id=${s.id}")
             if (r.optBoolean("ok")) data = r else error = r.optString("error")
@@ -603,11 +603,11 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                         Column(Modifier.padding(16.dp)) {
                             if (status == "REQUESTED" && caps.contains("sauda.place")) Button(
                                 onClick = {
-                                    if (busy) return@Button; busy = true
+                                    if (busy) return@Button; busy = true; actionError = ""
                                     scope.launch {
                                         val r = Api.post("mark-ordered", JSONObject().put("order_id", s.id))
                                         busy = false
-                                        if (r.optBoolean("ok")) load() else error = r.optString("error")
+                                        if (r.optBoolean("ok")) load() else actionError = r.optString("error")
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Maroon),
@@ -616,6 +616,7 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                             else if (!receiving && status == "ORDERED" && caps.contains("sauda.receive")) Button(
                                 onClick = {
                                     receiving = true
+                                    actionError = ""
                                     goodsImage = ""; billImage = ""
                                     lines.forEach {
                                         recvQty[it.optInt("id")] = numStr(it.optDouble("qty_ordered", 0.0))
@@ -631,12 +632,29 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                                     PhotoCaptureButton("Bill photo", billImage.isNotEmpty(), Modifier.weight(1f)) { billImage = it }
                                 }
                                 Spacer(Modifier.height(10.dp))
+                                if (actionError.isNotEmpty()) {
+                                    Text("⚠ $actionError", color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                                }
                                 Row {
                                     OutlinedButton(onClick = { receiving = false }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Cancel") }
                                     Spacer(Modifier.width(12.dp))
                                     Button(
                                     onClick = {
-                                        if (busy) return@Button; busy = true
+                                        if (busy) return@Button
+                                        if (goodsImage.isEmpty() || billImage.isEmpty()) {
+                                            actionError = "Take goods photo and bill photo before saving proof."
+                                            return@Button
+                                        }
+                                        val incomplete = lines.firstOrNull { l ->
+                                            val id = l.optInt("id")
+                                            (recvQty[id]?.toDoubleOrNull() ?: 0.0) <= 0.0 ||
+                                                paiseFromRupeeText(recvRate[id] ?: "") <= 0
+                                        }
+                                        if (incomplete != null) {
+                                            actionError = "Enter received quantity and bill rate for every item."
+                                            return@Button
+                                        }
+                                        busy = true; actionError = ""
                                         scope.launch {
                                             val arr = JSONArray()
                                             lines.forEach { l -> val id = l.optInt("id")
@@ -650,7 +668,7 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                                                 .put("goods_image", goodsImage)
                                                 .put("bill_image", billImage))
                                             busy = false
-                                            if (r.optBoolean("ok")) { receiving = false; load() } else error = r.optString("error")
+                                            if (r.optBoolean("ok")) { receiving = false; load() } else actionError = r.optString("error")
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = GoodG),

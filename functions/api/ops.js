@@ -495,23 +495,37 @@ export async function onRequest(context) {
       const order_id = b.order_id;
       const lines = Array.isArray(b.lines) ? b.lines : [];
       if (!order_id) return J({ ok: false, error: 'order_id required' }, 400);
+      if (!lines.length) return J({ ok: false, error: 'received lines required' }, 400);
+      if (!b.goods_image || !b.bill_image) return J({ ok: false, error: 'goods photo and bill photo required before receiving' }, 400);
       const po = await db.prepare(`SELECT id,outlet_id,status FROM purchase_orders WHERE id=?`).bind(order_id).first();
       if (!po) return J({ ok: false, error: 'card not found' }, 404);
       if (!outletOk(u, po.outlet_id)) return J({ ok: false, error: 'outlet not permitted' }, 403);
       const existing = (await db.prepare(`SELECT id,qty_ordered,qty_received,unit_cost_paise FROM purchase_order_lines WHERE order_id=?`)
         .bind(order_id).all()).results || [];
+      if (lines.length !== existing.length) return J({ ok: false, error: 'every order line must be received' }, 400);
       const byLine = Object.fromEntries(existing.map(l => [l.id, l]));
+      const seen = new Set();
       const stmts = [];
       for (const ln of lines) {
+        const lineId = Number(ln.line_id || 0);
+        if (!byLine[lineId]) return J({ ok: false, error: 'unknown receive line' }, 400);
+        if (seen.has(lineId)) return J({ ok: false, error: 'duplicate receive line' }, 400);
+        seen.add(lineId);
+        const state = String(ln.receive_state || 'ok');
         const qr = ln.qty_received != null && ln.qty_received !== '' ? Number(ln.qty_received) : null;
         const cost = ln.unit_cost_paise != null && ln.unit_cost_paise !== '' ? Math.max(0, Math.round(Number(ln.unit_cost_paise))) : null;
-        const old = byLine[ln.line_id] || {};
-        const basisQty = qr != null ? qr : (old.qty_received != null ? Number(old.qty_received) : Number(old.qty_ordered || 0));
-        const finalCost = cost != null ? cost : Number(old.unit_cost_paise || 0);
+        if (state !== 'missing' && (!Number.isFinite(qr) || qr <= 0)) {
+          return J({ ok: false, error: 'received quantity required for every line' }, 400);
+        }
+        if (state !== 'missing' && (!Number.isFinite(cost) || cost <= 0)) {
+          return J({ ok: false, error: 'bill rate required for every line' }, 400);
+        }
+        const basisQty = state === 'missing' ? 0 : qr;
+        const finalCost = state === 'missing' ? 0 : cost;
         const amount = finalCost ? Math.round((Number.isFinite(basisQty) ? basisQty : 0) * finalCost) : 0;
         stmts.push(db.prepare(
           `UPDATE purchase_order_lines SET qty_received=?, receive_state=?, unit_cost_paise=?, line_amount_paise=? WHERE id=? AND order_id=?`)
-          .bind(qr, ln.receive_state || 'ok', finalCost, amount, ln.line_id, order_id));
+          .bind(basisQty, state, finalCost, amount, lineId, order_id));
       }
       if (stmts.length) await db.batch(stmts);
       await storeOrderMedia(env, db, order_id, 'goods', b.goods_image, u.name);
@@ -531,6 +545,21 @@ export async function onRequest(context) {
       const po = await db.prepare(`SELECT id,outlet_id,status,expected_amount_paise FROM purchase_orders WHERE id=?`).bind(order_id).first();
       if (!po) return J({ ok: false, error: 'card not found' }, 404);
       if (!outletOk(u, po.outlet_id)) return J({ ok: false, error: 'outlet not permitted' }, 403);
+      const proof = await db.prepare(
+        `SELECT
+           SUM(CASE WHEN kind='goods' THEN 1 ELSE 0 END) goods_count,
+           SUM(CASE WHEN kind='bill' THEN 1 ELSE 0 END) bill_count
+           FROM purchase_media WHERE order_id=?`).bind(order_id).first();
+      if (!Number(proof?.goods_count || 0) || !Number(proof?.bill_count || 0)) {
+        return J({ ok: false, error: 'receive proof required before payment trail' }, 400);
+      }
+      const incomplete = await db.prepare(
+        `SELECT COUNT(*) n FROM purchase_order_lines
+          WHERE order_id=? AND (qty_received IS NULL OR qty_received<=0 OR unit_cost_paise IS NULL OR unit_cost_paise<=0)`)
+        .bind(order_id).first();
+      if (Number(incomplete?.n || 0) > 0) {
+        return J({ ok: false, error: 'received quantity and bill rate required before payment trail' }, 400);
+      }
       const paid = !!b.paid && can(u, 'sauda.pay');
       const amount = Math.max(0, Math.round(Number(b.pay_amount_paise || po.expected_amount_paise || 0)));
       await db.prepare(

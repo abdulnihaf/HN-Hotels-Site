@@ -41,10 +41,10 @@ jobs:
           cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 5,
-            "versionName": "1.4",
+            "versionCode": 6,
+            "versionName": "1.5",
             "url": "https://hn-ops-api.pages.dev/HN-Staff.apk",
-            "notes": "Sauda demand flow for Azeem/Nafees, Zoya purchase bucket, receive proof photos, rates, and payment trail."
+            "notes": "Sauda opens on today's date and requires goods photo, bill photo, received quantity, and bill rate before payment trail."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -68,7 +68,7 @@ jobs:
               <h1>HN Staff</h1>
               <p>Install the current Android staff app for Sauda purchase work.</p>
               <a href="/HN-Staff.apk">Download & install</a>
-              <small>Version 1.4 · HN Hotels Pvt Ltd</small>
+              <small>Version 1.5 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>
