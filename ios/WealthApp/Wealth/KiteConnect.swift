@@ -1,29 +1,15 @@
 import SwiftUI
-import SafariServices
 
-struct KiteURLItem: Identifiable { let id = UUID(); let url: URL }
-
-/// In-app Safari that SHARES cookies with Safari — so if you're already logged into
-/// kite.zerodha.com it's a one-tap Authorize.
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        let c = SFSafariViewController.Configuration()
-        c.entersReaderIfAvailable = false
-        let vc = SFSafariViewController(url: url, configuration: c)
-        vc.dismissButtonStyle = .done
-        return vc
-    }
-    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
-}
-
-/// "Connect Kite" button. Opens Zerodha's login (the one unavoidable web step), then
-/// POLLS the server connection status while the sheet is open and AUTO-CLOSES the sheet
-/// the instant the token is stored — so you never land on the web dashboard / key page.
+/// "Connect Kite" button. Opens Zerodha's login via the SYSTEM opener (openURL) so iOS
+/// hands off DIRECTLY to the installed Kite app — one-tap "Authorize", no typing — and
+/// only falls back to Safari if the Kite app isn't installed. (The previous version used
+/// an in-app SFSafariViewController, which by design can never hand off to another app, so
+/// it always showed the web login.) The access token is stored SERVER-SIDE the instant you
+/// authorize, so the app just POLLS connection status and flips to "connected" on return.
 struct KiteConnectButton: View {
     @ObservedObject var vm: WealthVM
     var label: String = "Connect Kite"
-    @State private var sheet: KiteURLItem?
+    @Environment(\.openURL) private var openURL
     @State private var loading = false
     @State private var poll: Task<Void, Never>?
 
@@ -32,9 +18,10 @@ struct KiteConnectButton: View {
             loading = true
             Task {
                 let resolved = await WealthClient.shared.kiteLoginURL()
+                let url = resolved ?? URL(string: "https://trade.hnhotels.in/wealth/auth/login")!
                 await MainActor.run {
                     loading = false
-                    sheet = KiteURLItem(url: resolved ?? URL(string: "https://trade.hnhotels.in/wealth/auth/login")!)
+                    openURL(url)          // system open → hands off to the Kite app if installed
                     startPolling()
                 }
             }
@@ -44,16 +31,11 @@ struct KiteConnectButton: View {
                 .frame(maxWidth: .infinity).padding(.vertical, 12)
                 .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(HK.accent))
         }
-        .sheet(item: $sheet, onDismiss: {
-            poll?.cancel()
-            Task { await vm.refresh() }
-        }) { item in
-            SafariView(url: item.url).ignoresSafeArea()
-        }
     }
 
-    /// While the login sheet is open, check status every 2s (up to ~5 min). The moment Kite
-    /// reports connected (token stored server-side after Authorize), dismiss the sheet.
+    /// After you tap Authorize in the Kite app, the token is stored server-side. Poll status
+    /// every 2s for ~5 min; the moment Kite reports connected, refresh the UI. The poll pauses
+    /// while you're in the Kite app and resumes when you return to Wealth.
     private func startPolling() {
         poll?.cancel()
         poll = Task {
@@ -61,7 +43,7 @@ struct KiteConnectButton: View {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 if Task.isCancelled { return }
                 if let st = try? await WealthClient.shared.kiteStatus(), st.connected == true {
-                    await MainActor.run { sheet = nil }   // dismiss → onDismiss refreshes
+                    await vm.refresh()
                     return
                 }
             }
