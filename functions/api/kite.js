@@ -654,6 +654,21 @@ async function placeOrder(env, db, kiteHeaders, body) {
   // Committed to D1 BEFORE the Kite subrequest (this await resolves first). Skipped
   // for internal bracket buys (the bracket already anchored on kite_bracket_orders),
   // for SIM (a SIM must never block a later real order), and when there is no tag.
+  // anchorClaim holds OUR winning claim so a DEFINITIVE broker rejection below can
+  // release it — a corrected retry after a rejection must not be falsely suppressed for
+  // 120s. It is NEVER released on a network/timeout failure where the order's fate is
+  // unknown; that preserves at-most-once (Fix 1A must never trade its no-double-fire
+  // guarantee for retry convenience).
+  let anchorClaim = null;
+  const releaseAnchor = async () => {
+    if (!anchorClaim) return;
+    try {
+      await db.prepare(
+        `DELETE FROM lab_order_anchors WHERE symbol=? AND transaction_type=? AND tag=? AND window_bucket=?`
+      ).bind(anchorClaim.symbol, anchorClaim.transaction_type, anchorClaim.tag, anchorClaim.window_bucket).run();
+    } catch { /* best-effort; a stale anchor only over-suppresses, never double-fires */ }
+    anchorClaim = null;
+  };
   if (!internal && !isSim && idemTag) {
     const windowBucket = Math.floor(Date.now() / DEDUPE_WINDOW_MS);
     let claimed = false;
@@ -667,6 +682,7 @@ async function placeOrder(env, db, kiteHeaders, body) {
       // INSERT OR IGNORE: changes===1 means WE won the claim; changes===0 means a
       // concurrent request already holds it (unique collision) → suppress this order.
       claimed = (ins?.meta?.changes ?? 0) === 1;
+      if (claimed) anchorClaim = { symbol: body.tradingsymbol, transaction_type: body.transaction_type, tag: idemTag, window_bucket: windowBucket };
     } catch {
       // Anchor table missing (migration not yet applied) → fall through and place.
       // The read-dedupe still guards the sequential case; pre-migration prod simply
@@ -698,15 +714,30 @@ async function placeOrder(env, db, kiteHeaders, body) {
   // §6.1: route through kiteFetch (circuit breaker + kite_endpoint_health writes)
   // instead of raw fetch — so a Lab order trips the breaker and stamps
   // last_success_ts like every other call. Returns { ok, status, body }.
-  const r = await kiteFetch(db, `${KITE_BASE}/orders/${variety}`, {
-    method: 'POST',
-    headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: formData.toString(),
-  });
+  // kiteFetch THROWS only on an OPEN circuit — i.e. BEFORE any POST is sent — so the
+  // order definitively never reached the broker: release the claim and surface it.
+  let r;
+  try {
+    r = await kiteFetch(db, `${KITE_BASE}/orders/${variety}`, {
+      method: 'POST',
+      headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    });
+  } catch (e) {
+    await releaseAnchor();
+    return { ok: false, error: String(e?.message || e), kite_response: null, http_status: 0 };
+  }
   const j = r.body || {};
 
   if (!r.ok || j.status !== 'success') {
-    return { ok: false, error: j.message || r.error || 'Order failed', kite_response: j, http_status: r.status };
+    // Release the concurrency claim ONLY on a DEFINITIVE broker rejection — an HTTP
+    // error response (4xx/5xx WITH a body) was received, so the order did NOT execute
+    // and a corrected retry must be allowed. On a network/timeout failure (no HTTP
+    // response: status 0 or no body) the order's fate is UNKNOWN → KEEP the claim so a
+    // retry can never re-fire a possibly-live order (at-most-once).
+    const brokerRejected = r.status >= 400 && r.status < 600 && r.body && typeof r.body === 'object';
+    if (brokerRejected) await releaseAnchor();
+    return { ok: false, error: j.message || r.error || 'Order failed', kite_response: j, http_status: r.status, anchor_held: !brokerRejected };
   }
   return { ok: true, order_id: j.data.order_id, kite_response: j };
 }
