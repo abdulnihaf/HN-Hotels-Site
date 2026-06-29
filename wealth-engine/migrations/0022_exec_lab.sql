@@ -49,6 +49,27 @@ CREATE TABLE IF NOT EXISTS lab_steps (
 );
 CREATE INDEX IF NOT EXISTS idx_lab_steps_run ON lab_steps(run_id, seq);
 
+-- ── Concurrency anchor: pre-flight in-flight claim BEFORE the Kite POST ────────
+-- The read-only dedupe on lab_runs (sliding 120s window) only catches SEQUENTIAL
+-- retries — a request whose lab_runs row was already written. TWO TRULY CONCURRENT
+-- retries (network timeout mid-order + client retry) both pass the read (neither
+-- has written its row yet) and BOTH fire a real Kite order. This anchor closes that
+-- hole the SAME way placeBracket pre-inserts kite_bracket_orders step='starting':
+-- the unified placeOrder INSERTs a claim row here BEFORE the Kite subrequest, and
+-- the UNIQUE constraint makes the concurrent second insert FAIL → that loser treats
+-- itself as a duplicate and never POSTs. Keyed on (symbol, txn, tag, window_bucket)
+-- so only same-symbol+side+tag inside the same 120s bucket collide; a different
+-- symbol/side/tag, or the next window, is free to proceed.
+-- SIM rows are NEVER written here (a SIM must not block a later real order).
+CREATE TABLE IF NOT EXISTS lab_order_anchors (
+  symbol            TEXT NOT NULL,
+  transaction_type  TEXT NOT NULL,
+  tag               TEXT NOT NULL,
+  window_bucket     INTEGER NOT NULL,   -- floor(now_ms / 120000)
+  created_at        TEXT,
+  PRIMARY KEY (symbol, transaction_type, tag, window_bucket)
+);
+
 -- ── New config keys the unified order door + the Lab read ─────────────────────
 -- max_order_notional_paise: the per-test rupee ceiling enforced SERVER-SIDE in
 -- the unified placeOrder. An order whose (qty × ref_price) exceeds this is REFUSED
@@ -65,5 +86,6 @@ INSERT OR REPLACE INTO user_config (config_key, config_value, description, updat
   ('nfo_index_whitelist',      'NIFTY,BANKNIFTY,FINNIFTY,MIDCPNIFTY', 'Buyer-only index weeklies allowed on NFO (prefix match); all else refused', strftime('%s','now')*1000),
   ('nfo_option_margin_cap_paise', '200000', 'NFO option order_margins.total cap (>₹2000 blocks — catches writing/SPAN) — ₹2000', strftime('%s','now')*1000),
   ('gtt_stop_slip_pct', '0.5', 'Bracket GTT stop-leg LIMIT buffer below trigger (SL-M-emulating marketable limit, %)', strftime('%s','now')*1000),
+  ('bracket_protective_slm', '1', 'Arm a TRUE SL-M protective stop the moment the buy fills (gap-proof) alongside the GTT OCO; our reconcile cancels the opposite leg. 1=on (default), 0=GTT-only legacy.', strftime('%s','now')*1000),
   ('time_exit_ist_hhmm', '1512', 'IST HH:MM the time-exit cron squares MIS (beats RMS ~15:20/15:25). SCAFFOLD — disabled vs real orders.', strftime('%s','now')*1000),
   ('time_exit_enabled', '0', 'Time-exit cron arm switch — 0 = SIM/dry only (NOT armed against real orders).', strftime('%s','now')*1000);

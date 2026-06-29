@@ -536,12 +536,20 @@ async function placeOrder(env, db, kiteHeaders, body) {
   // Internal bracket buys skip this (the bracket already deduped on kite_bracket_orders).
   const DEDUPE_WINDOW_MS = 120000;
   const idemTag = body.tag ? String(body.tag).slice(0, 20) : null;
+  const isSim = body.simulate === true || body.simulate === '1';
   if (!internal && idemTag) {
+    // Fix 1B — SIM must NEVER poison the real dedupe. A simulate=1 order records a
+    // lab_runs row with mode='sim'; if those rows were dedupe-eligible, a SIM test
+    // then a real order with the same symbol+side+tag inside the window would
+    // SILENTLY suppress the real order. We run SIM then TINY-REAL with the SAME tag
+    // by design, so the dedupe query EXCLUDES mode='sim' rows — only a prior REAL
+    // (mode='tiny_real') in-flight/placed order suppresses a duplicate.
     const dupe = await db.prepare(
       `SELECT id, status, raw_error, steps_json, created_at
          FROM lab_runs
         WHERE symbol = ? AND tag = ?
           AND kind = 'place_order'
+          AND mode != 'sim'
           AND status NOT IN ('error','blocked','market_closed','over_notional_cap','notional_unbounded')
           AND json_extract(intent_json, '$.transaction_type') = ?
           AND created_at > ?
@@ -632,6 +640,45 @@ async function placeOrder(env, db, kiteHeaders, body) {
       order_id: `SIM_${body.transaction_type}_${body.tradingsymbol}_${Date.now()}`,
       message: `Simulated ${body.transaction_type} ${body.quantity} ${body.exchange}:${body.tradingsymbol} (${body.product} ${body.order_type || 'MARKET'}) — passed all guards, nothing sent to broker.`,
     };
+  }
+
+  // ─── Fix 1A: concurrency anchor — pre-flight in-flight CLAIM before the POST ──
+  // The read-dedupe above only catches SEQUENTIAL retries (a request whose lab_runs
+  // row was already written by recordRun, which runs AFTER placeOrder returns). Two
+  // TRULY CONCURRENT retries (network timeout mid-order + client retry) both pass
+  // that read — neither has written its row yet — and both would fire a real order.
+  // Mirror placeBracket's pre-insert of kite_bracket_orders step='starting': INSERT a
+  // claim row into lab_order_anchors keyed (symbol, txn, tag, 120s window_bucket)
+  // with a UNIQUE PRIMARY KEY. The FIRST concurrent insert wins; the SECOND fails the
+  // unique constraint → that loser treats itself as a duplicate and NEVER POSTs.
+  // Committed to D1 BEFORE the Kite subrequest (this await resolves first). Skipped
+  // for internal bracket buys (the bracket already anchored on kite_bracket_orders),
+  // for SIM (a SIM must never block a later real order), and when there is no tag.
+  if (!internal && !isSim && idemTag) {
+    const windowBucket = Math.floor(Date.now() / DEDUPE_WINDOW_MS);
+    let claimed = false;
+    try {
+      const ins = await db.prepare(
+        `INSERT OR IGNORE INTO lab_order_anchors
+           (symbol, transaction_type, tag, window_bucket, created_at)
+         VALUES (?,?,?,?,?)`
+      ).bind(body.tradingsymbol, body.transaction_type, idemTag, windowBucket,
+             new Date().toISOString()).run();
+      // INSERT OR IGNORE: changes===1 means WE won the claim; changes===0 means a
+      // concurrent request already holds it (unique collision) → suppress this order.
+      claimed = (ins?.meta?.changes ?? 0) === 1;
+    } catch {
+      // Anchor table missing (migration not yet applied) → fall through and place.
+      // The read-dedupe still guards the sequential case; pre-migration prod simply
+      // keeps prior behaviour. Once 0022 is applied the concurrent hole is closed.
+      claimed = true;
+    }
+    if (!claimed) {
+      return {
+        ok: true, deduped: true, dedupe_reason: 'concurrent_anchor',
+        message: `Duplicate suppressed — a concurrent ${body.transaction_type} ${body.tradingsymbol} (tag ${idemTag}) is already in-flight in this window. No second order sent.`,
+      };
+    }
   }
 
   const formData = new URLSearchParams({
@@ -1213,6 +1260,62 @@ async function placeBracket(env, db, kiteHeaders, body) {
   await db.prepare(`UPDATE kite_bracket_orders SET buy_status='COMPLETE', fill_price_paise=?, fill_qty=?, step='filled' WHERE id=?`)
     .bind(Math.round(fillPrice * 100), filledQty, bracketRowId).run();
 
+  // ─── Fix 4: arm a TRUE gap-proof SL-M protective stop FROM THE MOMENT OF FILL ─
+  // The GTT stop leg is a 0.5%-buffered LIMIT (GTT can't hold SL-M as a leg type).
+  // A HARD gap-down > the buffer trades THROUGH that resting limit → the position is
+  // left NAKED (the exact 9-failure history). A LIMIT can be gap-skipped; an SL-M
+  // (market-on-trigger) CANNOT — it converts to a MARKET sell the instant price
+  // touches the trigger, so it always exits even on a violent gap. So we arm a true
+  // SL-M (order_type=SL-M) immediately on fill, BEFORE/alongside the GTT, not only as
+  // the step-4 GTT-failure fallback. This is the gap-proof primary stop.
+  //
+  // OCO mechanism (cancel-the-opposite-leg): with the SL-M armed, the GTT below
+  // becomes a TARGET-ONLY take-profit (a single SELL LIMIT at target) — NOT a second
+  // stop leg — so the two protective orders are the SL-M stop and the GTT target,
+  // never two stops that could double-sell. When ONE fills the other must be
+  // cancelled: both ids are persisted (fallback_sl_order_id = the SL-M, gtt_id = the
+  // target GTT), and our reconcile (reconcilePositions + the delete_gtt/cancel_order
+  // endpoints) cancels the now-stale opposite leg once the position reads flat. A
+  // stale resting leg on a flat book cannot re-open a position (an SL-M trigger sits
+  // BELOW market and a target LIMIT sits ABOVE — neither fires on a flat book), so the
+  // worst case is a harmless resting order the reconcile sweeps, never a naked gap.
+  // Config-gated (bracket_protective_slm, default 1); set 0 for the legacy GTT-only
+  // two-leg OCO (no-regression escape, gap-skippable — only for a deliberate revert).
+  const protRow = await db.prepare(
+    `SELECT config_value FROM user_config WHERE config_key='bracket_protective_slm' LIMIT 1`
+  ).first().catch(() => null);
+  const protectiveSlmOn = protRow ? protRow.config_value === '1' : true;   // default ON
+  let protectiveSlId = null, protectiveSlErr = null;
+  if (protectiveSlmOn) {
+    for (let attempt = 1; attempt <= 2 && !protectiveSlId; attempt++) {
+      const psForm = new URLSearchParams({
+        exchange, tradingsymbol: symbol,
+        transaction_type: 'SELL', quantity: String(filledQty),
+        product: body.product,
+        order_type: 'SL-M', validity: 'DAY',
+        trigger_price: String(stopPrice),
+        tag: (tag + '_PSL').slice(0, 20),
+      });
+      const psR = await kiteFetch(db, `${KITE_BASE}/orders/regular`, {
+        method: 'POST',
+        headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: psForm.toString(),
+      });
+      if (psR.ok && psR.body?.status === 'success') { protectiveSlId = psR.body.data.order_id; break; }
+      protectiveSlErr = psR.body?.message || `HTTP ${psR.status}`;
+      if (attempt < 2) await new Promise(res => setTimeout(res, 800));
+    }
+    result.steps.push({ step: 'protective_slm', ok: !!protectiveSlId, order_id: protectiveSlId, error: protectiveSlId ? null : protectiveSlErr });
+    if (protectiveSlId) {
+      await db.prepare(`UPDATE kite_bracket_orders SET fallback_sl_order_id=?, step='protective_slm_armed' WHERE id=?`)
+        .bind(protectiveSlId, bracketRowId).run();
+    }
+    // If the SL-M could not be armed, do NOT silently continue gap-exposed — fall
+    // through to the GTT two-leg path below (its buffered stop is the next-best
+    // protection), and the all-fail terminal state stays loud (Rail 4). The gap-proof
+    // guarantee holds ONLY when protectiveSlId is set; that is surfaced in the result.
+  }
+
   // ─── Step 3: place GTT OCO with up to 3 retries ────────────
   // §6.4 stop-leg hardening. Kite's GTT trigger-orders accept ONLY order_type:LIMIT
   // (SL-M is NOT a valid GTT leg type — Kite rejects it), so a true SL-M cannot live
@@ -1236,23 +1339,45 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const stopLimitPrice = Math.max(tickSize, Math.round(rawStopLimit / tickSize) * tickSize);
   let gttId = null;
   let gttLastError = null;
+  // When the gap-proof SL-M stop is already armed, the GTT carries the TARGET ONLY
+  // (a single-leg take-profit) — NOT a duplicate stop leg — so we never have two
+  // resting stops that could double-sell. When the SL-M is NOT armed (config off, or
+  // it failed), fall back to the legacy two-leg OCO (buffered stop + target) so the
+  // position still has SOME protection while step-4 retries a standalone SL-M.
+  const gttTargetOnly = !!protectiveSlId;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const gttForm = new URLSearchParams({
-      type: 'two-leg',
-      condition: JSON.stringify({
-        exchange, tradingsymbol: symbol,
-        last_price: fillPrice,
-        trigger_values: [stopPrice, targetPrice],
-      }),
-      orders: JSON.stringify([
-        // STOP leg: LIMIT priced BELOW the trigger (SL-M-emulating marketable limit).
-        { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
-          order_type: 'LIMIT', product: body.product, price: Number(stopLimitPrice.toFixed(2)) },
-        // TARGET leg: plain LIMIT at target (rests for the better price).
-        { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
-          order_type: 'LIMIT', product: body.product, price: targetPrice },
-      ]),
-    });
+    const gttForm = new URLSearchParams(
+      gttTargetOnly
+      ? {
+          type: 'single',
+          condition: JSON.stringify({
+            exchange, tradingsymbol: symbol,
+            last_price: fillPrice,
+            trigger_values: [targetPrice],
+          }),
+          orders: JSON.stringify([
+            // TARGET-ONLY take-profit (the gap-proof SL-M stop covers the downside).
+            { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
+              order_type: 'LIMIT', product: body.product, price: targetPrice },
+          ]),
+        }
+      : {
+          type: 'two-leg',
+          condition: JSON.stringify({
+            exchange, tradingsymbol: symbol,
+            last_price: fillPrice,
+            trigger_values: [stopPrice, targetPrice],
+          }),
+          orders: JSON.stringify([
+            // STOP leg: LIMIT priced BELOW the trigger (SL-M-emulating marketable limit).
+            { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
+              order_type: 'LIMIT', product: body.product, price: Number(stopLimitPrice.toFixed(2)) },
+            // TARGET leg: plain LIMIT at target (rests for the better price).
+            { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
+              order_type: 'LIMIT', product: body.product, price: targetPrice },
+          ]),
+        }
+    );
     const r = await kiteFetch(db, `${KITE_BASE}/gtt/triggers`, {
       method: 'POST',
       headers: { ...kiteHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1270,10 +1395,34 @@ async function placeBracket(env, db, kiteHeaders, body) {
   if (gttId) {
     await db.prepare(`UPDATE kite_bracket_orders SET gtt_id=?, gtt_attempts=?, step='complete', completed_at=? WHERE id=?`)
       .bind(gttId, 3, Date.now(), bracketRowId).run();
-    return { ...result, ok: true, fill_price: fillPrice, gtt_id: gttId, fallback_used: false };
+    return {
+      ...result, ok: true, fill_price: fillPrice, gtt_id: gttId, fallback_used: false,
+      protective_sl_order_id: protectiveSlId || null,
+      gap_proof: !!protectiveSlId,   // true SL-M downside stop is armed → cannot gap-skip
+      ...(protectiveSlId
+        ? { stop_type: 'SL-M', target_type: 'GTT_LIMIT', oco: 'reconcile_cancels_opposite' }
+        : { stop_type: 'GTT_LIMIT_buffered', warning: 'Protective SL-M not armed — stop is the buffered GTT LIMIT (can gap-skip on a hard gap). Downside is GTT-only.' }),
+    };
   }
 
-  // ─── Step 4: GTT failed — fallback to single-leg SL-M (2 attempts) ─────────
+  // ─── GTT failed, but the gap-proof SL-M stop IS already armed ───────────────
+  // Fix 4: if the protective SL-M was armed on fill, a GTT failure only loses the
+  // TARGET take-profit leg — the DOWNSIDE is still protected by the live SL-M, so the
+  // position is NOT naked. Surface that honestly (a missing target is not an
+  // emergency) instead of dropping into the naked-position terminal state.
+  if (protectiveSlId) {
+    await db.prepare(`UPDATE kite_bracket_orders SET gtt_attempts=3, gtt_last_error=?, step='complete_slm_no_target', completed_at=? WHERE id=?`)
+      .bind(gttLastError, Date.now(), bracketRowId).run();
+    result.steps.push({ step: 'gtt_failed_but_slm_armed', ok: true, error: gttLastError });
+    return {
+      ...result, ok: true, fill_price: fillPrice, gtt_id: null,
+      protective_sl_order_id: protectiveSlId, gap_proof: true,
+      stop_type: 'SL-M', target_type: 'none',
+      warning: `Protective SL-M stop is armed at ₹${stopPrice} (gap-proof) but the GTT TARGET leg failed (${gttLastError}). You are protected on the downside; set a target in Kite if you want one.`,
+    };
+  }
+
+  // ─── Step 4: GTT failed AND no protective SL-M — fallback single-leg SL-M ───
   // Fix #4b: a filled position with no stop is the worst outcome, so retry the
   // SL-M once, and if it STILL fails surface a loud, structured naked-position
   // state the app can act on — not just a warning string.
@@ -1811,18 +1960,66 @@ async function squareOffAll(env, db, kiteHeaders, body = {}) {
       lastErr = so.order?.error || so.error || 'unknown';
       if (attempt < 2) await new Promise(res => setTimeout(res, 800));
     }
-    if (done) squared.push({ tradingsymbol: p.tradingsymbol, product: p.product, qty: Math.abs(p.quantity), order: lastOrder });
-    else remaining.push({ tradingsymbol: p.tradingsymbol, product: p.product, qty: Math.abs(p.quantity), error: lastErr });
+    if (done) squared.push({ tradingsymbol: p.tradingsymbol, product: p.product, qty: Math.abs(p.quantity), order: lastOrder, book: 'positions' });
+    else remaining.push({ tradingsymbol: p.tradingsymbol, product: p.product, qty: Math.abs(p.quantity), error: lastErr, book: 'positions' });
   }
+
+  // ─── Fix 3: also flatten SETTLED CNC delivery HOLDINGS ──────────────────────
+  // The panic button must flatten EVERYTHING. positions.net holds intraday + same-day
+  // settled net only; a multi-day delivery holding (bought yesterday, settled) lives
+  // in /portfolio/holdings, NOT positions.net — so the loop above would MISS it and
+  // leave the owner long. Scan holdings and SELL each sellable settled qty (holdings
+  // are long-only delivery → opposite is always SELL), opposite MARKET, product from
+  // the holding (CNC). Kite's holdings `quantity` is the freely-sellable settled qty
+  // (T1/collateral are not sellable today, so we use `quantity` only). Merged into the
+  // SAME squared[]/remaining[] report so the kill-switch result is the whole book.
+  let holdings = [];
+  try {
+    const hr = await fetch(`${KITE_BASE}/portfolio/holdings`, { headers: kiteHeaders });
+    const hj = await hr.json().catch(() => ({}));
+    await logKite(db, '/portfolio/holdings', 'GET', hr.status, 0, hr.ok ? null : 'square_off_all holdings read');
+    holdings = (hj.data || []).filter(h => (h.quantity || 0) > 0);
+  } catch { holdings = []; }
+  for (const h of holdings) {
+    const sellQty = Math.abs(h.quantity);
+    const prod = h.product || 'CNC';
+    let done = false, lastErr = null, lastOrder = null;
+    for (let attempt = 1; attempt <= 2 && !done; attempt++) {
+      // Direct opposite-MARKET SELL of the settled holding. We pass the explicit
+      // quantity (squareOff's positions.net lookup would not find a holding), is_exit
+      // so the fund-check is skipped (a flatten must never be refused at cash=0), and
+      // a per-symbol holdings tag distinct from the positions tag.
+      const so = await placeOrder(env, db, kiteHeaders, {
+        exchange: h.exchange, tradingsymbol: h.tradingsymbol,
+        transaction_type: 'SELL', quantity: sellQty, product: prod,
+        order_type: 'MARKET', validity: 'DAY',
+        tag: `HN_WE_SQH_${h.tradingsymbol}`.slice(0, 20),
+        is_exit: true, bypass_funds_check: true,
+        bypass_block: body.bypass_block === true,
+        bypass_market_hours: body.bypass_market_hours === true,
+        simulate: body.simulate === true || body.simulate === '1',
+      });
+      lastOrder = so;
+      if (so.ok === true || so.deduped === true) { done = true; break; }
+      lastErr = so.error || 'unknown';
+      if (attempt < 2) await new Promise(res => setTimeout(res, 800));
+    }
+    if (done) squared.push({ tradingsymbol: h.tradingsymbol, product: prod, qty: sellQty, order: lastOrder, book: 'holdings' });
+    else remaining.push({ tradingsymbol: h.tradingsymbol, product: prod, qty: sellQty, error: lastErr, book: 'holdings' });
+  }
+
   await reconcilePositions(env, db, kiteHeaders).catch(() => {});
+  const totalOpen = open.length + holdings.length;   // positions book + settled holdings
   return {
     ok: remaining.length === 0,
     flat: remaining.length === 0,
-    total_open: open.length,
+    total_open: totalOpen,
+    open_positions: open.length,
+    open_holdings: holdings.length,
     squared, remaining,
     message: remaining.length === 0
-      ? (open.length === 0 ? 'Book already flat — no open positions.' : `Squared ${squared.length} position(s). Book is flat.`)
-      : `⚠️ ${remaining.length} position(s) STILL OPEN after square-off-all: ${remaining.map(x => `${x.tradingsymbol}(${x.product})`).join(', ')}. Retry or square manually in Kite NOW.`,
+      ? (totalOpen === 0 ? 'Book already flat — no open positions or holdings.' : `Squared ${squared.length} position(s)/holding(s). Book is flat.`)
+      : `⚠️ ${remaining.length} position(s)/holding(s) STILL OPEN after square-off-all: ${remaining.map(x => `${x.tradingsymbol}(${x.product})`).join(', ')}. Retry or square manually in Kite NOW.`,
   };
 }
 
