@@ -106,6 +106,9 @@ export async function onRequest(context) {
 
   try {
     if (action === 'status') return Response.json(await getStatus(db, env), { headers });
+    if (action === 'execution_gate') {
+      return Response.json(await getExecutionGate(db, { symbol: url.searchParams.get('symbol') }), { headers });
+    }
 
     // All other actions need a valid access token
     const tok = await getActiveToken(db);
@@ -451,6 +454,27 @@ async function placeOrder(env, db, kiteHeaders, body) {
   // runs it. Caller can also force the bypass explicitly.
   const isExit = body.is_exit === true || body.transaction_type === 'SELL';
   const skipFundCheck = internal || body.bypass_funds_check === true || isExit;
+  const isBrokerEntry = body.transaction_type === 'BUY' && !isExit && !internal;
+  const dryRun = isDryRun(body);
+
+  if (isBrokerEntry) {
+    const gate = await assertBrokerFacingPickAllowed(db, body, { dryRun });
+    if (!gate.ok) {
+      await logKite(db, '/execution_gate place_order', 'POST', 403, 0, gate.error);
+      return gate;
+    }
+    if (dryRun) {
+      await logKite(db, '/orders/regular dry_run', 'POST', 200, 0, null);
+      return {
+        ok: true,
+        dry_run: true,
+        mode: 'paper',
+        message: 'Paper order staged on the server. No Kite request was sent.',
+        execution_gate: gate.execution_gate,
+        attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
+      };
+    }
+  }
 
   // ─── Pre-launch / CPV-pending safety guard ──────────────
   // If user_config.block_real_orders = 1, refuse to place real orders.
@@ -464,7 +488,17 @@ async function placeOrder(env, db, kiteHeaders, body) {
       blocked: true,
       reason: 'block_real_orders=1 in user_config',
       message: 'Real orders are blocked while engine is in shadow_run mode (pre-launch / CPV pending / paused). To unblock: UPDATE user_config SET config_value=\'0\' WHERE config_key=\'block_real_orders\'. Or pass bypass_block:true if you understand the risk.',
+      execution_gate: isBrokerEntry ? (await getExecutionGate(db, { symbol: body.tradingsymbol })).execution_gate : undefined,
       attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
+    };
+  }
+  if (isBrokerEntry && !ORDER_PROXY?.base) {
+    await logKite(db, '/execution_gate place_order', 'POST', 503, 0, 'stable_ip_proxy_missing');
+    return {
+      ok: false,
+      error: 'stable_ip_proxy_missing',
+      message: 'Real broker orders require the whitelisted stable-IP execution proxy. Kite was not called.',
+      execution_gate: (await getExecutionGate(db, { symbol: body.tradingsymbol })).execution_gate,
     };
   }
   if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
@@ -1060,6 +1094,7 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const stopPrice = parseFloat(body.stop_price);
   const targetPrice = parseFloat(body.target_price);
   const tag = body.tag || 'HN_WE_BRK';
+  const dryRun = isDryRun(body);
 
   // ─── SIM rung: simulate=1 must NEVER touch the broker ─────────────────────
   // The buy leg below routes through placeOrder with _internal:true and does NOT
@@ -1079,6 +1114,27 @@ async function placeBracket(env, db, kiteHeaders, body) {
         { name: 'gtt_target', ok: true, detail: `Would place a GTT take-profit at ${targetPrice}.` },
       ],
       summary: 'Bracket wiring OK (simulated — nothing sent to the broker): market BUY → true SL-M protective stop → GTT target. Run TINY-REAL at market open to confirm a real fill.',
+    };
+  }
+
+  const gate = await assertBrokerFacingPickAllowed(db, body, { dryRun });
+  if (!gate.ok) {
+    await logKite(db, '/execution_gate place_bracket', 'POST', 403, 0, gate.error);
+    return gate;
+  }
+  if (dryRun) {
+    await logKite(db, '/orders/bracket dry_run', 'POST', 200, 0, null);
+    return {
+      ok: true,
+      dry_run: true,
+      mode: 'paper',
+      message: 'Paper bracket staged on the server. No Kite request was sent.',
+      simulated: {
+        symbol, qty, stop_price: stopPrice, target_price: targetPrice,
+        flow: '1) validate latest TRADE verdict -> 2) stage BUY -> 3) stage stop/target -> 4) no broker call',
+        would_have_executed: true,
+      },
+      execution_gate: gate.execution_gate,
     };
   }
 
@@ -1138,11 +1194,24 @@ async function placeBracket(env, db, kiteHeaders, body) {
       ok: false, blocked: true, bracket_id: bracketRowId,
       reason: 'shadow_run',
       message: 'Real orders blocked. Engine is in shadow mode (CPV pending). Set block_real_orders=0 to unlock.',
+      execution_gate: gate.execution_gate,
       simulated: {
         symbol, qty, stop_price: stopPrice, target_price: targetPrice,
         flow: '1) MARKET BUY → 2) wait for fill → 3) GTT OCO → 4) verify',
         would_have_executed: true,
       },
+    };
+  }
+  if (!ORDER_PROXY?.base) {
+    await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
+      .bind('stable_ip_proxy_missing', Date.now(), bracketRowId).run();
+    await logKite(db, '/execution_gate place_bracket', 'POST', 503, 0, 'stable_ip_proxy_missing');
+    return {
+      ok: false,
+      bracket_id: bracketRowId,
+      error: 'stable_ip_proxy_missing',
+      message: 'Real broker orders require the whitelisted stable-IP execution proxy. Kite was not called.',
+      execution_gate: gate.execution_gate,
     };
   }
   if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
@@ -2242,6 +2311,252 @@ async function recordStep(db, runId, seq, step) {
 // ─────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────
+function isDryRun(body = {}) {
+  return body.dry_run === true || body.dry_run === '1' ||
+    body.paper === true || body.mode === 'paper' || body.execution_mode === 'paper';
+}
+
+function safeJson(value, fallback) {
+  if (value == null || value === '') return fallback;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+function normalizeSymbol(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function pickSymbol(pick) {
+  return normalizeSymbol(pick?.symbol || pick?.tradingsymbol);
+}
+
+function pickQty(pick) {
+  return pick?.qty ?? pick?.quantity ?? null;
+}
+
+function paiseToRs(paise) {
+  return Number(paise) / 100;
+}
+
+function pickPaise(pick, paiseKey, rupeeKey) {
+  if (pick?.[paiseKey] != null) return Number(pick[paiseKey]);
+  if (pick?.[rupeeKey] != null) return Math.round(Number(pick[rupeeKey]) * 100);
+  return null;
+}
+
+function priceMatches(actual, expectedPaise) {
+  if (actual == null || expectedPaise == null) return true;
+  const actualNum = Number(actual);
+  if (!Number.isFinite(actualNum)) return false;
+  return Math.abs(actualNum - paiseToRs(expectedPaise)) <= 0.05;
+}
+
+async function getLatestMorningVerdict(db) {
+  const today = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+  const latestRow = await db.prepare(`
+    SELECT * FROM daily_verdicts
+    WHERE trade_date=?
+    ORDER BY composed_at DESC LIMIT 1
+  `).bind(today).first().catch(() => null);
+  const row = await db.prepare(`
+    SELECT * FROM daily_verdicts
+    WHERE trade_date=? AND verdict_type='morning'
+    ORDER BY composed_at DESC LIMIT 1
+  `).bind(today).first().catch(() => null);
+  return { today, row, latestRow };
+}
+
+function sourceRules(nowMs = Date.now()) {
+  const marketOpen = isNseRegularMarketOpen(nowMs);
+  return [
+    {
+      key: 'live_ltp',
+      label: 'Live LTP / Kite quotes',
+      patterns: ['live ltp', 'kite quote', 'kite_quotes', 'ltp'],
+      maxAgeMs: marketOpen ? 5 * 60 * 1000 : 4 * 3600 * 1000,
+    },
+    {
+      key: 'intraday_bars',
+      label: 'Intraday bars',
+      patterns: ['intraday 5', '5-min', '5 min', 'intraday_bars', 'intraday bars'],
+      maxAgeMs: marketOpen ? 30 * 60 * 1000 : 20 * 3600 * 1000,
+    },
+    {
+      key: 'india_vix',
+      label: 'India VIX',
+      patterns: ['india vix', 'vix'],
+      maxAgeMs: marketOpen ? 15 * 60 * 1000 : 4 * 3600 * 1000,
+    },
+  ];
+}
+
+async function checkRequiredSourceHealth(db) {
+  const now = Date.now();
+  const rows = (await db.prepare(`
+    SELECT source_name,last_success_ts,consecutive_failures,last_error,is_circuit_broken,updated_at
+    FROM source_health
+  `).all().catch(() => ({ results: [] }))).results || [];
+  const details = [];
+  for (const rule of sourceRules(now)) {
+    const matches = rows.filter((r) => {
+      const n = String(r.source_name || '').toLowerCase();
+      return rule.patterns.some((p) => n.includes(p));
+    });
+    if (!matches.length) {
+      details.push({ ...rule, ok: false, status: 'missing', message: `${rule.label} has no source_health row` });
+      continue;
+    }
+    const evaluated = matches.map((r) => {
+      const ts = Number(r.last_success_ts || 0);
+      const ageMs = ts ? now - ts : null;
+      const broken = Number(r.is_circuit_broken || 0) !== 0;
+      const stale = ageMs == null || ageMs > rule.maxAgeMs;
+      return {
+        source_name: r.source_name,
+        last_success_ts: r.last_success_ts || null,
+        age_minutes: ageMs == null ? null : Math.round(ageMs / 60000),
+        threshold_minutes: Math.round(rule.maxAgeMs / 60000),
+        consecutive_failures: r.consecutive_failures || 0,
+        last_error: r.last_error || null,
+        is_circuit_broken: broken,
+        ok: !broken && !stale,
+        status: broken ? 'broken' : stale ? 'stale' : 'fresh',
+      };
+    });
+    const passing = evaluated.find((r) => r.ok);
+    details.push({
+      key: rule.key,
+      label: rule.label,
+      ok: !!passing,
+      status: passing ? 'fresh' : evaluated[0]?.status || 'unknown',
+      candidates: evaluated,
+      message: passing
+        ? `${rule.label} fresh`
+        : `${rule.label} ${evaluated[0]?.status || 'unhealthy'}`,
+    });
+  }
+  return { ok: details.every((d) => d.ok), required_sources: details };
+}
+
+async function getExecutionGate(db, opts = {}) {
+  const { today, row, latestRow } = await getLatestMorningVerdict(db);
+  const reasons = [];
+  if (!row) {
+    reasons.push({ code: 'no_morning_verdict', message: 'No morning verdict exists for today.' });
+    return {
+      ok: true,
+      execution_gate: {
+        trade_authorized: false,
+        trade_date: today,
+        reasons,
+        stable_ip_proxy_configured: !!ORDER_PROXY?.base,
+      },
+    };
+  }
+
+  const decision = String(row.decision || '').toUpperCase();
+  const rawPicks = safeJson(row.picks_json, []);
+  const picks = Array.isArray(rawPicks) ? rawPicks : [];
+  const alternatives = safeJson(row.alternatives_json, {}) || {};
+  const context = safeJson(row.context_snapshot_json, {}) || {};
+  const authority = alternatives.execution_authority || null;
+  const requestedSymbol = normalizeSymbol(opts.symbol);
+  const matchedPick = requestedSymbol
+    ? picks.find((p) => pickSymbol(p) === requestedSymbol) || null
+    : (picks[0] || null);
+  const sourceHealth = await checkRequiredSourceHealth(db);
+
+  if (decision !== 'TRADE') {
+    reasons.push({ code: 'decision_not_trade', message: `Latest morning verdict is ${decision || 'UNKNOWN'}, not TRADE.` });
+  }
+  if (latestRow && String(latestRow.id) !== String(row.id)) {
+    reasons.push({
+      code: 'morning_verdict_superseded',
+      message: `A newer ${latestRow.verdict_type || 'daily'} verdict has superseded the morning verdict.`,
+    });
+  }
+  if (!picks.length) {
+    reasons.push({ code: 'picks_json_empty', message: 'daily_verdicts.picks_json is empty.' });
+  }
+  if (authority !== 'broker_facing_picks_authorized') {
+    reasons.push({
+      code: 'execution_authority_not_authorized',
+      message: `alternatives_json.execution_authority is ${authority || 'missing'}, not broker_facing_picks_authorized.`,
+    });
+  }
+  if (!sourceHealth.ok) {
+    reasons.push({ code: 'source_health_unhealthy', message: 'One or more required market inputs are stale, broken, or missing.' });
+  }
+  if (requestedSymbol && !matchedPick) {
+    reasons.push({ code: 'symbol_not_in_broker_picks', message: `${requestedSymbol} is not in daily_verdicts.picks_json.` });
+  }
+
+  return {
+    ok: true,
+    execution_gate: {
+      trade_authorized: reasons.length === 0,
+      trade_date: today,
+      verdict_id: row.id,
+      decision,
+      headline: row.headline || null,
+      recommended_symbol: row.recommended_symbol || null,
+      picks_count: picks.length,
+      execution_authority: authority,
+      reasons,
+      requested_symbol: requestedSymbol || null,
+      matched_pick: matchedPick,
+      required_sources: sourceHealth.required_sources,
+      stable_ip_proxy_configured: !!ORDER_PROXY?.base,
+      machine_execution_plan: alternatives.machine_execution_plan || [],
+      why_rejected: alternatives.rejected_setups || alternatives.why_rejected || alternatives.alternatives || alternatives.watch || [],
+      context_snapshot: context,
+      composed_at: row.composed_at || null,
+    },
+  };
+}
+
+async function assertBrokerFacingPickAllowed(db, body, opts = {}) {
+  const symbol = normalizeSymbol(body?.tradingsymbol || body?.symbol);
+  const gateResp = await getExecutionGate(db, { symbol });
+  const gate = gateResp.execution_gate;
+  if (!gate?.trade_authorized) {
+    return {
+      ok: false,
+      error: gate?.reasons?.[0]?.code || 'execution_gate_blocked',
+      message: (gate?.reasons || []).map((r) => r.message).join(' '),
+      execution_gate: gate,
+    };
+  }
+
+  const pick = gate.matched_pick;
+  const mismatches = [];
+  const qty = pickQty(pick);
+  const stopPaise = pickPaise(pick, 'stop_paise', 'stop');
+  const targetPaise = pickPaise(pick, 'target_paise', 'target');
+  if (qty != null && Number(body.quantity) !== Number(qty)) {
+    mismatches.push(`quantity ${body.quantity} != broker pick qty ${qty}`);
+  }
+  if (!priceMatches(body.stop_price, stopPaise)) {
+    mismatches.push(`stop ${body.stop_price} does not match broker pick stop ${paiseToRs(stopPaise)}`);
+  }
+  if (!priceMatches(body.target_price, targetPaise)) {
+    mismatches.push(`target ${body.target_price} does not match broker pick target ${paiseToRs(targetPaise)}`);
+  }
+  if (body.verdict_id != null && Number(body.verdict_id) !== Number(gate.verdict_id)) {
+    mismatches.push(`verdict_id ${body.verdict_id} != latest morning verdict ${gate.verdict_id}`);
+  }
+  if (mismatches.length) {
+    return {
+      ok: false,
+      error: 'order_does_not_match_broker_pick',
+      message: mismatches.join('; '),
+      execution_gate: gate,
+    };
+  }
+
+  return { ok: true, execution_gate: gate, pick, dry_run: !!opts.dryRun };
+}
+
 function isNseRegularMarketOpen(nowMs = Date.now()) {
   const ist = new Date(nowMs + 5.5 * 3600000);
   const day = ist.getUTCDay(); // 0 Sun, 6 Sat after IST shift

@@ -103,7 +103,7 @@ struct NowView: View {
             case .connectKite:
                 KiteConnectButton(vm: vm, label: "Connect Kite")
             case .place(let sym):
-                Button { vm.prefill = WealthVM.OrderDraft(symbol: sym, stop: "", target: "", qty: ""); goToExecute() } label: {
+                Button { vm.prefill = vm.brokerPick?.draft ?? WealthVM.OrderDraft(symbol: sym, stop: "", target: "", qty: ""); goToExecute() } label: {
                     Text("Review & place \(sym) →").font(.system(size: 15, weight: .bold)).foregroundColor(HK.bg)
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(HK.accent))
@@ -139,10 +139,15 @@ struct NowView: View {
                              sub: "The engine is holding the stop and target. Watch it on the Execute tab; it squares off by 3:10 PM.",
                              tone: HK.accent, action: .none)
         }
-        if dec == "TRADE", let p = pick {
+        if vm.orderReady, let p = vm.brokerPick?.symbol ?? pick {
             return Situation(headline: "Today: trade \(p)",
-                             sub: "The engine found a setup. Review the exact entry, stop, target and quantity before placing it. Treat it as unproven until the proof ladder graduates.",
+                             sub: "Broker-facing picks are authorized. Review the exact entry, stop, target, quantity and time exit before placing it.",
                              tone: HK.ready, action: .place(p))
+        }
+        if dec == "TRADE" {
+            return Situation(headline: "Trade blocked by safety gate",
+                             sub: vm.orderBlockers.first ?? "The latest verdict is TRADE, but the broker execution gate is not green.",
+                             tone: HK.running, action: .none)
         }
         if dec == "SIT_OUT" {
             return Situation(headline: "Today: no engine trade",
@@ -191,22 +196,105 @@ struct NowView: View {
     // ── The pick (only meaningful detail) ──
     private var pickCard: some View {
         Card {
-            Text(vm.isMarketDay ? "Today's call" : "Next call").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
+            Text("Latest morning verdict").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
             if !vm.isMarketDay {
                 let next = MarketCalendar.nextTradingDay()
                 Text("Markets are closed (\(MarketCalendar.weekday())). The engine's next call composes \(MarketCalendar.weekday(next)) 09:40 AM — see Friday's on the Today tab's trail.")
                     .font(.system(size: 12)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
-            } else if vm.verdict?.decision == "TRADE", let p = vm.verdict?.recommended_symbol {
-                Row(label: "Decision", value: "TRADE", valueColor: HK.ready)
-                Row(label: "Stock", value: p)
-                Text("Full entry / stop / target opens in Execute. Confidence is unproven — keep it small.")
-                    .font(.system(size: 11)).foregroundColor(HK.running)
+            } else if let v = vm.verdict {
+                let decision = (v.decision ?? "—").uppercased()
+                Row(label: "Decision", value: decision, valueColor: vm.orderReady ? HK.ready : (decision == "TRADE" ? HK.running : HK.idle))
+                if let h = v.headline {
+                    Text(h).font(.system(size: 13, weight: .semibold)).foregroundColor(HK.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Row(label: "Recommended", value: v.recommended_symbol ?? vm.brokerPick?.symbol ?? "—")
+                Row(label: "Authority", value: v.executionAuthority ?? "missing",
+                    valueColor: v.executionAuthority == "broker_facing_picks_authorized" ? HK.ready : HK.error)
+
+                if !vm.orderReady {
+                    Divider().background(HK.line)
+                    Text(decision == "TRADE" ? "Order blocked" : "OBSERVE — intelligence only")
+                        .font(.system(size: 12, weight: .heavy)).foregroundColor(decision == "TRADE" ? HK.running : HK.idle)
+                    ForEach(vm.orderBlockers.prefix(4), id: \.self) { b in
+                        bullet(b, color: HK.running)
+                    }
+                }
+
+                if let pick = vm.brokerPick {
+                    Divider().background(HK.line)
+                    HStack {
+                        Text(pick.symbol).font(.system(size: 18, weight: .heavy, design: .rounded)).foregroundColor(HK.text)
+                        Spacer()
+                        Pill(text: vm.orderReady ? "ORDER READY" : "INTELLIGENCE ONLY", color: vm.orderReady ? HK.ready : HK.idle)
+                    }
+                    Row(label: "Entry", value: pick.entryRupees.map(Money.rupeesFromRupee) ?? "—")
+                    Row(label: "Stop", value: pick.stopRupees.map(Money.rupeesFromRupee) ?? "—", valueColor: HK.error)
+                    Row(label: "Target", value: pick.targetRupees.map(Money.rupeesFromRupee) ?? "—", valueColor: HK.ready)
+                    Row(label: "Qty", value: pick.qty.map(String.init) ?? "—")
+                    Row(label: "Time exit", value: pick.hard_exit_ist ?? pick.exit_mode ?? "—")
+                    if let why = pick.rationale {
+                        Text("Why picked").font(.system(size: 11, weight: .heavy)).foregroundColor(HK.accent)
+                        Text(why).font(.system(size: 12)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                let machinePlan = v.machinePlan
+                if !machinePlan.isEmpty {
+                    Divider().background(HK.line)
+                    Text("Machine execution plan").font(.system(size: 11, weight: .heavy)).foregroundColor(HK.accent)
+                    ForEach(Array(machinePlan.prefix(5).enumerated()), id: \.offset) { _, p in
+                        let title = [p.step, p.action, p.symbol].compactMap { $0 }.joined(separator: " · ")
+                        let line = [p.entry.map { "entry \(Money.rupeesFromRupee($0))" },
+                                    p.stop.map { "stop \(Money.rupeesFromRupee($0))" },
+                                    p.target.map { "target \(Money.rupeesFromRupee($0))" },
+                                    p.qty.map { "qty \($0)" },
+                                    p.time_exit.map { "exit \($0)" }].compactMap { $0 }.joined(separator: " · ")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(title.isEmpty ? "Plan step" : title).font(.system(size: 12, weight: .semibold)).foregroundColor(HK.text)
+                            if !line.isEmpty { Text(line).font(.system(size: 11)).foregroundColor(HK.textDim) }
+                            if let why = p.why ?? p.note { Text(why).font(.system(size: 11)).foregroundColor(HK.textFaint).fixedSize(horizontal: false, vertical: true) }
+                        }
+                    }
+                }
+
+                if !v.rejected.isEmpty {
+                    Divider().background(HK.line)
+                    Text("Why rejected").font(.system(size: 11, weight: .heavy)).foregroundColor(HK.accent)
+                    ForEach(v.rejected.prefix(4)) { r in
+                        bullet("\(r.symbol ?? "Other"): \(r.why_not ?? r.reason ?? "rejected")", color: HK.textDim)
+                    }
+                }
+
+                if !vm.unhealthyRequiredSources.isEmpty {
+                    Divider().background(HK.line)
+                    Text("Source health warnings").font(.system(size: 11, weight: .heavy)).foregroundColor(HK.running)
+                    ForEach(vm.unhealthyRequiredSources.prefix(4)) { s in
+                        bullet(s.message ?? "\(s.label) \(s.status ?? "unhealthy")", color: HK.running)
+                    }
+                }
+
+                if vm.orderReady, let p = vm.brokerPick {
+                    Button { vm.prefill = p.draft; goToExecute() } label: {
+                        Text("Review & place \(p.symbol)")
+                            .font(.system(size: 15, weight: .bold)).foregroundColor(HK.bg)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(HK.accent))
+                    }
+                }
             } else if vm.verdict?.decision == "SIT_OUT" {
                 Row(label: "Decision", value: "NO ENGINE TRADE", valueColor: HK.idle)
             } else {
                 Text("Composes around 09:40 AM (Mon–Fri), after the opening bars. Until then there's nothing to act on.")
                     .font(.system(size: 12)).foregroundColor(HK.textDim)
             }
+        }
+    }
+
+    @ViewBuilder private func bullet(_ text: String, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text("·").font(.system(size: 13, weight: .bold)).foregroundColor(color)
+            Text(text).font(.system(size: 12)).foregroundColor(color).fixedSize(horizontal: false, vertical: true)
         }
     }
 

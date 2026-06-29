@@ -9,6 +9,7 @@ final class WealthVM: ObservableObject {
     @Published var auto: AutoTraderState?
     @Published var engine: EngineState?
     @Published var verdict: VerdictToday?
+    @Published var executionGate: ExecutionGate?
     @Published var config: [String: String] = [:]
     @Published var plan: TodaysPlan?
     @Published var intel: IntelAudit?
@@ -39,6 +40,7 @@ final class WealthVM: ObservableObject {
         async let a = WealthClient.shared.autoTrader()
         async let e = WealthClient.shared.engineState()
         async let v = WealthClient.shared.verdictToday()
+        async let eg = WealthClient.shared.executionGate()
         async let p = WealthClient.shared.todaysPlan()
         async let ia = WealthClient.shared.intelAudit()
         async let sh = WealthClient.shared.systemHealth()
@@ -60,6 +62,7 @@ final class WealthVM: ObservableObject {
         auto = try? await a
         engine = try? await e
         verdict = try? await v
+        executionGate = try? await eg
         plan = try? await p
         intel = try? await ia
         sysHealth = try? await sh
@@ -87,6 +90,20 @@ final class WealthVM: ObservableObject {
     var deployablePaise: Int { Int(config["today_deployable_paise"] ?? "") ?? 0 }
     // Robust: trust EITHER source. A single slow/failed status fetch must not show a false "Connect Kite".
     var kiteConnected: Bool { kite?.connected == true || plan?.state?.kite_connected == true }
+    var brokerPick: VerdictPick? { executionGate?.matched_pick ?? verdict?.primaryPick }
+    var orderReady: Bool {
+        executionGate?.trade_authorized == true && verdict?.decision?.uppercased() == "TRADE" && brokerPick != nil
+    }
+    var orderBlockers: [String] {
+        if let reasons = executionGate?.reasons, !reasons.isEmpty { return reasons.map(\.message) }
+        if verdict?.decision?.uppercased() != "TRADE" { return ["Latest morning verdict is intelligence-only."] }
+        if verdict?.picks.isEmpty != false { return ["No broker-facing pick is published."] }
+        if verdict?.executionAuthority != "broker_facing_picks_authorized" { return ["Broker execution authority is not granted."] }
+        return []
+    }
+    var unhealthyRequiredSources: [RequiredSourceGate] {
+        (executionGate?.required_sources ?? []).filter { $0.ok != true }
+    }
 
     // Business-day truth: the engine's is_market_day is authoritative (knows holidays);
     // fall back to local weekday so the weekend framing shows instantly before the plan loads.
