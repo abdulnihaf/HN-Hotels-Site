@@ -1058,6 +1058,27 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const targetPrice = parseFloat(body.target_price);
   const tag = body.tag || 'HN_WE_BRK';
 
+  // ─── SIM rung: simulate=1 must NEVER touch the broker ─────────────────────
+  // The buy leg below routes through placeOrder with _internal:true and does NOT
+  // propagate simulate, and the GTT/SL-M legs POST directly — so without this
+  // short-circuit a "SIM" bracket would fire a REAL order the moment the fund
+  // check passes (e.g. once cash is funded). Mirror pipeline_test: return the
+  // wiring description with ZERO broker contact. The Lab's SIM promise (₹0 risk)
+  // depends on this short-circuit. (Found by live verification 2026-06-30.)
+  if (body.simulate === true || body.simulate === '1') {
+    return {
+      ok: true, simulated: true, mode: 'sim', overall: 'pass_simulated',
+      symbol, qty, stop_type: 'SL-M', gap_proof: true,
+      steps: [
+        { name: 'place_buy', ok: true, detail: `Would BUY ${qty} ${symbol} at market (${body.product}) — no real order sent.` },
+        { name: 'confirm_fill', ok: true, detail: 'Simulated fill.' },
+        { name: 'protective_slm', ok: true, detail: `Would arm a TRUE SL-M stop at trigger ${stopPrice} (gap-proof) the moment the buy fills.` },
+        { name: 'gtt_target', ok: true, detail: `Would place a GTT take-profit at ${targetPrice}.` },
+      ],
+      summary: 'Bracket wiring OK (simulated — nothing sent to the broker): market BUY → true SL-M protective stop → GTT target. Run TINY-REAL at market open to confirm a real fill.',
+    };
+  }
+
   // ─── Fix #1: idempotency / double-buy guard ───────────────────────────────
   // The hole: kite_bracket_orders had no tag column and placeBracket had no
   // dedupe, so a network timeout mid-BUY + a client retry (or a double tap)

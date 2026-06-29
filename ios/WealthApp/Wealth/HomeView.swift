@@ -180,6 +180,8 @@ struct HomeView: View {
                 .tabItem { Label("Today", systemImage: "sun.max.fill") }.tag(3)
             OpsView(vm: vm)
                 .tabItem { Label("Ops", systemImage: "waveform.path.ecg") }.tag(4)
+            LabView(vm: vm)
+                .tabItem { Label("Lab", systemImage: "testtube.2") }.tag(5)
         }
         .tint(HK.accent)
         .task { await vm.refresh() }
