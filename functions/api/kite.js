@@ -123,6 +123,7 @@ export async function onRequest(context) {
     if (action === 'place_bracket') {
       if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
       const body = await request.json().catch(() => ({}));
+      if (url.searchParams.get('simulate') === '1') body.simulate = true;
       const out = await placeBracket(env, db, kiteHeaders, body);
       await recordRun(db, {
         scenario: body.scenario || 'E5', kind: 'bracket', surface: body.surface,
@@ -228,6 +229,7 @@ export async function onRequest(context) {
     if (action === 'square_off') {
       if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
       const body = await request.json().catch(() => ({}));
+      if (url.searchParams.get('simulate') === '1') body.simulate = true;
       const out = await squareOff(env, db, kiteHeaders, body);
       await recordRun(db, {
         scenario: body.scenario || '', kind: 'partial_exit', surface: body.surface,
@@ -243,6 +245,7 @@ export async function onRequest(context) {
     if (action === 'square_off_all') {
       if (request.method !== 'POST') return Response.json({ error: 'POST required' }, { status: 405, headers });
       const body = await request.json().catch(() => ({}));
+      if (url.searchParams.get('simulate') === '1') body.simulate = true;
       const out = await squareOffAll(env, db, kiteHeaders, body);
       await recordRun(db, {
         scenario: body.scenario || 'X2', kind: 'square_off_all', surface: body.surface,
