@@ -33,6 +33,22 @@
 
 const KITE_BASE = 'https://api.kite.trade';
 
+// Fix #3 (order-path hardening): product must be EXPLICIT on every order.
+// The old `body.product` default silently turned any caller that omitted
+// product (e.g. a non-iOS client) into a CNC *delivery* order — wrong and unhedged
+// for the intraday MIS strategy. assertProduct rejects a missing/invalid product
+// instead of guessing. Valid Kite products: MIS (intraday), CNC (delivery),
+// NRML (F&O / overnight margin), MTF (margin funding).
+const VALID_PRODUCTS = ['MIS', 'CNC', 'NRML', 'MTF'];
+function assertProduct(body) {
+  if (!body || !body.product) {
+    throw new Error('Missing required field: product — must be one of MIS, CNC, NRML, MTF (no silent CNC default)');
+  }
+  if (!VALID_PRODUCTS.includes(body.product)) {
+    throw new Error(`Invalid product '${body.product}' — must be one of ${VALID_PRODUCTS.join(', ')}`);
+  }
+}
+
 // ── Static-IP order egress ───────────────────────────────────────────────────
 // Kite requires LIVE orders to arrive from ONE whitelisted IP (a SEBI rule).
 // Cloudflare has no fixed egress IP, so order *mutations* (POST/PUT/DELETE on
@@ -274,7 +290,7 @@ export async function onRequest(context) {
 // Body:
 //   { exchange, tradingsymbol, transaction_type, quantity,
 //     product, order_type, price?, trigger_price?, validity?, tag? }
-// Defaults: product=CNC, order_type=MARKET, validity=DAY, variety=regular
+// product is REQUIRED (MIS|CNC|NRML|MTF — no default). Defaults: order_type=MARKET, validity=DAY, variety=regular
 async function placeOrder(env, db, kiteHeaders, body) {
   const required = ['exchange', 'tradingsymbol', 'transaction_type', 'quantity'];
   for (const f of required) {
@@ -282,6 +298,7 @@ async function placeOrder(env, db, kiteHeaders, body) {
   }
   if (!['BUY','SELL'].includes(body.transaction_type)) throw new Error('transaction_type must be BUY or SELL');
   if (!Number.isInteger(body.quantity) || body.quantity < 1) throw new Error('quantity must be positive integer');
+  assertProduct(body);   // Fix #3: no silent CNC default
 
   // ─── Pre-launch / CPV-pending safety guard ──────────────
   // If user_config.block_real_orders = 1, refuse to place real orders.
@@ -313,7 +330,7 @@ async function placeOrder(env, db, kiteHeaders, body) {
     tradingsymbol: body.tradingsymbol,
     transaction_type: body.transaction_type,
     quantity: String(body.quantity),
-    product: body.product || 'CNC',
+    product: body.product,
     order_type: body.order_type || 'MARKET',
     validity: body.validity || 'DAY',
   });
@@ -344,13 +361,14 @@ async function placeOrder(env, db, kiteHeaders, body) {
 // Body:
 //   { tradingsymbol, exchange, last_price, type='two-leg',
 //     stop_trigger, stop_price, target_trigger, target_price,
-//     quantity, transaction_type='SELL', product='CNC' }
+//     quantity, transaction_type='SELL', product (REQUIRED: MIS|CNC|NRML|MTF) }
 // type='single' is also supported with single trigger_value + price.
 async function placeGtt(env, db, kiteHeaders, body) {
   const required = ['tradingsymbol', 'exchange', 'last_price', 'quantity'];
   for (const f of required) {
     if (!body[f]) throw new Error(`Missing required field: ${f}`);
   }
+  assertProduct(body);   // Fix #3: GTT legs must carry an explicit product too
 
   const isOco = body.type === 'two-leg' || (body.stop_trigger && body.target_trigger);
 
@@ -370,7 +388,7 @@ async function placeGtt(env, db, kiteHeaders, body) {
         transaction_type: body.transaction_type || 'SELL',
         quantity: body.quantity,
         order_type: 'LIMIT',
-        product: body.product || 'CNC',
+        product: body.product,
         price: Number(body.stop_price || body.stop_trigger),
       },
       {
@@ -379,7 +397,7 @@ async function placeGtt(env, db, kiteHeaders, body) {
         transaction_type: body.transaction_type || 'SELL',
         quantity: body.quantity,
         order_type: 'LIMIT',
-        product: body.product || 'CNC',
+        product: body.product,
         price: Number(body.target_price || body.target_trigger),
       },
     ];
@@ -397,7 +415,7 @@ async function placeGtt(env, db, kiteHeaders, body) {
       transaction_type: body.transaction_type || 'SELL',
       quantity: body.quantity,
       order_type: 'LIMIT',
-      product: body.product || 'CNC',
+      product: body.product,
       price: Number(body.price),
     }];
   }
@@ -592,6 +610,7 @@ async function placeBracket(env, db, kiteHeaders, body) {
   for (const f of required) {
     if (body[f] == null) throw new Error(`Missing required field: ${f}`);
   }
+  assertProduct(body);   // Fix #3: no silent CNC default on the bracket buy/stop/target legs
   const symbol = body.tradingsymbol;
   const exchange = body.exchange;
   const qty = body.quantity;
@@ -679,7 +698,7 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const buyForm = new URLSearchParams({
     exchange, tradingsymbol: symbol,
     transaction_type: 'BUY', quantity: String(qty),
-    product: body.product || 'CNC',
+    product: body.product,
     order_type: body.order_type || 'MARKET',
     validity: 'DAY', tag,
   });
@@ -744,9 +763,9 @@ async function placeBracket(env, db, kiteHeaders, body) {
       }),
       orders: JSON.stringify([
         { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
-          order_type: 'LIMIT', product: body.product || 'CNC', price: stopPrice },
+          order_type: 'LIMIT', product: body.product, price: stopPrice },
         { exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: filledQty,
-          order_type: 'LIMIT', product: body.product || 'CNC', price: targetPrice },
+          order_type: 'LIMIT', product: body.product, price: targetPrice },
       ]),
     });
     const r = await kiteFetch(db, `${KITE_BASE}/gtt/triggers`, {
@@ -777,7 +796,7 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const slForm = new URLSearchParams({
     exchange, tradingsymbol: symbol,
     transaction_type: 'SELL', quantity: String(filledQty),
-    product: body.product || 'CNC',
+    product: body.product,
     order_type: 'SL-M',
     validity: 'DAY',
     trigger_price: String(stopPrice),
