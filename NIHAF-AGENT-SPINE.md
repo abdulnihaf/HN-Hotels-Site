@@ -321,6 +321,50 @@ lines unpriced**, which may mean receive happens on paper / web, not the app (on
 This section is the **L0 detect-rule + L4 reconciliation draft** for agent #1, captured for resume. Build
 it only after the purchasing build closes.
 
+## 14. ANOMALY INTELLIGENCE — value × category-completeness, NOT item-presence *(2026-07-01, Nihaf)*
+
+**Purpose (reframe):** the purchases agent does NOT police individual items. It **certifies today's total
+purchasing cost is complete + accurate** — that number feeds Hisaab P&L. An anomaly = "the day's cost is
+materially understated because an ESSENTIAL category is entirely missing (a missed entry)", never "some
+item wasn't bought."
+
+**Why item-presence checking fails (PROVEN in the trail — D1 `hn-hiring` `buy_lines`, 12 days, Jun '26):**
+recurrence ≠ value. Lemon bought 11/12 days = **₹250** total; Tomato 10 days = ₹100; the cheap veg
+(chilli, coriander, cucumber, gobi, beans) dominate FREQUENCY but are near-zero value — the "cabbage class."
+Value is CONCENTRATED: Buffalo milk **₹17,600**, Rumali roti ₹4,500, then milk/butter/oil/chicken. So
+neither flat presence nor recurrence alone works — the signal is **value × expectation at CATEGORY grain.**
+
+**Category-completeness (the core test):** group SKUs into essential category-groups; raise ONLY when a
+high-materiality, high-expectation group is **entirely absent today (no SKU, any form).** Worked example —
+*Chicken* = the 7 `Meat & Poultry` SKUs in `hn-ops.items` (Boneless/Shawarma/Kebab/Tandoori/Grill/Tangdi/
+Lollipop; all `price_mode=live`, vendor `mnbroilers`, brand HE). If even ONE form is entered → covered
+(chicken IS there). If ALL 7 absent for HE on an operating day → missed entry → P&L wrong → chase.
+Cabbage absent → ignore.
+
+**Tiers (DERIVED from trail spend-share + category recurrence; self-calibrating as the going-forward
+`hn-ops` trail grows — THIS is why "no data lost from here" matters):**
+- **T1 monitor-always** (material + near-daily): Chicken (HE), Milk/Dairy (esp. NCH), Mutton/red-meat (HE),
+  core breads (Rumali roti), cooking oil/fat, charcoal/fuel (HE tandoor).
+- **T2 monitor-as-a-whole-only**: low-value daily perishables (veg) — flag only if the ENTIRE fresh-veg run
+  is absent (no veg at all = no market run happened), never a single vegetable.
+- **T3 never-chase**: stock-up / occasional (the 58 Dry Goods, 32 Packaging, masala) — bought in bulk
+  periodically; daily absence is normal.
+
+**Reconcile before raising (anti-false-alarm law):** a missing T1 group is a *candidate*; clear benign
+reasons first (outlet closed today? a day-of-week the group isn't bought? menu still sells it?) before
+raising. The reconcile + the buyer's answer are themselves trail.
+
+**Chase / UX:** message the responsible buyer (PIN→phone via Darbar, Sparksol WABA) naming ONLY the missing
+material groups, with a one-tap deep-link into the HN Staff entry screen **pre-scoped to that group** (vendor
++ SKUs pre-loaded), PLUS a one-tap **"not bought today"** that records legitimate absence into the trail.
+Follow up until every T1 group is either ENTERED or explicitly MARKED-absent — then the day's purchasing
+cost is **certified** for P&L. Correcting must be fewer taps than ignoring.
+
+**Ground truth to confirm with Nihaf before build:** (1) the exact T1 essential set, per brand (is mutton
+daily or specific days? chicken literally every operating day?); (2) the operating calendar (closed days) so
+absence isn't false-flagged; (3) whether "not bought today" is a real allowed state per group. Agent still
+**DEFERRED** per §13 until the purchasing build closes; this is its L3 (intelligence) + L4 (reconciliation) design.
+
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
 witness is Nihaf. A wrong line in a spine is worse than no spine — correct it here first.*
