@@ -34,7 +34,8 @@ final class WealthVM: ObservableObject {
         status = "Refreshing…"
         // Safety-critical: load config FIRST so the real-money mode banner is correct ASAP.
         if let cfg = try? await WealthClient.shared.config() { config = cfg }
-        // The rest run concurrently: one failure must not blank the others.
+        // Critical path only: broker, verdict, order gate, and today's coaching should
+        // clear first. Heavy research/stock surfaces hydrate after the spinner clears.
         async let k = WealthClient.shared.kiteStatus()
         async let r = WealthClient.shared.readiness()
         async let a = WealthClient.shared.autoTrader()
@@ -44,20 +45,11 @@ final class WealthVM: ObservableObject {
         async let p = WealthClient.shared.todaysPlan()
         async let ia = WealthClient.shared.intelAudit()
         async let sh = WealthClient.shared.systemHealth()
-        async let sp = WealthClient.shared.stockPicker()
-        async let br = WealthClient.shared.briefing()
-        async let sg = WealthClient.shared.signals()
-        async let ch = WealthClient.shared.chainHealth()
-        async let rd = WealthClient.shared.researchDepth()
         async let st = WealthClient.shared.scoutToday()
         async let str = WealthClient.shared.scoutTrail()
-        async let un = WealthClient.shared.analysedUniverse()
         kite = try? await k
-        // The scout is the marquee daily action — resolve it EARLY (fast endpoints),
-        // ahead of the slow briefing/stockPicker awaits, so it never loads last.
         scoutToday = try? await st
         scoutTrail = try? await str
-        universe = try? await un
         readiness = try? await r
         auto = try? await a
         engine = try? await e
@@ -66,13 +58,24 @@ final class WealthVM: ObservableObject {
         plan = try? await p
         intel = try? await ia
         sysHealth = try? await sh
+        loading = false
+        status = (kite == nil && readiness == nil && config.isEmpty) ? "Couldn't reach the Wealth broker gate" : ""
+        Task { await refreshResearchSurfaces() }
+    }
+
+    private func refreshResearchSurfaces() async {
+        async let sp = WealthClient.shared.stockPicker()
+        async let br = WealthClient.shared.briefing()
+        async let sg = WealthClient.shared.signals()
+        async let ch = WealthClient.shared.chainHealth()
+        async let rd = WealthClient.shared.researchDepth()
+        async let un = WealthClient.shared.analysedUniverse()
         stockPicker = try? await sp
         briefing = try? await br
         signals = (try? await sg) ?? []
         chainHealth = try? await ch
         researchDepth = try? await rd
-        loading = false
-        status = (kite == nil && readiness == nil && config.isEmpty) ? "Couldn't reach trade.hnhotels.in" : ""
+        universe = try? await un
     }
 
     // ── Derived ──
@@ -88,8 +91,12 @@ final class WealthVM: ObservableObject {
     }
     var totalCapitalPaise: Int { Int(config["total_capital_paise"] ?? "") ?? 0 }
     var deployablePaise: Int { Int(config["today_deployable_paise"] ?? "") ?? 0 }
-    // Robust: trust EITHER source. A single slow/failed status fetch must not show a false "Connect Kite".
-    var kiteConnected: Bool { kite?.connected == true || plan?.state?.kite_connected == true }
+    // Trust the plan only while /api/kite/status is still unknown. Once status arrives,
+    // it is authoritative because the backend validates the token against Kite.
+    var kiteConnected: Bool {
+        if let kite { return kite.connected == true }
+        return plan?.state?.kite_connected == true
+    }
     var kiteStatusKnown: Bool { kite != nil || plan?.state?.kite_connected != nil }
     var executionGateUnavailable: Bool {
         executionGate?.reasons?.contains { $0.code == "gate_missing" } == true || (executionGate == nil && !loading)
@@ -222,7 +229,7 @@ struct HeaderBar: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 22, weight: .heavy, design: .rounded)).foregroundColor(HK.text)
-                Text("trade.hnhotels.in").font(.system(size: 11, weight: .medium)).foregroundColor(HK.textFaint)
+                Text("Private broker gate").font(.system(size: 11, weight: .medium)).foregroundColor(HK.textFaint)
             }
             Spacer()
             if vm.loading { ProgressView().tint(HK.accent) }
@@ -300,7 +307,7 @@ struct TodayView: View {
                         if vm.kiteConnected, let m = vm.kite?.expires_in_min {
                             Row(label: "Token expires in", value: "\(m) min")
                         } else if !vm.kiteStatusKnown && vm.loading {
-                            Text("Checking the broker token from trade.hnhotels.in.")
+                            Text("Checking the secure Wealth broker gate.")
                                 .font(.system(size: 12)).foregroundColor(HK.textDim)
                         } else {
                             Text("Connect Kite from the Capital tab to enable live data + orders.")
@@ -403,7 +410,7 @@ struct CapitalView: View {
                             Text("Checking broker connection from the backend.")
                                 .font(.system(size: 12)).foregroundColor(HK.textDim)
                         } else {
-                            Text("Not connected (\(vm.kite?.reason ?? "—")). Tap to log in with your Zerodha credentials — fund the account first.")
+                            Text("Not connected (\(vm.kite?.reason ?? "—")). iOS Safari / iCloud Keychain can autofill Zerodha; Wealth stores only the daily Kite token.")
                                 .font(.system(size: 12)).foregroundColor(HK.textDim)
                             KiteConnectButton(vm: vm)
                         }
@@ -637,7 +644,7 @@ struct OpsView: View {
             if !vm.kiteStatusKnown && vm.loading { return out }
             let reason = vm.kite?.reason ?? "not connected"
             out.append(OpsAction(title: reason == "expired" ? "Reconnect Kite (token expired)" : "Connect Kite",
-                                 detail: "Kite tokens die daily ~6am IST. Tap Connect Kite on the Now tab. No live data/orders without it.",
+                                 detail: "Kite tokens die daily ~6am IST. Tap Connect Kite on the Now tab; iOS Keychain/Safari can autofill Zerodha. No live data/orders without the daily token.",
                                  color: HK.running))
         } else if let m = vm.kite?.expires_in_min, m < 90 {
             out.append(OpsAction(title: "Kite token expiring soon", detail: "\(m) min left — reconnect to avoid a mid-session data gap.", color: HK.running))

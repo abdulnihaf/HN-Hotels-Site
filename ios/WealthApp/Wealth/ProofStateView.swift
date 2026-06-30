@@ -158,10 +158,10 @@ struct SignalProofCard: View {
         let chain = vm.chainHealth
         let universe = rd?.universe_syms ?? 0
         let bars = rd?.bars_total ?? 0
-        let verdict = (rd?.verdict ?? "missing").uppercased()
+        let verdict = rd == nil ? "LOADING" : (rd?.verdict ?? "missing").uppercased()
         let z = rd?.random_null?.z_vs_null
         let folds = rd?.folds_positive ?? "n/a"
-        let overall = (chain?.overall ?? "missing").uppercased()
+        let overall = chain == nil ? "LOADING" : (chain?.overall ?? "missing").uppercased()
 
         let dataStatus: ProofWitness.Status = universe >= 1_000 && bars >= 1_000_000 ? .pass : (rd == nil ? .unknown : .warn)
         let causalMethod = (rd?.method ?? "").lowercased()
@@ -186,29 +186,35 @@ struct SignalProofCard: View {
             ProofWitness(
                 id: "data",
                 label: "Data coverage",
-                value: dataStatus == .pass ? "PASS" : "CHECK",
-                detail: "\(formatCount(universe)) stocks, \(formatCount(bars)) five-minute bars, \(rd?.date_range?.joined(separator: " -> ") ?? "no range")",
+                value: rd == nil ? "LOADING" : (dataStatus == .pass ? "PASS" : "CHECK"),
+                detail: rd == nil
+                    ? "Research coverage is still loading. No zero-coverage assumption is made."
+                    : "\(formatCount(universe)) stocks, \(formatCount(bars)) five-minute bars, \(rd?.date_range?.joined(separator: " -> ") ?? "no range")",
                 status: dataStatus
             ),
             ProofWitness(
                 id: "causal",
                 label: "Causality",
-                value: causalStatus == .pass ? "PASS" : "AUDIT",
-                detail: rd?.method ?? "No method returned by the server.",
+                value: rd == nil ? "LOADING" : (causalStatus == .pass ? "PASS" : "AUDIT"),
+                detail: rd?.method ?? "Waiting for the research method witness from the server.",
                 status: causalStatus
             ),
             ProofWitness(
                 id: "oos",
                 label: "OOS / random-null",
                 value: verdict,
-                detail: "OOS \(pct(rd?.oos_expectancy_pct)) per trade, folds \(folds), random-null z \(z.map { String(format: "%.2f", $0) } ?? "n/a").",
+                detail: rd == nil
+                    ? "Waiting for OOS, fold, and random-null witnesses from the server."
+                    : "OOS \(pct(rd?.oos_expectancy_pct)) per trade, folds \(folds), random-null z \(z.map { String(format: "%.2f", $0) } ?? "n/a").",
                 status: oosStatus
             ),
             ProofWitness(
                 id: "live",
                 label: "Live chain",
                 value: overall,
-                detail: (chain?.checks ?? []).map { "\($0.name): \($0.status ?? "?")" }.prefix(4).joined(separator: " · "),
+                detail: chain == nil
+                    ? "Waiting for live chain health from the server."
+                    : (chain?.checks ?? []).map { "\($0.name): \($0.status ?? "?")" }.prefix(4).joined(separator: " · "),
                 status: liveStatus
             ),
             ProofWitness(

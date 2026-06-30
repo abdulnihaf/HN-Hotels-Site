@@ -123,6 +123,17 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Production backend note: the live Pages function was separately deployed from clean branch `codex/wealth-kite-gate-prod-20260630` with only `functions/api/kite.js`, so `/api/kite?action=execution_gate` no longer returns `unknown action`.
 - Verification: production `execution_gate` returns `stable_ip_proxy_configured=true` and `no_morning_verdict` for `2026-06-30`; paper and real bracket attempts both stop at the verdict gate with no broker call; stable-IP proxy order path rejects unsigned direct calls with `403`; ship gate passed **31/31**; simulator build passed; simulator screenshots verified Now says connected/set and Execute shows **STABLE-IP OK** with OBSERVE/no morning verdict; Release archive/export/upload passed.
 
+## Build 24 — broker-validated Kite status gate (2026-06-30, Codex)
+- Safety fix after pre-market testing found a real gap: `/api/kite?action=status` reported connected from the stored token record even when live Kite reads returned `TokenException`.
+- Backend `getStatus` now probes Kite `/user/profile`, logs a `status_probe`, deactivates invalid tokens, and returns `connected=false` with `reason=invalid_token` instead of a false connected state.
+- iOS now lets the live Kite status override `todays_plan.state.kite_connected`; the plan is only a temporary fallback while the status request is still unknown.
+- Fixed the Connect Kite regression: the button no longer opens the default browser/Chrome. It presents Zerodha OAuth inside Wealth with `SFSafariViewController`, polls `/api/kite?action=status`, and auto-dismisses once the server stores a valid token.
+- Clarified the password behavior in the app: Zerodha credentials are remembered by iOS Safari / iCloud Keychain autofill, while Wealth never stores the broker password and only stores the daily server-side Kite token.
+- Reduced perceived loading: the main broker/verdict/order-gate surface now clears before the heavy research universe, stock picker, signal grid, briefing, chain health, and research-depth endpoints finish hydrating.
+- Fixed the proof-card loading state so unloaded research witnesses render as `LOADING`/unknown instead of fake `0 stocks, 0 bars`.
+- Removed visible `trade.hnhotels.in` labels from the lock/header copy; that domain remains only the secure backend broker gate, not a user-facing destination.
+- Bumped TestFlight build to **24** so Nihaf installs the broker-status fix, not build 23's optimistic fallback.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).

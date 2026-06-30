@@ -136,7 +136,7 @@ struct NowView: View {
         }
         if !kiteOK {
             return Situation(headline: "Connect Kite to begin",
-                             sub: "Your broker link powers live prices and orders. It's a 30-second login each morning — tokens reset overnight.",
+                             sub: "Your broker link powers live prices and orders. iOS Safari / iCloud Keychain can remember and autofill the Zerodha password; Wealth stores only the daily Kite token.",
                              tone: HK.running, action: .connectKite)
         }
         if positions > 0 {

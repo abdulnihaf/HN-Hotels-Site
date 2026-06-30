@@ -72,7 +72,7 @@ struct ExecuteView: View {
                                     .font(.system(size: 12)).foregroundColor(HK.textDim)
                             } else {
                                 Text("Kite not connected").font(.system(size: 14, weight: .bold)).foregroundColor(HK.running)
-                                Text("Connect Kite to place orders. Until then no order can fire (the server rejects with kite_expired).")
+                                Text("Connect Kite to place orders. iOS Keychain/Safari can autofill Zerodha; Wealth stores only the daily Kite token.")
                                     .font(.system(size: 12)).foregroundColor(HK.textDim)
                                 KiteConnectButton(vm: vm)
                             }
