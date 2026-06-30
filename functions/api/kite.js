@@ -81,6 +81,10 @@ export async function onRequest(context) {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Vary': 'x-api-key',
   };
   if (request.method === 'OPTIONS') return new Response(null, { headers });
 
@@ -439,7 +443,7 @@ export async function onRequest(context) {
 // and fund-check here (the bracket already ran BOTH upstream once), so the bracket
 // normal path stays byte-for-byte identical: same single fund-check, same single
 // kiteFetch BUY. is_exit / bypass_funds_check make the direction explicit.
-async function placeOrder(env, db, kiteHeaders, body) {
+async function placeOrder(env, db, kiteHeaders, body, opts = {}) {
   const required = ['exchange', 'tradingsymbol', 'transaction_type', 'quantity'];
   for (const f of required) {
     if (!body[f]) throw new Error(`Missing required field: ${f}`);
@@ -459,6 +463,23 @@ async function placeOrder(env, db, kiteHeaders, body) {
     || body.surface === 'lab'
     || String(body.tag || '').startsWith('HN_LAB_')
     || String(body.tag || '').startsWith('HN_WE_PIPETEST');
+  const technicalSmoke = opts.technicalSmoke === true;
+
+  if (technicalSmoke) {
+    const smokeOk = body.exchange === 'NSE'
+      && body.tradingsymbol === 'IDEA'
+      && body.transaction_type === 'BUY'
+      && body.quantity === 1
+      && body.product === 'MIS'
+      && (body.order_type || 'MARKET') === 'MARKET';
+    if (!smokeOk) {
+      return {
+        ok: false,
+        error: 'invalid_technical_smoke_order',
+        message: 'Technical smoke test is restricted to BUY 1 NSE:IDEA MIS MARKET only.',
+      };
+    }
+  }
 
   if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
     await logKite(db, `/orders/${variety} preflight`, 'POST', 422, 0, 'market_closed_preflight');
@@ -486,7 +507,7 @@ async function placeOrder(env, db, kiteHeaders, body) {
     };
   }
 
-  if (!internal && !isSim && !isExit && !isLabTinyReal && !body.bypass_execution_gate) {
+  if (!internal && !isSim && !isExit && !isLabTinyReal && !technicalSmoke && !body.bypass_execution_gate) {
     const gate = await buildExecutionGate(db, env);
     if (gate.trade_authorized !== true) {
       await logKite(db, `/orders/${variety} execution_gate`, 'POST', 403, 0, 'execution_gate_blocked');
@@ -2232,7 +2253,7 @@ async function pipelineTest(env, db, kiteHeaders, body) {
     exchange: 'NSE', tradingsymbol: symbol, transaction_type: 'BUY', quantity: qty,
     product: 'MIS', order_type: 'MARKET', validity: 'DAY', tag: 'HN_WE_PIPETEST',
     bypass_funds_check: true,
-  });
+  }, { technicalSmoke: true });
   if (buy.blocked) { add('place_buy', false, 'Real orders are OFF (practice mode). Turn on real orders to run the live test.', buy);
     return { ok: false, overall: 'blocked', symbol, qty, steps, summary: 'Real orders are blocked — this is the practice setting.' }; }
   if (!buy.ok) { add('place_buy', false, buy.error || 'Buy order was not accepted.', buy);
@@ -2392,11 +2413,69 @@ async function getStatus(db, env) {
       execution_gate: gate,
     };
   }
+  const kiteHeaders = {
+    'X-Kite-Version': '3',
+    'Authorization': `token ${env.KITE_API_KEY}:${tok.access_token}`,
+  };
+  const t0 = Date.now();
+  let profileResp;
+  let profileBody = {};
+  try {
+    profileResp = await fetch(`${KITE_BASE}/user/profile`, { headers: kiteHeaders });
+    try { profileBody = await profileResp.json(); } catch { profileBody = { message: 'profile returned non-json' }; }
+    await logKite(
+      db,
+      '/user/profile status_probe',
+      'GET',
+      profileResp.status,
+      Date.now() - t0,
+      profileResp.ok ? null : (profileBody.message || profileBody.error_type)
+    );
+  } catch (e) {
+    await logKite(db, '/user/profile status_probe', 'GET', 0, Date.now() - t0, e?.message || 'profile_check_failed');
+    return {
+      connected: false,
+      reason: 'profile_check_failed',
+      message: e?.message || 'Kite profile check failed.',
+      user_id: tok.user_id, user_name: tok.user_name, email: tok.email,
+      obtained_at: tok.obtained_at, expires_at: tok.expires_at,
+      expires_in_min: Math.round((tok.expires_at - now) / 60000),
+      login_url: '/wealth/auth/login',
+      stable_ip_proxy_configured: gate?.stable_ip_proxy_configured || false,
+      stable_ip_proxy_active: gate?.stable_ip_proxy_active || false,
+      kite_order_base: gate?.kite_order_base || null,
+      execution_gate: gate,
+    };
+  }
+  if (!profileResp.ok || profileBody.status !== 'success') {
+    const reason = profileBody.error_type === 'TokenException' ? 'invalid_token' : 'profile_check_failed';
+    if (reason === 'invalid_token') {
+      await db.prepare(`UPDATE kite_tokens SET is_active=0 WHERE id=?`).bind(tok.id).run().catch(() => {});
+    }
+    return {
+      connected: false,
+      reason,
+      error_type: profileBody.error_type || null,
+      message: profileBody.message || `Kite profile check failed with HTTP ${profileResp.status}`,
+      user_id: tok.user_id, user_name: tok.user_name, email: tok.email,
+      obtained_at: tok.obtained_at, expires_at: tok.expires_at,
+      expires_in_min: Math.round((tok.expires_at - now) / 60000),
+      login_url: '/wealth/auth/login',
+      stable_ip_proxy_configured: gate?.stable_ip_proxy_configured || false,
+      stable_ip_proxy_active: gate?.stable_ip_proxy_active || false,
+      kite_order_base: gate?.kite_order_base || null,
+      execution_gate: gate,
+    };
+  }
+  const profile = profileBody.data || {};
   return {
     connected: true,
-    user_id: tok.user_id, user_name: tok.user_name, email: tok.email,
+    user_id: profile.user_id || tok.user_id,
+    user_name: profile.user_name || tok.user_name,
+    email: profile.email || tok.email,
     obtained_at: tok.obtained_at, expires_at: tok.expires_at,
     expires_in_min: Math.round((tok.expires_at - now) / 60000),
+    verified_by: 'kite_profile',
     stable_ip_proxy_configured: gate?.stable_ip_proxy_configured || false,
     stable_ip_proxy_active: gate?.stable_ip_proxy_active || false,
     kite_order_base: gate?.kite_order_base || null,
