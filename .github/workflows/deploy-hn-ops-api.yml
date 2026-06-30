@@ -41,10 +41,10 @@ jobs:
           cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 6,
-            "versionName": "1.5",
+            "versionCode": 7,
+            "versionName": "1.6",
             "url": "https://hn-ops-api.pages.dev/HN-Staff.apk",
-            "notes": "Sauda opens on today's date and requires goods photo, bill photo, received quantity, and bill rate before payment trail."
+            "notes": "Sauda now has an item directory, upload-based proof photos, and a clear payment request action."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -68,7 +68,7 @@ jobs:
               <h1>HN Staff</h1>
               <p>Install the current Android staff app for Sauda purchase work.</p>
               <a href="/HN-Staff.apk">Download & install</a>
-              <small>Version 1.5 · HN Hotels Pvt Ltd</small>
+              <small>Version 1.6 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>

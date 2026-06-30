@@ -159,6 +159,7 @@ sealed class Screen {
     data class Day(val outlet: String, val date: String) : Screen()
     data class Card(val id: Int, val outlet: String, val date: String) : Screen()
     data class Place(val outlet: String, val date: String) : Screen()
+    data class Directory(val outlet: String, val date: String) : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -244,6 +245,7 @@ fun StaffShell(me: JSONObject) {
             back = { nav.removeAt(nav.lastIndex) },
             openCard = { id, outlet -> nav.add(Screen.Card(id, outlet, cur.date)) },
             openPlace = { outlet -> nav.add(Screen.Place(outlet, cur.date)) },
+            openDirectory = { outlet -> nav.add(Screen.Directory(outlet, cur.date)) },
             setDate = { d -> nav[nav.lastIndex] = Screen.PurchaseDay(d) })
         is Screen.Day -> DayScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
@@ -252,6 +254,9 @@ fun StaffShell(me: JSONObject) {
             setOutletDate = { o, d -> nav[nav.lastIndex] = Screen.Day(o, d) })
         is Screen.Card -> CardScreen(me, cur) { nav.removeAt(nav.lastIndex) }
         is Screen.Place -> PlaceScreen(me, cur, back = { nav.removeAt(nav.lastIndex) }) { nav.removeAt(nav.lastIndex) }
+        is Screen.Directory -> CatalogDirectoryScreen(me, cur,
+            back = { nav.removeAt(nav.lastIndex) },
+            openPlace = { nav.add(Screen.Place(cur.outlet, cur.date)) })
     }
 }
 
@@ -318,7 +323,8 @@ fun ChamberTile(name: String, sub: String, icon: androidx.compose.ui.graphics.ve
 // ---- Purchase day: owner Sauda map, scoped to staff role -------------------
 @Composable
 fun PurchaseDayScreen(me: JSONObject, s: Screen.PurchaseDay, back: () -> Unit,
-                      openCard: (Int, String) -> Unit, openPlace: (String) -> Unit, setDate: (String) -> Unit) {
+                      openCard: (Int, String) -> Unit, openPlace: (String) -> Unit,
+                      openDirectory: (String) -> Unit, setDate: (String) -> Unit) {
     var brand by remember { mutableStateOf("all") }
     var data by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf("") }
@@ -357,11 +363,18 @@ fun PurchaseDayScreen(me: JSONObject, s: Screen.PurchaseDay, back: () -> Unit,
                     modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
                 IconButton(onClick = { setDate(stepDate(s.date, 1)) }) { Icon(Icons.Filled.ChevronRight, "next", tint = Maroon) }
             }
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(selected = brand == "all", onClick = { brand = "all" }, label = { Text("All HN") }, modifier = Modifier.padding(end = 8.dp))
                 FilterChip(selected = brand == "HE", onClick = { brand = "HE" }, label = { Text("HE") }, modifier = Modifier.padding(end = 8.dp))
                 FilterChip(selected = brand == "NCH", onClick = { brand = "NCH" }, label = { Text("NCH") })
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                if (placeOutlet.isNotEmpty()) {
+                    OutlinedButton(onClick = { openDirectory(placeOutlet) }, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), modifier = Modifier.padding(end = 8.dp)) {
+                        Icon(Icons.Filled.Inventory2, null, tint = Maroon, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Items", color = Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
                 OutlinedButton(onClick = {
                     val u = "$BASE?action=purchase_day_pdf&date=${s.date}&brand=$brand&pin=$PIN"
                     ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
@@ -451,6 +464,115 @@ fun BrandPill(brand: String) {
         Text(if (brand == "HE") "HE" else if (brand == "NCH") "NCH" else "HN",
             color = fg, fontSize = 10.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
+    }
+}
+
+// ---- Catalog directory: item -> vendor -> price intelligence ---------------
+@Composable
+fun CatalogDirectoryScreen(me: JSONObject, s: Screen.Directory, back: () -> Unit, openPlace: () -> Unit) {
+    var cat by remember { mutableStateOf<JSONObject?>(null) }
+    var error by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
+    var selectedCat by remember { mutableStateOf("All") }
+    val scope = rememberCoroutineScope()
+    fun load() {
+        cat = null; error = ""
+        scope.launch {
+            val r = Api.get("action=catalog&outlet=${s.outlet}")
+            if (r.optBoolean("ok")) cat = r else error = r.optString("error")
+        }
+    }
+    LaunchedEffect(s.outlet) { load() }
+    val vendors = cat?.optJSONArray("vendors")?.toObjList() ?: emptyList()
+    val vendorByKey = vendors.associateBy { it.optString("vendor_key") }
+    val historyByItem = cat?.optJSONObject("history_by_item")
+    val allItems = remember(cat) { cat?.optJSONObject("items_by_vendor").catalogItems().sortedBy { it.optString("label") } }
+    val categories = remember(allItems) {
+        listOf("All") + allItems.map { categoryShort(it.optString("category")) }.filter { it.isNotEmpty() }.distinct().take(10)
+    }
+    val q = query.trim()
+    val displayItems = allItems.filter {
+        (selectedCat == "All" || categoryShort(it.optString("category")) == selectedCat) && (q.isEmpty() || itemMatches(it, q))
+    }
+    Scaffold(
+        topBar = { HnBar("Item directory", subtitle = "${cat?.optString("brand").orEmpty().ifEmpty { "HN" }} · vendor + rate map", onBack = back) },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = openPlace, containerColor = Maroon, contentColor = Color.White,
+                icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Place order") })
+        }
+    ) { p ->
+        Column(Modifier.padding(p).fillMaxSize().padding(16.dp)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, null, tint = Maroon) },
+                label = { Text("Search 175-item purchase directory") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                categories.forEach { c ->
+                    FilterChip(selected = selectedCat == c, onClick = { selectedCat = c }, label = { Text(c, maxLines = 1) },
+                        modifier = Modifier.padding(end = 8.dp))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            when {
+                error.isNotEmpty() -> CenterMsg("⚠ $error") { load() }
+                cat == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = Maroon) }
+                displayItems.isEmpty() -> CenterMsg("No matching purchase item.", null)
+                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
+                    item {
+                        Text("${displayItems.size} shown · ${cat?.optInt("item_count") ?: allItems.size} catalog items",
+                            color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
+                    }
+                    items(displayItems) { item ->
+                        CatalogItemRow(item, vendorByKey, historyByItem?.optJSONObject(item.optString("item_code")))
+                        HorizontalDivider(color = Sand)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CatalogItemRow(item: JSONObject, vendorByKey: Map<String, JSONObject>, history: JSONObject?) {
+    val unit = item.optString("unit").ifEmpty { "unit" }
+    val vendorKey = item.optString("default_vendor").ifEmpty { item.optString("_vendor_key") }
+    val vendorName = vendorByKey[vendorKey]?.optString("name") ?: vendorKey.ifEmpty { "vendor not mapped" }
+    val price = item.optInt("price_paise")
+    val priceText = when {
+        item.optString("price_mode") == "live" -> "live rate"
+        price > 0 -> "expected ${rupee(price)}/$unit"
+        else -> "rate at bill"
+    }
+    val hRate = history?.optInt("unit_cost_paise") ?: 0
+    val hDate = history?.optString("last_date") ?: ""
+    val hQty = history?.optDouble("last_qty", 0.0) ?: 0.0
+    Row(Modifier.fillMaxWidth().padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(color = categoryColor(categoryShort(item.optString("category"))), shape = RoundedCornerShape(9.dp),
+            modifier = Modifier.size(44.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(item.optString("label").take(1).uppercase(Locale.US), color = Ink, fontWeight = FontWeight.Bold)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(item.optString("label"), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(vendorName, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (hDate.isNotEmpty()) {
+                Text("last ${numStr(hQty)} ${history?.optString("uom").orEmpty().ifEmpty { unit }}" +
+                    (if (hRate > 0) " · ${rupee(hRate)}/$unit" else "") + " · $hDate",
+                    color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(priceText, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(categoryShort(item.optString("category")), color = Muted, fontSize = 10.sp, maxLines = 1)
+        }
     }
 }
 
@@ -642,7 +764,7 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                                     onClick = {
                                         if (busy) return@Button
                                         if (goodsImage.isEmpty() || billImage.isEmpty()) {
-                                            actionError = "Take goods photo and bill photo before saving proof."
+                                            actionError = "Upload goods photo and bill photo before saving proof."
                                             return@Button
                                         }
                                         val incomplete = lines.firstOrNull { l ->
@@ -730,6 +852,7 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
     val caps = me.optJSONArray("capabilities")?.toStrList() ?: emptyList()
     val canSave = caps.contains("sauda.raise") || caps.contains("sauda.pay")
     val canPay = caps.contains("sauda.pay")
+    val requestOnly = !canPay
     var amount by remember(orderId, card.optInt("pay_amount_paise"), card.optInt("expected_amount_paise")) {
         mutableStateOf(rupeeTextFromPaise(card.optInt("pay_amount_paise").takeIf { it > 0 } ?: card.optInt("expected_amount_paise")))
     }
@@ -743,8 +866,10 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
         border = androidx.compose.foundation.BorderStroke(1.dp, Sand),
         modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
         Column(Modifier.padding(14.dp)) {
-            Text("Payment trail", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Text("Save method, amount and proof reference. Cash-to-Tijori adjustment can consume this later.", color = Muted, fontSize = 11.sp)
+            Text(if (requestOnly) "Payment request" else "Payment trail", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text(if (requestOnly) "Request owner payment from this received bill. Nihaf Agent reads this as ready_to_pay."
+                else "Save method, amount and proof reference. Cash-to-Tijori adjustment can consume this later.",
+                color = Muted, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf("upi", "cash", "bank", "manual").forEach { m ->
@@ -773,12 +898,17 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
                 Button(
                     onClick = {
                         if (busy) return@Button
+                        val payPaise = paiseFromRupeeText(amount)
+                        if (payPaise <= 0) {
+                            err = "Enter payment amount."
+                            return@Button
+                        }
                         busy = true; err = ""
                         scope.launch {
                             val r = Api.post("payment", JSONObject()
                                 .put("order_id", orderId)
                                 .put("pay_method", method)
-                                .put("pay_amount_paise", paiseFromRupeeText(amount))
+                                .put("pay_amount_paise", payPaise)
                                 .put("bank_ref", ref)
                                 .put("paid", paid))
                             busy = false
@@ -788,7 +918,7 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
                     colors = ButtonDefaults.buttonColors(containerColor = Maroon),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth().height(46.dp)
-                ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text("Save payment trail") }
+                ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text(if (requestOnly) "Request payment" else "Save payment trail") }
             }
         }
     }
@@ -1323,22 +1453,16 @@ fun uriToDataUrl(ctx: Context, uri: Uri): String {
 @Composable
 fun PhotoCaptureButton(label: String, captured: Boolean, modifier: Modifier = Modifier, onCaptured: (String) -> Unit) {
     val ctx = LocalContext.current
-    var uri by remember { mutableStateOf<Uri?>(null) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val u = uri
-        if (ok && u != null) onCaptured(uriToDataUrl(ctx, u))
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) onCaptured(uriToDataUrl(ctx, uri))
     }
     OutlinedButton(
-        onClick = {
-            val u = newImageUri(ctx, label.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "-"))
-            uri = u
-            launcher.launch(u)
-        },
+        onClick = { launcher.launch("image/*") },
         shape = RoundedCornerShape(10.dp),
         modifier = modifier.height(46.dp)
     ) {
-        Icon(if (captured) Icons.Filled.CheckCircle else Icons.Filled.PhotoCamera, null, tint = if (captured) GoodG else Maroon)
+        Icon(if (captured) Icons.Filled.CheckCircle else Icons.Filled.AttachFile, null, tint = if (captured) GoodG else Maroon)
         Spacer(Modifier.width(6.dp))
-        Text(if (captured) "$label saved" else label, color = if (captured) GoodG else Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(if (captured) "$label uploaded" else "Upload $label", color = if (captured) GoodG else Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }

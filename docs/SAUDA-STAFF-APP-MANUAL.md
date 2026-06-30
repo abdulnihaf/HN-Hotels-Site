@@ -2,6 +2,8 @@
 
 **What it is:** the staff app for Sauda purchase work. Azeem/Nafees create item-first demand without knowing vendors. Zoya/Bashir convert that demand into vendor orders, receiving proof, rates, and payment trail. Everything shown is decided by the staff PIN.
 
+The complete cross-chamber Android model is in `docs/HN-STAFF-ANDROID-UX-MODEL.md`. This page stays as the Sauda worker manual.
+
 ---
 
 ## 1. Install (once)
@@ -75,6 +77,6 @@ A **⚠ note** on a line (e.g. "price is per box — confirm at bill") means the
 ---
 
 ## What's deliberately **not** here (yet)
-Automatic Tijori cash reduction, khata diary intelligence, and Naqeeb reminder loops are the next layers. This slice closes tomorrow's purchase miss: demand → ordered → received proof → rate/payment trail.
+Automatic Tijori cash reduction, khata diary intelligence, and Nihaf Agent reminder loops are the next layers. This slice closes tomorrow's purchase miss: demand -> ordered -> received proof -> rate/payment trail.
 
 *PINs: Azeem `7341` · Nafees `3160` · Zoya `2026` · Bashir `8523` · Admin Console `5634` · owner `0305`. Admin Console sees all outlets/chambers but does not carry final owner payment approval. App: HN Staff (Android). Backend: hn-ops-api (Cloudflare).*
