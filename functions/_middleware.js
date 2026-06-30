@@ -18,6 +18,16 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const host = url.hostname;
 
+  // ── SECURITY: deny public access to internal source/context files ─────────
+  // With pages_build_output_dir = "." every committed file is uploaded as a
+  // static asset — so /NIHAF-BRAIN.md, /CLAUDE.md, /docs/*.md, schema-*.sql,
+  // wrangler.toml etc. were being served on the open web. They exist for
+  // Claude/Codex context, NEVER for the public. 404 them on every host, before
+  // any routing. App surfaces (.html/.js/.css/.json/images) are untouched.
+  if (isInternalAsset(url.pathname)) {
+    return new Response('Not Found', { status: 404 });
+  }
+
   // ── darbar.hnhotels.in — serve the Darbar app at the bare subdomain root ──
   // The app lives at /ops/darbar/ and uses absolute asset/api paths, so we only
   // rewrite the bare root (clean URL, no redirect); everything else resolves
@@ -172,6 +182,16 @@ export async function onRequest(context) {
 
   // Anything else on the trade subdomain → 404
   return new Response('Not Found', { status: 404 });
+}
+
+// SECURITY: true for internal source/context files that must never be public.
+// Matches extensions that are never legitimate app assets + named config files.
+// Deliberately does NOT match .json (manifest.json), .html, .js, .css, images.
+function isInternalAsset(pathname) {
+  if (/\.(md|markdown|sql|toml|sh|bash|lock|gitignore|cfignore)$/i.test(pathname)) return true;
+  const base = (pathname.split('/').pop() || '').toLowerCase();
+  return base === 'package.json' || base === 'package-lock.json'
+      || base === '.env' || base.startsWith('.env.') || base === '.dev.vars';
 }
 
 // Rewrite (internal) — keeps the user-visible URL but serves a different path
