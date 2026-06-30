@@ -107,6 +107,38 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - **SHIPPED AS BUILD 19, not 17 — and that is what saved the outcome.** A CONCURRENT Wealth lane had already uploaded builds 17 (19:58 IST) and 18 (21:54 IST) today, both BEFORE this honesty fix merged to `main` (#484, 22:14 IST) — so 17 and 18 do NOT carry the fix. `xcodebuild -exportArchive` (method=app-store) has `manageAppVersionAndBuildNumber` defaulting TRUE: it queried ASC, saw the latest was 18, and auto-incremented this export from 17 → **19**. Net effect: the honesty fix is the LATEST TestFlight build (19, VALID, in the Internal group, ASC app `6784299674`), so the owner installs the FIXED build. Had it stayed 17 it would have collided as a duplicate and/or sat behind 18 — the owner would have updated to the un-fixed 18. Verified the UPLOADED IPA in-binary: CFBundleVersion 19, "09:40" ×10 (incl. ScoutView), zero "8:30", zero "25% paper win-rate", "9:15 AM" market-open preserved.
 - **Lesson for the next builder:** when a sibling lane may be shipping the same app, `exportArchive` auto-numbering past the store's latest is desirable (keeps your build on top). If you ever need the store number to equal `project.yml`, set `manageAppVersionAndBuildNumber=false` in ExportOptions — but then guard against duplicate/lower numbers yourself.
 
+## Build 22 — verdict-gated order execution (2026-06-30, Codex)
+- Shipped **TestFlight build 22** for `com.hnhotels.wealth`; App Store Connect readback: **VALID**, build id `3adaef57-be06-4770-818d-59bc0ef01526`, internal group `Internal` assigned.
+- Source branch: `codex/wealth-order-execution`, stacked on `codex/wealth-intelligence`. The shipped binary is from the clean `/tmp/wealth-tf22-tree` checkout, not the dirty `codex/sauda-zoya-fixes` working tree.
+- Added server-side `/api/kite?action=execution_gate` plus hard order guards: latest morning verdict must be `TRADE`, `daily_verdicts.picks_json` must be non-empty, `alternatives_json.execution_authority` must be `broker_facing_picks_authorized`, required market inputs must be fresh/healthy, the morning verdict must not be superseded, and real broker entry orders require the stable-IP proxy.
+- Added the iOS owner surface for that contract: Now shows the latest morning verdict, broker pick, machine plan, source warnings, why picked, and why rejected; Execute separates **Paper dry-run** from **Real** and only enables placement when the server gate and broker-pick match.
+- Existing Execution Lab `simulate=1` behavior remains separate and intact; `wealth-engine/workers/wealth-verdict` intelligence logic is consumed only, not changed in this lane.
+- Verification: `ship-check.sh` passed **31/31**, `node --check functions/api/kite.js`, mocked D1 guard harness passed OBSERVE/source-health/paper/no-proxy/proxy cases, clean simulator build passed, Release archive/export/upload passed, and ASC processing reached `VALID`. No live broker order was sent.
+
+## Build 23 — connected-state and stable-IP display fix (2026-06-30, Codex)
+- Shipped **TestFlight build 23** for `com.hnhotels.wealth`; upload delivery UUID/build id `5358b2b4-cec3-4c93-b337-933e18404672`, internal group `Internal` assigned. App Store Connect readback: **VALID**, `APP_STORE_ELIGIBLE`, `USES-NON-EXEMPT-ENCRYPTION=false`.
+- Fixed the build-22 false disconnected state: the app now trusts either `/api/kite?action=status` or `todays_plan.state.kite_connected`, and shows a temporary **Checking Kite connection** state instead of a false **Connect Kite to begin** while endpoints are still loading.
+- Fixed the stable-IP pill: Execute now derives **STABLE-IP OK** from the live execution gate or configured `kite_order_base`; gate-unavailable is shown separately from truly missing stable-IP.
+- Reframed the old random-null/NO_EDGE card as **Research proof** and explicitly states it is a historical proof ladder, not today's real broker order gate. Kite/broker status no longer upgrades or downgrades the research proof state.
+- Production backend note: the live Pages function was separately deployed from clean branch `codex/wealth-kite-gate-prod-20260630` with only `functions/api/kite.js`, so `/api/kite?action=execution_gate` no longer returns `unknown action`.
+- Verification: production `execution_gate` returns `stable_ip_proxy_configured=true` and `no_morning_verdict` for `2026-06-30`; paper and real bracket attempts both stop at the verdict gate with no broker call; stable-IP proxy order path rejects unsigned direct calls with `403`; ship gate passed **31/31**; simulator build passed; simulator screenshots verified Now says connected/set and Execute shows **STABLE-IP OK** with OBSERVE/no morning verdict; Release archive/export/upload passed.
+
+## Build 24 — broker-validated Kite status gate (2026-06-30, Codex)
+- Safety fix after pre-market testing found a real gap: `/api/kite?action=status` reported connected from the stored token record even when live Kite reads returned `TokenException`.
+- Backend `getStatus` now probes Kite `/user/profile`, logs a `status_probe`, deactivates invalid tokens, and returns `connected=false` with `reason=invalid_token` instead of a false connected state.
+- iOS now lets the live Kite status override `todays_plan.state.kite_connected`; the plan is only a temporary fallback while the status request is still unknown.
+- Fixed the Connect Kite regression: the button no longer opens the default browser/Chrome. It presents Zerodha OAuth inside Wealth with `SFSafariViewController`, polls `/api/kite?action=status`, and auto-dismisses once the server stores a valid token.
+- Clarified the password behavior in the app: Zerodha credentials are remembered by iOS Safari / iCloud Keychain autofill, while Wealth never stores the broker password and only stores the daily server-side Kite token.
+- Reduced perceived loading: the main broker/verdict/order-gate surface now clears before the heavy research universe, stock picker, signal grid, briefing, chain health, and research-depth endpoints finish hydrating.
+- Fixed the proof-card loading state so unloaded research witnesses render as `LOADING`/unknown instead of fake `0 stocks, 0 bars`.
+- Removed visible `trade.hnhotels.in` labels from the lock/header copy; that domain remains only the secure backend broker gate, not a user-facing destination.
+- Bumped TestFlight build to **24** so Nihaf installs the broker-status fix, not build 23's optimistic fallback.
+
+## Build 25 — live-device Kite cache hotfix (2026-06-30, Codex)
+- Real iPhone build-24 UI probing showed the backend was broker-verified connected, but the app could still render stale `KITE OFF` / `Connect Kite` after refresh because an old negative `/api/kite?action=status` response overrode `todays_plan.state.kite_connected=true`.
+- Added no-store/no-cache headers to `/api/kite` and made the Swift client bypass local/remote URL cache on every Wealth API request.
+- Changed `WealthVM.kiteConnected` display logic to trust either a broker-validated status success or a positive `todays_plan.state.kite_connected`; real order placement remains fully guarded by the server execution gate.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).

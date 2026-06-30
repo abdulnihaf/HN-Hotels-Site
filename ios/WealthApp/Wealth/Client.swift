@@ -105,31 +105,349 @@ struct VerdictPlan: Decodable {
         else { qty = nil }
     }
 }
+
+struct VerdictPick: Decodable, Identifiable {
+    let symbol: String
+    let sector: String?
+    let qty: Int?
+    let entry_window: String?
+    let live_entry_estimate_paise: Int?
+    let entry_estimate_paise: Int?
+    let stop_paise: Int?
+    let target_paise: Int?
+    let stop_pct: Double?
+    let target_pct: Double?
+    let rr_ratio: Double?
+    let hard_exit_ist: String?
+    let exit_mode: String?
+    let rationale: String?
+    let gap_pct: Double?
+    let turnover_cr: Double?
+    let catalyst: Bool?
+    let max_loss_paise: Int?
+    let max_gain_at_target_paise: Int?
+    var id: String { symbol }
+
+    enum CodingKeys: String, CodingKey {
+        case symbol, sector, qty, entry_window
+        case live_entry_estimate_paise, entry_estimate_paise, entry_paise, entry
+        case stop_paise, stop, target_paise, target
+        case stop_pct, target_pct, rr_ratio
+        case hard_exit_ist, hard_exit, time_exit, exit_mode
+        case rationale, why_picked, why
+        case gap_pct, turnover_cr, catalyst
+        case max_loss_paise, max_gain_at_target_paise
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func int(_ keys: CodingKeys...) -> Int? {
+            for k in keys {
+                if let i = try? c.decode(Int.self, forKey: k) { return i }
+                if let d = try? c.decode(Double.self, forKey: k) { return Int(d) }
+                if let s = try? c.decode(String.self, forKey: k), let i = Int(s) { return i }
+            }
+            return nil
+        }
+        func double(_ k: CodingKeys) -> Double? {
+            if let d = try? c.decode(Double.self, forKey: k) { return d }
+            if let i = try? c.decode(Int.self, forKey: k) { return Double(i) }
+            if let s = try? c.decode(String.self, forKey: k) { return Double(s) }
+            return nil
+        }
+        func rupeeAliasToPaise(_ k: CodingKeys) -> Int? {
+            double(k).map { Int(round($0 * 100.0)) }
+        }
+        func str(_ keys: CodingKeys...) -> String? {
+            for k in keys {
+                if let s = try? c.decode(String.self, forKey: k), !s.isEmpty { return s }
+            }
+            return nil
+        }
+
+        symbol = (try? c.decode(String.self, forKey: .symbol)) ?? ""
+        sector = str(.sector)
+        qty = int(.qty)
+        entry_window = str(.entry_window)
+        live_entry_estimate_paise = int(.live_entry_estimate_paise)
+        entry_estimate_paise = int(.entry_estimate_paise, .entry_paise) ?? rupeeAliasToPaise(.entry)
+        stop_paise = int(.stop_paise) ?? rupeeAliasToPaise(.stop)
+        target_paise = int(.target_paise) ?? rupeeAliasToPaise(.target)
+        stop_pct = double(.stop_pct)
+        target_pct = double(.target_pct)
+        rr_ratio = double(.rr_ratio)
+        hard_exit_ist = str(.hard_exit_ist, .time_exit, .hard_exit)
+        exit_mode = str(.exit_mode)
+        rationale = str(.rationale, .why_picked, .why)
+        gap_pct = double(.gap_pct)
+        turnover_cr = double(.turnover_cr)
+        catalyst = try? c.decode(Bool.self, forKey: .catalyst)
+        max_loss_paise = int(.max_loss_paise)
+        max_gain_at_target_paise = int(.max_gain_at_target_paise)
+    }
+
+    var entryRupees: Double? {
+        (live_entry_estimate_paise ?? entry_estimate_paise).map { Double($0) / 100.0 }
+    }
+    var stopRupees: Double? { stop_paise.map { Double($0) / 100.0 } }
+    var targetRupees: Double? { target_paise.map { Double($0) / 100.0 } }
+    var draft: WealthVM.OrderDraft {
+        WealthVM.OrderDraft(
+            symbol: symbol,
+            stop: stopRupees.map { String(format: "%.2f", $0) } ?? "",
+            target: targetRupees.map { String(format: "%.2f", $0) } ?? "",
+            qty: qty.map(String.init) ?? ""
+        )
+    }
+}
+
+struct MachinePlanEntry: Decodable, Identifiable {
+    let step: String?
+    let action: String?
+    let symbol: String?
+    let entry: Double?
+    let stop: Double?
+    let target: Double?
+    let qty: Int?
+    let time_exit: String?
+    let why: String?
+    let note: String?
+    var id: String { [step, action, symbol, note].compactMap { $0 }.joined(separator: "_") }
+
+    enum CodingKeys: String, CodingKey {
+        case step, action, symbol, entry, stop, target, entry_paise, stop_paise, target_paise, qty
+        case time_exit, hard_exit, why, note
+    }
+
+    init(step: String?, action: String?, symbol: String?, entry: Double?, stop: Double?, target: Double?, qty: Int?, time_exit: String?, why: String?, note: String?) {
+        self.step = step
+        self.action = action
+        self.symbol = symbol
+        self.entry = entry
+        self.stop = stop
+        self.target = target
+        self.qty = qty
+        self.time_exit = time_exit
+        self.why = why
+        self.note = note
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func str(_ keys: CodingKeys...) -> String? {
+            for k in keys {
+                if let s = try? c.decode(String.self, forKey: k), !s.isEmpty { return s }
+            }
+            return nil
+        }
+        func double(_ keys: CodingKeys...) -> Double? {
+            for k in keys {
+                if let d = try? c.decode(Double.self, forKey: k) { return d }
+                if let i = try? c.decode(Int.self, forKey: k) { return Double(i) }
+                if let s = try? c.decode(String.self, forKey: k), let d = Double(s) { return d }
+            }
+            return nil
+        }
+        func int(_ k: CodingKeys) -> Int? {
+            if let i = try? c.decode(Int.self, forKey: k) { return i }
+            if let d = try? c.decode(Double.self, forKey: k) { return Int(d) }
+            if let s = try? c.decode(String.self, forKey: k), let i = Int(s) { return i }
+            return nil
+        }
+        func paiseToRupee(_ k: CodingKeys) -> Double? {
+            int(k).map { Double($0) / 100.0 }
+        }
+        step = str(.step)
+        action = str(.action)
+        symbol = str(.symbol)
+        entry = double(.entry) ?? paiseToRupee(.entry_paise)
+        stop = double(.stop) ?? paiseToRupee(.stop_paise)
+        target = double(.target) ?? paiseToRupee(.target_paise)
+        qty = int(.qty)
+        time_exit = str(.time_exit, .hard_exit)
+        why = str(.why)
+        note = str(.note)
+    }
+}
+
+struct RejectedSetup: Decodable, Identifiable {
+    let symbol: String?
+    let why_not: String?
+    let reason: String?
+    let gap_pct: Double?
+    let turnover_cr: Double?
+    var id: String { (symbol ?? UUID().uuidString) + (why_not ?? reason ?? "") }
+    enum CodingKeys: String, CodingKey { case symbol, why_not, why_rejected, why, reason, gap_pct, turnover_cr }
+
+    init(from decoder: Decoder) throws {
+        if let s = try? decoder.singleValueContainer().decode(String.self) {
+            symbol = nil; why_not = s; reason = nil; gap_pct = nil; turnover_cr = nil
+            return
+        }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func double(_ k: CodingKeys) -> Double? {
+            if let d = try? c.decode(Double.self, forKey: k) { return d }
+            if let i = try? c.decode(Int.self, forKey: k) { return Double(i) }
+            if let s = try? c.decode(String.self, forKey: k) { return Double(s) }
+            return nil
+        }
+        symbol = try? c.decode(String.self, forKey: .symbol)
+        why_not = (try? c.decode(String.self, forKey: .why_not)) ??
+            (try? c.decode(String.self, forKey: .why_rejected)) ??
+            (try? c.decode(String.self, forKey: .why))
+        reason = try? c.decode(String.self, forKey: .reason)
+        gap_pct = double(.gap_pct)
+        turnover_cr = double(.turnover_cr)
+    }
+}
+
+struct VerdictAlternatives: Decodable {
+    let execution_authority: String?
+    let machine_execution_plan: [MachinePlanEntry]?
+    let rejected_setups: [RejectedSetup]?
+    let why_rejected: [RejectedSetup]?
+    let alternatives: [RejectedSetup]?
+    let watch: [RejectedSetup]?
+    let risk_flags: [String]?
+}
+
 struct VerdictToday: Decodable {
+    let id: Int?
     let ok: Bool?
     let decision: String?
+    let headline: String?
+    let narrative: String?
     let recommended_symbol: String?
     let reason: String?
     let plan: VerdictPlan?
+    let picks: [VerdictPick]
+    let alternatives: VerdictAlternatives?
+    let composed_at: Double?
 
-    enum CodingKeys: String, CodingKey { case ok, decision, recommended_symbol, reason, recommended_plan_json }
+    var primaryPick: VerdictPick? { picks.first }
+    var executionAuthority: String? { alternatives?.execution_authority }
+    var brokerFacingAuthorized: Bool {
+        decision?.uppercased() == "TRADE" &&
+        !picks.isEmpty &&
+        executionAuthority == "broker_facing_picks_authorized"
+    }
+    var machinePlan: [MachinePlanEntry] {
+        if let plan = alternatives?.machine_execution_plan, !plan.isEmpty { return plan }
+        return picks.map {
+            MachinePlanEntry(step: "broker_pick", action: "stage", symbol: $0.symbol,
+                             entry: $0.entryRupees, stop: $0.stopRupees, target: $0.targetRupees,
+                             qty: $0.qty, time_exit: $0.hard_exit_ist, why: $0.rationale, note: $0.exit_mode)
+        }
+    }
+    var rejected: [RejectedSetup] {
+        alternatives?.rejected_setups ?? alternatives?.why_rejected ?? alternatives?.alternatives ?? alternatives?.watch ?? []
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case ok, reason, id, decision, headline, narrative, recommended_symbol, recommended_plan_json
+        case picks, picks_json, alternatives, alternatives_json, composed_at, verdict
+    }
+    enum VerdictKeys: String, CodingKey {
+        case id, decision, headline, narrative, recommended_symbol, recommended_plan, picks, alternatives, composed_at
+    }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         ok = try? c.decode(Bool.self, forKey: .ok)
-        decision = try? c.decode(String.self, forKey: .decision)
-        recommended_symbol = try? c.decode(String.self, forKey: .recommended_symbol)
         reason = try? c.decode(String.self, forKey: .reason)
-        if let obj = try? c.decode(VerdictPlan.self, forKey: .recommended_plan_json) {
-            plan = obj
-        } else if let s = try? c.decode(String.self, forKey: .recommended_plan_json),
-                  let d = s.data(using: .utf8),
-                  let p = try? JSONDecoder().decode(VerdictPlan.self, from: d) {
-            plan = p
+
+        if let v = try? c.nestedContainer(keyedBy: VerdictKeys.self, forKey: .verdict) {
+            id = try? v.decode(Int.self, forKey: .id)
+            decision = try? v.decode(String.self, forKey: .decision)
+            headline = try? v.decode(String.self, forKey: .headline)
+            narrative = try? v.decode(String.self, forKey: .narrative)
+            recommended_symbol = try? v.decode(String.self, forKey: .recommended_symbol)
+            plan = try? v.decode(VerdictPlan.self, forKey: .recommended_plan)
+            picks = (try? v.decode([VerdictPick].self, forKey: .picks)) ?? []
+            alternatives = try? v.decode(VerdictAlternatives.self, forKey: .alternatives)
+            composed_at = try? v.decode(Double.self, forKey: .composed_at)
         } else {
-            plan = nil
+            if let i = try? c.decode(Int.self, forKey: .id) { id = i }
+            else if let s = try? c.decode(String.self, forKey: .id), let i = Int(s) { id = i }
+            else { id = nil }
+            decision = try? c.decode(String.self, forKey: .decision)
+            headline = try? c.decode(String.self, forKey: .headline)
+            narrative = try? c.decode(String.self, forKey: .narrative)
+            recommended_symbol = try? c.decode(String.self, forKey: .recommended_symbol)
+            if let obj = try? c.decode(VerdictPlan.self, forKey: .recommended_plan_json) {
+                plan = obj
+            } else if let s = try? c.decode(String.self, forKey: .recommended_plan_json),
+                      let d = s.data(using: .utf8),
+                      let p = try? JSONDecoder().decode(VerdictPlan.self, from: d) {
+                plan = p
+            } else {
+                plan = nil
+            }
+            if let arr = try? c.decode([VerdictPick].self, forKey: .picks) {
+                picks = arr
+            } else if let s = try? c.decode(String.self, forKey: .picks_json),
+                      let d = s.data(using: .utf8),
+                      let arr = try? JSONDecoder().decode([VerdictPick].self, from: d) {
+                picks = arr
+            } else {
+                picks = []
+            }
+            if let obj = try? c.decode(VerdictAlternatives.self, forKey: .alternatives) {
+                alternatives = obj
+            } else if let s = try? c.decode(String.self, forKey: .alternatives_json),
+                      let d = s.data(using: .utf8),
+                      let obj = try? JSONDecoder().decode(VerdictAlternatives.self, from: d) {
+                alternatives = obj
+            } else {
+                alternatives = nil
+            }
+            if let d = try? c.decode(Double.self, forKey: .composed_at) { composed_at = d }
+            else if let i = try? c.decode(Int.self, forKey: .composed_at) { composed_at = Double(i) }
+            else if let s = try? c.decode(String.self, forKey: .composed_at), let d = Double(s) { composed_at = d }
+            else { composed_at = nil }
         }
     }
 }
+
+struct ExecutionGateReason: Decodable, Identifiable {
+    let code: String
+    let message: String
+    var id: String { code + message }
+}
+struct RequiredSourceCandidate: Decodable, Identifiable {
+    let source_name: String
+    let status: String?
+    let age_minutes: Int?
+    let threshold_minutes: Int?
+    let is_circuit_broken: Bool?
+    let last_error: String?
+    var id: String { source_name }
+}
+struct RequiredSourceGate: Decodable, Identifiable {
+    let key: String
+    let label: String
+    let ok: Bool?
+    let status: String?
+    let message: String?
+    let candidates: [RequiredSourceCandidate]?
+    var id: String { key }
+}
+struct ExecutionGate: Decodable {
+    let trade_authorized: Bool?
+    let trade_date: String?
+    let verdict_id: Int?
+    let decision: String?
+    let headline: String?
+    let recommended_symbol: String?
+    let picks_count: Int?
+    let execution_authority: String?
+    let reasons: [ExecutionGateReason]?
+    let required_sources: [RequiredSourceGate]?
+    let stable_ip_proxy_configured: Bool?
+    let matched_pick: VerdictPick?
+    let machine_execution_plan: [MachinePlanEntry]?
+    let why_rejected: [RejectedSetup]?
+}
+struct ExecutionGateResp: Decodable { let execution_gate: ExecutionGate? }
 
 struct ConfigResp: Decodable { let config: [String: String]? }
 
@@ -296,6 +614,8 @@ struct SignalsResp: Decodable { let signals: [SignalScore]?; let note: String? }
 struct BracketResult: Decodable {
     let ok: Bool?
     let blocked: Bool?
+    let dry_run: Bool?
+    let mode: String?
     let reason: String?
     let error: String?
     let message: String?
@@ -304,6 +624,7 @@ struct BracketResult: Decodable {
     let fallback_used: Bool?
     let warning: String?
     let bracket_id: Int?
+    let execution_gate: ExecutionGate?
 }
 
 struct ChainHealthCheck: Decodable, Identifiable {
@@ -425,9 +746,11 @@ actor WealthClient {
         if !items.isEmpty { comps.queryItems = items }
         guard let url = comps.url else { throw WealthError.badURL }
 
-        var req = URLRequest(url: url, timeoutInterval: 18)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 18)
         req.httpMethod = method
         req.setValue(key, forHTTPHeaderField: "x-api-key")
+        req.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        req.setValue("no-cache", forHTTPHeaderField: "Pragma")
         if let rawBody {
             req.httpBody = rawBody
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -473,6 +796,18 @@ actor WealthClient {
     func autoTrader() async throws -> AutoTraderState { try await get(AutoTraderState.self, action: "auto_trader_state") }
     func engineState() async throws -> EngineState { try await get(EngineState.self, action: "engine_state") }
     func verdictToday() async throws -> VerdictToday { try await get(VerdictToday.self, action: "verdict_today") }
+    func executionGate(symbol: String? = nil) async throws -> ExecutionGate {
+        var q = ["action": "execution_gate"]
+        if let symbol, !symbol.isEmpty { q["symbol"] = symbol }
+        let data = try await request(path: "/api/kite", query: q)
+        return (try JSONDecoder().decode(ExecutionGateResp.self, from: data)).execution_gate ?? ExecutionGate(
+            trade_authorized: false, trade_date: nil, verdict_id: nil, decision: nil, headline: nil,
+            recommended_symbol: nil, picks_count: nil, execution_authority: nil,
+            reasons: [ExecutionGateReason(code: "gate_missing", message: "Server returned no execution gate.")],
+            required_sources: nil, stable_ip_proxy_configured: nil, matched_pick: nil,
+            machine_execution_plan: nil, why_rejected: nil
+        )
+    }
     func config() async throws -> [String: String] {
         (try await get(ConfigResp.self, action: "config")).config ?? [:]
     }
@@ -501,12 +836,16 @@ actor WealthClient {
     /// product is forced to MIS (intraday auto-square) — never CNC. `tag` carries an idempotency stamp.
     /// Throws .unauthorized when Kite is expired/not connected (no order fires).
     /// Returns blocked:true (simulated) when block_real_orders=1.
-    func placeBracket(symbol: String, qty: Int, stop: Double, target: Double, tag: String) async throws -> BracketResult {
-        let body: [String: Any] = [
+    func placeBracket(symbol: String, qty: Int, stop: Double, target: Double, tag: String,
+                      verdictId: Int?, dryRun: Bool) async throws -> BracketResult {
+        var body: [String: Any] = [
             "exchange": "NSE", "tradingsymbol": symbol, "quantity": qty,
             "stop_price": stop, "target_price": target,
             "product": "MIS", "order_type": "MARKET", "tag": tag,
+            "dry_run": dryRun,
+            "mode": dryRun ? "paper" : "real",
         ]
+        if let verdictId { body["verdict_id"] = verdictId }
         let raw = try JSONSerialization.data(withJSONObject: body)
         let data = try await request(path: "/api/kite",
                                      query: ["action": "place_bracket"],

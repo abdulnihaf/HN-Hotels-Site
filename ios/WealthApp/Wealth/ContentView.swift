@@ -86,7 +86,7 @@ private struct UnlockView: View {
             Text("Wealth")
                 .font(.system(size: 30, weight: .heavy, design: .rounded))
                 .foregroundColor(HK.text)
-            Text("trade.hnhotels.in")
+            Text("Private broker gate")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(HK.textFaint)
 

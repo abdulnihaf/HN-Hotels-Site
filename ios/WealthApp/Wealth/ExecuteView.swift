@@ -18,6 +18,12 @@ private struct OrderExecutionWitness: Equatable {
     let timestamp: Date
 }
 
+private enum OrderMode: String, CaseIterable, Identifiable {
+    case paper = "Paper"
+    case real = "Real"
+    var id: String { rawValue }
+}
+
 struct ExecuteView: View {
     @ObservedObject var vm: WealthVM
     @Environment(\.openURL) private var openURL
@@ -30,7 +36,7 @@ struct ExecuteView: View {
     @State private var placing = false
     @State private var result: BracketResult?
     @State private var errorMsg: String?
-    @State private var practice = true
+    @State private var orderMode: OrderMode = .paper
     @State private var lastWasPractice = false
     @State private var orderWitness: OrderExecutionWitness?
 
@@ -39,7 +45,16 @@ struct ExecuteView: View {
     private var target: Double { Double(targetText) ?? 0 }
     private var kiteOK: Bool { vm.kiteConnected }
     private var isReal: Bool { vm.config["block_real_orders"] == "0" }
+    private var paperMode: Bool { orderMode == .paper }
     private var formValid: Bool { !symbol.isEmpty && qty >= 1 && stop > 0 && target > 0 }
+    private var matchesBrokerPick: Bool {
+        guard let pick = vm.brokerPick else { return false }
+        let symbolOK = symbol.uppercased() == pick.symbol.uppercased()
+        let qtyOK = pick.qty == nil || qty == pick.qty
+        let stopOK = pick.stopRupees == nil || abs(stop - (pick.stopRupees ?? stop)) <= 0.05
+        let targetOK = pick.targetRupees == nil || abs(target - (pick.targetRupees ?? target)) <= 0.05
+        return symbolOK && qtyOK && stopOK && targetOK
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,13 +62,20 @@ struct ExecuteView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     ModeBanner(vm: vm)
+                    executionGateCard
 
                     if !kiteOK {
                         Card {
-                            Text("Kite not connected").font(.system(size: 14, weight: .bold)).foregroundColor(HK.running)
-                            Text("Connect Kite to place orders. Until then no order can fire (the server rejects with kite_expired).")
-                                .font(.system(size: 12)).foregroundColor(HK.textDim)
-                            KiteConnectButton(vm: vm)
+                            if !vm.kiteStatusKnown && vm.loading {
+                                Text("Checking Kite connection").font(.system(size: 14, weight: .bold)).foregroundColor(HK.running)
+                                Text("Reading broker state from the backend. No order can fire while this is unknown.")
+                                    .font(.system(size: 12)).foregroundColor(HK.textDim)
+                            } else {
+                                Text("Kite not connected").font(.system(size: 14, weight: .bold)).foregroundColor(HK.running)
+                                Text("Connect Kite to place orders. iOS Keychain/Safari can autofill Zerodha; Wealth stores only the daily Kite token.")
+                                    .font(.system(size: 12)).foregroundColor(HK.textDim)
+                                KiteConnectButton(vm: vm)
+                            }
                         }
                     }
 
@@ -61,11 +83,17 @@ struct ExecuteView: View {
                         HStack {
                             Text("New order").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
                             Spacer()
-                            Pill(text: "MIS · MARKET BUY", color: HK.accent)
+                            Pill(text: vm.orderReady ? "BROKER PICK" : "INTELLIGENCE ONLY", color: vm.orderReady ? HK.ready : HK.idle)
                         }
-                        Toggle(isOn: $practice) {
-                            Text("Practice (rehearse — nothing sent)").font(.system(size: 13)).foregroundColor(HK.textDim)
-                        }.tint(HK.accent)
+                        Picker("Mode", selection: $orderMode) {
+                            Text("Paper dry-run").tag(OrderMode.paper)
+                            Text("Real").tag(OrderMode.real)
+                        }
+                        .pickerStyle(.segmented)
+                        Text(paperMode
+                             ? "Paper dry-run validates the latest TRADE verdict on the server and sends nothing to Zerodha."
+                             : "Real mode can call Kite only through the whitelisted stable-IP proxy, after Face ID and server guards.")
+                            .font(.system(size: 11)).foregroundColor(paperMode ? HK.ready : HK.running)
                         labeledField("Symbol (NSE)", text: $symbol, placeholder: "e.g. HFCL", caps: true)
                         HStack {
                             Text("Quantity").font(.system(size: 14)).foregroundColor(HK.textDim)
@@ -81,17 +109,21 @@ struct ExecuteView: View {
                             Text("Stop \(Money.rupeesFromRupee(stop)) · Target \(Money.rupeesFromRupee(target)) · \(qty) sh · auto-squares 15:15 (MIS)")
                                 .font(.system(size: 11)).foregroundColor(HK.textFaint)
                         }
+                        if !matchesBrokerPick {
+                            Text("Order must match the current broker-facing pick exactly. Manual edits are shown, but the server will refuse them.")
+                                .font(.system(size: 11, weight: .semibold)).foregroundColor(HK.running)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
 
-                        let canPlace = formValid && !placing && (practice || kiteOK)
+                        let canPlace = formValid && !placing && vm.orderReady && matchesBrokerPick && (paperMode || kiteOK)
                         Button {
                             errorMsg = nil; result = nil; orderWitness = nil; showConfirm = true
                         } label: {
-                            Text(placing ? "Placing…" : (practice ? "Place practice order" : (isReal ? "Review & place REAL order" : "Review & place (shadow)")))
+                            Text(placing ? "Placing…" : (paperMode ? "Stage PAPER dry-run" : (isReal ? "Review & place REAL order" : "Review & place (server shadow)")))
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(canPlace ? HK.bg : HK.textFaint)
                                 .frame(maxWidth: .infinity).padding(.vertical, 13)
-                                .background(RoundedRectangle(cornerRadius: HK.radiusSm)
-                                    .fill(canPlace ? (practice ? HK.accent : (isReal ? HK.error : HK.accent)) : HK.cardHi))
+                                .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(canPlace ? (paperMode ? HK.ready : (isReal ? HK.error : HK.accent)) : HK.cardHi))
                         }
                         .disabled(!canPlace)
                     }
@@ -104,7 +136,7 @@ struct ExecuteView: View {
 
                     Card {
                         Text("How this works").font(.system(size: 12, weight: .bold)).foregroundColor(HK.textFaint)
-                        Text("Places directly on Zerodha via the server — no need to open the Kite app. It fires a market BUY, waits for the fill, then sets a GTT one-cancels-other stop + target. If the GTT fails it falls back to an SL-M stop and warns you. block_real_orders=1 simulates the whole flow safely; =0 places real money.")
+                        Text("The app never talks to Kite directly. It sends the current broker-facing pick to /api/kite; the server re-checks the latest TRADE verdict, pick JSON, authority flag, source health, market hours, and stable-IP proxy before any real broker call.")
                             .font(.system(size: 12)).foregroundColor(HK.textDim)
                     }
                 }
@@ -120,17 +152,29 @@ struct ExecuteView: View {
                 if !d.stop.isEmpty { stopText = d.stop }
                 if !d.target.isEmpty { targetText = d.target }
                 if !d.qty.isEmpty { qtyText = d.qty }
-                practice = false           // came from a real pick → default to live shadow/real path
+                orderMode = .real           // came from a broker pick → default to live shadow/real path
                 vm.prefill = nil
+            } else if let pick = vm.brokerPick {
+                apply(pick)
             }
         }
-        .alert(practice ? "Place a practice order?" : (isReal ? "Place a REAL order?" : "Place a simulated order?"), isPresented: $showConfirm) {
-            Button(practice ? "Place practice order" : (isReal ? "Place REAL order" : "Place (shadow)"), role: .destructive) { place() }
+        .onChange(of: vm.brokerPick?.symbol ?? "") { _, _ in
+            if let pick = vm.brokerPick, symbol.isEmpty || !matchesBrokerPick { apply(pick) }
+        }
+        .alert(paperMode ? "Stage a paper dry-run?" : (isReal ? "Place a REAL order?" : "Place a server-shadow order?"), isPresented: $showConfirm) {
+            Button(paperMode ? "Stage paper" : (isReal ? "Place REAL order" : "Place shadow"), role: .destructive) { place() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            let lead = practice ? "PRACTICE — nothing is sent to Zerodha. " : (isReal ? "⚠️ REAL MONEY. " : "Shadow — no real order. ")
+            let lead = paperMode ? "PAPER — server validates, no Zerodha call. " : (isReal ? "REAL MONEY. " : "Shadow — no real order. ")
             Text("\(lead)MIS market BUY \(qty) × \(symbol.uppercased()), stop \(Money.rupeesFromRupee(stop)), target \(Money.rupeesFromRupee(target)). Face ID / passcode required.")
         }
+    }
+
+    private func apply(_ pick: VerdictPick) {
+        symbol = pick.symbol
+        if let stop = pick.stopRupees { stopText = String(format: "%.2f", stop) }
+        if let target = pick.targetRupees { targetText = String(format: "%.2f", target) }
+        if let qty = pick.qty { qtyText = String(qty) }
     }
 
     @ViewBuilder
@@ -149,14 +193,64 @@ struct ExecuteView: View {
     }
 
     @ViewBuilder
+    private var executionGateCard: some View {
+        Card {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Execution gate").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
+                    Text(vm.orderReady ? "TRADE — order-ready" : "OBSERVE — intelligence only")
+                        .font(.system(size: 18, weight: .heavy, design: .rounded))
+                        .foregroundColor(vm.orderReady ? HK.ready : HK.running)
+                }
+                Spacer()
+                Pill(text: stableIpPill.0, color: stableIpPill.1)
+            }
+            Row(label: "Decision", value: (vm.executionGate?.decision ?? vm.verdict?.decision ?? "—").uppercased(),
+                valueColor: vm.orderReady ? HK.ready : HK.textDim)
+            Row(label: "Authority", value: vm.executionGate?.execution_authority ?? vm.verdict?.executionAuthority ?? "missing",
+                valueColor: (vm.executionGate?.execution_authority ?? vm.verdict?.executionAuthority) == "broker_facing_picks_authorized" ? HK.ready : HK.error)
+            Row(label: "Broker picks", value: "\(vm.executionGate?.picks_count ?? vm.verdict?.picks.count ?? 0)")
+            if let h = vm.executionGate?.headline ?? vm.verdict?.headline {
+                Text(h).font(.system(size: 12)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
+            }
+            if !vm.orderBlockers.isEmpty {
+                Divider().background(HK.line)
+                ForEach(vm.orderBlockers.prefix(4), id: \.self) { b in
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("·").font(.system(size: 13, weight: .bold)).foregroundColor(HK.running)
+                        Text(b).font(.system(size: 12)).foregroundColor(HK.running).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            if !vm.unhealthyRequiredSources.isEmpty {
+                Divider().background(HK.line)
+                Text("Required market inputs").font(.system(size: 11, weight: .heavy)).foregroundColor(HK.textFaint)
+                ForEach(vm.unhealthyRequiredSources.prefix(3)) { s in
+                    Row(label: s.label, value: (s.status ?? "bad").uppercased(), valueColor: HK.running)
+                }
+            }
+        }
+    }
+
+    private var stableIpPill: (String, Color) {
+        if vm.stableIpConfigured { return ("STABLE-IP OK", HK.ready) }
+        if vm.executionGateUnavailable { return ("GATE UNKNOWN", HK.running) }
+        return ("NO STABLE-IP", HK.error)
+    }
+
+    @ViewBuilder
     private func resultCard(_ r: BracketResult) -> some View {
         Card {
-            if lastWasPractice {
-                Pill(text: "PRACTICE — NOT SENT TO ZERODHA", color: HK.accent)
+            if lastWasPractice || r.dry_run == true {
+                Pill(text: "PAPER DRY-RUN — NOT SENT TO ZERODHA", color: HK.ready)
             }
             if r.blocked == true {
                 Text("SHADOW — simulated").font(.system(size: 15, weight: .bold)).foregroundColor(HK.ready)
                 Text("No real order placed (block_real_orders=1). The full flow was validated safely.")
+                    .font(.system(size: 12)).foregroundColor(HK.textDim)
+            } else if r.dry_run == true {
+                Text("Paper order staged").font(.system(size: 15, weight: .bold)).foregroundColor(HK.ready)
+                Text(r.message ?? "The server validated the verdict and staged the order without contacting Kite.")
                     .font(.system(size: 12)).foregroundColor(HK.textDim)
             } else if r.ok == true {
                 Text("Order placed ✓").font(.system(size: 15, weight: .bold)).foregroundColor(HK.ready)
@@ -209,16 +303,20 @@ struct ExecuteView: View {
 
     private func place() {
         guard !placing else { return }
+        guard vm.orderReady, matchesBrokerPick else {
+            errorMsg = "Order blocked — this screen only sends the current broker-facing pick."
+            return
+        }
         placing = true; errorMsg = nil; result = nil
         let tag = "HN_WE_IOS_\(Int(Date().timeIntervalSince1970))"
         let sym = symbol.uppercased()
-        let isPractice = practice
-        let mode = isPractice ? "PRACTICE" : (isReal ? "REAL" : "SHADOW")
+        let isPaper = paperMode
+        let mode = isPaper ? "PAPER" : (isReal ? "REAL" : "SHADOW")
         orderWitness = OrderExecutionWitness(tag: tag, mode: mode, auth: nil,
                                              server: "Waiting for iOS auth", broker: "Not reached",
                                              timestamp: Date())
         Task {
-            let auth = await authorizeOrder(isPractice: isPractice)
+            let auth = await authorizeOrder(isPractice: isPaper)
             await MainActor.run {
                 updateWitness { w in
                     w.auth = auth
@@ -233,33 +331,19 @@ struct ExecuteView: View {
                 }
                 return
             }
-            if isPractice {
-                // Rehearse the whole flow locally — nothing leaves the phone.
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
-                let fill = (stop + target) / 2
-                let gtt = Int(Date().timeIntervalSince1970) % 100000
-                let demo = BracketResult(ok: true, blocked: nil, reason: "practice", error: nil, message: nil,
-                                         fill_price: fill, gtt_id: gtt, fallback_used: false, warning: nil, bracket_id: nil)
-                await MainActor.run {
-                    updateWitness { w in
-                        w.server = "Practice only - not sent to trade.hnhotels.in"
-                        w.broker = "No Zerodha order. Local rehearsal fill \(Money.rupeesFromRupee(fill)); demo GTT #\(gtt)."
-                    }
-                    result = demo
-                    lastWasPractice = true
-                    placing = false
-                }
-                return
-            }
-            await MainActor.run { lastWasPractice = false }
             do {
-                let r = try await WealthClient.shared.placeBracket(symbol: sym, qty: qty, stop: stop, target: target, tag: tag)
+                let r = try await WealthClient.shared.placeBracket(
+                    symbol: sym, qty: qty, stop: stop, target: target, tag: tag,
+                    verdictId: vm.executionGate?.verdict_id ?? vm.verdict?.id,
+                    dryRun: isPaper
+                )
                 await MainActor.run {
                     updateWitness { w in
                         w.server = serverWitness(r)
                         w.broker = brokerWitness(r)
                     }
                     result = r
+                    lastWasPractice = isPaper
                     placing = false
                 }
                 await vm.refresh()
@@ -284,12 +368,16 @@ struct ExecuteView: View {
     }
 
     private func serverWitness(_ r: BracketResult) -> String {
+        if r.dry_run == true { return "API returned paper dry-run staged" }
         if r.blocked == true { return "API returned blocked/simulated" }
         if r.ok == true { return "API returned ok" }
         return "API returned failure"
     }
 
     private func brokerWitness(_ r: BracketResult) -> String {
+        if r.dry_run == true {
+            return "No Kite call. Server validated the broker-facing pick and staged a paper order."
+        }
         if r.blocked == true {
             return "Server simulation only. No real broker order placed."
         }
@@ -353,6 +441,7 @@ struct ExecuteView: View {
         switch type {
         case .faceID: return "Face ID"
         case .touchID: return "Touch ID"
+        case .opticID: return "Optic ID"
         case .none: return "None"
         @unknown default: return "Unknown"
         }

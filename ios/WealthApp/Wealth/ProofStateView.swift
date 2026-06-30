@@ -26,7 +26,7 @@ private enum WealthProofState {
 
     var headline: String {
         switch self {
-        case .rejected: return "No buy signal is allowed"
+        case .rejected: return "No deployable research edge"
         case .watch: return "Research signal only"
         case .deployable: return "Signal cleared the proof gates"
         case .unknown: return "Proof state not loaded"
@@ -71,7 +71,7 @@ struct SignalProofCard: View {
         Card {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Signal state")
+                    Text("Research proof")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(HK.textFaint)
                     Text(state.headline)
@@ -85,6 +85,10 @@ struct SignalProofCard: View {
             Text(summaryText(for: state))
                 .font(.system(size: 13))
                 .foregroundColor(HK.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Historical proof ladder only — today's real order gate is the latest morning verdict on Execute.")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(HK.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
 
             if !metricLine.isEmpty {
@@ -127,7 +131,7 @@ struct SignalProofCard: View {
     private var proofState: WealthProofState {
         guard let raw = vm.researchDepth?.verdict?.uppercased(), !raw.isEmpty else { return .unknown }
         if raw == "NO_EDGE" || raw.contains("NO_EDGE") { return .rejected }
-        if raw.contains("DEPLOY") || (raw == "EDGE" && chainIsOK && vm.kiteConnected) { return .deployable }
+        if raw.contains("DEPLOY") { return .deployable }
         if raw.contains("EDGE") || raw.contains("CANDIDATE") || raw.contains("THIN") { return .watch }
         return .unknown
     }
@@ -139,7 +143,7 @@ struct SignalProofCard: View {
     private func summaryText(for state: WealthProofState) -> String {
         switch state {
         case .rejected:
-            return "The research stack found opportunity, but the tested selection did not beat the required OOS, fold, and random-null gates."
+            return "The historical research stack found opportunity, but the tested selection did not beat the required OOS, fold, and random-null gates."
         case .watch:
             return "There may be selection skill here, but one or more proof gates are incomplete. This can be watched or paper-scouted, not bought with size."
         case .deployable:
@@ -154,10 +158,10 @@ struct SignalProofCard: View {
         let chain = vm.chainHealth
         let universe = rd?.universe_syms ?? 0
         let bars = rd?.bars_total ?? 0
-        let verdict = (rd?.verdict ?? "missing").uppercased()
+        let verdict = rd == nil ? "LOADING" : (rd?.verdict ?? "missing").uppercased()
         let z = rd?.random_null?.z_vs_null
         let folds = rd?.folds_positive ?? "n/a"
-        let overall = (chain?.overall ?? "missing").uppercased()
+        let overall = chain == nil ? "LOADING" : (chain?.overall ?? "missing").uppercased()
 
         let dataStatus: ProofWitness.Status = universe >= 1_000 && bars >= 1_000_000 ? .pass : (rd == nil ? .unknown : .warn)
         let causalMethod = (rd?.method ?? "").lowercased()
@@ -176,43 +180,49 @@ struct SignalProofCard: View {
             if chain.overall == "warn" { return .warn }
             return .fail
         }()
-        let orderStatus: ProofWitness.Status = vm.kiteConnected ? (proofState == .deployable ? .pass : .warn) : .fail
+        let orderStatus: ProofWitness.Status = vm.kiteConnected ? .warn : (vm.kiteStatusKnown ? .fail : .unknown)
 
         return [
             ProofWitness(
                 id: "data",
                 label: "Data coverage",
-                value: dataStatus == .pass ? "PASS" : "CHECK",
-                detail: "\(formatCount(universe)) stocks, \(formatCount(bars)) five-minute bars, \(rd?.date_range?.joined(separator: " -> ") ?? "no range")",
+                value: rd == nil ? "LOADING" : (dataStatus == .pass ? "PASS" : "CHECK"),
+                detail: rd == nil
+                    ? "Research coverage is still loading. No zero-coverage assumption is made."
+                    : "\(formatCount(universe)) stocks, \(formatCount(bars)) five-minute bars, \(rd?.date_range?.joined(separator: " -> ") ?? "no range")",
                 status: dataStatus
             ),
             ProofWitness(
                 id: "causal",
                 label: "Causality",
-                value: causalStatus == .pass ? "PASS" : "AUDIT",
-                detail: rd?.method ?? "No method returned by the server.",
+                value: rd == nil ? "LOADING" : (causalStatus == .pass ? "PASS" : "AUDIT"),
+                detail: rd?.method ?? "Waiting for the research method witness from the server.",
                 status: causalStatus
             ),
             ProofWitness(
                 id: "oos",
                 label: "OOS / random-null",
                 value: verdict,
-                detail: "OOS \(pct(rd?.oos_expectancy_pct)) per trade, folds \(folds), random-null z \(z.map { String(format: "%.2f", $0) } ?? "n/a").",
+                detail: rd == nil
+                    ? "Waiting for OOS, fold, and random-null witnesses from the server."
+                    : "OOS \(pct(rd?.oos_expectancy_pct)) per trade, folds \(folds), random-null z \(z.map { String(format: "%.2f", $0) } ?? "n/a").",
                 status: oosStatus
             ),
             ProofWitness(
                 id: "live",
                 label: "Live chain",
                 value: overall,
-                detail: (chain?.checks ?? []).map { "\($0.name): \($0.status ?? "?")" }.prefix(4).joined(separator: " · "),
+                detail: chain == nil
+                    ? "Waiting for live chain health from the server."
+                    : (chain?.checks ?? []).map { "\($0.name): \($0.status ?? "?")" }.prefix(4).joined(separator: " · "),
                 status: liveStatus
             ),
             ProofWitness(
                 id: "order",
-                label: "Order path",
-                value: vm.kiteConnected ? "KITE OK" : "KITE OFF",
+                label: "Broker link",
+                value: vm.kiteConnected ? "KITE OK" : (vm.kiteStatusKnown ? "KITE OFF" : "CHECKING"),
                 detail: vm.kiteConnected
-                    ? "Broker connection is live. A real order still needs the Execute screen's Face ID witness."
+                    ? "Broker connection is live. This does not upgrade the research proof; real orders still need the Execute verdict gate."
                     : "No real order path without the daily Kite token.",
                 status: orderStatus
             ),
