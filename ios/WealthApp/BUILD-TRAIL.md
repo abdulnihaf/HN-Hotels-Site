@@ -116,7 +116,7 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Verification: `ship-check.sh` passed **31/31**, `node --check functions/api/kite.js`, mocked D1 guard harness passed OBSERVE/source-health/paper/no-proxy/proxy cases, clean simulator build passed, Release archive/export/upload passed, and ASC processing reached `VALID`. No live broker order was sent.
 
 ## Build 23 — connected-state and stable-IP display fix (2026-06-30, Codex)
-- Shipped **TestFlight build 23** for `com.hnhotels.wealth`; upload delivery UUID `5358b2b4-cec3-4c93-b337-933e18404672`. App Store Connect readback: **VALID**, `APP_STORE_ELIGIBLE`, `USES-NON-EXEMPT-ENCRYPTION=false`.
+- Shipped **TestFlight build 23** for `com.hnhotels.wealth`; upload delivery UUID/build id `5358b2b4-cec3-4c93-b337-933e18404672`, internal group `Internal` assigned. App Store Connect readback: **VALID**, `APP_STORE_ELIGIBLE`, `USES-NON-EXEMPT-ENCRYPTION=false`.
 - Fixed the build-22 false disconnected state: the app now trusts either `/api/kite?action=status` or `todays_plan.state.kite_connected`, and shows a temporary **Checking Kite connection** state instead of a false **Connect Kite to begin** while endpoints are still loading.
 - Fixed the stable-IP pill: Execute now derives **STABLE-IP OK** from the live execution gate or configured `kite_order_base`; gate-unavailable is shown separately from truly missing stable-IP.
 - Reframed the old random-null/NO_EDGE card as **Research proof** and explicitly states it is a historical proof ladder, not today's real broker order gate. Kite/broker status no longer upgrades or downgrades the research proof state.
