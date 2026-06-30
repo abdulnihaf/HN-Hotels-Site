@@ -133,6 +133,7 @@ export async function onRequest(context) {
       case 'execution_gate':     return Response.json(await buildExecutionGate(db, env), { headers });
       case 'trader_timeline':    return Response.json(await getTraderTimeline(db, url), { headers });
       case 'intelligence_audit': return Response.json(await getIntelligenceAudit(db), { headers });
+      case 'winner_intelligence': return Response.json(await getWinnerIntelligence(db, url), { headers });
       case 'system_health':      return Response.json(await getSystemHealth(db), { headers });
       case 'eod_learning_audit': return Response.json(await getEodLearningAudit(db, env, url), { headers });
       case 'readiness_report':   return Response.json(await getReadinessReport(db, url), { headers });
@@ -5083,6 +5084,33 @@ async function getTodayConsolidated(db, env) {
     generated_at: nowMs,
   };
 
+  // WINNER INTELLIGENCE summary (migration 0023) — what won (highest first), what
+  // the bot picked, intel-only vs broker-ready, missed winners. Full detail via
+  // ?action=winner_intelligence. Additive, never an order surface.
+  try {
+    const [wr, wt, ap] = await Promise.all([
+      db.prepare(`SELECT n_tradable_winners,n_circuit_traps,top_winners_json FROM winner_replay_daily WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(today).first().catch(() => null),
+      db.prepare(`SELECT decision,selected_symbol,picks_broker_facing,execution_authority,why_this,no_loser_gate_json FROM daily_selection_witness WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(today).first().catch(() => null),
+      db.prepare(`SELECT missed_winners_json,n_reason_later_wrong FROM missed_winner_autopsy WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(today).first().catch(() => null),
+    ]);
+    const J = (s) => { try { return JSON.parse(s || 'null'); } catch { return null; } };
+    const tw = (J(wr?.top_winners_json) || []).sort((a, b) => (b.day_pct || -99) - (a.day_pct || -99));
+    const missed = (J(ap?.missed_winners_json) || []).filter(m => m.reason_later_wrong).map(m => m.symbol);
+    response.winner_intelligence = {
+      bot_pick: wt?.selected_symbol || null,
+      decision: wt?.decision || null,
+      intelligence_only: wt ? wt.picks_broker_facing === 0 : null,
+      broker_ready: wt ? wt.picks_broker_facing === 1 : null,
+      why_this: wt?.why_this || null,
+      no_loser_gate: J(wt?.no_loser_gate_json),
+      top_winners_highest_first: tw.slice(0, 5).map(w => ({ symbol: w.symbol, day_pct: w.day_pct, catchable_from_0940_pct: w.to_high_pct, circuit_trap: !!w.circuit_trap })),
+      n_tradable_winners: wr?.n_tradable_winners ?? null,
+      n_circuit_traps: wr?.n_circuit_traps ?? null,
+      misses_affecting_tomorrow: missed,
+      detail_action: 'winner_intelligence',
+    };
+  } catch (_) { /* additive — never break the consolidated view */ }
+
   // AUTO-SAVE SNAPSHOT (May 7 EOD owner ask) — fire-and-forget on first POST_CLOSE
   // page load each day. Replaces the need for a separate 16:30 IST cron.
   // Logic: if phase is POST_CLOSE/CLOSE AND no snapshot yet exists for today,
@@ -6633,6 +6661,7 @@ async function getVerdictToday(db, env) {
       alternatives,
       context_snapshot: context,
       execution_authority: executionAuthority,
+      winner_intelligence: alternatives.winner_intelligence || null,
       broker_order_surface: executionGate?.broker_order_surface || (verdict.decision === 'TRADE' ? 'unknown' : 'blocked'),
       machine_plan_surface: executionGate?.machine_plan_surface || (alternatives.machine_execution_plan ? 'staged_plan' : 'none'),
       owner_truth: executionGate?.owner_truth || null,
@@ -6792,6 +6821,94 @@ async function getTraderTimeline(db, url) {
 // Meta-audit: where might Opus be missing context? What data is stale?
 // Used by Today UI Section 6: "Intelligence Gaps"
 // ═══════════════════════════════════════════════════════════════════════════
+// ─── Winner Intelligence (migration 0023) ───────────────────────────────────
+// The owner-facing answer to: what actually won today (highest first), what the
+// bot picked, was the pick intelligence-only or broker-ready, which real winners
+// were missed + why, and whether a miss will change tomorrow's ranking.
+// Reads winner_replay_daily + missed_winner_autopsy + daily_selection_witness +
+// ranker_configs. Pure intelligence — never an order surface.
+async function getWinnerIntelligence(db, url) {
+  const sp = (s) => { try { return JSON.parse(s || 'null'); } catch { return null; } };
+  const istNow = new Date(Date.now() + 5.5 * 3600000);
+  const today = istNow.toISOString().slice(0, 10);
+  const date = (url && url.searchParams.get('date')) || today;
+  const days = Math.min(parseInt((url && url.searchParams.get('days')) || '30', 10) || 30, 120);
+
+  const [ranker, replay, autopsy, witness] = await Promise.all([
+    db.prepare(`SELECT version,target,backtest_json,trained_days,date_to,published_at FROM ranker_configs WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`).first().catch(() => null),
+    db.prepare(`SELECT * FROM winner_replay_daily WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(date).first().catch(() => null),
+    db.prepare(`SELECT * FROM missed_winner_autopsy WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(date).first().catch(() => null),
+    db.prepare(`SELECT * FROM daily_selection_witness WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(date).first().catch(() => null),
+  ]);
+
+  const bt = sp(ranker?.backtest_json) || {};
+  const ts = bt.two_stage_causal || {}, og = bt.old_gap_ranker || {}, rnd = bt.random_gated || {};
+  const topWinners = (sp(replay?.top_winners_json) || []).map(w => ({
+    symbol: w.symbol, day_pct: w.day_pct, gap_pct: w.gap_pct,
+    catchable_from_0940_pct: w.to_high_pct, held_to_1430_pct: w.to_1430_pct,
+    circuit_trap: !!w.circuit_trap, capturable: !!w.capturable, knowable_at_0940: !!w.knowable_at_0940,
+  })).sort((a, b) => (b.day_pct || -99) - (a.day_pct || -99));   // highest first
+
+  const missed = (sp(autopsy?.missed_winners_json) || []).map(m => ({
+    symbol: m.symbol, day_pct: m.day_pct, why_missed: m.passed_gate
+      ? 'passed the loss gate but ranked below the top picks on causal upside'
+      : `rejected by loss gate: ${(m.reject_reasons || []).join(', ')}`,
+    rejection_was_valid: m.rejection_valid, will_change_tomorrow_ranking: !!m.reason_later_wrong,
+    lesson: m.rule_change || null,
+  }));
+
+  const witnessPick = witness ? {
+    decision: witness.decision, selected_symbol: witness.selected_symbol,
+    intelligence_only: (witness.picks_broker_facing === 0),
+    broker_ready: (witness.picks_broker_facing === 1),
+    execution_authority: witness.execution_authority,
+    ranked_candidates: sp(witness.ranked_candidates_json) || [],
+    rejected_predictable_losers: sp(witness.rejected_json) || [],
+    no_loser_gate: sp(witness.no_loser_gate_json) || null,
+    why_this: witness.why_this, source_state: witness.source_state, ranker_version: witness.ranker_version,
+  } : null;
+
+  // recent capture/learning trail
+  const trail = (await db.prepare(`
+    SELECT r.trade_date, r.n_tradable_winners, r.n_circuit_traps,
+           a.picks_json, a.best_realized_winner, a.best_day_pct, a.n_reason_later_wrong, a.n_missed
+    FROM winner_replay_daily r LEFT JOIN missed_winner_autopsy a ON a.trade_date=r.trade_date
+    WHERE r.trade_date<=? ORDER BY r.trade_date DESC LIMIT ?
+  `).bind(date, days).all().catch(() => ({ results: [] }))).results || [];
+
+  return {
+    ok: true, date: replay?.trade_date || date,
+    bot_pick: witnessPick,
+    today_winners_highest_first: topWinners,
+    n_tradable_winners: replay?.n_tradable_winners ?? null,
+    n_circuit_traps: replay?.n_circuit_traps ?? null,
+    missed_winners: missed,
+    misses_affecting_tomorrow: missed.filter(m => m.will_change_tomorrow_ranking).map(m => m.symbol),
+    ranker: ranker ? {
+      version: ranker.version, target: ranker.target, trained_days: ranker.trained_days, date_to: ranker.date_to,
+      proven_walk_forward: {
+        test_days: bt.config?.test_days ?? null,
+        winner_capture_pct: ts.top_winner_capture_pct ?? null,
+        capture_vs_random_pct: rnd.top_winner_capture_pct ?? null,
+        circuit_traps_picked: ts.circuit_picks ?? null,
+        old_ranker_circuit_traps: og.circuit_picks ?? null,
+        loser_pick_freq_pct: ts.loser_pick_freq ?? null,
+        avg_net_pct_after_cost: ts.avg_net_pct ?? null,
+        honest_verdict: (ts.avg_net_pct != null && ts.avg_net_pct < 0)
+          ? 'Better intelligence (no circuit traps, ~3x less bleed, ~3x random capture) but still net-negative after cost — NO broker edge. Stays OBSERVE/PAPER.'
+          : 'See metrics.',
+      },
+    } : null,
+    learning_trail: trail.map(t => {
+      const picks = sp(t.picks_json) || [];
+      return { trade_date: t.trade_date, pick: picks[0] || null, best_winner: t.best_realized_winner,
+        best_day_pct: t.best_day_pct, captured_a_winner: !!(picks[0] && t.best_realized_winner && picks.includes(t.best_realized_winner)),
+        tradable_winners: t.n_tradable_winners, circuit_traps: t.n_circuit_traps, misses_feeding_tomorrow: t.n_reason_later_wrong };
+    }),
+    honest_line: 'Intelligence and execution are separate. The ranker picks the best causally-justifiable name and avoids predictable losers/circuit traps; it does NOT yet beat costs, so no real broker order is placed. picks_json stays empty until the broker contract is satisfied.',
+  };
+}
+
 async function getIntelligenceAudit(db) {
   const nowMs = Date.now();
   const ist = new Date(nowMs + 5.5 * 3600000);
