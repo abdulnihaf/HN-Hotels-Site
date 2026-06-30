@@ -24,6 +24,45 @@ struct KiteStatus: Decodable {
     let reason: String?
     let user_name: String?
     let expires_in_min: Int?
+    let stable_ip_proxy_configured: Bool?
+    let stable_ip_proxy_active: Bool?
+}
+
+struct ExecutionGateSource: Decodable, Identifiable {
+    let logical_source: String
+    let freshness: String?
+    let healthy: Bool?
+    let age_minutes: Int?
+    let satisfied_by: [String]?
+    var id: String { logical_source }
+}
+
+struct ExecutionGateScout: Decodable {
+    let has_scout: Bool?
+    let mode: String?
+    let decision: String?
+    let primary_symbol: String?
+    let candidates: [String]?
+    let edge_state: String?
+}
+
+struct ExecutionGate: Decodable {
+    let ok: Bool?
+    let owner_truth: String?
+    let broker_order_surface: String?
+    let machine_plan_surface: String?
+    let trade_authorized: Bool?
+    let blocked_reasons: [String]?
+    let decision: String?
+    let recommended_symbol: String?
+    let picks_count: Int?
+    let execution_authority: String?
+    let stable_ip_proxy_configured: Bool?
+    let stable_ip_proxy_active: Bool?
+    let kite_connected: Bool?
+    let in_market_hours: Bool?
+    let required_sources: [ExecutionGateSource]?
+    let scout: ExecutionGateScout?
 }
 
 struct ReadinessGate: Decodable, Identifiable {
@@ -483,6 +522,7 @@ actor WealthClient {
     func signals() async throws -> [SignalScore] { (try await get(SignalsResp.self, action: "signals")).signals ?? [] }
     func briefing() async throws -> Briefing { try await get(Briefing.self, action: "briefing_v2") }
     func chainHealth() async throws -> ChainHealth { try await get(ChainHealth.self, action: "chain_health") }
+    func executionGate() async throws -> ExecutionGate { try await get(ExecutionGate.self, action: "execution_gate") }
     func researchDepth() async throws -> ResearchDepth { try await get(ResearchDepth.self, action: "research_depth") }
     func scoutToday() async throws -> ScoutToday { try await get(ScoutToday.self, action: "scout_today") }
     func scoutTrail() async throws -> ScoutTrail { try await get(ScoutTrail.self, action: "scout_trail") }

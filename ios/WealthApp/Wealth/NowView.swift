@@ -139,10 +139,20 @@ struct NowView: View {
                              sub: "The engine is holding the stop and target. Watch it on the Execute tab; it squares off by 3:10 PM.",
                              tone: HK.accent, action: .none)
         }
-        if dec == "TRADE", let p = pick {
+        if dec == "TRADE", let p = pick, vm.tradeAuthorized {
             return Situation(headline: "Today: trade \(p)",
                              sub: "The engine found a setup. Review the exact entry, stop, target and quantity before placing it. Treat it as unproven until the proof ladder graduates.",
                              tone: HK.ready, action: .place(p))
+        }
+        if dec == "TRADE", let p = pick {
+            return Situation(headline: "Today: \(p) is staged only",
+                             sub: vm.executionGate?.owner_truth ?? "The machine plan is visible, but the broker gate is closed. No order can fire until the server authorizes it.",
+                             tone: HK.running, action: .none)
+        }
+        if dec == "OBSERVE" {
+            return Situation(headline: "Today: observe only",
+                             sub: vm.executionGate?.owner_truth ?? "The machine plan is intelligence only today. Paper scout results are for learning; no broker order is authorized.",
+                             tone: HK.idle, action: .none)
         }
         if dec == "SIT_OUT" {
             return Situation(headline: "Today: no engine trade",
@@ -199,8 +209,13 @@ struct NowView: View {
             } else if vm.verdict?.decision == "TRADE", let p = vm.verdict?.recommended_symbol {
                 Row(label: "Decision", value: "TRADE", valueColor: HK.ready)
                 Row(label: "Stock", value: p)
-                Text("Full entry / stop / target opens in Execute. Confidence is unproven — keep it small.")
-                    .font(.system(size: 11)).foregroundColor(HK.running)
+                Text(vm.tradeAuthorized ? "Full entry / stop / target opens in Execute. Confidence is unproven — keep it small." : "Staged intelligence only. Execute stays locked until the broker gate opens.")
+                    .font(.system(size: 11)).foregroundColor(vm.tradeAuthorized ? HK.running : HK.textFaint)
+            } else if vm.verdict?.decision == "OBSERVE" {
+                Row(label: "Decision", value: "OBSERVE", valueColor: HK.idle)
+                if let sym = vm.verdict?.recommended_symbol { Row(label: "Machine plan", value: sym) }
+                Text(vm.executionGate?.owner_truth ?? "Paper scout only. No broker order is authorized today.")
+                    .font(.system(size: 11)).foregroundColor(HK.textFaint)
             } else if vm.verdict?.decision == "SIT_OUT" {
                 Row(label: "Decision", value: "NO ENGINE TRADE", valueColor: HK.idle)
             } else {
@@ -217,7 +232,7 @@ struct NowView: View {
                 Text("Setup").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
                 Spacer()
                 Pill(text: kiteOK ? "KITE OK" : "KITE OFF", color: kiteOK ? HK.ready : HK.running)
-                Pill(text: vm.config["block_real_orders"] == "1" ? "SHADOW" : "REAL", color: vm.config["block_real_orders"] == "1" ? HK.ready : HK.error)
+                Pill(text: vm.tradeAuthorized ? "ORDER GATE OPEN" : "BROKER BLOCKED", color: vm.tradeAuthorized ? HK.error : HK.ready)
             }
             Text("Today's size").font(.system(size: 12)).foregroundColor(HK.textDim)
             HStack(spacing: 8) {

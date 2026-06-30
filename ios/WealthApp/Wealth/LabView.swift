@@ -139,9 +139,14 @@ struct LabView: View {
                     Text(lab.tinyReal ? "TINY-REAL — real orders, Face ID + ₹\(lab.capPaise/100) cap per run"
                                       : "SIM — nothing is sent to Zerodha, ₹0 at risk")
                         .font(.system(size: 12)).foregroundColor(lab.tinyReal ? HK.error : HK.textDim)
+                    if vm.executionGate?.in_market_hours == false {
+                        Text("Tiny-real opens only during NSE regular market hours.")
+                            .font(.system(size: 11)).foregroundColor(HK.textFaint)
+                    }
                 }
                 Spacer()
                 Toggle("", isOn: $lab.tinyReal).labelsHidden().tint(HK.error)
+                    .disabled(vm.executionGate?.in_market_hours == false)
             }
         }
     }
@@ -175,7 +180,7 @@ struct LabView: View {
                         .frame(width: 54, height: 32)
                         .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(over ? HK.cardHi : HK.accent))
                 }
-                .disabled(r.state == .running || over || (tiny && !vm.kiteConnected))
+                .disabled(r.state == .running || over || (tiny && (!vm.kiteConnected || vm.executionGate?.in_market_hours == false)))
             }
             if r.state != .idle { resultBlock(s, r) }
         }

@@ -249,7 +249,7 @@ struct StocksView: View {
         Dictionary(vm.signals.map { ($0.symbol, $0) }, uniquingKeysWith: { a, _ in a })
     }
     private var pickSymbol: String? {
-        vm.verdict?.decision == "TRADE" ? vm.verdict?.recommended_symbol : nil
+        (vm.verdict?.decision == "TRADE" && vm.tradeAuthorized) ? vm.verdict?.recommended_symbol : nil
     }
 
     private func intel(symbol: String, price: WatchlistStock?, signal: SignalScore?) -> StockIntel {
@@ -392,9 +392,9 @@ struct StocksView: View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.shield.fill").font(.system(size: 18)).foregroundColor(HK.running)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Edge unproven — \(vm.readiness?.passing ?? "—") ready")
+                Text("Watch and learn — \(vm.readiness?.passing ?? "—") ready")
                     .font(.system(size: 13, weight: .heavy)).foregroundColor(HK.running)
-                Text("These are the engine's candidates, not sure things. Learn the lights. Keep sizes small until the proof ladder graduates.")
+                Text("These are research candidates, not broker trades. Learn the lights; real orders stay locked until the server broker gate opens.")
                     .font(.system(size: 11)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
@@ -821,9 +821,9 @@ private struct StockDetailSheet: View {
     private func planCard(_ plan: VerdictPlan) -> some View {
         Card {
             HStack {
-                Text("TODAY'S ENGINE PLAN").font(.system(size: 12, weight: .heavy)).foregroundColor(HK.accent)
+                Text(vm.tradeAuthorized ? "TODAY'S BROKER PLAN" : "TODAY'S MACHINE PLAN").font(.system(size: 12, weight: .heavy)).foregroundColor(HK.accent)
                 Spacer()
-                Pill(text: "THE PICK", color: HK.accent)
+                Pill(text: vm.tradeAuthorized ? "THE PICK" : "INTELLIGENCE", color: vm.tradeAuthorized ? HK.accent : HK.ready)
             }
             if let e = plan.entry { Row(label: "Entry", value: Money.rupeesFromRupee(e)) }
             if let s = plan.stop { Row(label: "Stop (cut loss)", value: Money.rupeesFromRupee(s), valueColor: HK.error) }
@@ -834,39 +834,35 @@ private struct StockDetailSheet: View {
             }
             if let rr = plan.rr { Row(label: "Reward : risk", value: String(format: "1 : %.1f", rr), valueColor: HK.ready) }
 
-            Button {
-                vm.prefill = WealthVM.OrderDraft(
-                    symbol: intel.symbol,
-                    stop: plan.stop.map { String(format: "%.2f", $0) } ?? "",
-                    target: plan.target.map { String(format: "%.2f", $0) } ?? "",
-                    qty: plan.qty.map(String.init) ?? "")
-                goToExecute()
-            } label: {
-                Text("Review & place \(intel.symbol) →")
-                    .font(.system(size: 15, weight: .bold)).foregroundColor(HK.bg)
-                    .frame(maxWidth: .infinity).padding(.vertical, 13)
-                    .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(HK.accent))
+            if vm.tradeAuthorized {
+                Button {
+                    vm.prefill = WealthVM.OrderDraft(
+                        symbol: intel.symbol,
+                        stop: plan.stop.map { String(format: "%.2f", $0) } ?? "",
+                        target: plan.target.map { String(format: "%.2f", $0) } ?? "",
+                        qty: plan.qty.map(String.init) ?? "")
+                    goToExecute()
+                } label: {
+                    Text("Review & place \(intel.symbol) →")
+                        .font(.system(size: 15, weight: .bold)).foregroundColor(HK.bg)
+                        .frame(maxWidth: .infinity).padding(.vertical, 13)
+                        .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(HK.accent))
+                }
+                Text("Opens Execute pre-filled. Nothing fires until you confirm with Face ID and the server gate remains open.")
+                    .font(.system(size: 11)).foregroundColor(HK.textFaint)
+            } else {
+                Text(vm.executionGate?.owner_truth ?? "Machine plan only. No broker order is authorized.")
+                    .font(.system(size: 11)).foregroundColor(HK.textFaint)
             }
-            Text("Opens Execute pre-filled. Nothing fires until you confirm with Face ID. Shadow mode simulates safely.")
-                .font(.system(size: 11)).foregroundColor(HK.textFaint)
         }
     }
 
     private var noPlanCard: some View {
         Card {
-            Text("Not today's engine pick").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
-            Text("The engine composes ONE plan a day around 09:40 AM, after the opening bars — and that's \(vm.verdict?.recommended_symbol ?? "decided then"). You can still trade this manually, but set your own stop and target first.")
+            Text("Research watch only").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
+            Text("The engine composes one broker-facing plan only when the server gate authorizes TRADE. This stock is for watching, research, and learning; it is not a broker order.")
                 .font(.system(size: 12)).foregroundColor(HK.textDim).fixedSize(horizontal: false, vertical: true)
-            Button {
-                vm.prefill = WealthVM.OrderDraft(symbol: intel.symbol, stop: "", target: "", qty: "")
-                goToExecute()
-            } label: {
-                Text("Set up \(intel.symbol) in Execute →")
-                    .font(.system(size: 15, weight: .bold)).foregroundColor(HK.text)
-                    .frame(maxWidth: .infinity).padding(.vertical, 13)
-                    .background(RoundedRectangle(cornerRadius: HK.radiusSm).fill(HK.cardHi))
-                    .overlay(RoundedRectangle(cornerRadius: HK.radiusSm).stroke(HK.line, lineWidth: 1))
-            }
+            Pill(text: intel.priceContext == "live" ? "LIVE WATCH" : "AT CLOSE", color: intel.priceContext == "live" ? HK.ready : HK.idle)
         }
     }
 

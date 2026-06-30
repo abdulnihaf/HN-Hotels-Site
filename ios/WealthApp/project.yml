@@ -21,7 +21,7 @@ targets:
       properties:
         CFBundleDisplayName: Wealth
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "21"
+        CFBundleVersion: "22"
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: "Unlock Wealth with Face ID instead of typing your PIN."
         NSLocalNetworkUsageDescription: "Wealth connects to HN services on your private network."

@@ -17,6 +17,7 @@ final class WealthVM: ObservableObject {
     @Published var briefing: Briefing?
     @Published var signals: [SignalScore] = []     // per-stock engine scores (Stocks tab 5-lights)
     @Published var chainHealth: ChainHealth?
+    @Published var executionGate: ExecutionGate?
     @Published var researchDepth: ResearchDepth?
     @Published var scoutToday: ScoutToday?         // the daily learning action
     @Published var scoutTrail: ScoutTrail?         // the learning trail + stats
@@ -25,6 +26,7 @@ final class WealthVM: ObservableObject {
     @Published var prefill: OrderDraft?            // set by Now/Stocks → consumed by Execute (one-tap engine trade)
     @Published var status: String = ""
     @Published var loading = false
+    @Published private var lastKnownKiteConnected = false
 
     struct OrderDraft { let symbol: String; let stop: String; let target: String; let qty: String }
 
@@ -46,11 +48,13 @@ final class WealthVM: ObservableObject {
         async let br = WealthClient.shared.briefing()
         async let sg = WealthClient.shared.signals()
         async let ch = WealthClient.shared.chainHealth()
+        async let eg = WealthClient.shared.executionGate()
         async let rd = WealthClient.shared.researchDepth()
         async let st = WealthClient.shared.scoutToday()
         async let str = WealthClient.shared.scoutTrail()
         async let un = WealthClient.shared.analysedUniverse()
-        kite = try? await k
+        let nextKite = try? await k
+        kite = nextKite
         // The scout is the marquee daily action — resolve it EARLY (fast endpoints),
         // ahead of the slow briefing/stockPicker awaits, so it never loads last.
         scoutToday = try? await st
@@ -60,13 +64,20 @@ final class WealthVM: ObservableObject {
         auto = try? await a
         engine = try? await e
         verdict = try? await v
-        plan = try? await p
+        let nextPlan = try? await p
+        plan = nextPlan
+        if nextKite?.connected == true || nextPlan?.state?.kite_connected == true {
+            lastKnownKiteConnected = true
+        } else if nextKite?.connected == false || nextPlan?.state?.kite_connected == false {
+            lastKnownKiteConnected = false
+        }
         intel = try? await ia
         sysHealth = try? await sh
         stockPicker = try? await sp
         briefing = try? await br
         signals = (try? await sg) ?? []
         chainHealth = try? await ch
+        executionGate = try? await eg
         researchDepth = try? await rd
         loading = false
         status = (kite == nil && readiness == nil && config.isEmpty) ? "Couldn't reach trade.hnhotels.in" : ""
@@ -86,7 +97,9 @@ final class WealthVM: ObservableObject {
     var totalCapitalPaise: Int { Int(config["total_capital_paise"] ?? "") ?? 0 }
     var deployablePaise: Int { Int(config["today_deployable_paise"] ?? "") ?? 0 }
     // Robust: trust EITHER source. A single slow/failed status fetch must not show a false "Connect Kite".
-    var kiteConnected: Bool { kite?.connected == true || plan?.state?.kite_connected == true }
+    var kiteConnected: Bool { kite?.connected == true || plan?.state?.kite_connected == true || (loading && lastKnownKiteConnected) }
+    var tradeAuthorized: Bool { executionGate?.trade_authorized == true }
+    var observeOnly: Bool { executionGate?.decision == "OBSERVE" || executionGate?.machine_plan_surface == "intelligence_only" }
 
     // Business-day truth: the engine's is_market_day is authoritative (knows holidays);
     // fall back to local weekday so the weekend framing shows instantly before the plan loads.

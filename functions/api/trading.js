@@ -8,6 +8,7 @@ import { recordObservation, getPosterior, scoreBand, detectRegime } from './_lib
 import { getTodaysPlan, getGlossary } from './_lib/coaching.js';
 import { callHaiku, getSpendSummary } from './_lib/anthropic.js';
 import { FNO_SET, NIFTY50_SET, FNO_AS_OF, NIFTY50_AS_OF } from './_lib/wealthReference.js';
+import { buildExecutionGate, parseJsonMaybe } from './_lib/wealthExecutionGate.js';
 //
 // Actions:
 //   health     — cron run log + source health summary
@@ -129,6 +130,7 @@ export async function onRequest(context) {
       case 'auto_trader_state':  return Response.json(await getAutoTraderState(db), { headers });
       case 'live_positions':     return Response.json(await getLivePositions(db), { headers });
       case 'chain_health':       return Response.json(await getChainHealth(db, env), { headers });
+      case 'execution_gate':     return Response.json(await buildExecutionGate(db, env), { headers });
       case 'trader_timeline':    return Response.json(await getTraderTimeline(db, url), { headers });
       case 'intelligence_audit': return Response.json(await getIntelligenceAudit(db), { headers });
       case 'system_health':      return Response.json(await getSystemHealth(db), { headers });
@@ -3619,11 +3621,25 @@ async function getReadinessReport(db, url) {
   // Today's pick accuracy (if available from EOD finding)
   const pickAccuracy = todayEntry?.intelligence?.eod?.data?.pick_accuracy || null;
   const tradeSummary = todayEntry?.execution?.eod?.data?.trade_summary || null;
+  const chain = await getChainHealth(db, null).catch(() => null);
+  const gate = await buildExecutionGate(db, {}, { checkProxy: false }).catch(() => null);
+  const engine940 = chain?.checks?.find(c => {
+    const n = String(c.name || '').toLowerCase();
+    return n.includes('940') || n.includes('09:40') || n.includes('engine');
+  }) || null;
 
   return {
+    ok: true,
     today,
     lookback_days: lookbackDays,
     rollup: todayRollup,
+    owner_truth: gate?.owner_truth || null,
+    chain_split: {
+      pre_market_report: todayRollup.go_no_go,
+      live_chain: chain?.overall || null,
+      engine_940: engine940 ? { name: engine940.name, status: engine940.status, detail: engine940.detail } : null,
+      explanation: 'Readiness is a pre-market/no-go audit snapshot. Chain health is the live execution-chain state. A 09:40 engine pass can coexist with pre-market NO-GO; broker orders still require execution_gate.trade_authorized.',
+    },
     counts,
     pick_accuracy: pickAccuracy,
     trade_summary: tradeSummary,
@@ -4697,6 +4713,9 @@ async function getTodayConsolidated(db, env) {
       picks,
       alternatives,
       context,
+      execution_authority: alternatives?.execution_authority || context?.execution_authority || null,
+      broker_order_surface: picks.length > 0 ? 'picks_json' : 'none',
+      alternatives_are_order_surface: false,
       composed_at: verdictRow.composed_at,
       composed_by_model: verdictRow.composed_by_model,
       cost_paise: verdictRow.cost_paise,
@@ -5013,10 +5032,23 @@ async function getTodayConsolidated(db, env) {
   else if (istMins < 23 * 60) phaseLabel = 'POST_CLOSE';
   else phaseLabel = 'OFF_HOURS';
 
+  const execution_gate = await buildExecutionGate(db, env).catch((e) => ({
+    ok: false,
+    error: String(e?.message || e).slice(0, 200),
+  }));
+
   const response = {
+    ok: true,
     trade_date: today,
     ist_now_minutes: istMins,
     phase: phaseLabel,
+    owner_truth: execution_gate?.owner_truth || 'Today: no broker order.',
+    execution_gate,
+    copy_version: {
+      morning_compose_ist: '09:40',
+      owner_primary_outcome: execution_gate?.owner_truth || null,
+      note: 'Legacy readiness and pool cards are context; broker orders only come from picks_json through execution_gate.',
+    },
     pre_market_integrity,
     live_integrity,
     verdict,
@@ -6428,7 +6460,7 @@ async function getVerdictToday(db, env) {
     return {
       ok: false,
       reason: 'no-verdict-yet-today',
-      hint: 'Morning verdict composes at 08:30 IST Mon-Fri. Use POST /run/compose on wealth-verdict worker to force.',
+      hint: 'Morning verdict composes at 09:40 IST Mon-Fri, after the opening bars. Use POST /run/compose on wealth-verdict worker to force.',
       date: today,
     };
   }
@@ -6444,6 +6476,10 @@ async function getVerdictToday(db, env) {
   // verdict_today take ~30s and timed out the app's fetch (so the call never showed).
   // Use the stored plan if present, else null; the app reads picks[], not this field.
   const livePlan = safeParse(verdict.recommended_plan_json);
+  const alternatives = safeParse(verdict.alternatives_json) || {};
+  const context = safeParse(verdict.context_snapshot_json) || {};
+  const executionAuthority = alternatives.execution_authority || context.execution_authority || null;
+  const executionGate = await buildExecutionGate(db, env, { checkProxy: false }).catch(() => null);
 
   // INTRADAY PORTFOLIO MODE — picks array is the new primary output.
   // Each pick has its own plan; we attach live LTP for entry sizing.
@@ -6570,8 +6606,12 @@ async function getVerdictToday(db, env) {
       time_stop_days: verdict.time_stop_days,
       pre_event_exit: verdict.pre_event_exit,
       // Meta
-      alternatives: safeParse(verdict.alternatives_json),
-      context_snapshot: safeParse(verdict.context_snapshot_json),
+      alternatives,
+      context_snapshot: context,
+      execution_authority: executionAuthority,
+      broker_order_surface: executionGate?.broker_order_surface || (verdict.decision === 'TRADE' ? 'unknown' : 'blocked'),
+      machine_plan_surface: executionGate?.machine_plan_surface || (alternatives.machine_execution_plan ? 'staged_plan' : 'none'),
+      owner_truth: executionGate?.owner_truth || null,
       invalidator_reason: verdict.invalidator_reason,
       composed_at: verdict.composed_at,
       composed_by_model: verdict.composed_by_model,
@@ -6733,19 +6773,23 @@ async function getIntelligenceAudit(db) {
   const ist = new Date(nowMs + 5.5 * 3600000);
   const istHour = ist.getUTCHours();
   const inMarketHours = istHour >= 9 && istHour < 16;
+  const gateForAudit = await buildExecutionGate(db, {}, { checkProxy: false }).catch(() => null);
+  const sourceByLogical = Object.fromEntries((gateForAudit?.required_sources || []).map(s => [s.logical_source, s]));
 
   // Critical data sources Opus relies on — check freshness
   const sources = [
     {
       name: 'Live LTP (Kite quotes)',
-      query: `SELECT MAX(ts) AS last_ts FROM kite_quotes`,
+      logical_source: 'live_ltp',
+      query: `SELECT MAX(ts) AS last_ts FROM intraday_ticks`,
       staleness_threshold_ms: inMarketHours ? 5 * 60 * 1000 : 4 * 3600 * 1000,
       severity: 'critical',
       used_by: 'wealth-trader entry_decision + price_monitor',
     },
     {
       name: 'Intraday 5-min bars',
-      query: `SELECT MAX(ts) AS last_ts FROM intraday_bars WHERE trade_date >= date('now', '-1 days')`,
+      logical_source: 'intraday_bars',
+      query: `SELECT MAX(ts) AS last_ts FROM intraday_bars`,
       staleness_threshold_ms: inMarketHours ? 30 * 60 * 1000 : 20 * 3600 * 1000,
       severity: 'high',
       used_by: 'breakout_trigger volume confirmation + ATR computation',
@@ -6831,18 +6875,26 @@ async function getIntelligenceAudit(db) {
       const r = await db.prepare(s.query).first();
       lastTs = r?.last_ts;
     } catch (e) { /* skip */ }
+    const gateSource = s.logical_source ? sourceByLogical[s.logical_source] : null;
+    if (gateSource?.last_update_ms && (!lastTs || gateSource.last_update_ms > Number(lastTs))) {
+      lastTs = gateSource.last_update_ms;
+    }
     const ageMs = lastTs ? nowMs - lastTs : null;
     const isStale = ageMs == null ? null : ageMs > s.staleness_threshold_ms;
     const ageMinutes = ageMs != null ? Math.round(ageMs / 60000) : null;
     results.push({
       name: s.name,
+      logical_source: s.logical_source || null,
       severity: s.severity,
       used_by: s.used_by,
       last_update_ms: lastTs,
       age_minutes: ageMinutes,
       threshold_minutes: Math.round(s.staleness_threshold_ms / 60000),
-      stale: isStale,
-      status: lastTs == null ? 'no_data' : isStale ? 'stale' : 'fresh',
+      stale: gateSource ? !gateSource.healthy : isStale,
+      status: gateSource ? gateSource.freshness : (lastTs == null ? 'missing' : isStale ? 'delayed' : 'live'),
+      freshness: gateSource?.freshness || (lastTs == null ? 'missing' : isStale ? 'delayed' : 'live'),
+      satisfied_by: gateSource?.satisfied_by || [],
+      note: gateSource?.note || null,
     });
   }
 
@@ -6874,6 +6926,12 @@ async function getIntelligenceAudit(db) {
   return {
     ok: true,
     in_market_hours: inMarketHours,
+    freshness_legend: {
+      live: 'fresh enough for the current phase',
+      delayed: 'same-session data exists but is outside the live threshold',
+      'prior-session': 'latest proof is from an earlier trading session',
+      missing: 'no row or runtime proof found',
+    },
     summary: {
       total_sources: results.length,
       fresh: fresh_count,

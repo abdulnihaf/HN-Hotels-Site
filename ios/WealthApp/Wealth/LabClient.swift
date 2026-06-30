@@ -122,7 +122,7 @@ extension WealthClient {
         var q = ["action": "pipeline_test"]
         if sim { q["simulate"] = "1" }
         let body: [String: Any] = ["tradingsymbol": symbol, "exchange": "NSE", "quantity": qty, "product": "MIS",
-                                   "bypass_market_hours": true]
+                                   "bypass_market_hours": sim, "lab_tiny_real": !sim, "surface": "lab"]
         let raw = try JSONSerialization.data(withJSONObject: body)
         let data = try await request(path: "/api/kite", query: q, method: "POST", rawBody: raw)
         return try labDecode(data, "pipeline_test")
@@ -131,7 +131,7 @@ extension WealthClient {
     /// A single market order through the unified hardened door.
     func labPlaceOrder(exchange: String = "NSE", symbol: String, side: String, qty: Int,
                        product: String, orderType: String = "MARKET", refPricePaise: Int,
-                       tag: String, sim: Bool, bypassMarketHours: Bool = true) async throws -> LabResult {
+                       tag: String, sim: Bool, bypassMarketHours: Bool = false) async throws -> LabResult {
         var q = ["action": "place_order"]
         if sim { q["simulate"] = "1" }
         let body: [String: Any] = [
@@ -140,6 +140,7 @@ extension WealthClient {
             "ref_price": Double(refPricePaise) / 100.0, "tag": tag,
             "enforce_notional_cap": true, "bypass_funds_check": false,
             "bypass_market_hours": bypassMarketHours,
+            "lab_tiny_real": !sim, "surface": "lab",
         ]
         let raw = try JSONSerialization.data(withJSONObject: body)
         let data = try await request(path: "/api/kite", query: q, method: "POST", rawBody: raw)
@@ -154,7 +155,7 @@ extension WealthClient {
             "exchange": "NSE", "tradingsymbol": symbol, "quantity": qty,
             "stop_price": stop, "target_price": target,
             "product": "MIS", "order_type": "MARKET", "tag": tag,
-            "bypass_market_hours": true,
+            "bypass_market_hours": sim, "lab_tiny_real": !sim, "surface": "lab",
         ]
         let raw = try JSONSerialization.data(withJSONObject: body)
         let data = try await request(path: "/api/kite", query: q, method: "POST", rawBody: raw)
@@ -165,7 +166,7 @@ extension WealthClient {
     func labSquareOffAll(sim: Bool) async throws -> LabResult {
         var q = ["action": "square_off_all"]
         if sim { q["simulate"] = "1" }
-        let body: [String: Any] = ["bypass_market_hours": true]
+        let body: [String: Any] = ["bypass_market_hours": sim, "lab_tiny_real": !sim, "surface": "lab"]
         let raw = try JSONSerialization.data(withJSONObject: body)
         let data = try await request(path: "/api/kite", query: q, method: "POST", rawBody: raw)
         return try labDecode(data, "square_off_all")
@@ -175,7 +176,7 @@ extension WealthClient {
     func labSquareOff(symbol: String, qty: Int? = nil, sim: Bool) async throws -> LabResult {
         var q = ["action": "square_off"]
         if sim { q["simulate"] = "1" }
-        var body: [String: Any] = ["tradingsymbol": symbol, "bypass_market_hours": true]
+        var body: [String: Any] = ["tradingsymbol": symbol, "bypass_market_hours": sim, "lab_tiny_real": !sim, "surface": "lab"]
         if let qty { body["quantity"] = qty }
         let raw = try JSONSerialization.data(withJSONObject: body)
         let data = try await request(path: "/api/kite", query: q, method: "POST", rawBody: raw)

@@ -39,6 +39,7 @@ struct ExecuteView: View {
     private var target: Double { Double(targetText) ?? 0 }
     private var kiteOK: Bool { vm.kiteConnected }
     private var isReal: Bool { vm.config["block_real_orders"] == "0" }
+    private var tradeAuthorized: Bool { vm.tradeAuthorized }
     private var formValid: Bool { !symbol.isEmpty && qty >= 1 && stop > 0 && target > 0 }
 
     var body: some View {
@@ -47,6 +48,7 @@ struct ExecuteView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     ModeBanner(vm: vm)
+                    executionGateCard
 
                     if !kiteOK {
                         Card {
@@ -82,11 +84,11 @@ struct ExecuteView: View {
                                 .font(.system(size: 11)).foregroundColor(HK.textFaint)
                         }
 
-                        let canPlace = formValid && !placing && (practice || kiteOK)
+                        let canPlace = formValid && !placing && (practice || (kiteOK && tradeAuthorized))
                         Button {
                             errorMsg = nil; result = nil; orderWitness = nil; showConfirm = true
                         } label: {
-                            Text(placing ? "Placing…" : (practice ? "Place practice order" : (isReal ? "Review & place REAL order" : "Review & place (shadow)")))
+                            Text(placing ? "Placing…" : (practice ? "Place practice order" : (tradeAuthorized ? (isReal ? "Review & place REAL order" : "Review & place broker order") : "Broker order locked")))
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(canPlace ? HK.bg : HK.textFaint)
                                 .frame(maxWidth: .infinity).padding(.vertical, 13)
@@ -104,7 +106,7 @@ struct ExecuteView: View {
 
                     Card {
                         Text("How this works").font(.system(size: 12, weight: .bold)).foregroundColor(HK.textFaint)
-                        Text("Places directly on Zerodha via the server — no need to open the Kite app. It fires a market BUY, waits for the fill, then sets a GTT one-cancels-other stop + target. If the GTT fails it falls back to an SL-M stop and warns you. block_real_orders=1 simulates the whole flow safely; =0 places real money.")
+                        Text("Real orders go only through the server execution gate and the stable-IP Kite proxy. OBSERVE days are intelligence only; practice orders stay local and do not touch Zerodha.")
                             .font(.system(size: 12)).foregroundColor(HK.textDim)
                     }
                 }
@@ -130,6 +132,25 @@ struct ExecuteView: View {
         } message: {
             let lead = practice ? "PRACTICE — nothing is sent to Zerodha. " : (isReal ? "⚠️ REAL MONEY. " : "Shadow — no real order. ")
             Text("\(lead)MIS market BUY \(qty) × \(symbol.uppercased()), stop \(Money.rupeesFromRupee(stop)), target \(Money.rupeesFromRupee(target)). Face ID / passcode required.")
+        }
+    }
+
+    private var executionGateCard: some View {
+        Card {
+            HStack {
+                Text("Broker gate").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
+                Spacer()
+                Pill(text: tradeAuthorized ? "AUTHORIZED" : "INTELLIGENCE ONLY",
+                     color: tradeAuthorized ? HK.error : HK.ready)
+            }
+            Text(vm.executionGate?.owner_truth ?? "Waiting for server gate.")
+                .font(.system(size: 13, weight: .semibold)).foregroundColor(tradeAuthorized ? HK.error : HK.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            if let reasons = vm.executionGate?.blocked_reasons, !reasons.isEmpty {
+                Text(reasons.prefix(3).joined(separator: " · "))
+                    .font(.system(size: 11)).foregroundColor(HK.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -209,6 +230,10 @@ struct ExecuteView: View {
 
     private func place() {
         guard !placing else { return }
+        if !practice && !tradeAuthorized {
+            errorMsg = vm.executionGate?.owner_truth ?? "Broker order locked by execution gate."
+            return
+        }
         placing = true; errorMsg = nil; result = nil
         let tag = "HN_WE_IOS_\(Int(Date().timeIntervalSince1970))"
         let sym = symbol.uppercased()

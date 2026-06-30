@@ -31,6 +31,8 @@
 // Order placement is user-triggered (one-click), not auto-trading.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { buildExecutionGate } from './_lib/wealthExecutionGate.js';
+
 const KITE_BASE = 'https://api.kite.trade';
 
 // Fix #3 (order-path hardening): product must be EXPLICIT on every order.
@@ -106,6 +108,7 @@ export async function onRequest(context) {
 
   try {
     if (action === 'status') return Response.json(await getStatus(db, env), { headers });
+    if (action === 'execution_gate') return Response.json(await buildExecutionGate(db, env), { headers });
 
     // All other actions need a valid access token
     const tok = await getActiveToken(db);
@@ -451,6 +454,21 @@ async function placeOrder(env, db, kiteHeaders, body) {
   // runs it. Caller can also force the bypass explicitly.
   const isExit = body.is_exit === true || body.transaction_type === 'SELL';
   const skipFundCheck = internal || body.bypass_funds_check === true || isExit;
+  const isSim = body.simulate === true || body.simulate === '1';
+  const isLabTinyReal = body.lab_tiny_real === true
+    || body.surface === 'lab'
+    || String(body.tag || '').startsWith('HN_LAB_')
+    || String(body.tag || '').startsWith('HN_WE_PIPETEST');
+
+  if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
+    await logKite(db, `/orders/${variety} preflight`, 'POST', 422, 0, 'market_closed_preflight');
+    return {
+      ok: false,
+      error: 'market_closed_preflight',
+      message: 'NSE regular market is closed. Live order not sent to Kite.',
+      attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
+    };
+  }
 
   // ─── Pre-launch / CPV-pending safety guard ──────────────
   // If user_config.block_real_orders = 1, refuse to place real orders.
@@ -467,12 +485,45 @@ async function placeOrder(env, db, kiteHeaders, body) {
       attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
     };
   }
-  if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
-    await logKite(db, `/orders/${variety} preflight`, 'POST', 422, 0, 'market_closed_preflight');
+
+  if (!internal && !isSim && !isExit && !isLabTinyReal && !body.bypass_execution_gate) {
+    const gate = await buildExecutionGate(db, env);
+    if (gate.trade_authorized !== true) {
+      await logKite(db, `/orders/${variety} execution_gate`, 'POST', 403, 0, 'execution_gate_blocked');
+      return {
+        ok: false,
+        error: 'execution_gate_blocked',
+        message: 'Broker order blocked by execution_gate. OBSERVE/machine plans are intelligence only; real orders require TRADE + non-empty picks_json + broker_facing_picks_authorized + healthy sources.',
+        execution_gate: {
+          trade_authorized: gate.trade_authorized,
+          decision: gate.decision,
+          picks_count: gate.picks_count,
+          execution_authority: gate.execution_authority,
+          blocked_reasons: gate.blocked_reasons,
+        },
+        attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
+      };
+    }
+  }
+
+  if (!internal && !isSim && isLabTinyReal && !isExit) {
+    const sym = String(body.tradingsymbol || '').toUpperCase();
+    if (sym !== 'IDEA' || body.quantity !== 1 || body.exchange !== 'NSE' || body.product !== 'MIS') {
+      await logKite(db, `/orders/${variety} lab_tiny_guard`, 'POST', 403, 0, 'lab_tiny_real_refused');
+      return {
+        ok: false,
+        error: 'lab_tiny_real_refused',
+        message: 'TINY-REAL lab entry is limited to 1 share IDEA on NSE MIS.',
+        attempted_order: { tradingsymbol: body.tradingsymbol, quantity: body.quantity, exchange: body.exchange, product: body.product },
+      };
+    }
+  }
+
+  if (!internal && !isSim && !isExit && isLabTinyReal && body.bypass_market_hours === true) {
     return {
       ok: false,
       error: 'market_closed_preflight',
-      message: 'NSE regular market is closed. Live order not sent to Kite.',
+      message: 'TINY-REAL lab orders cannot bypass market-hours preflight.',
       attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
     };
   }
@@ -539,7 +590,6 @@ async function placeOrder(env, db, kiteHeaders, body) {
   // Internal bracket buys skip this (the bracket already deduped on kite_bracket_orders).
   const DEDUPE_WINDOW_MS = 120000;
   const idemTag = body.tag ? String(body.tag).slice(0, 20) : null;
-  const isSim = body.simulate === true || body.simulate === '1';
   if (!internal && idemTag) {
     // Fix 1B — SIM must NEVER poison the real dedupe. A simulate=1 order records a
     // lab_runs row with mode='sim'; if those rows were dedupe-eligible, a SIM test
@@ -1060,6 +1110,9 @@ async function placeBracket(env, db, kiteHeaders, body) {
   const stopPrice = parseFloat(body.stop_price);
   const targetPrice = parseFloat(body.target_price);
   const tag = body.tag || 'HN_WE_BRK';
+  const isLabTinyReal = body.lab_tiny_real === true
+    || body.surface === 'lab'
+    || String(tag).startsWith('HN_LAB_');
 
   // ─── SIM rung: simulate=1 must NEVER touch the broker ─────────────────────
   // The buy leg below routes through placeOrder with _internal:true and does NOT
@@ -1127,6 +1180,39 @@ async function placeBracket(env, db, kiteHeaders, body) {
      VALUES (?,?,?,?,?,'starting',?,?)`
   ).bind(symbol, exchange, qty, Math.round(stopPrice * 100), Math.round(targetPrice * 100), tag, Date.now()).run()).meta?.last_row_id;
 
+  if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
+    await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
+      .bind('market_closed_preflight', Date.now(), bracketRowId).run();
+    return {
+      ok: false,
+      bracket_id: bracketRowId,
+      error: 'market_closed_preflight',
+      message: 'NSE regular market is closed. Bracket order not sent to Kite.',
+    };
+  }
+
+  if (isLabTinyReal && body.bypass_market_hours === true) {
+    await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
+      .bind('market_closed_preflight', Date.now(), bracketRowId).run();
+    return {
+      ok: false,
+      bracket_id: bracketRowId,
+      error: 'market_closed_preflight',
+      message: 'TINY-REAL lab bracket cannot bypass market-hours preflight.',
+    };
+  }
+
+  if (isLabTinyReal && (symbol !== 'IDEA' || qty !== 1 || exchange !== 'NSE' || body.product !== 'MIS')) {
+    await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
+      .bind('lab_tiny_real_refused', Date.now(), bracketRowId).run();
+    return {
+      ok: false,
+      bracket_id: bracketRowId,
+      error: 'lab_tiny_real_refused',
+      message: 'TINY-REAL lab bracket is limited to 1 share IDEA on NSE MIS.',
+    };
+  }
+
   // Pre-launch guard
   const block = await db.prepare(
     `SELECT config_value FROM user_config WHERE config_key='block_real_orders'`
@@ -1145,6 +1231,28 @@ async function placeBracket(env, db, kiteHeaders, body) {
       },
     };
   }
+
+  if (!isLabTinyReal && !body.bypass_execution_gate) {
+    const gate = await buildExecutionGate(db, env);
+    if (gate.trade_authorized !== true) {
+      await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
+        .bind('execution_gate_blocked', Date.now(), bracketRowId).run();
+      return {
+        ok: false,
+        bracket_id: bracketRowId,
+        error: 'execution_gate_blocked',
+        message: 'Broker bracket blocked by execution_gate. OBSERVE/machine plans are intelligence only; real brackets require TRADE + non-empty picks_json + broker_facing_picks_authorized + healthy sources.',
+        execution_gate: {
+          trade_authorized: gate.trade_authorized,
+          decision: gate.decision,
+          picks_count: gate.picks_count,
+          execution_authority: gate.execution_authority,
+          blocked_reasons: gate.blocked_reasons,
+        },
+      };
+    }
+  }
+
   if (!body.bypass_market_hours && !isNseRegularMarketOpen()) {
     await db.prepare(`UPDATE kite_bracket_orders SET step='failed', error=?, completed_at=? WHERE id=?`)
       .bind('market_closed_preflight', Date.now(), bracketRowId).run();
@@ -2259,12 +2367,17 @@ async function getActiveToken(db) {
 
 async function getStatus(db, env) {
   const tok = await getActiveToken(db);
+  const gate = await buildExecutionGate(db, env).catch(() => null);
   if (!tok) {
     return {
       connected: false, reason: 'no_token',
       api_key_configured: !!env.KITE_API_KEY,
       api_secret_configured: !!env.KITE_API_SECRET,
       login_url: '/wealth/auth/login',
+      stable_ip_proxy_configured: gate?.stable_ip_proxy_configured || false,
+      stable_ip_proxy_active: gate?.stable_ip_proxy_active || false,
+      kite_order_base: gate?.kite_order_base || null,
+      execution_gate: gate,
     };
   }
   const now = Date.now();
@@ -2273,6 +2386,10 @@ async function getStatus(db, env) {
       connected: false, reason: 'expired',
       expired_at: tok.expires_at, user_name: tok.user_name,
       login_url: '/wealth/auth/login',
+      stable_ip_proxy_configured: gate?.stable_ip_proxy_configured || false,
+      stable_ip_proxy_active: gate?.stable_ip_proxy_active || false,
+      kite_order_base: gate?.kite_order_base || null,
+      execution_gate: gate,
     };
   }
   return {
@@ -2280,6 +2397,10 @@ async function getStatus(db, env) {
     user_id: tok.user_id, user_name: tok.user_name, email: tok.email,
     obtained_at: tok.obtained_at, expires_at: tok.expires_at,
     expires_in_min: Math.round((tok.expires_at - now) / 60000),
+    stable_ip_proxy_configured: gate?.stable_ip_proxy_configured || false,
+    stable_ip_proxy_active: gate?.stable_ip_proxy_active || false,
+    kite_order_base: gate?.kite_order_base || null,
+    execution_gate: gate,
   };
 }
 
