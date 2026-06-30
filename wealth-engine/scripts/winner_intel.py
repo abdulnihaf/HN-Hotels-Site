@@ -387,9 +387,38 @@ def autopsy(date=None, write=True):
     return out
 
 # ════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
+# ODDS — honest base rates of the #1 pick (walk-forward). Powers the "best shot"
+# card: the real probability a pick like today's reaches +5%/+2% intraday, the
+# win rate, expected R. Never a fabricated confidence — the live system shows THIS.
+def odds(min_train=120, k=1, lam=10.0):
+    import statistics as st
+    days, by = load_days()
+    tohi=[]; net1430=[]; rs=[]
+    for i in range(min_train, len(days)):
+        train = [r for j in range(0, i) for r in by[days[j]] if r.get("to_1430_pct") is not None]
+        model = fit_linear(train, TARGET, lam)
+        ch, _ = pick_topk(by[days[i]], model, k)
+        if not ch or ch[0].get("to_high_pct") is None: continue
+        p = ch[0]; net = (p["to_1430_pct"] or 0) - COST_PCT
+        tohi.append(p["to_high_pct"]); net1430.append(net)
+        rs.append(net / max(0.5, (p["or_pct"] or 2)/2))
+    n = len(tohi) or 1
+    res = dict(method="walk_forward_top1", n_days=len(tohi),
+        p_hit_5pct=round(100*sum(1 for x in tohi if x>=5)/n,1),
+        p_hit_3pct=round(100*sum(1 for x in tohi if x>=3)/n,1),
+        p_hit_2pct=round(100*sum(1 for x in tohi if x>=2)/n,1),
+        avg_to_high_pct=round(sum(tohi)/n,2),
+        median_to_high_pct=round(st.median(tohi),2) if tohi else None,
+        win_rate_pct=round(100*sum(1 for x in net1430 if x>0)/n,1),
+        avg_net_1430_pct=round(sum(net1430)/n,3),
+        avg_R=round(sum(rs)/len(rs),3) if rs else None,
+        worst_day_pct=round(min(net1430),2) if net1430 else None)
+    json.dump(res, open("odds.json","w")); print(json.dumps(res, indent=2)); return res
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["build","replay","backtest","autopsy"])
+    ap.add_argument("cmd", choices=["build","replay","backtest","autopsy","odds"])
     ap.add_argument("--days", type=int, default=None)
     ap.add_argument("--date", default=None)
     ap.add_argument("--k", type=int, default=3)
@@ -398,3 +427,4 @@ if __name__ == "__main__":
     elif a.cmd == "replay": replay()
     elif a.cmd == "backtest": backtest(k=a.k)
     elif a.cmd == "autopsy": autopsy(a.date)
+    elif a.cmd == "odds": odds(k=a.k)

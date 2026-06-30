@@ -33,13 +33,14 @@ autopsy = json.load(open(os.path.join(WS, "missed_autopsy.json")))[-A.days:]
 
 # 1. ranker_config — deactivate old, publish v1 active
 rc = bt["ranker_config"]
+odds = json.load(open(os.path.join(WS,"odds.json"))) if os.path.exists(os.path.join(WS,"odds.json")) else None
 d1("UPDATE ranker_configs SET is_active=0")
 d1("""INSERT OR REPLACE INTO ranker_configs
-      (version,is_active,target,gate_json,model_json,backtest_json,trained_days,date_to,published_at)
-      VALUES (?,1,?,?,?,?,?,?,?)""",
+      (version,is_active,target,gate_json,model_json,backtest_json,trained_days,date_to,published_at,odds_json)
+      VALUES (?,1,?,?,?,?,?,?,?,?)""",
    [rc["version"], rc["target"], js(rc["gate"]), js(rc["model"]),
     js({k: bt[k] for k in ("two_stage_causal", "old_gap_ranker", "random_gated", "config")}),
-    rc["trained_days"], rc["date_to"], NOW])
+    rc["trained_days"], rc["date_to"], NOW, (js(odds) if odds else None)])
 print("ranker_config published:", rc["version"])
 
 # 2. winner_replay_daily
