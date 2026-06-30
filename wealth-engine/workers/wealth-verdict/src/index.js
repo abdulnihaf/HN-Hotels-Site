@@ -1173,7 +1173,151 @@ async function loadRankerConfig(db) {
   ).first().catch(() => null);
   let gate = { ...RANKER_GATE_DEFAULT };
   if (row?.gate_json) { try { gate = { ...gate, ...JSON.parse(row.gate_json) }; } catch {} }
-  return { version: row?.version || 'preopen_default', target: row?.target || 'to_high_pct', gate };
+  let model = null;
+  if (row?.model_json) { try { model = JSON.parse(row.model_json); } catch {} }
+  return { version: row?.version || 'preopen_default', target: row?.target || 'to_high_pct', gate, model };
+}
+
+// ── FEED LIVENESS GATE (added 2026-07-01 after intraday_bars was silently dead
+// since May). Every feed the live 09:40 decision depends on is checked here; a dead
+// CRITICAL feed raises ONE system_alert (self-monitor law) and is stamped on the
+// verdict witness — so a rotting feed can never again silently degrade the pick.
+async function checkFeedHealth(db) {
+  const now = Date.now();
+  const tsAge = async (sql) => { try { const r = await db.prepare(sql).first(); return r?.m ? Math.round((now - r.m) / 3600000) : null; } catch { return null; } };
+  const dayAge = async (sql) => { try { const r = await db.prepare(sql).first(); return r?.d != null ? r.d : null; } catch { return null; } };
+  const feeds = [
+    { name: 'preopen_snapshot', critical: true,  age_h: await tsAge(`SELECT MAX(ts) m FROM preopen_snapshot`), max_h: 30 },
+    { name: 'equity_eod',       critical: true,  age_d: await dayAge(`SELECT julianday('now')-julianday(MAX(trade_date)) d FROM equity_eod`), max_d: 5 },
+    { name: 'signal_scores',    critical: true,  age_h: await tsAge(`SELECT MAX(computed_at) m FROM signal_scores`), max_h: 30 },
+    { name: 'intraday_bars',    critical: false, age_h: await tsAge(`SELECT MAX(ts) m FROM intraday_bars`), max_h: 30 },
+    { name: 'intraday_ticks',   critical: false, age_h: await tsAge(`SELECT MAX(ts) m FROM intraday_ticks`), max_h: 30 },
+    { name: 'india_vix_ticks',  critical: false, age_h: await tsAge(`SELECT MAX(ts) m FROM india_vix_ticks`), max_h: 30 },
+    { name: 'news_items',       critical: false, age_h: await tsAge(`SELECT MAX(published_at) m FROM news_items`), max_h: 48 },
+  ];
+  const dead = [];
+  for (const f of feeds) {
+    const over = (f.age_h != null && f.age_h > f.max_h) || (f.age_d != null && f.age_d > f.max_d) || (f.age_h == null && f.age_d == null);
+    f.status = over ? 'DEAD' : 'live';
+    if (over) dead.push(f.name);
+  }
+  const deadCritical = feeds.filter(f => f.critical && f.status === 'DEAD').map(f => f.name);
+  if (deadCritical.length) {
+    try {
+      await db.prepare(`INSERT INTO system_alerts (severity, category, title, body, ts) VALUES (?,?,?,?,?)`)
+        .bind('critical', 'wealth_feed_dead', `Wealth feed DEAD: ${deadCritical.join(', ')}`,
+          `The 09:40 decision depends on these feeds and one is stale/dead. Intelligence is degraded until fixed. ${JSON.stringify(dead)}`, now).run();
+    } catch {}
+  }
+  return { feeds, dead, dead_critical: deadCritical, all_critical_live: deadCritical.length === 0, checked_at: now };
+}
+
+// ── Stage B: portable linear upside score (exact replica of winner_intel.py) ──
+// model = {feat_keys, weights, mu, sd, med, intercept}. feat = {raw key -> value|null}.
+function scoreUpside(feat, model) {
+  if (!model || !Array.isArray(model.feat_keys)) return null;
+  let s = model.intercept || 0;
+  for (let i = 0; i < model.feat_keys.length; i++) {
+    const k = model.feat_keys[i];
+    let v = feat[k];
+    if (v == null || Number.isNaN(v)) v = (model.med && model.med[k] != null) ? model.med[k] : 0;
+    const mu = model.mu[i], sd = model.sd[i] || 1;
+    s += ((v - mu) / sd) * model.weights[i];
+  }
+  return s;
+}
+
+// ── Live Kite auth (mirrors wealth-intraday-bars; reads are not IP-gated) ──────
+async function getKiteAuthVerdict(env) {
+  const r = await env.DB.prepare(
+    `SELECT access_token, api_key FROM kite_tokens WHERE is_active=1 ORDER BY id DESC LIMIT 1`
+  ).first().catch(() => null);
+  if (!r?.access_token) return { error: 'no-active-kite-token' };
+  const apiKey = r.api_key || env.KITE_API_KEY;
+  if (!apiKey) return { error: 'no-api-key' };
+  return { access_token: r.access_token, api_key: apiKey };
+}
+
+// ── LIVE 09:40 opening-bar fetch → causal features (slots 0-4 = 09:15-09:40) ──
+// This is the unlock that makes the full causal ranker run live: at 09:40 the
+// intraday_bars feed can't supply opening bars (16:00 post-close job), so we fetch
+// today's 5-min bars on demand from Kite historical for the small gated-survivor
+// set. Returns { ok, mode, bySymbol:{sym:{drive_pct,pos_vs_vwap_pct,gap_pct,or_pct,
+// entry_paise,...}}, fetched, reason }. Read-only; never an order path.
+async function fetchOpeningFeatures(env, db, candidates, dateStr, opts = {}) {
+  const auth = await getKiteAuthVerdict(env);
+  if (auth.error) return { ok: false, reason: auth.error, bySymbol: {}, fetched: 0 };
+  const syms = candidates.map(c => c.symbol);
+  if (!syms.length) return { ok: false, reason: 'no_candidates', bySymbol: {}, fetched: 0 };
+  const ph = syms.map(() => '?').join(',');
+  const toks = (await db.prepare(
+    `SELECT tradingsymbol, instrument_token FROM kite_instruments WHERE tradingsymbol IN (${ph}) AND exchange='NSE' AND instrument_type='EQ'`
+  ).bind(...syms).all().catch(() => ({ results: [] }))).results || [];
+  const tokBy = {}; for (const t of toks) tokBy[t.tradingsymbol] = t.instrument_token;
+  const prevBy = {}; for (const c of candidates) prevBy[c.symbol] = c.prev_close_paise;
+  const bySymbol = {}; let fetched = 0;
+  const persistStmts = [];   // opt-in: self-heal intraday_bars with today's opening bars
+  for (const c of candidates) {
+    const token = tokBy[c.symbol];
+    if (!token) continue;
+    try {
+      const url = `https://api.kite.trade/instruments/historical/${token}/5minute?from=${encodeURIComponent(dateStr + ' 09:15:00')}&to=${encodeURIComponent(dateStr + ' 09:45:00')}`;
+      const r = await fetch(url, { headers: { 'X-Kite-Version': '3', 'Authorization': `token ${auth.api_key}:${auth.access_token}` }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const candles = (j.status === 'success' && j.data?.candles) ? j.data.candles : [];
+      if (candles.length < 5) continue;                       // need slots 0-4
+      // candle = [ts, o, h, l, c, vol] (prices in rupees → paise)
+      const px = candles.map(k => ({ o: Math.round(k[1] * 100), h: Math.round(k[2] * 100), l: Math.round(k[3] * 100), c: Math.round(k[4] * 100), v: k[5] || 0 }));
+      if (opts.persist) {
+        for (let bi = 0; bi < candles.length; bi++) {
+          const ts = new Date(candles[bi][0]).getTime();
+          persistStmts.push(db.prepare(`INSERT OR REPLACE INTO intraday_bars (symbol, ts, trade_date, interval, open_paise, high_paise, low_paise, close_paise, volume) VALUES (?,?,?,?,?,?,?,?,?)`)
+            .bind(c.symbol, ts, dateStr, '5minute', px[bi].o, px[bi].h, px[bi].l, px[bi].c, px[bi].v));
+        }
+      }
+      const cw = px.slice(0, 5);                               // 09:15-09:40
+      const dayOpen = cw[0].o;
+      const entry = px[5] ? px[5].o : cw[4].c;                 // slot5 open = 09:40 entry
+      const orHigh = Math.max(...cw.map(b => b.h)), orLow = Math.min(...cw.map(b => b.l));
+      const c0940 = cw[4].c;
+      const vol0 = cw.reduce((a, b) => a + b.v, 0);
+      const vwap = vol0 > 0 ? cw.reduce((a, b) => a + b.v * b.c, 0) / vol0 : c0940;
+      const pc = prevBy[c.symbol];
+      if (!dayOpen || !entry) continue;
+      const rng = orHigh - orLow;
+      bySymbol[c.symbol] = {
+        entry_paise: entry,
+        gap_pct: pc ? 100 * (dayOpen - pc) / pc : (c.gap_pct ?? null),
+        drive_pct: 100 * (c0940 - dayOpen) / dayOpen,
+        pos_vs_vwap_pct: vwap ? 100 * (entry - vwap) / vwap : 0,
+        or_pct: 100 * rng / dayOpen,
+        pos_in_range: rng > 0 ? (entry - orLow) / rng : 1.0,
+        ret_by_0940_pct: pc ? 100 * (entry - pc) / pc : null,
+      };
+      fetched++;
+    } catch { /* skip this symbol */ }
+  }
+  if (opts.persist && persistStmts.length) {
+    try { for (let i = 0; i < persistStmts.length; i += 50) await db.batch(persistStmts.slice(i, i + 50)); }
+    catch (e) { console.log('intraday_bars self-heal write(non-fatal):', e?.message || e); }
+  }
+  return { ok: fetched > 0, mode: fetched > 0 ? 'full_causal_live' : 'no_bars', bySymbol, fetched, reason: fetched > 0 ? null : 'no_opening_bars' };
+}
+
+// Build the Stage B feature vector (raw keys) from live opening features + preopen liquidity.
+function buildUpsideFeat(of, cand) {
+  const liq = cand.turnover_cr || 0;
+  return {
+    drive_pct: of.drive_pct,
+    pos_vs_vwap_pct: of.pos_vs_vwap_pct,
+    log_relvol: null,                                  // 20d opening-vol baseline not available live → imputed
+    gap_pct: of.gap_pct ?? cand.gap_pct,
+    log_liq: liq > 0 ? Math.log(Math.max(liq, 1)) : null,
+    or_pct: of.or_pct,
+    prior_day_ret: null,                               // imputed (small weight)
+    is_fno: null,                                      // imputed (small weight)
+  };
 }
 // Live (preopen-applicable) loss gate. Returns reasons; [] = passes. Mirrors the
 // preopen-only rules in winner_intel.py stage_a so live matches the backtest.
@@ -1738,6 +1882,36 @@ async function runGapEngine(env, db, today, cfg, carryover) {
   const maxPicks = Math.min(cfg.max_picks || 3, parseInt(uc.max_active_positions || '3', 10));
 
   const executionAuthorized = isBrokerExecutionAuthorized(cfg);
+
+  // ★ LIVE FULL CAUSAL RANKER — fetch 09:15-09:40 bars for the gated survivors and
+  // re-rank by the walk-forward-proven upside model (the +29% winner-capture engine).
+  // Falls back to the preopen loss-gate order if Kite/bars are unavailable.
+  const ranker = await loadRankerConfig(db);
+  const feedHealth = await checkFeedHealth(db).catch(() => null);   // self-monitor: dead feed → alert
+  let rankerMode = 'loss_gate_live';
+  let openingFetched = 0;
+  if (ranker.model && Array.isArray(scan.candidates) && scan.candidates.length) {
+    try {
+      const of = await fetchOpeningFeatures(env, db, scan.candidates, today, { persist: true });
+      openingFetched = of.fetched || 0;
+      if (of.ok) {
+        for (const c of scan.candidates) {
+          const f = of.bySymbol[c.symbol];
+          if (f) {
+            c.upside_score = scoreUpside(buildUpsideFeat(f, c), ranker.model);
+            c.drive_pct = (f.drive_pct != null) ? +f.drive_pct.toFixed(2) : c.drive_pct;
+            c.pos_vs_vwap_pct = (f.pos_vs_vwap_pct != null) ? +f.pos_vs_vwap_pct.toFixed(2) : null;
+            c.or_pct = (f.or_pct != null) ? +f.or_pct.toFixed(2) : null;
+            if (f.entry_paise) c.open_paise = f.entry_paise;     // refine entry to the live 09:40 print
+            c.bars_confirmed = true;
+          } else { c.upside_score = -999; c.bars_confirmed = false; }  // no bars → can't confirm, sink
+        }
+        scan.candidates.sort((a, b) => (b.upside_score ?? -1000) - (a.upside_score ?? -1000));
+        rankerMode = 'full_causal_live';
+      }
+    } catch (e) { console.log('full ranker(non-fatal):', e?.message || e); }
+  }
+
   const top = await pickSectorSpread(db, scan.candidates, maxPicks);
   if (top.length) await refineEntries(env, top);
 
@@ -1779,11 +1953,17 @@ async function runGapEngine(env, db, today, cfg, carryover) {
   } catch {}
   const winnerIntel = {
     ranker_version: scan.ranker_version || 'preopen_default',
-    ranker_mode: 'loss_gate_live',
-    ranker_note: 'Loss-avoidance gate is live + walk-forward-proven (circuit traps 29→0). Full upside ranker (opening drive/relvol/range, +29% winner capture) is armed pending the 09:15-09:40 bar feed (intraday_bars currently stale).',
+    ranker_mode: rankerMode,
+    ranker_note: rankerMode === 'full_causal_live'
+      ? `Full causal ranker LIVE: fetched 09:15-09:40 bars for ${openingFetched} survivors and ranked by the walk-forward-proven upside model (opening drive + VWAP-hold + range; +29% winner capture, 0 circuit traps in 145-day OOS). Loss gate ran first.`
+      : 'Loss-avoidance gate live + walk-forward-proven (circuit traps 29→0). Full upside ranker armed but opening bars were unavailable at 09:40 (Kite/bars) → ranked on preopen structure this run.',
     no_loser_gate: scan.no_loser_gate || null,
-    ranked_candidates: (machinePlan.length ? machinePlan : (scan.candidates || []).slice(0, 6)).map((p, i) => ({
+    feed_health: feedHealth ? { all_critical_live: feedHealth.all_critical_live, dead: feedHealth.dead, dead_critical: feedHealth.dead_critical } : null,
+    ranked_candidates: (scan.candidates || []).slice(0, 6).map((p, i) => ({
       rank: i + 1, symbol: p.symbol, gap_pct: p.gap_pct, turnover_cr: p.turnover_cr,
+      upside_score: (p.upside_score != null && p.upside_score > -900) ? +p.upside_score.toFixed(3) : null,
+      drive_pct: p.drive_pct ?? null, pos_vs_vwap_pct: p.pos_vs_vwap_pct ?? null,
+      bars_confirmed: !!p.bars_confirmed,
       preopen_imbalance: p.preopen_imbalance ?? null, catalyst: !!p.catalyst })),
     rejected_predictable_losers: rejectedTop,
     why_this: recommendedSymbol
@@ -2499,9 +2679,37 @@ const CRON_DISPATCH = {
   '30 3 * * 1':               { name: 'weekly',     fn: composeWeeklyReview },   // Mon 09:00 IST
 };
 
+// Read-only verification of the LIVE full causal ranker for any date (no DB write):
+// scans that day's preopen survivors, fetches the 09:15-09:40 bars, scores upside.
+// Lets us prove the live ranker matches the backtest before market open.
+async function rankTest(env, opts = {}) {
+  const db = env.DB;
+  const date = opts.date || istToday();
+  const ranker = await loadRankerConfig(db);
+  const cfg = (await loadStrategyConfig(db).catch(() => null)) ||
+    { strategy: 'gap_up_intraday', verdict: 'MARKET_DATA_ONLY', gap_min_pct: 2.0, min_turnover_cr: 10, stop_pct: 2.0, exit_time_ist: '14:30', max_picks: 3 };
+  const scan = await scanGapUp(env, db, cfg, date);
+  if (!scan.fresh) return { ok: false, reason: 'no_preopen_for_date', date };
+  const of = await fetchOpeningFeatures(env, db, scan.candidates, date);
+  const ranked = scan.candidates.map(c => {
+    const f = of.bySymbol[c.symbol];
+    const score = (f && ranker.model) ? scoreUpside(buildUpsideFeat(f, c), ranker.model) : null;
+    return { symbol: c.symbol, gap_pct: c.gap_pct, turnover_cr: c.turnover_cr, bars: !!f,
+      upside_score: score != null ? +score.toFixed(3) : null,
+      drive_pct: f ? +f.drive_pct.toFixed(2) : null, pos_vs_vwap_pct: f ? +f.pos_vs_vwap_pct.toFixed(2) : null,
+      or_pct: f ? +f.or_pct.toFixed(2) : null };
+  }).sort((a, b) => (b.upside_score ?? -1000) - (a.upside_score ?? -1000));
+  return { ok: true, date, ranker_version: ranker.version, has_model: !!ranker.model, mode: of.mode,
+    fetched: of.fetched, fetch_reason: of.reason, survivors: scan.candidates.length,
+    gated_out: (scan.rejected || []).length,
+    rejected: (scan.rejected || []).slice(0, 6).map(r => ({ symbol: r.symbol, gap_pct: r.gap_pct, reasons: r.reject_reasons })),
+    ranked: ranked.slice(0, 10) };
+}
+
 const HTTP_HANDLERS = {
   pre_market:    composePreMarketBriefing,
   compose:       composeVerdictWithScout,
+  rank_test:     rankTest,
   scout:         (env) => composeScout(env, env.DB, istToday()).then(r => ({ rows: r?.picks || 0, ...r })),
   reconcile_scout: (env) => reconcileScouts(env),
   triage:        triageAlerts,
@@ -2537,7 +2745,7 @@ export default {
     if (m && HTTP_HANDLERS[m[1]]) {
       const id = await logCronStart(env.DB, m[1], 'http');
       try {
-        const r = await HTTP_HANDLERS[m[1]](env, { force: url.searchParams.get('force') === '1' });
+        const r = await HTTP_HANDLERS[m[1]](env, { force: url.searchParams.get('force') === '1', date: url.searchParams.get('date') });
         await logCronEnd(env.DB, id, 'success', r.rows || 0, r.error || null);
         return Response.json({ ok: true, ...r });
       } catch (e) {
