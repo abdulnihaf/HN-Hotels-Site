@@ -8,8 +8,9 @@
 //   GET  ?action=purchase_day&date=&brand=  -> HN-wide purchase day (HE/NCH cards)
 //   GET  ?action=purchase_day_pdf&date=     -> printable A4 purchase day
 //   GET  ?action=day&outlet=&date=          -> vendor cards (one vendor one card) for one outlet
-//   GET  ?action=card&id=                   -> one card with its lines
+//   GET  ?action=card&id=                   -> one card with its lines + event trail
 //   POST ?action=place    {outlet,vendor_key,for_date,lines:[...]}  -> upsert card + lines
+//   POST ?action=edit-lines {order_id,lines:[...]} -> replace pre-receive order lines + audit trail
 //   POST ?action=receive  {order_id,lines:[{line_id,qty_received,receive_state}],note}
 //   POST ?action=route    {labels:[...]}    -> resolve free labels -> item_code+vendor (decode aid)
 
@@ -161,6 +162,50 @@ async function purchaseDayRows(db, u, date, brandFilter) {
     allowed,
     cards: cards.map(c => ({ ...c, outlet_brand: c.outlet_brand || outletById[c.outlet_id]?.brand || '' })),
     linesByOrder
+  };
+}
+
+async function ensurePurchaseEventLog(db) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS purchase_event_log (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id     INTEGER NOT NULL,
+      event_type   TEXT NOT NULL,
+      actor_pin    TEXT DEFAULT '',
+      actor_name   TEXT DEFAULT '',
+      payload_json TEXT DEFAULT '{}',
+      created_at   TEXT DEFAULT (datetime('now'))
+    )`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS ix_purchase_event_order ON purchase_event_log(order_id, created_at)`).run();
+}
+async function writePurchaseEvent(db, orderId, type, u, payload) {
+  await ensurePurchaseEventLog(db);
+  await db.prepare(
+    `INSERT INTO purchase_event_log (order_id,event_type,actor_pin,actor_name,payload_json)
+     VALUES (?,?,?,?,?)`)
+    .bind(orderId, type, u?.staff_pin || '', u?.name || '', JSON.stringify(payload || {})).run();
+}
+async function readPurchaseEvents(db, orderId) {
+  try {
+    const rows = (await db.prepare(
+      `SELECT id,event_type,actor_name,created_at,payload_json
+         FROM purchase_event_log WHERE order_id=? ORDER BY id DESC LIMIT 30`)
+      .bind(orderId).all()).results || [];
+    return rows;
+  } catch (e) {
+    return [];
+  }
+}
+function purchaseLineSnapshot(l) {
+  return {
+    id: Number(l.id || 0),
+    item_code: l.item_code || '',
+    item_label: l.item_label || '',
+    qty_ordered: l.qty_ordered == null ? null : Number(l.qty_ordered),
+    uom: l.uom || '',
+    unit_cost_paise: Math.max(0, Math.round(Number(l.unit_cost_paise || 0))),
+    line_amount_paise: Math.max(0, Math.round(Number(l.line_amount_paise || 0))),
+    flag: l.flag || '',
   };
 }
 
@@ -356,7 +401,8 @@ export async function onRequest(context) {
       const lines = (await db.prepare(
         `SELECT id,item_code,item_label,qty_ordered,uom,unit_cost_paise,line_amount_paise,qty_received,receive_state,flag
            FROM purchase_order_lines WHERE order_id=? ORDER BY id`).bind(id).all()).results || [];
-      return J({ ok: true, card: po, lines });
+      const events = await readPurchaseEvents(db, id);
+      return J({ ok: true, card: po, lines, events });
     }
 
     // ---------- route helper (decode aid) ----------
@@ -432,6 +478,9 @@ export async function onRequest(context) {
         await db.batch(stmts);
         const sum = (await db.prepare(`SELECT COALESCE(SUM(line_amount_paise),0) s FROM purchase_order_lines WHERE order_id=?`).bind(card.id).first()).s;
         await db.prepare(`UPDATE purchase_orders SET expected_amount_paise=?, updated_at=? WHERE id=?`).bind(sum, istNow(), card.id).run();
+        await writePurchaseEvent(db, card.id, 'demand', u, {
+          outlet, for_date, vendor_key: vendorKey, lines_added: lines.length, expected_amount_paise: sum
+        });
         created.push({ order_id: card.id, vendor_key: vendorKey, lines_added: lines.length, expected_amount_paise: sum });
       }
       return J({ ok: true, for_date, outlet, orders: created });
@@ -472,7 +521,94 @@ export async function onRequest(context) {
       // recompute expected + ledger
       const sum = (await db.prepare(`SELECT COALESCE(SUM(line_amount_paise),0) s FROM purchase_order_lines WHERE order_id=?`).bind(card.id).first()).s;
       await db.prepare(`UPDATE purchase_orders SET expected_amount_paise=?, updated_at=? WHERE id=?`).bind(sum, istNow(), card.id).run();
+      await writePurchaseEvent(db, card.id, 'place', u, {
+        outlet, for_date, vendor_key, lines_added: lines.length, expected_amount_paise: sum
+      });
       return J({ ok: true, order_id: card.id, expected_amount_paise: sum, lines_added: lines.length });
+    }
+
+    // ---------- EDIT: replace pre-receive item lines with a visible trail ----------
+    if (action === 'edit-lines' && req.method === 'POST') {
+      if (!can(u, 'sauda.place')) return J({ ok: false, error: 'not permitted to edit order items' }, 403);
+      const b = await req.json().catch(() => ({}));
+      const order_id = b.order_id;
+      const incoming = Array.isArray(b.lines) ? b.lines : [];
+      if (!order_id) return J({ ok: false, error: 'order_id required' }, 400);
+      if (!incoming.length) return J({ ok: false, error: 'keep at least one item on the card' }, 400);
+      const po = await db.prepare(`SELECT id,outlet_id,status,expected_amount_paise FROM purchase_orders WHERE id=?`).bind(order_id).first();
+      if (!po) return J({ ok: false, error: 'card not found' }, 404);
+      if (!outletOk(u, po.outlet_id)) return J({ ok: false, error: 'outlet not permitted' }, 403);
+      if (!['REQUESTED', 'ORDERED'].includes(po.status)) {
+        return J({ ok: false, error: 'items can only be edited before receiving proof' }, 400);
+      }
+      const existing = (await db.prepare(
+        `SELECT id,item_code,item_label,qty_ordered,uom,unit_cost_paise,line_amount_paise,qty_received,receive_state,flag,raw
+           FROM purchase_order_lines WHERE order_id=? ORDER BY id`).bind(order_id).all()).results || [];
+      const byId = Object.fromEntries(existing.map(l => [Number(l.id), l]));
+      const seen = new Set();
+      const normalized = [];
+      for (const ln of incoming) {
+        const lineId = Number(ln.line_id || ln.id || 0);
+        if (lineId && !byId[lineId]) return J({ ok: false, error: 'unknown edit line' }, 400);
+        if (lineId && seen.has(lineId)) return J({ ok: false, error: 'duplicate edit line' }, 400);
+        if (lineId) seen.add(lineId);
+        const label = String(ln.item_label || ln.label || '').trim();
+        if (!label) return J({ ok: false, error: 'item label required' }, 400);
+        const qty = ln.qty_ordered != null && ln.qty_ordered !== '' ? Number(ln.qty_ordered) :
+          (ln.qty != null && ln.qty !== '' ? Number(ln.qty) : null);
+        if (!Number.isFinite(qty) || qty <= 0) return J({ ok: false, error: `quantity required for ${label}` }, 400);
+        const cost = Math.max(0, Math.round(Number(ln.unit_cost_paise || 0)));
+        const amount = cost ? Math.round(qty * cost) : 0;
+        normalized.push({
+          line_id: lineId,
+          item_code: String(ln.item_code || ''),
+          item_label: label,
+          qty_ordered: qty,
+          uom: String(ln.uom || ''),
+          unit_cost_paise: cost,
+          line_amount_paise: amount,
+          flag: String(ln.flag || ''),
+          raw: String(ln.raw || label),
+        });
+      }
+      const removeIds = existing.map(l => Number(l.id)).filter(id => !seen.has(id));
+      const expected = normalized.reduce((n, l) => n + l.line_amount_paise, 0);
+      const before = existing.map(purchaseLineSnapshot);
+      const stmts = [];
+      for (const ln of normalized) {
+        if (ln.line_id) {
+          stmts.push(db.prepare(
+            `UPDATE purchase_order_lines
+                SET item_code=?, item_label=?, qty_ordered=?, uom=?, unit_cost_paise=?, line_amount_paise=?, flag=?, raw=?
+              WHERE id=? AND order_id=?`)
+            .bind(ln.item_code, ln.item_label, ln.qty_ordered, ln.uom, ln.unit_cost_paise, ln.line_amount_paise,
+              ln.flag, ln.raw, ln.line_id, order_id));
+        } else {
+          stmts.push(db.prepare(
+            `INSERT INTO purchase_order_lines (order_id,item_code,item_label,qty_ordered,uom,unit_cost_paise,line_amount_paise,flag,raw)
+             VALUES (?,?,?,?,?,?,?,?,?)`)
+            .bind(order_id, ln.item_code, ln.item_label, ln.qty_ordered, ln.uom, ln.unit_cost_paise, ln.line_amount_paise,
+              ln.flag, ln.raw));
+        }
+      }
+      for (const id of removeIds) {
+        stmts.push(db.prepare(`DELETE FROM purchase_order_lines WHERE id=? AND order_id=?`).bind(id, order_id));
+      }
+      stmts.push(db.prepare(`UPDATE purchase_orders SET expected_amount_paise=?, updated_at=? WHERE id=?`).bind(expected, istNow(), order_id));
+      await ensurePurchaseEventLog(db);
+      stmts.push(db.prepare(
+        `INSERT INTO purchase_event_log (order_id,event_type,actor_pin,actor_name,payload_json)
+         VALUES (?,?,?,?,?)`)
+        .bind(order_id, 'edit-lines', u.staff_pin || '', u.name || '', JSON.stringify({
+          status: po.status,
+          previous_amount_paise: Number(po.expected_amount_paise || 0),
+          expected_amount_paise: expected,
+          removed_line_ids: removeIds,
+          before,
+          after: normalized.map(l => ({ ...l, id: l.line_id || null })),
+        })));
+      await db.batch(stmts);
+      return J({ ok: true, order_id, expected_amount_paise: expected, lines_updated: normalized.length, lines_removed: removeIds.length });
     }
 
     // ---------- ORDERED: purchase person confirms vendor order was placed ----------
@@ -485,6 +621,7 @@ export async function onRequest(context) {
       if (!outletOk(u, po.outlet_id)) return J({ ok: false, error: 'outlet not permitted' }, 403);
       await db.prepare(`UPDATE purchase_orders SET status='ORDERED', ordered_at=COALESCE(ordered_at,?), ordered_by=?, updated_at=? WHERE id=?`)
         .bind(istNow(), u.name, istNow(), order_id).run();
+      await writePurchaseEvent(db, order_id, 'mark-ordered', u, { status: 'ORDERED' });
       return J({ ok: true, order_id, status: 'ORDERED' });
     }
 
@@ -534,6 +671,13 @@ export async function onRequest(context) {
       await db.prepare(
         `UPDATE purchase_orders SET status='RECEIVED', expected_amount_paise=?, received_at=?, received_by=?, received_station=?, receive_note=?, updated_at=? WHERE id=?`)
         .bind(sum, istNow(), u.name, b.station || u.brand || '', b.note || '', istNow(), order_id).run();
+      await writePurchaseEvent(db, order_id, 'receive', u, {
+        expected_amount_paise: sum,
+        lines_updated: stmts.length,
+        goods_photo: true,
+        bill_photo: true,
+        note: String(b.note || '').slice(0, 400),
+      });
       return J({ ok: true, order_id, status: 'RECEIVED', expected_amount_paise: sum, lines_updated: stmts.length });
     }
 
@@ -562,6 +706,7 @@ export async function onRequest(context) {
       }
       const paid = !!b.paid && can(u, 'sauda.pay');
       const amount = Math.max(0, Math.round(Number(b.pay_amount_paise || po.expected_amount_paise || 0)));
+      if (amount <= 0) return J({ ok: false, error: 'payment amount required' }, 400);
       await db.prepare(
         `UPDATE purchase_orders
             SET status=?, raised_at=COALESCE(raised_at,?), raised_by=COALESCE(raised_by,?),
@@ -570,6 +715,11 @@ export async function onRequest(context) {
           WHERE id=?`)
         .bind(paid ? 'PAID' : 'RAISED', istNow(), u.name, String(b.pay_method || '').slice(0, 40),
           amount, String(b.bank_ref || '').slice(0, 160), paid ? 1 : 0, istNow(), istNow(), order_id).run();
+      await writePurchaseEvent(db, order_id, paid ? 'paid' : 'payment-request', u, {
+        pay_method: String(b.pay_method || '').slice(0, 40),
+        pay_amount_paise: amount,
+        bank_ref: String(b.bank_ref || '').slice(0, 160),
+      });
       return J({ ok: true, order_id, status: paid ? 'PAID' : 'RAISED', pay_amount_paise: amount });
     }
 

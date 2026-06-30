@@ -54,6 +54,7 @@ import java.util.*
 
 // ---- config / theme -------------------------------------------------------
 private const val BASE = "https://hn-ops-api.pages.dev/api/ops"
+private const val CHICKEN_BASE = "https://hnhotels.in/api/chicken-ops"
 private val Maroon = Color(0xFF581810)
 private val Sand = Color(0xFFF5F0EF)
 private val Ink = Color(0xFF2A1A14)
@@ -114,6 +115,29 @@ object Api {
     private fun err(e: Exception) = JSONObject().put("ok", false).put("error", e.message ?: "network error")
 }
 
+object ChickenApi {
+    private fun conn(u: String): HttpURLConnection {
+        val c = URL(u).openConnection() as HttpURLConnection
+        c.connectTimeout = 12000; c.readTimeout = 18000
+        c.setRequestProperty("User-Agent", "HNStaff-Android")
+        return c
+    }
+    suspend fun get(qs: String): JSONObject = withContext(Dispatchers.IO) {
+        val c = conn("$CHICKEN_BASE?$qs")
+        try { JSONObject(readAll(c)) } catch (e: Exception) { JSONObject().put("success", false).put("error", e.message ?: "network error") } finally { c.disconnect() }
+    }
+    suspend fun post(action: String, body: JSONObject): JSONObject = withContext(Dispatchers.IO) {
+        val c = conn("$CHICKEN_BASE?action=$action&pin=$PIN")
+        c.requestMethod = "POST"; c.doOutput = true; c.setRequestProperty("content-type", "application/json")
+        try { c.outputStream.use { it.write(body.toString().toByteArray()) }; JSONObject(readAll(c)) }
+        catch (e: Exception) { JSONObject().put("success", false).put("error", e.message ?: "network error") } finally { c.disconnect() }
+    }
+    private fun readAll(c: HttpURLConnection): String {
+        val code = c.responseCode
+        return (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: "{}"
+    }
+}
+
 // ---- self-update (sideload-friendly): check version.json, download + install ----
 private const val VERSION_URL = "https://hn-ops-api.pages.dev/version.json"
 object Updater {
@@ -160,6 +184,7 @@ sealed class Screen {
     data class Card(val id: Int, val outlet: String, val date: String) : Screen()
     data class Place(val outlet: String, val date: String) : Screen()
     data class Directory(val outlet: String, val date: String) : Screen()
+    data class Chicken(val date: String) : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -246,6 +271,7 @@ fun StaffShell(me: JSONObject) {
             openCard = { id, outlet -> nav.add(Screen.Card(id, outlet, cur.date)) },
             openPlace = { outlet -> nav.add(Screen.Place(outlet, cur.date)) },
             openDirectory = { outlet -> nav.add(Screen.Directory(outlet, cur.date)) },
+            openChicken = { nav.add(Screen.Chicken(cur.date)) },
             setDate = { d -> nav[nav.lastIndex] = Screen.PurchaseDay(d) })
         is Screen.Day -> DayScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
@@ -257,6 +283,8 @@ fun StaffShell(me: JSONObject) {
         is Screen.Directory -> CatalogDirectoryScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
             openPlace = { nav.add(Screen.Place(cur.outlet, cur.date)) })
+        is Screen.Chicken -> ChickenScreen(cur, back = { nav.removeAt(nav.lastIndex) },
+            setDate = { d -> nav[nav.lastIndex] = Screen.Chicken(d) })
     }
 }
 
@@ -324,7 +352,7 @@ fun ChamberTile(name: String, sub: String, icon: androidx.compose.ui.graphics.ve
 @Composable
 fun PurchaseDayScreen(me: JSONObject, s: Screen.PurchaseDay, back: () -> Unit,
                       openCard: (Int, String) -> Unit, openPlace: (String) -> Unit,
-                      openDirectory: (String) -> Unit, setDate: (String) -> Unit) {
+                      openDirectory: (String) -> Unit, openChicken: () -> Unit, setDate: (String) -> Unit) {
     var brand by remember { mutableStateOf("all") }
     var data by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf("") }
@@ -373,6 +401,13 @@ fun PurchaseDayScreen(me: JSONObject, s: Screen.PurchaseDay, back: () -> Unit,
                         Icon(Icons.Filled.Inventory2, null, tint = Maroon, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(5.dp))
                         Text("Items", color = Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                if (canPlace || caps.contains("sauda.receive")) {
+                    OutlinedButton(onClick = openChicken, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), modifier = Modifier.padding(end = 8.dp)) {
+                        Icon(Icons.Filled.SetMeal, null, tint = Maroon, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("MN", color = Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 OutlinedButton(onClick = {
@@ -679,11 +714,15 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
     var error by remember { mutableStateOf("") }
     var actionError by remember { mutableStateOf("") }
     var receiving by remember { mutableStateOf(false) }
+    var editingItems by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var goodsImage by remember { mutableStateOf("") }
     var billImage by remember { mutableStateOf("") }
     val recvQty = remember { mutableStateMapOf<Int, String>() }
     val recvRate = remember { mutableStateMapOf<Int, String>() }
+    val editQty = remember { mutableStateMapOf<Int, String>() }
+    val editRate = remember { mutableStateMapOf<Int, String>() }
+    val editRemoved = remember { mutableStateListOf<Int>() }
     val scope = rememberCoroutineScope()
     fun load() {
         data = null
@@ -698,7 +737,9 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
     val caps = me.optJSONArray("capabilities")?.toStrList() ?: emptyList()
     val card = data?.optJSONObject("card")
     val lines = data?.optJSONArray("lines")?.toObjList() ?: emptyList()
+    val events = data?.optJSONArray("events")?.toObjList() ?: emptyList()
     val status = card?.optString("status") ?: ""
+    val canEditItems = caps.contains("sauda.place") && status in listOf("REQUESTED", "ORDERED")
     Scaffold(topBar = { HnBar(card?.optString("vendor_name") ?: "Order",
         subtitle = card?.let { rupee(it.optInt("expected_amount_paise")) + " · " + status }, onBack = back) }) { p ->
         Column(Modifier.padding(p).fillMaxSize()) {
@@ -709,100 +750,181 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp)) {
                         items(lines) { l ->
                             val id = l.optInt("id")
-                            LineRow(
-                                l = l,
-                                receiving = receiving,
-                                recvVal = recvQty[id] ?: numStr(l.optDouble("qty_ordered", 0.0)),
-                                rateVal = recvRate[id] ?: rupeeTextFromPaise(l.optInt("unit_cost_paise")),
-                                onRecv = { recvQty[id] = it },
-                                onRate = { recvRate[id] = it }
-                            )
+                            if (editingItems) {
+                                EditableOrderLineRow(
+                                    l = l,
+                                    removed = editRemoved.contains(id),
+                                    qtyVal = editQty[id] ?: numStr(l.optDouble("qty_ordered", 0.0)),
+                                    rateVal = editRate[id] ?: rupeeTextFromPaise(l.optInt("unit_cost_paise")),
+                                    onQty = { editQty[id] = it },
+                                    onRate = { editRate[id] = it },
+                                    onToggleRemove = {
+                                        if (editRemoved.contains(id)) editRemoved.remove(id) else editRemoved.add(id)
+                                    }
+                                )
+                            } else {
+                                LineRow(
+                                    l = l,
+                                    receiving = receiving,
+                                    recvVal = recvQty[id] ?: numStr(l.optDouble("qty_ordered", 0.0)),
+                                    rateVal = recvRate[id] ?: rupeeTextFromPaise(l.optInt("unit_cost_paise")),
+                                    onRecv = { recvQty[id] = it },
+                                    onRate = { recvRate[id] = it }
+                                )
+                            }
                             HorizontalDivider(color = Sand)
                         }
+                        item { PurchaseEventTrail(events) }
                         item { PaymentTrail(me, card, s.id) { load() } }
                     }
                     if (caps.contains("sauda.place") || caps.contains("sauda.receive")) Surface(shadowElevation = 8.dp, color = Color.White) {
                         Column(Modifier.padding(16.dp)) {
-                            if (status == "REQUESTED" && caps.contains("sauda.place")) Button(
-                                onClick = {
-                                    if (busy) return@Button; busy = true; actionError = ""
-                                    scope.launch {
-                                        val r = Api.post("mark-ordered", JSONObject().put("order_id", s.id))
-                                        busy = false
-                                        if (r.optBoolean("ok")) load() else actionError = r.optString("error")
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Maroon),
-                                modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(10.dp)
-                            ) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(8.dp)); Text("Vendor order placed") }
-                            else if (!receiving && status == "ORDERED" && caps.contains("sauda.receive")) Button(
-                                onClick = {
-                                    receiving = true
-                                    actionError = ""
-                                    goodsImage = ""; billImage = ""
-                                    lines.forEach {
-                                        recvQty[it.optInt("id")] = numStr(it.optDouble("qty_ordered", 0.0))
-                                        recvRate[it.optInt("id")] = rupeeTextFromPaise(it.optInt("unit_cost_paise"))
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Maroon),
-                                modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(10.dp)
-                            ) { Icon(Icons.Filled.Inventory2, null); Spacer(Modifier.width(8.dp)); Text("Receive goods") }
-                            else if (receiving) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    PhotoCaptureButton("Goods photo", goodsImage.isNotEmpty(), Modifier.weight(1f)) { goodsImage = it }
-                                    PhotoCaptureButton("Bill photo", billImage.isNotEmpty(), Modifier.weight(1f)) { billImage = it }
-                                }
-                                Spacer(Modifier.height(10.dp))
+                            if (editingItems) {
                                 if (actionError.isNotEmpty()) {
                                     Text("⚠ $actionError", color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
                                 }
                                 Row {
-                                    OutlinedButton(onClick = { receiving = false }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Cancel") }
+                                    OutlinedButton(onClick = {
+                                        editingItems = false; actionError = ""; editRemoved.clear(); editQty.clear(); editRate.clear()
+                                    }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Cancel") }
                                     Spacer(Modifier.width(12.dp))
                                     Button(
+                                        onClick = {
+                                            if (busy) return@Button
+                                            val kept = lines.filter { !editRemoved.contains(it.optInt("id")) }
+                                            if (kept.isEmpty()) {
+                                                actionError = "Keep at least one item on this card."
+                                                return@Button
+                                            }
+                                            val bad = kept.firstOrNull { l -> (editQty[l.optInt("id")]?.toDoubleOrNull() ?: l.optDouble("qty_ordered", 0.0)) <= 0.0 }
+                                            if (bad != null) {
+                                                actionError = "Enter quantity for every item."
+                                                return@Button
+                                            }
+                                            busy = true; actionError = ""
+                                            scope.launch {
+                                                val arr = JSONArray()
+                                                kept.forEach { l ->
+                                                    val id = l.optInt("id")
+                                                    arr.put(JSONObject()
+                                                        .put("line_id", id)
+                                                        .put("item_code", l.optString("item_code"))
+                                                        .put("item_label", l.optString("item_label"))
+                                                        .put("qty_ordered", editQty[id] ?: numStr(l.optDouble("qty_ordered", 0.0)))
+                                                        .put("uom", l.optString("uom"))
+                                                        .put("unit_cost_paise", paiseFromRupeeText(editRate[id] ?: rupeeTextFromPaise(l.optInt("unit_cost_paise"))))
+                                                        .put("flag", l.optString("flag")))
+                                                }
+                                                val r = Api.post("edit-lines", JSONObject().put("order_id", s.id).put("lines", arr))
+                                                busy = false
+                                                if (r.optBoolean("ok")) {
+                                                    editingItems = false; editRemoved.clear(); editQty.clear(); editRate.clear(); load()
+                                                } else actionError = r.optString("error")
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                                        modifier = Modifier.weight(1.4f).height(50.dp), shape = RoundedCornerShape(10.dp)
+                                    ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                                        else { Icon(Icons.Filled.Save, null); Spacer(Modifier.width(8.dp)); Text("Save edit") } }
+                                }
+                            } else {
+                                if (canEditItems && !receiving) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            actionError = ""; editRemoved.clear(); editQty.clear(); editRate.clear()
+                                            lines.forEach {
+                                                val id = it.optInt("id")
+                                                editQty[id] = numStr(it.optDouble("qty_ordered", 0.0))
+                                                editRate[id] = rupeeTextFromPaise(it.optInt("unit_cost_paise"))
+                                            }
+                                            editingItems = true
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) { Icon(Icons.Filled.Edit, null, tint = Maroon); Spacer(Modifier.width(8.dp)); Text("Edit items", color = Maroon, fontWeight = FontWeight.SemiBold) }
+                                    Spacer(Modifier.height(10.dp))
+                                }
+                                if (status == "REQUESTED" && caps.contains("sauda.place")) Button(
                                     onClick = {
-                                        if (busy) return@Button
-                                        if (goodsImage.isEmpty() || billImage.isEmpty()) {
-                                            actionError = "Upload goods photo and bill photo before saving proof."
-                                            return@Button
-                                        }
-                                        val incomplete = lines.firstOrNull { l ->
-                                            val id = l.optInt("id")
-                                            (recvQty[id]?.toDoubleOrNull() ?: 0.0) <= 0.0 ||
-                                                paiseFromRupeeText(recvRate[id] ?: "") <= 0
-                                        }
-                                        if (incomplete != null) {
-                                            actionError = "Enter received quantity and bill rate for every item."
-                                            return@Button
-                                        }
-                                        busy = true; actionError = ""
+                                        if (busy) return@Button; busy = true; actionError = ""
                                         scope.launch {
-                                            val arr = JSONArray()
-                                            lines.forEach { l -> val id = l.optInt("id")
-                                                arr.put(JSONObject().put("line_id", id)
-                                                    .put("qty_received", (recvQty[id] ?: "").ifEmpty { "0" })
-                                                    .put("unit_cost_paise", paiseFromRupeeText(recvRate[id] ?: "0"))
-                                                    .put("receive_state", "ok")) }
-                                            val r = Api.post("receive", JSONObject()
-                                                .put("order_id", s.id)
-                                                .put("lines", arr)
-                                                .put("goods_image", goodsImage)
-                                                .put("bill_image", billImage))
+                                            val r = Api.post("mark-ordered", JSONObject().put("order_id", s.id))
                                             busy = false
-                                            if (r.optBoolean("ok")) { receiving = false; load() } else actionError = r.optString("error")
+                                            if (r.optBoolean("ok")) load() else actionError = r.optString("error")
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = GoodG),
-                                    modifier = Modifier.weight(1.4f).height(50.dp), shape = RoundedCornerShape(10.dp)
-                                    ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                                        else { Icon(Icons.Filled.Check, null); Spacer(Modifier.width(8.dp)); Text("Save proof") } }
+                                    colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                                    modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(10.dp)
+                                ) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(8.dp)); Text("Vendor order placed") }
+                                else if (!receiving && status == "ORDERED" && caps.contains("sauda.receive")) Button(
+                                    onClick = {
+                                        receiving = true
+                                        actionError = ""
+                                        goodsImage = ""; billImage = ""
+                                        lines.forEach {
+                                            recvQty[it.optInt("id")] = numStr(it.optDouble("qty_ordered", 0.0))
+                                            recvRate[it.optInt("id")] = rupeeTextFromPaise(it.optInt("unit_cost_paise"))
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                                    modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(10.dp)
+                                ) { Icon(Icons.Filled.Inventory2, null); Spacer(Modifier.width(8.dp)); Text("Receive goods") }
+                                else if (receiving) {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        PhotoCaptureButton("Goods photo", goodsImage.isNotEmpty(), Modifier.weight(1f)) { goodsImage = it }
+                                        PhotoCaptureButton("Bill photo", billImage.isNotEmpty(), Modifier.weight(1f)) { billImage = it }
+                                    }
+                                    Spacer(Modifier.height(10.dp))
+                                    if (actionError.isNotEmpty()) {
+                                        Text("⚠ $actionError", color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                                    }
+                                    Row {
+                                        OutlinedButton(onClick = { receiving = false }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Cancel") }
+                                        Spacer(Modifier.width(12.dp))
+                                        Button(
+                                        onClick = {
+                                            if (busy) return@Button
+                                            if (goodsImage.isEmpty() || billImage.isEmpty()) {
+                                                actionError = "Upload goods photo and bill photo before saving proof."
+                                                return@Button
+                                            }
+                                            val incomplete = lines.firstOrNull { l ->
+                                                val id = l.optInt("id")
+                                                (recvQty[id]?.toDoubleOrNull() ?: 0.0) <= 0.0 ||
+                                                    paiseFromRupeeText(recvRate[id] ?: "") <= 0
+                                            }
+                                            if (incomplete != null) {
+                                                actionError = "Enter received quantity and bill rate for every item."
+                                                return@Button
+                                            }
+                                            busy = true; actionError = ""
+                                            scope.launch {
+                                                val arr = JSONArray()
+                                                lines.forEach { l -> val id = l.optInt("id")
+                                                    arr.put(JSONObject().put("line_id", id)
+                                                        .put("qty_received", (recvQty[id] ?: "").ifEmpty { "0" })
+                                                        .put("unit_cost_paise", paiseFromRupeeText(recvRate[id] ?: "0"))
+                                                        .put("receive_state", "ok")) }
+                                                val r = Api.post("receive", JSONObject()
+                                                    .put("order_id", s.id)
+                                                    .put("lines", arr)
+                                                    .put("goods_image", goodsImage)
+                                                    .put("bill_image", billImage))
+                                                busy = false
+                                                if (r.optBoolean("ok")) { receiving = false; load() } else actionError = r.optString("error")
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = GoodG),
+                                        modifier = Modifier.weight(1.4f).height(50.dp), shape = RoundedCornerShape(10.dp)
+                                        ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                                            else { Icon(Icons.Filled.Check, null); Spacer(Modifier.width(8.dp)); Text("Save proof") } }
+                                    }
                                 }
-                            }
-                            else if (status == "RECEIVED") Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.CheckCircle, null, tint = GoodG)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Received by ${card?.optString("received_by") ?: ""}", color = GoodG, fontWeight = FontWeight.Medium)
+                                else if (status == "RECEIVED") Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Filled.CheckCircle, null, tint = GoodG)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Received by ${card?.optString("received_by") ?: ""}", color = GoodG, fontWeight = FontWeight.Medium)
+                                }
                             }
                         }
                     }
@@ -839,6 +961,65 @@ fun LineRow(l: JSONObject, receiving: Boolean, recvVal: String, rateVal: String,
             Column(horizontalAlignment = Alignment.End) {
                 Text(rupee(l.optInt("line_amount_paise")), color = Ink, fontSize = 14.sp)
                 if (qr != null && qr != JSONObject.NULL) Text("✓ ${numStr(l.optDouble("qty_received", 0.0))}", color = GoodG, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun EditableOrderLineRow(l: JSONObject, removed: Boolean, qtyVal: String, rateVal: String,
+                         onQty: (String) -> Unit, onRate: (String) -> Unit, onToggleRemove: () -> Unit) {
+    val uom = l.optString("uom").ifEmpty { "u" }
+    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(l.optString("item_label"), fontWeight = FontWeight.Medium, color = if (removed) Muted else Ink,
+                fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (removed) "will be removed from this card" else "edit ordered qty and expected rate",
+                color = if (removed) WarnA else Muted, fontSize = 11.sp)
+        }
+        if (!removed) {
+            OutlinedTextField(
+                value = qtyVal, onValueChange = { onQty(it.replace(Regex("[^0-9.]"), "")) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.width(82.dp), label = { Text("qty", fontSize = 10.sp) })
+            Spacer(Modifier.width(6.dp))
+            OutlinedTextField(
+                value = rateVal, onValueChange = { onRate(it.replace(Regex("[^0-9.]"), "")) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.width(86.dp), label = { Text("₹/$uom", fontSize = 10.sp) })
+        }
+        IconButton(onClick = onToggleRemove) {
+            Icon(if (removed) Icons.Filled.Restore else Icons.Filled.Close, if (removed) "restore" else "remove",
+                tint = if (removed) GoodG else WarnA)
+        }
+    }
+}
+
+@Composable
+fun PurchaseEventTrail(events: List<JSONObject>) {
+    if (events.isEmpty()) return
+    Surface(shape = RoundedCornerShape(12.dp), color = Sand, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Text("Purchase trail", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Spacer(Modifier.height(6.dp))
+            events.take(8).forEach { ev ->
+                val label = when (ev.optString("event_type")) {
+                    "edit-lines" -> "Items edited"
+                    "mark-ordered" -> "Vendor order placed"
+                    "receive" -> "Received with proof"
+                    "payment-request" -> "Payment requested"
+                    "paid" -> "Marked paid"
+                    "place" -> "Order card created"
+                    "demand" -> "Demand routed"
+                    else -> ev.optString("event_type")
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.History, null, tint = Maroon, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(label, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text(listOf(ev.optString("actor_name"), ev.optString("created_at").take(16)).filter { it.isNotEmpty() }.joinToString(" · "),
+                        color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
@@ -920,6 +1101,180 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
                     modifier = Modifier.fillMaxWidth().height(46.dp)
                 ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text(if (requestOnly) "Request payment" else "Save payment trail") }
             }
+        }
+    }
+}
+
+private val ChickenCuts = listOf("boneless", "shawarma", "kebab", "tandoori", "grill", "tangdi", "lollipop")
+
+@Composable
+fun ChickenScreen(s: Screen.Chicken, back: () -> Unit, setDate: (String) -> Unit) {
+    var queue by remember { mutableStateOf<JSONObject?>(null) }
+    var detailRows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var error by remember { mutableStateOf("") }
+    var saveMsg by remember { mutableStateOf("") }
+    var dailyRate by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val yieldedKg = remember { mutableStateMapOf<String, String>() }
+    val deliveredKg = remember { mutableStateMapOf<String, String>() }
+    val scope = rememberCoroutineScope()
+    fun load() {
+        queue = null; error = ""; saveMsg = ""
+        scope.launch {
+            val q = ChickenApi.get("action=price-backfill-queue&brand=HE")
+            val d = ChickenApi.get("action=day-detail&date=${s.date}&brand=HE")
+            if (q.optBoolean("success")) {
+                queue = q
+                detailRows = d.optJSONArray("rows")?.toObjList() ?: emptyList()
+            } else error = q.optString("error", "chicken spine unavailable")
+        }
+    }
+    LaunchedEffect(s.date) { load() }
+    val days = queue?.optJSONArray("days")?.toObjList() ?: emptyList()
+    val day = days.firstOrNull { it.optString("date") == s.date }
+    val lines = day?.optJSONArray("lines")?.toObjList() ?: ChickenCuts.map { JSONObject().put("business_date", s.date).put("cut", it) }
+    val detailByCut = detailRows.associateBy { it.optString("cut") }
+    LaunchedEffect(queue?.toString(), s.date) {
+        yieldedKg.clear(); deliveredKg.clear()
+        dailyRate = day?.optInt("daily_rate_paise")?.takeIf { it > 0 }?.let { rupeeTextFromPaise(it) } ?: ""
+        lines.forEach { ln ->
+            val cut = ln.optString("cut")
+            val yielded = ln.optDoubleOrNull("purchased_kg")
+            val delivered = ln.optDoubleOrNull("delivered_kg")
+            if (yielded != null && yielded > 0) yieldedKg[cut] = numStr(yielded)
+            if (delivered != null && delivered > 0) deliveredKg[cut] = numStr(delivered)
+        }
+    }
+    Scaffold(topBar = { HnBar("MN Broilers", subtitle = "HE chicken spine · ${prettyDate(s.date)}", onBack = back) }) { p ->
+        Column(Modifier.padding(p).fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                IconButton(onClick = { setDate(stepDate(s.date, -1)) }) { Icon(Icons.Filled.ChevronLeft, "prev", tint = Maroon) }
+                Text(prettyDate(s.date), fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp,
+                    modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                IconButton(onClick = { setDate(stepDate(s.date, 1)) }) { Icon(Icons.Filled.ChevronRight, "next", tint = Maroon) }
+            }
+            when {
+                error.isNotEmpty() -> CenterMsg("⚠ $error") { load() }
+                queue == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = Maroon) }
+                else -> {
+                    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 92.dp)) {
+                        item {
+                            Surface(shape = RoundedCornerShape(12.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(14.dp)) {
+                                    Text("Daily chicken bill", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Text("Enter MN's one ₹/kg rate, then delivered kg by cut. Backend computes cost and effective yielded rate.",
+                                        color = Muted, fontSize = 11.sp)
+                                    Spacer(Modifier.height(10.dp))
+                                    OutlinedTextField(
+                                        value = dailyRate,
+                                        onValueChange = { dailyRate = it.replace(Regex("[^0-9.]"), "") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        label = { Text("MN daily rate ₹/kg") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                        }
+                        items(lines) { line ->
+                            val cut = line.optString("cut")
+                            ChickenCutRow(
+                                line = line,
+                                detail = detailByCut[cut],
+                                yielded = yieldedKg[cut] ?: "",
+                                delivered = deliveredKg[cut] ?: "",
+                                onYielded = { yieldedKg[cut] = it },
+                                onDelivered = { deliveredKg[cut] = it }
+                            )
+                            HorizontalDivider(color = Sand)
+                        }
+                    }
+                    Surface(shadowElevation = 8.dp, color = Color.White) {
+                        Column(Modifier.padding(16.dp)) {
+                            if (saveMsg.isNotEmpty()) Text(saveMsg, color = if (saveMsg.startsWith("Saved")) GoodG else WarnA,
+                                fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                            Button(
+                                onClick = {
+                                    if (busy) return@Button
+                                    val rate = paiseFromRupeeText(dailyRate)
+                                    if (rate <= 0) { saveMsg = "Enter MN daily rate."; return@Button }
+                                    val cuts = JSONArray()
+                                    lines.forEach { line ->
+                                        val cut = line.optString("cut")
+                                        val delivered = deliveredKg[cut]?.toDoubleOrNull() ?: 0.0
+                                        val yielded = yieldedKg[cut]?.toDoubleOrNull() ?: 0.0
+                                        if (delivered > 0.0) {
+                                            cuts.put(JSONObject().put("cut", cut).put("delivered_kg", delivered).put("yielded_kg", yielded))
+                                        }
+                                    }
+                                    if (cuts.length() == 0) { saveMsg = "Enter delivered kg for at least one cut."; return@Button }
+                                    busy = true; saveMsg = ""
+                                    scope.launch {
+                                        val r = ChickenApi.post("save-day-prices", JSONObject()
+                                            .put("date", s.date)
+                                            .put("daily_rate", dailyRate)
+                                            .put("cuts", cuts))
+                                        busy = false
+                                        if (r.optBoolean("success")) {
+                                            val results = r.optJSONArray("results")?.toObjList() ?: emptyList()
+                                            val ok = results.count { it.optBoolean("ok") }
+                                            val bad = results.firstOrNull { !it.optBoolean("ok") }
+                                            saveMsg = if (bad == null) "Saved $ok chicken cuts." else "Saved $ok; ${bad.optString("cut")} needs ${bad.optString("error")}."
+                                            load()
+                                        } else saveMsg = r.optString("error", "save failed")
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                                modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(10.dp)
+                            ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                                else { Icon(Icons.Filled.Save, null); Spacer(Modifier.width(8.dp)); Text("Save MN chicken entry") } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChickenCutRow(line: JSONObject, detail: JSONObject?, yielded: String, delivered: String,
+                  onYielded: (String) -> Unit, onDelivered: (String) -> Unit) {
+    val cut = line.optString("cut")
+    val cost = line.optInt("cost_paise")
+    val effective = line.optInt("price_per_kg_paise")
+    val recipeG = detail?.optInt("recipe_consumed_g") ?: 0
+    val variance = detail?.optDoubleOrNull("variance_pct")
+    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(chickenCutLabel(cut), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                val sub = mutableListOf<String>()
+                if (cost > 0) sub.add("cost ${rupee(cost)}")
+                if (effective > 0) sub.add("effective ${rupee(effective)}/kg")
+                if (recipeG > 0) sub.add("recipe ${numStr(recipeG / 1000.0)} kg")
+                if (variance != null) sub.add("${if (variance > 0) "+" else ""}${numStr(variance)}% variance")
+                Text(sub.ifEmpty { listOf("waiting for MN bill entry") }.joinToString(" · "),
+                    color = Muted, fontSize = 11.sp, maxLines = 2)
+            }
+            OutlinedTextField(
+                value = yielded,
+                onValueChange = { onYielded(it.replace(Regex("[^0-9.]"), "")) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.width(82.dp),
+                label = { Text("yield", fontSize = 10.sp) }
+            )
+            Spacer(Modifier.width(6.dp))
+            OutlinedTextField(
+                value = delivered,
+                onValueChange = { onDelivered(it.replace(Regex("[^0-9.]"), "")) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.width(82.dp),
+                label = { Text("MN kg", fontSize = 10.sp) }
+            )
         }
     }
 }
@@ -1328,6 +1683,15 @@ fun CenterMsg(msg: String, onRetry: (() -> Unit)?) {
 fun numStr(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else d.toString()
 fun JSONArray.toStrList(): List<String> = (0 until length()).map { optString(it) }
 fun JSONArray.toObjList(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
+fun JSONObject.optDoubleOrNull(key: String): Double? {
+    val v = opt(key)
+    if (v == null || v == JSONObject.NULL) return null
+    val d = when (v) {
+        is Number -> v.toDouble()
+        else -> v.toString().toDoubleOrNull()
+    } ?: return null
+    return if (d.isNaN() || d.isInfinite()) null else d
+}
 fun JSONObject?.catalogItems(): List<JSONObject> {
     if (this == null) return emptyList()
     val out = mutableListOf<JSONObject>()
@@ -1409,7 +1773,8 @@ fun categoryShort(cat: String): String {
     return when {
         c.contains("dairy") -> "Dairy"
         c.contains("fresh") || c.contains("vegetable") || c.contains("veg") -> "Fresh"
-        c.contains("meat") || c.contains("chicken") -> "Meat"
+        c.contains("chicken") -> "Chicken"
+        c.contains("meat") -> "Meat"
         c.contains("pack") || c.contains("paper") -> "Packaging"
         c.contains("water") || c.contains("beverage") -> "Water"
         c.contains("pantry") || c.contains("dry") || c.contains("spice") -> "Pantry"
@@ -1419,6 +1784,7 @@ fun categoryShort(cat: String): String {
 }
 fun categoryColor(cat: String): Color = when (cat) {
     "Fresh" -> Color(0xFFEAF5EA)
+    "Chicken" -> Color(0xFFFDE5E5)
     "Meat" -> Color(0xFFFDECEC)
     "Dairy" -> Color(0xFFEAF1FF)
     "Packaging" -> Color(0xFFFFF4DB)
@@ -1428,6 +1794,16 @@ fun categoryColor(cat: String): Color = when (cat) {
 }
 fun paiseFromRupeeText(v: String): Int = Math.max(0, Math.round(((v.replace(Regex("[^0-9.]"), "").toDoubleOrNull() ?: 0.0) * 100)).toInt())
 fun rupeeTextFromPaise(paise: Int): String = if (paise <= 0) "" else (paise / 100.0).let { if (it == it.toLong().toDouble()) it.toLong().toString() else String.format(Locale.US, "%.2f", it) }
+fun chickenCutLabel(cut: String): String = when (cut) {
+    "boneless" -> "Boneless"
+    "shawarma" -> "Shawarma"
+    "kebab" -> "Kebab"
+    "tandoori" -> "Tandoori"
+    "grill" -> "Grill"
+    "tangdi" -> "Tangdi"
+    "lollipop" -> "Lollipop / wings"
+    else -> cut.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+}
 
 fun newImageUri(ctx: Context, prefix: String): Uri {
     val file = File(ctx.externalCacheDir, "${prefix}-${System.currentTimeMillis()}.jpg")
