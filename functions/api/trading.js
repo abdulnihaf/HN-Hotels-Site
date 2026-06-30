@@ -5036,6 +5036,27 @@ async function getTodayConsolidated(db, env) {
     ok: false,
     error: String(e?.message || e).slice(0, 200),
   }));
+  const scout_today = await getScoutToday(db, {
+    searchParams: new URLSearchParams({ date: today }),
+  }).catch((e) => ({
+    ok: false,
+    has_scout: false,
+    date: today,
+    error: String(e?.message || e).slice(0, 200),
+  }));
+  const primary_outcome = scout_today?.has_scout ? {
+    kind: 'paper_scout',
+    headline: scout_today.headline,
+    edge_state: scout_today.edge_state,
+    candidates: scout_today.candidates || [],
+    outcome: scout_today.outcome || null,
+    broker_order_surface: 'none',
+  } : {
+    kind: 'verdict',
+    decision: verdict?.decision || null,
+    recommended_symbol: verdict?.recommended_symbol || null,
+    broker_order_surface: execution_gate?.broker_order_surface || 'blocked',
+  };
 
   const response = {
     ok: true,
@@ -5044,10 +5065,13 @@ async function getTodayConsolidated(db, env) {
     phase: phaseLabel,
     owner_truth: execution_gate?.owner_truth || 'Today: no broker order.',
     execution_gate,
+    scout: scout_today,
+    scout_today,
+    primary_outcome,
     copy_version: {
       morning_compose_ist: '09:40',
-      owner_primary_outcome: execution_gate?.owner_truth || null,
-      note: 'Legacy readiness and pool cards are context; broker orders only come from picks_json through execution_gate.',
+      owner_primary_outcome: primary_outcome?.headline || execution_gate?.owner_truth || null,
+      note: 'Legacy readiness and pool cards are context; paper scout is today’s learning outcome when present; broker orders only come from picks_json through execution_gate.',
     },
     pre_market_integrity,
     live_integrity,
