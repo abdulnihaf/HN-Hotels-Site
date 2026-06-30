@@ -388,6 +388,31 @@ not to act. Responsibility is sealed onto the trail, not argued from memory.
 This is COA exact: don't chase what's lost — close the space so the wrong move can't happen; and where it
 still happens, the trail names who let it. See the diagram drawn 2026-07-01.
 
+## 16. THE AGENT SELF-CONFIGURES BY ASKING THE RIGHT PEOPLE — Nihaf need not decide *(2026-07-01, Nihaf — doctrine + relief)*
+
+**Nihaf does NOT have to know or decide the operational details** (who is responsible for what, order
+cutoffs, which items are daily-essential, even whether a flow is fragmented). He holds the **objective**;
+the **operators** hold the operational ground truth. So the Nihaf Agent **bootstraps its own config by
+ASKING the right people**, never by making Nihaf decide.
+
+- **Bootstrap step (build into every agent):** the agent asks each staff person what they are
+  responsible for — e.g. asks Zoya *"Do you enter the orders? Do you enter prices too?"*, asks Bashir
+  likewise — and configures the routing from their answers. Roles are **populated by asking**, never
+  assumed or hard-coded. Re-ask when reality shifts.
+- **This sharpens "derive-don't-ask-Nihaf":** when a fact CANNOT be derived from the system/code and is
+  *operational* ground truth, **ASK THE STAFF (the right person), NOT Nihaf.** Only true owner-policy
+  (money threshold, outward sends, brand strategy) goes to Nihaf.
+- **Even with fragmented / incomplete flows, and Nihaf not knowing the answers, the agent reaches the
+  right configuration AND the right data by asking the right people.** This is the relief — his words,
+  2026-07-01: *"this could have been very easily solved by asking them… why should I decide? No, I don't
+  have to decide anything."* The decision burden leaves him entirely.
+
+**Known now (from Nihaf, 2026-07-01):** Zoya does MOST order entry **and** enters chicken price. So do
+NOT hard-split Zoya=entry / Bashir=price — the agent confirms each person's responsibilities by asking
+at bootstrap and routes a gap to whoever owns that step. The earlier "open questions for Nihaf" in
+`docs/NIHAF-AGENT-SAUDA-BUILD-PROMPT.md` are re-routed: the operational ones go to the STAFF (via the
+bootstrap ask), only owner-policy stays with Nihaf.
+
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
 witness is Nihaf. A wrong line in a spine is worse than no spine — correct it here first.*
