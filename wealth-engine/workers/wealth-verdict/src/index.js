@@ -1169,13 +1169,23 @@ const RANKER_GATE_DEFAULT = {
 };
 async function loadRankerConfig(db) {
   const row = await db.prepare(
-    `SELECT version, target, gate_json, model_json FROM ranker_configs WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`
+    `SELECT version, target, gate_json, model_json, odds_json FROM ranker_configs WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`
   ).first().catch(() => null);
   let gate = { ...RANKER_GATE_DEFAULT };
   if (row?.gate_json) { try { gate = { ...gate, ...JSON.parse(row.gate_json) }; } catch {} }
-  let model = null;
+  let model = null, odds = null;
   if (row?.model_json) { try { model = JSON.parse(row.model_json); } catch {} }
-  return { version: row?.version || 'preopen_default', target: row?.target || 'to_high_pct', gate, model };
+  if (row?.odds_json) { try { odds = JSON.parse(row.odds_json); } catch {} }
+  return { version: row?.version || 'preopen_default', target: row?.target || 'to_high_pct', gate, model, odds };
+}
+
+// Plain-English honest odds line for the best-shot card. Never fabricated — these are
+// the walk-forward base rates of the #1 pick (odds_json), stated as real probabilities.
+function oddsLine(odds) {
+  if (!odds || odds.p_hit_5pct == null) return 'Odds still calibrating — base rates not computed yet.';
+  return `A pick like this reaches +5% intraday about ${odds.p_hit_5pct}% of days (+2% about ${odds.p_hit_2pct}%), ` +
+         `ends green ${odds.win_rate_pct}% of days, avg intraday high +${odds.avg_to_high_pct}%. ` +
+         `Net after cost still ~${odds.avg_net_1430_pct}%/day — a real shot, not a sure thing.`;
 }
 
 // ── FEED LIVENESS GATE (added 2026-07-01 after intraday_bars was silently dead
@@ -1918,18 +1928,28 @@ async function runGapEngine(env, db, today, cfg, carryover) {
   let decision, picksJson = [], headline;
   const sizedPlan = top.length ? sizePicks(top, cfg, deployable, totalCap, maxRiskPct) : [];
   const machinePlan = buildMachineExecutionPlan(sizedPlan, cfg);
+  // BEST-SHOT PRODUCT (Track A): the daily deliverable is ALWAYS the single best
+  // causally-justified shot — never a defeatist "OBSERVE/sit-out". It is the top
+  // loss-gate survivor (machine plan #1, else top survivor). The broker decision is
+  // SEPARATE: it stays OBSERVE until the execution gate passes — but the owner always
+  // gets a best shot + its HONEST odds, not an empty screen.
+  const bestShot = machinePlan[0] || scan.candidates[0] || null;
   let watch = machinePlan;
   if (executionAuthorized && machinePlan.length) {
     picksJson = sizedPlan;
     decision = 'TRADE';
     headline = `${picksJson.map(p => p.symbol).join(' + ')} — gap-up ≥${cfg.gap_min_pct}%, hold to ${cfg.exit_time_ist}, wide ${cfg.stop_pct}% stop`;
-  } else if (machinePlan.length) {
+  } else if (bestShot) {
     decision = 'OBSERVE';
-    headline = `OBSERVE — live machine plan: ${machinePlan.map(p => p.symbol).join(' + ')} (execution staged)`;
+    const o = ranker.odds;
+    headline = `Today's best shot: ${bestShot.symbol}` +
+      (bestShot.gap_pct != null ? ` (gap ${bestShot.gap_pct}%${bestShot.drive_pct != null ? `, drive ${bestShot.drive_pct}%` : ''})` : '') +
+      (o && o.p_hit_5pct != null ? ` · ~${o.p_hit_5pct}% shot at +5% · watching, no real order (no proven edge yet)` : ` · watching, no real order (no proven edge yet)`);
+    headline = headline.slice(0, 200);
+    if (!machinePlan.length) watch = scan.candidates.slice(0, 6).map(c => ({ symbol: c.symbol, gap_pct: c.gap_pct, turnover_cr: c.turnover_cr, catalyst: !!c.catalyst }));
   } else {
     decision = 'OBSERVE';
-    watch = scan.candidates.slice(0, 6).map(c => ({ symbol: c.symbol, gap_pct: c.gap_pct, turnover_cr: c.turnover_cr, catalyst: !!c.catalyst }));
-    headline = `OBSERVE — ${scan.gated} gappers, none cleared liquidity/sector/execution filters`;
+    headline = `No clean setup today — every gapper was illiquid or a circuit-trap risk; the best move is to not force one.`;
   }
 
   const narr = await narrateGap(env, today, cfg, decision, picksJson, scan, watch);
@@ -1959,6 +1979,15 @@ async function runGapEngine(env, db, today, cfg, carryover) {
       : 'Loss-avoidance gate live + walk-forward-proven (circuit traps 29→0). Full upside ranker armed but opening bars were unavailable at 09:40 (Kite/bars) → ranked on preopen structure this run.',
     no_loser_gate: scan.no_loser_gate || null,
     feed_health: feedHealth ? { all_critical_live: feedHealth.all_critical_live, dead: feedHealth.dead, dead_critical: feedHealth.dead_critical } : null,
+    best_shot: bestShot ? {
+      symbol: bestShot.symbol, gap_pct: bestShot.gap_pct ?? null, drive_pct: bestShot.drive_pct ?? null,
+      entry_paise: bestShot.entry_estimate_paise || bestShot.open_paise || null,
+      stop_paise: bestShot.stop_paise ?? null, target_paise: bestShot.target_paise ?? null,
+      expected_r: bestShot.rr_ratio ?? null, turnover_cr: bestShot.turnover_cr ?? null,
+      broker_ready: !!(executionAuthorized && picksJson.length),
+    } : null,
+    honest_odds: ranker.odds || null,
+    honest_odds_line: oddsLine(ranker.odds),
     ranked_candidates: (scan.candidates || []).slice(0, 6).map((p, i) => ({
       rank: i + 1, symbol: p.symbol, gap_pct: p.gap_pct, turnover_cr: p.turnover_cr,
       upside_score: (p.upside_score != null && p.upside_score > -900) ? +p.upside_score.toFixed(3) : null,

@@ -5088,15 +5088,20 @@ async function getTodayConsolidated(db, env) {
   // the bot picked, intel-only vs broker-ready, missed winners. Full detail via
   // ?action=winner_intelligence. Additive, never an order surface.
   try {
-    const [wr, wt, ap] = await Promise.all([
+    const [wr, wt, ap, vd] = await Promise.all([
       db.prepare(`SELECT n_tradable_winners,n_circuit_traps,top_winners_json FROM winner_replay_daily WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(today).first().catch(() => null),
       db.prepare(`SELECT decision,selected_symbol,picks_broker_facing,execution_authority,why_this,no_loser_gate_json FROM daily_selection_witness WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(today).first().catch(() => null),
       db.prepare(`SELECT missed_winners_json,n_reason_later_wrong FROM missed_winner_autopsy WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(today).first().catch(() => null),
+      db.prepare(`SELECT headline, alternatives_json FROM daily_verdicts WHERE trade_date<=? AND verdict_type='morning' ORDER BY trade_date DESC, composed_at DESC LIMIT 1`).bind(today).first().catch(() => null),
     ]);
     const J = (s) => { try { return JSON.parse(s || 'null'); } catch { return null; } };
+    const vwi = J(vd?.alternatives_json)?.winner_intelligence || null;
     const tw = (J(wr?.top_winners_json) || []).sort((a, b) => (b.day_pct || -99) - (a.day_pct || -99));
     const missed = (J(ap?.missed_winners_json) || []).filter(m => m.reason_later_wrong).map(m => m.symbol);
     response.winner_intelligence = {
+      headline: vd?.headline || null,
+      best_shot: vwi?.best_shot || null,
+      honest_odds_line: vwi?.honest_odds_line || null,
       bot_pick: wt?.selected_symbol || null,
       decision: wt?.decision || null,
       intelligence_only: wt ? wt.picks_broker_facing === 0 : null,
@@ -6834,12 +6839,14 @@ async function getWinnerIntelligence(db, url) {
   const date = (url && url.searchParams.get('date')) || today;
   const days = Math.min(parseInt((url && url.searchParams.get('days')) || '30', 10) || 30, 120);
 
-  const [ranker, replay, autopsy, witness] = await Promise.all([
-    db.prepare(`SELECT version,target,backtest_json,trained_days,date_to,published_at FROM ranker_configs WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`).first().catch(() => null),
+  const [ranker, replay, autopsy, witness, verdict] = await Promise.all([
+    db.prepare(`SELECT version,target,backtest_json,trained_days,date_to,published_at,odds_json FROM ranker_configs WHERE is_active=1 ORDER BY published_at DESC LIMIT 1`).first().catch(() => null),
     db.prepare(`SELECT * FROM winner_replay_daily WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(date).first().catch(() => null),
     db.prepare(`SELECT * FROM missed_winner_autopsy WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(date).first().catch(() => null),
     db.prepare(`SELECT * FROM daily_selection_witness WHERE trade_date<=? ORDER BY trade_date DESC LIMIT 1`).bind(date).first().catch(() => null),
+    db.prepare(`SELECT headline, alternatives_json FROM daily_verdicts WHERE trade_date<=? AND verdict_type='morning' ORDER BY trade_date DESC, composed_at DESC LIMIT 1`).bind(date).first().catch(() => null),
   ]);
+  const verdictWI = sp(verdict?.alternatives_json)?.winner_intelligence || null;
 
   const bt = sp(ranker?.backtest_json) || {};
   const ts = bt.two_stage_causal || {}, og = bt.old_gap_ranker || {}, rnd = bt.random_gated || {};
@@ -6878,6 +6885,10 @@ async function getWinnerIntelligence(db, url) {
 
   return {
     ok: true, date: replay?.trade_date || date,
+    headline: verdict?.headline || null,
+    best_shot: verdictWI?.best_shot || null,
+    honest_odds: verdictWI?.honest_odds || sp(ranker?.odds_json) || null,
+    honest_odds_line: verdictWI?.honest_odds_line || null,
     bot_pick: witnessPick,
     today_winners_highest_first: topWinners,
     n_tradable_winners: replay?.n_tradable_winners ?? null,
