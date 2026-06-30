@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nihaf Agent — purchase preview</title>
+<style>
+  :root{ --bg:#f6f4f1; --card:#fff; --ink:#23201d; --soft:#7c736a; --line:#e7e1d9;
+         --accent:#2f6f4f; --accentink:#fff; --warn:#b9521a; --ok:#2f6f4f; --miss:#b9521a;
+         --chip:#efe9e1; --watch:#c08a3e; }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#191613; --card:#23201d; --ink:#f2ede7; --soft:#a89e93; --line:#34302b;
+           --accent:#4f9a72; --chip:#2c2823; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:480px;margin:0 auto;padding:16px 16px 56px}
+  h1{font-size:19px;font-weight:600;margin:0 0 2px}
+  .sub{font-size:12.5px;color:var(--soft);margin:0 0 14px}
+  .banner{background:rgba(192,138,62,.12);border:1px solid rgba(192,138,62,.4);color:var(--watch);
+          border-radius:10px;padding:8px 11px;font-size:12.5px;margin-bottom:16px}
+  .row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;
+        padding:7px 13px;font-size:13.5px;cursor:pointer;user-select:none}
+  .pill.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .lbl{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--soft);margin:14px 0 6px}
+  .verdict{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px 14px;margin-bottom:6px}
+  .verdict .big{font-size:15px;font-weight:600;margin-bottom:7px}
+  .chk{display:flex;align-items:center;gap:8px;font-size:14px;padding:3px 0}
+  .dot{width:16px;text-align:center}
+  .ok{color:var(--ok)} .miss{color:var(--miss);font-weight:600}
+  .msg{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0}
+  .to{font-size:11.5px;color:var(--soft);margin-bottom:6px}
+  .body{font-size:15px}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .b1{background:var(--accent);color:var(--accentink);border:none;border-radius:999px;padding:8px 15px;font-size:13px;font-weight:600}
+  .b2{background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;padding:8px 15px;font-size:13px}
+  .watch{border-left:3px solid var(--watch);padding-left:13px;margin:12px 0}
+  .silent{background:rgba(47,111,79,.10);border:1px solid rgba(47,111,79,.35);border-radius:13px;padding:13px 14px;color:var(--ok);font-size:14.5px}
+  details{margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:4px 14px}
+  summary{cursor:pointer;font-size:14px;font-weight:600;padding:10px 0}
+  .cfg{font-size:13.5px;color:var(--soft);margin:2px 0 10px}
+  .tg{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:1px solid var(--line)}
+  .tg .nm{font-size:14.5px;color:var(--ink)}
+  .tg .hard{font-size:11px;color:var(--soft)}
+  .sw{width:44px;height:26px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;flex:none}
+  .sw.on{background:var(--accent)}
+  .sw i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}
+  .sw.on i{left:21px}
+  textarea{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);
+           font:13px/1.45 inherit;padding:9px;margin:4px 0 12px;resize:vertical}
+  .hint{font-size:11.5px;color:var(--soft);margin-top:-8px;margin-bottom:12px}
+  .foot{font-size:12.5px;color:var(--soft);margin-top:22px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Nihaf Agent — purchases</h1>
+  <p class="sub">Preview on real Hamza & Nawabi data · change the agent below and watch it change</p>
+  <div class="banner">This is a preview. Nothing is sent to anyone. It shows exactly what the agent <em>would</em> do — so you can feel it and tell me what to change.</div>
+
+  <div class="lbl">Brand</div>
+  <div class="seg" id="brandSeg"></div>
+  <div class="lbl">Day (real entries)</div>
+  <div class="seg" id="dateSeg"></div>
+
+  <div class="lbl">The agent's read</div>
+  <div class="verdict" id="verdict"></div>
+
+  <div class="lbl">What it would send</div>
+  <div id="messages"></div>
+
+  <details id="cfgPanel">
+    <summary>⚙︎ Change the agent (live)</summary>
+    <p class="cfg">Flip what counts as an essential item, or rewrite the message. The preview above updates instantly.</p>
+    <div id="toggles"></div>
+    <div style="margin-top:14px">
+      <div class="lbl" style="margin-top:6px">Message to Zoya (entry)</div>
+      <textarea id="tZoya" rows="3"></textarea>
+      <div class="hint">use {group} and {brand} — they fill in automatically</div>
+      <div class="lbl">Message to Bashir (price)</div>
+      <textarea id="tBashir" rows="3"></textarea>
+      <div class="hint">use {brand} and {items}</div>
+    </div>
+  </details>
+
+  <p class="foot">Built for Nihaf · experience it, then tell Claude what felt right or wrong.</p>
+</div>
+
+<script>
+// ---- REAL DATA (snapshot from the live store, hn-ops) -------------------------
+var BRANDS = {HE:"Hamza Express", NCH:"Nawabi Chai House"};
+var DATES = [{iso:"2026-06-18",lab:"18 Jun"},{iso:"2026-06-26",lab:"26 Jun"},{iso:"2026-06-30",lab:"30 Jun"}];
+// each line: d=date iso, b=brand, n=name, c=category, q=qty, r=rate ₹, m=price mode
+var DATA = [
+ // 18 Jun — Hamza Express
+ {d:"2026-06-18",b:"HE",n:"Cooking oil",c:"Dry Goods & Pantry",q:6,r:0,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Sunflower oil",c:"Dry Goods & Pantry",q:4,r:173,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Maida",c:"Dry Goods & Pantry",q:10,r:40,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Baby cashew",c:"Dry Goods & Pantry",q:2,r:650,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Vinegar",c:"Dry Goods & Pantry",q:2,r:0,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Whole cashew",c:"Dry Goods & Pantry",q:250,r:0,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Cardamom",c:"Dry Goods & Pantry",q:300,r:0,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Amul cream",c:"Dairy & Fresh",q:1,r:220,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Shawarma chicken",c:"Meat & Poultry",q:6,r:0,m:"live"},
+ {d:"2026-06-18",b:"HE",n:"Tandoori chicken",c:"Meat & Poultry",q:10,r:0,m:"live"},
+ {d:"2026-06-18",b:"HE",n:"Boneless chicken",c:"Meat & Poultry",q:6,r:0,m:"live"},
+ {d:"2026-06-18",b:"HE",n:"Egg",c:"Proteins",q:3,r:210,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Coriander leaves",c:"Fresh & Dairy",q:3,r:0,m:"live"},
+ {d:"2026-06-18",b:"HE",n:"Potato",c:"Fresh & Dairy",q:5,r:0,m:"live"},
+ {d:"2026-06-18",b:"HE",n:"Cabbage",c:"Fresh & Dairy",q:4,r:0,m:"live"},
+ {d:"2026-06-18",b:"HE",n:"Tomato",c:"Fresh & Dairy",q:2,r:0,m:"live"},
+ {d:"2026-06-18",b:"HE",n:"Curd",c:"Dairy",q:4,r:58,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Milk",c:"Dairy",q:2,r:50,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"Charcoal",c:"Other",q:null,r:660,m:"fixed"},
+ {d:"2026-06-18",b:"HE",n:"LPG cylinder",c:"Other",q:1,r:3300,m:"fixed"},
+ // 18 Jun — Nawabi Chai House
+ {d:"2026-06-18",b:"NCH",n:"Silver pouch 5/7",c:"Packaging & Other",q:3,r:50,m:"fixed"},
+ {d:"2026-06-18",b:"NCH",n:"Disposable cups (small)",c:"Packaging & Other",q:5,r:35,m:"fixed"},
+ {d:"2026-06-18",b:"NCH",n:"Water (small)",c:"Beverages & Disposables",q:5,r:180,m:"fixed"},
+ {d:"2026-06-18",b:"NCH",n:"Coffee",c:"Pantry & Provisions",q:null,r:270,m:"fixed"},
+ {d:"2026-06-18",b:"NCH",n:"Butter",c:"Dairy & Fresh",q:6,r:0,m:"fixed"},
+ {d:"2026-06-18",b:"NCH",n:"Bun",c:"Bakery & Snacks",q:100,r:8,m:"fixed"},
+ {d:"2026-06-18",b:"NCH",n:"Lemon",c:"Produce",q:20,r:0,m:"live"},
+ {d:"2026-06-18",b:"NCH",n:"Milk (morning)",c:"Dairy",q:60,r:50,m:"fixed"},
+ {d:"2026-06-18",b:"NCH",n:"Milk (evening)",c:"Dairy",q:40,r:50,m:"fixed"},
+ // 26 Jun — Nawabi only (Hamza has nothing this day)
+ {d:"2026-06-26",b:"NCH",n:"Cutlets",c:"Bakery & Snacks",q:50,r:15,m:"fixed"},
+ {d:"2026-06-26",b:"NCH",n:"Buns",c:"Bakery & Snacks",q:160,r:8,m:"fixed"},
+ {d:"2026-06-26",b:"NCH",n:"Samosa",c:"Bakery & Snacks",q:15,r:10,m:"fixed"},
+ {d:"2026-06-26",b:"NCH",n:"Milk",c:"Dairy",q:100,r:50,m:"fixed"},
+ {d:"2026-06-26",b:"NCH",n:"Honey",c:"Pantry & Provisions",q:2,r:230,m:"fixed"},
+ {d:"2026-06-26",b:"NCH",n:"Lemon",c:"Produce",q:20,r:0,m:"live"},
+ {d:"2026-06-26",b:"NCH",n:"Aqua King water 500ml",c:"Water & Cold Drinks",q:5,r:140,m:"fixed"},
+ // 30 Jun — Hamza Express
+ {d:"2026-06-30",b:"HE",n:"Eggs",c:"Proteins",q:2,r:210,m:"fixed"},
+ {d:"2026-06-30",b:"HE",n:"Ruchi Gold oil",c:"Dry Goods & Pantry",q:1,r:128,m:"fixed"},
+ {d:"2026-06-30",b:"HE",n:"Amul cream",c:"Dairy & Fresh",q:1,r:220,m:"fixed"},
+ {d:"2026-06-30",b:"HE",n:"Maida",c:"Dry Goods & Pantry",q:10,r:40,m:"fixed"},
+ {d:"2026-06-30",b:"HE",n:"Roasted chana (fried)",c:"Dry Goods & Pantry",q:1,r:75,m:"fixed"},
+ {d:"2026-06-30",b:"HE",n:"Rumali roti",c:"Bakery & Snacks",q:50,r:10,m:"fixed"},
+ {d:"2026-06-30",b:"HE",n:"Tomato",c:"Fresh & Dairy",q:5,r:0,m:"live"},
+ {d:"2026-06-30",b:"HE",n:"Cucumber",c:"Fresh & Dairy",q:4,r:0,m:"live"},
+ {d:"2026-06-30",b:"HE",n:"Green chilli",c:"Fresh & Dairy",q:1,r:0,m:"live"},
+ {d:"2026-06-30",b:"HE",n:"Potato",c:"Fresh & Dairy",q:5,r:0,m:"live"},
+ {d:"2026-06-30",b:"HE",n:"Lemon",c:"Produce",q:30,r:0,m:"live"},
+ // 30 Jun — Nawabi Chai House
+ {d:"2026-06-30",b:"NCH",n:"Tea Powder - Liberty Premium",c:"Beverage Inputs",q:50,r:470,m:"fixed"},
+ {d:"2026-06-30",b:"NCH",n:"Buns",c:"Bakery & Snacks",q:120,r:8,m:"fixed"},
+ {d:"2026-06-30",b:"NCH",n:"Bisleri water 500ml",c:"Water & Cold Drinks",q:5,r:180,m:"fixed"},
+ {d:"2026-06-30",b:"NCH",n:"Samosa",c:"Bakery & Snacks",q:15,r:10,m:"fixed"},
+ {d:"2026-06-30",b:"NCH",n:"Cutlets",c:"Bakery & Snacks",q:20,r:15,m:"fixed"}
+];
+
+// ---- THE AGENT'S BRAIN (this is the editable config) --------------------------
+var CFG = {
+  groups: [
+    {id:"chicken", brand:"HE",  name:"Chicken", cats:["Meat & Poultry"], inc:[], on:true,  hard:true},
+    {id:"mutton",  brand:"HE",  name:"Mutton",  cats:[], inc:["mutton"],  on:false, hard:false},
+    {id:"milk",    brand:"NCH", name:"Milk",    cats:[], inc:["milk"],    on:true,  hard:true}
+  ],
+  msgZoya: "Asalamualaikum Zoya. {group} isn't entered for {brand} yet today — and it's a main item. Add it here, or tap 'not bought today' if it really wasn't.",
+  msgBashir: "Bashir — these items for {brand} are entered but have no price yet: {items}. Confirm yesterday's rates, or change them."
+};
+
+// ---- LOGIC --------------------------------------------------------------------
+var state = {brand:"HE", date:"2026-06-30"};
+
+function matches(line, g){
+  if(g.cats.indexOf(line.c) > -1) return true;
+  var nm = line.n.toLowerCase();
+  return g.inc.some(function(k){ return nm.indexOf(k) > -1; });
+}
+function compute(){
+  var lines = DATA.filter(function(x){ return x.b===state.brand && x.d===state.date; });
+  var groups = CFG.groups.filter(function(g){ return g.brand===state.brand && g.on; });
+  var checks = groups.map(function(g){ return {name:g.name, covered: lines.some(function(l){return matches(l,g);})}; });
+  var missing = checks.filter(function(c){ return !c.covered; });
+  var unpriced = lines.filter(function(l){ return l.m==="fixed" && (!l.r || l.r===0); });
+  return {lines:lines, checks:checks, missing:missing, unpriced:unpriced};
+}
+function fill(t,map){ return t.replace(/\{(\w+)\}/g, function(_,k){ return map[k]!==undefined?map[k]:("{"+k+"}"); }); }
+
+function render(){
+  // segments
+  seg("brandSeg", Object.keys(BRANDS).map(function(k){return {v:k,lab:BRANDS[k]};}), state.brand, function(v){state.brand=v;render();});
+  seg("dateSeg", DATES.map(function(d){return {v:d.iso,lab:d.lab};}), state.date, function(v){state.date=v;render();});
+
+  var r = compute();
+  var bn = BRANDS[state.brand];
+
+  // verdict
+  var v = '<div class="big">'+bn+', '+labFor(state.date)+' — '+r.lines.length+' items entered</div>';
+  if(r.checks.length===0){ v += '<div class="chk"><span class="dot">·</span> No essential items switched on for this brand.</div>'; }
+  r.checks.forEach(function(c){
+    v += '<div class="chk"><span class="dot '+(c.covered?'ok':'miss')+'">'+(c.covered?'✓':'✗')+'</span><span class="'+(c.covered?'':'miss')+'">'+c.name+(c.covered?' — entered':' — not entered')+'</span></div>';
+  });
+  if(r.unpriced.length){ v += '<div class="chk"><span class="dot">₹</span><span>'+r.unpriced.length+' item'+(r.unpriced.length>1?'s':'')+' entered with no price yet</span></div>'; }
+  document.getElementById("verdict").innerHTML = v;
+
+  // messages
+  var m = "";
+  r.missing.forEach(function(c){
+    m += msgCard("to Zoya · "+bn+" · 10:30 am",
+        fill(CFG.msgZoya, {group:c.name, brand:bn}),
+        ['Add '+c.name.toLowerCase(),'Not bought today']);
+  });
+  if(r.unpriced.length){
+    var items = r.unpriced.map(function(l){return l.n;}).slice(0,6).join(", ") + (r.unpriced.length>6?"…":"");
+    m += msgCard("to Bashir · "+bn+" · price", fill(CFG.msgBashir,{brand:bn, items:items}), ["Confirm yesterday's prices","Change"]);
+  }
+  if(r.missing.length){
+    var names = r.missing.map(function(c){return c.name;}).join(" and ");
+    m += '<div class="watch"><div class="to">to you · only if still unresolved · 9:40 pm</div><div class="body">'+names+' still not entered for '+bn+', '+labFor(state.date)+'. Zoya was asked twice, no reply. Everything else is complete — nothing for you to do unless you want to step in.</div></div>';
+  }
+  if(!r.missing.length && !r.unpriced.length){
+    m = '<div class="silent">Day looks complete — every essential is in and priced. The agent stays silent. No one is messaged.</div>';
+  }
+  document.getElementById("messages").innerHTML = m;
+
+  renderToggles();
+}
+
+function seg(id, items, cur, cb){
+  var el = document.getElementById(id); el.innerHTML="";
+  items.forEach(function(it){
+    var b=document.createElement("div"); b.className="pill"+(it.v===cur?" on":""); b.textContent=it.lab;
+    b.onclick=function(){cb(it.v);}; el.appendChild(b);
+  });
+}
+function msgCard(to, body, btns){
+  return '<div class="msg"><div class="to">'+to+'</div><div class="body">'+esc(body)+'</div><div class="btns">'+
+    '<button class="b1">'+esc(btns[0])+'</button><button class="b2">'+esc(btns[1])+'</button></div></div>';
+}
+function renderToggles(){
+  var el=document.getElementById("toggles"); el.innerHTML="";
+  CFG.groups.forEach(function(g){
+    var row=document.createElement("div"); row.className="tg";
+    row.innerHTML='<div><div class="nm">'+g.name+' <span style="color:var(--soft);font-size:12px">· '+BRANDS[g.brand]+'</span></div>'+
+      (g.hard?'<div class="hard">core item</div>':'<div class="hard">optional — flip on to watch it</div>')+'</div>';
+    var sw=document.createElement("div"); sw.className="sw"+(g.on?" on":""); sw.innerHTML="<i></i>";
+    sw.onclick=function(){ g.on=!g.on; render(); };
+    row.appendChild(sw); el.appendChild(row);
+  });
+}
+function labFor(iso){ var d=DATES.filter(function(x){return x.iso===iso;})[0]; return d?d.lab:iso; }
+function esc(s){ return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+
+document.getElementById("tZoya").value = CFG.msgZoya;
+document.getElementById("tBashir").value = CFG.msgBashir;
+document.getElementById("tZoya").addEventListener("input", function(e){ CFG.msgZoya=e.target.value; render(); });
+document.getElementById("tBashir").addEventListener("input", function(e){ CFG.msgBashir=e.target.value; render(); });
+
+render();
+</script>
+</body>
+</html>
