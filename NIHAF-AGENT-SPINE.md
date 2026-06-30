@@ -221,26 +221,67 @@ close_condition, escalation_ladder, mode }`. Everything below is shared.
 (Kimi / OpenAI / Gemini / Claude), priority order, and any monthly cost cap. Names only — keys go
 to Worker secrets / `.env.local`, never here.
 
-## 11. BUILD LOG / BLOCKERS *(2026-06-30)*
+## 11. BUILD LOG / STATUS *(2026-06-30 — DEPLOYED & VERIFIED LIVE)*
 
-- **L3 model router — BUILT (committed, NOT deployed).** `functions/api/_lib/ai-router.js`
-  (`selfTest()` = free auth-check of all 4 keys via each provider's models endpoint; `think()` =
-  tier chain + fallback + paise cost-cap + D1 `ai_spend_log`) and gated endpoint
-  `functions/api/ai-router.js` (`/api/ai-router?action=selftest|think&pin=0305`). ESM syntax-verified.
-- **SECURITY — found live, fixed in code, NOT deployed.** `pages_build_output_dir="."` was serving
-  every committed file publicly: `hnhotels.in/NIHAF-BRAIN.md`, `/CLAUDE.md`, `/docs/*.md` (incl.
-  `DARBAR-SECURITY-AUDIT.md`) all returned **200 with raw content** (constitution, endpoint map,
-  secret *names*, the security audit). Fix: `isInternalAsset()` gate at the TOP of
-  `functions/_middleware.js` → 404s `*.md/.sql/.toml/.sh/.lock` + config files on every host, before
-  routing; app surfaces untouched. Deploy-path-agnostic (runs at request time). **Once live, the
-  spine docs are safe on `main`** (markdown is 404'd to the public) — resolves §0's hold.
-- **DEPLOY BLOCKED — credentials.** This Linux worktree has NO GitHub/Cloudflare creds (`git push`
-  → "could not read Username"; no token in env). 3 commits sit local-only on
-  `claude/gallant-khayyam-4a411b`: `220f3af` spines · `5329de5` router · `5e2b588` security.
-  Deploy = Cloudflare Pages auto-build on push to `main`; the only missing piece is push access
-  (token on this box, OR a CF API token for `wrangler pages deploy`, OR push from a creds'd machine).
-- **NEXT, once deployable (security fix FIRST):** hit `/api/ai-router?action=selftest&pin=0305`
-  → per-provider `authenticated | bad_key | rate_limited_or_no_credit` = the real key verification.
+- **L3 model router — LIVE on production.** `functions/api/_lib/ai-router.js` + gated endpoint
+  `functions/api/ai-router.js` (`/api/ai-router?action=selftest|think&pin=0305`). Shipped to
+  `hn-hotels-site` via PR #499 (squash `15d60ea`), then a redeploy to bind `GEMINI_API_KEY`.
+- **Self-test PASSED 4/4** (token-free — lists each provider's models, spends nothing):
+  `anthropic` 296ms · `openai` 859ms · `moonshot`(Kimi) 300ms · `gemini` 100ms — all `authenticated`.
+  `GEMINI_API_KEY` was stale at first (400 invalid); replaced via `wrangler pages secret put`
+  + redeploy → green. Keys are present AND functionally valid — proven by a real auth call, not a guess.
+- **SECURITY — fixed & re-verified CLOSED.** `pages_build_output_dir="."` was serving every committed
+  file publicly: `hnhotels.in/NIHAF-BRAIN.md`, `/CLAUDE.md`, `/wrangler.toml`, `/docs/*.md` returned
+  **200 with raw content** (constitution, endpoint map, secret *names*). `isInternalAsset()` at the TOP
+  of `functions/_middleware.js` now 404s `*.md/.sql/.toml/.sh/.lock` + named config on every host;
+  app surfaces (.html/.js/.css/.json/img) untouched. Re-tested live post-deploy: those paths now
+  **404**, root + `manifest.json` still **200**. Spine markdown is now safe on `main`.
+- **Recovery note.** Built in RTX session `6d68c041` (worktree `gallant-khayyam-4a411b`), a box with
+  NO git/Cloudflare creds → could neither push nor deploy. The RTX control link dropped (the box
+  itself stayed up); the session was recovered to the Mac, rebased onto `main`, and deployed from the
+  creds'd machine. Full transcript + bundle archived.
+- **NEXT:** **L7 comms router** — extend `comms-core.js` (+ElevenLabs human TTS, +dry-run gate) so the
+  agent can chase up the WABA→SMS→voice ladder. Then loop engine + Agent Registry (L0/L5) and
+  heartbeat (L9). L3 (done) + L7 (next) are the two reusable routers — the spine that stands
+  independent of any chamber's trail.
+
+## 12. THE ROUTER INTELLIGENCE — exactly how `think()` decides (as executed, live)
+
+The router is L3's brain: ONE enforced choke point — `think(env, {...})` — for every LLM call in the
+platform. Nothing calls Anthropic / OpenAI / Kimi / Gemini directly, the same way `comms-core.js` is
+the only path to a message. That single door is *why* intelligence here is cheap, capped, logged, and
+swappable instead of scattered and uncontrolled. Its decision logic, in order:
+
+1. **Rules first, model last.** A caller reaches `think()` ONLY when deterministic rules can't decide.
+   The model is the exception-handler, never the default — most cases close with zero spend. (COA:
+   the agent is intelligence bounded by a closed space, not a chatbot.)
+2. **Tier = how hard the question is.** Three tiers map difficulty to cost:
+   `classify` (cheap, high-volume — "is this a real gap? which bucket?") · `summarize` (mid — condense
+   a trail) · `judge` (rare, expensive — genuinely hard reasoning). Each tier pins the cheapest-capable
+   model per provider (classify ≈ Haiku / Gemini-Flash / Kimi / GPT-4o-mini; judge ≈ Opus / GPT-4o / Kimi).
+3. **Priority chain + fallback — the immune system.** Each tier has an ordered provider list —
+   classify `anthropic→gemini→moonshot→openai`, summarize `anthropic→moonshot→gemini→openai`,
+   judge `anthropic→openai→moonshot`. It tries the first; on ANY failure (error / unconfigured key /
+   over-cap) it silently falls to the next brain. A dead provider, a bad key, or a rate-limit NEVER
+   stops the agent — it degrades to the next model. Brains are interchangeable by construction.
+4. **Cost cap enforced BEFORE spending (paise).** It estimates input tokens, computes the paise cost
+   for that provider×tier model (USD price table × ₹88/$), and if the estimate exceeds the cap
+   (default ₹5/call) it SKIPS that provider for a cheaper one. The cap is a *door*, not an after-the-fact
+   reading — a single call physically cannot blow the budget.
+5. **Output is a coordinate, not prose.** Pass a `schema` and the router forces "reply ONLY with valid
+   JSON of this shape," strips code fences, and parses it. The agent receives a typed object — COA's
+   "code, not free-text" applied to the model's mouth. Every case it emits is structured, never a sentence.
+6. **Every spend is logged (the trail is the intelligence).** Each successful call writes to D1
+   `ai_spend_log`: provider, model, tier, agent, tokens in/out, cost_paise, time. You can see which
+   agent spent what on which brain. Logging is wrapped so it can never break a call.
+7. **Total failure is a SIGNAL, not a crash.** If every provider in the chain fails, `think()` returns
+   `{ok:false, error:'all_providers_failed', attempts:[…]}` with the per-provider reason — which the
+   heartbeat (L9) treats as an owner-threshold event. "All brains down" is itself detected, never silent.
+8. **`selfTest()` proves, it doesn't guess.** It lists each provider's models (no tokens spent) to prove
+   the key is valid + reachable. That is the 4/4 green in §11 — verification against reality, not assumption.
+
+Prices and model-ids live in the `MODELS` config table — swapping a model string or a price is a
+one-line edit, no code change. `USD_INR = 88` is the only FX assumption (refine with a live feed later).
 
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
