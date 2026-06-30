@@ -149,7 +149,15 @@ reconciles against witnesses (L1), and graduates.
 `WA_SPARKSOL_TOKEN`/`WA_COMMS_TOKEN`/`WA_ACCESS_TOKEN` · SMS: `FAST2SMS_API_KEY`
 `FAST2SMS_ENTITY_ID` (BSNL: `BSNL_DLT_API_URL`/`BSNL_DLT_TOKEN`/`BSNL_DLT_ENTITY_ID`) · Voice:
 `EXOTEL_SID` `EXOTEL_API_KEY` `EXOTEL_API_TOKEN` `EXOTEL_CALLER_ID` · webhook sig: `DASHBOARD_KEY`
-· AI (classification only, where rules are insufficient): provider key (name TBD) · D1: bind
+· AI model router L3 keys — ALL separate pay-as-you-go, subscriptions (Claude Max / ChatGPT
+Pro / Kimi membership) do NOT cover API: `ANTHROPIC_API_KEY` (console.anthropic.com/settings/keys),
+`OPENAI_API_KEY` (platform.openai.com/api-keys), `MOONSHOT_API_KEY` (platform.moonshot.ai, recharge
+≥$1 to activate, base https://api.moonshot.ai/v1; runtime model `kimi-k2.7-code`, $0.95/$4.00 per
+MTok). All three CONFIRMED present in `hn-hotels-site` production secrets (list 2026-06-30), alongside
+existing `GEMINI_API_KEY` (→ router has 4 providers), `FAST2SMS_API_KEY`, `EXOTEL_*`, `WA_*`,
+`CRON_TOKEN`, `OWNER_PHONE`, `ODOO_*` (POS/reconciliation witnesses), `NAZAR_WITNESS_KEY` — the whole
+platform substrate is already provisioned. NOTE: present ≠ proven; functional validity (valid + funded)
+is proven only by the router's first live call — build a gated self-test endpoint. · D1: bind
 `OPS_DB` (hn-ops) — not yet in wrangler.toml.
 
 ## 9. Open threads (where we paused)
@@ -159,6 +167,80 @@ reconciles against witnesses (L1), and graduates.
 - Build order: the two soul pieces (re-read-closer + heartbeat) + the dry-run gate in comms-core,
   then one silent loop.
 - Nihaf to walk the **true on-the-ground flow** of a purchase (the one input no trail holds).
+
+## 10. UNIVERSAL PLATFORM ARCHITECTURE — BUILD THIS FIRST *(Nihaf 2026-06-30)*
+
+**Decision (supersedes the per-chamber framing in §7):** do NOT build agents per-scenario — that
+fragments the plumbing. Build ONE universal platform; every half-agent is a **config** dropped on
+it. The node model applied to the agent itself — the substrate is the moat, each agent is a point.
+The platform is use-case-agnostic, so it does NOT wait for any trail; build it now. §7 becomes
+"how each CONFIG is rolled out" once the platform stands.
+
+**An agent = a config.** Per use-case you declare ONLY:
+`{ name, source, schedule, detect_rule, witnesses[], responsible_resolver, message_templates,
+close_condition, escalation_ladder, mode }`. Everything below is shared.
+
+**The layers (a case flows top→bottom):**
+- **L0 — Agent Registry (config).** Only thing written per use-case. *(new)*
+- **L1 — Clock.** Cloudflare crons + hub pattern + `CRON_TOKEN`; one scheduler ticks all agents.
+  *(exists: `workers/sauda-remind-cron` pattern → generalize)*
+- **L2 — Source/Read (data-from-anywhere).** Pluggable adapters behind one interface: D1
+  (hn-ops, hn-hiring), Odoo JSON-RPC, HTTP APIs, R2, snapshots. *(partly exists → formalize)*
+- **L3 — Intelligence = the Nihaf AI model router.** *(NEW — Nihaf's named priority.)* Rules
+  FIRST (deterministic, free); model only where rules can't decide. One `think(task, context)`
+  interface routing by **priority + fallback + cost-cap** across providers (Kimi → OpenAI →
+  Gemini → Claude; provider-agnostic, configurable). Cheap model to classify, strong to judge.
+  Centralizes model keys; logs spend; caps cost.
+- **L4 — Reconciliation (reality-before-record, law L1).** For a candidate gap, query declared
+  WITNESSES (cash/stock/sales/CCTV) → verdict real-gap / recording-gap / unknown. Only real-gaps
+  proceed. *(NEW — core discipline)*
+- **L5 — Case/Memory.** Each case = row with the 5 required fields + lifecycle + proof +
+  reconciliation verdict + re-read-close state. *(exists: `agent_findings` → extend)*
+- **L6 — Identity/Responsibility.** case → person → phone → channel → opt-in. *(exists: Darbar /
+  `hr_employees`)*
+- **L7 — Comms router (universal outbound).** One interface across **WABA → SMS → Voice** with
+  escalation ladder, two-way ack, opt-in gate, phone-verify guard. Voice = **Exotel** (telephony)
+  + **ElevenLabs** (human TTS). *(largely EXISTS: `comms-core.js` → add ElevenLabs + dry-run gate)*
+- **L8 — Gate.** Per-agent mode (silent/dry-run vs live = birth-silent L6); owner-threshold
+  (money/go-live → Nihaf = L8); rate limits; compliance. *(partly exists → add dry-run agent gate)*
+- **L9 — Liveness/Heartbeat (immune system, law L7).** Every agent + cron emits a pulse; a
+  meta-watcher catches any dead agent → self-heal or escalate. The platform watches itself. *(NEW
+  — foundational)*
+- **L10 — Secrets/Key registry.** All keys by NAME (model + comms + cron), read by the routers,
+  never plaintext. See §8.
+
+**Build order:**
+1. **Model router (L3)** + **Comms router (L7** — extend `comms-core`: +ElevenLabs, +dry-run gate).
+   The two reusable routers Nihaf named; independent of any trail → build first.
+2. **Loop engine + Agent Registry + Case layer (L0/L5)** — generalize `agents.js` to run any config.
+3. **Heartbeat (L9)** — ship WITH the engine so the platform can't die.
+4. **Read adapters (L2) + Reconciliation (L4)** → then **Gate (L8)**.
+5. THEN the first agent = a config (purchases, once its trail is reliable).
+
+**To build L3 next, the one input needed from Nihaf:** which providers + which key NAMES exist
+(Kimi / OpenAI / Gemini / Claude), priority order, and any monthly cost cap. Names only — keys go
+to Worker secrets / `.env.local`, never here.
+
+## 11. BUILD LOG / BLOCKERS *(2026-06-30)*
+
+- **L3 model router — BUILT (committed, NOT deployed).** `functions/api/_lib/ai-router.js`
+  (`selfTest()` = free auth-check of all 4 keys via each provider's models endpoint; `think()` =
+  tier chain + fallback + paise cost-cap + D1 `ai_spend_log`) and gated endpoint
+  `functions/api/ai-router.js` (`/api/ai-router?action=selftest|think&pin=0305`). ESM syntax-verified.
+- **SECURITY — found live, fixed in code, NOT deployed.** `pages_build_output_dir="."` was serving
+  every committed file publicly: `hnhotels.in/NIHAF-BRAIN.md`, `/CLAUDE.md`, `/docs/*.md` (incl.
+  `DARBAR-SECURITY-AUDIT.md`) all returned **200 with raw content** (constitution, endpoint map,
+  secret *names*, the security audit). Fix: `isInternalAsset()` gate at the TOP of
+  `functions/_middleware.js` → 404s `*.md/.sql/.toml/.sh/.lock` + config files on every host, before
+  routing; app surfaces untouched. Deploy-path-agnostic (runs at request time). **Once live, the
+  spine docs are safe on `main`** (markdown is 404'd to the public) — resolves §0's hold.
+- **DEPLOY BLOCKED — credentials.** This Linux worktree has NO GitHub/Cloudflare creds (`git push`
+  → "could not read Username"; no token in env). 3 commits sit local-only on
+  `claude/gallant-khayyam-4a411b`: `220f3af` spines · `5329de5` router · `5e2b588` security.
+  Deploy = Cloudflare Pages auto-build on push to `main`; the only missing piece is push access
+  (token on this box, OR a CF API token for `wrangler pages deploy`, OR push from a creds'd machine).
+- **NEXT, once deployable (security fix FIRST):** hit `/api/ai-router?action=selftest&pin=0305`
+  → per-provider `authenticated | bad_key | rate_limited_or_no_credit` = the real key verification.
 
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final

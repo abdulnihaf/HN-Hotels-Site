@@ -196,8 +196,6 @@ NIHAF  (root — this constitution)
 │   └─ Nawabi Chai House  (NCH — Irani chai cafe)
 │       (operational chambers — Sauda, Anbar, Takht, Darbar, Hisaab, Nazar, Naam, Tijori,
 │        Hukum — serve this node; their detail lives in the chamber spines under SPINE.md)
-│       Nihaf Agent — the closing layer across ALL chambers (intelligence for closure):
-│        detail → NIHAF-AGENT-SPINE.md  ·  why it exists → NIHAF-LACK-SPINE.md
 │
 ├─ VISA MEDICALS  (Dr. Shafi's GCC visa-medical clinic — a SEPARATE venture Nihaf builds
 │   the tech for; not an HN Hotels subsidiary)   → detail: VISAMEDICALS-SPINE.md
