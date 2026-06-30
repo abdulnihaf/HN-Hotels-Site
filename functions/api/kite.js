@@ -2590,11 +2590,41 @@ async function getStatus(db, env) {
       login_url: '/wealth/auth/login',
     };
   }
+  const kiteHeaders = {
+    'X-Kite-Version': '3',
+    'Authorization': `token ${env.KITE_API_KEY}:${tok.access_token}`,
+  };
+  const t0 = Date.now();
+  const r = await fetch(`${KITE_BASE}/user/profile`, { headers: kiteHeaders });
+  const dur = Date.now() - t0;
+  let body = {};
+  try { body = await r.json(); } catch { body = { message: 'profile returned non-json' }; }
+  await logKite(db, '/user/profile status_probe', 'GET', r.status, dur, r.ok ? null : (body.message || body.error_type));
+  if (!r.ok || body.status !== 'success') {
+    const reason = body.error_type === 'TokenException' ? 'invalid_token' : 'profile_check_failed';
+    if (reason === 'invalid_token') {
+      await db.prepare(`UPDATE kite_tokens SET is_active=0 WHERE id=?`).bind(tok.id).run().catch(() => {});
+    }
+    return {
+      connected: false,
+      reason,
+      error_type: body.error_type || null,
+      message: body.message || `Kite profile check failed with HTTP ${r.status}`,
+      user_id: tok.user_id, user_name: tok.user_name, email: tok.email,
+      obtained_at: tok.obtained_at, expires_at: tok.expires_at,
+      expires_in_min: Math.round((tok.expires_at - now) / 60000),
+      login_url: '/wealth/auth/login',
+    };
+  }
+  const profile = body.data || {};
   return {
     connected: true,
-    user_id: tok.user_id, user_name: tok.user_name, email: tok.email,
+    user_id: profile.user_id || tok.user_id,
+    user_name: profile.user_name || tok.user_name,
+    email: profile.email || tok.email,
     obtained_at: tok.obtained_at, expires_at: tok.expires_at,
     expires_in_min: Math.round((tok.expires_at - now) / 60000),
+    verified_by: 'kite_profile',
   };
 }
 
