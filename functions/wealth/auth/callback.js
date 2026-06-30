@@ -7,7 +7,9 @@
 // We exchange the request_token for an access_token by POSTing to
 // https://api.kite.trade/session/token with checksum = SHA256(api_key + request_token + api_secret)
 //
-// On success: store access_token in D1.kite_tokens, redirect user back to /trading.
+// On success: store access_token in D1.kite_tokens, then show an app-return page.
+// Do not redirect straight to /trading: mobile OAuth can land in a browser context
+// without the dashboard key and expose the legacy key gate after a successful login.
 // On failure: render an error page with the upstream message.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -16,7 +18,6 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const status = url.searchParams.get('status');
   const requestToken = url.searchParams.get('request_token');
-  const action = url.searchParams.get('action');
 
   if (status !== 'success' || !requestToken) {
     return errorPage(`Kite OAuth returned status=${status || 'missing'}. Please re-initiate from /trading.`);
@@ -88,12 +89,9 @@ export async function onRequest(context) {
     }
   }
 
-  // Redirect to /trading with a success flag
-  return new Response(null, {
-    status: 302,
-    headers: {
-      'Location': `/trading/?kite=connected&until=${expiresAt}`,
-    },
+  return successPage({
+    userName: data.user_name || data.user_id || 'Kite',
+    expiresAt,
   });
 }
 
@@ -120,6 +118,47 @@ function errorPage(message) {
 <p><a href="/trading/">← Back to dashboard</a> · <a href="/wealth/auth/login">↻ Retry login</a></p>
 </body></html>`;
   return new Response(html, { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' }});
+}
+
+function successPage({ userName, expiresAt }) {
+  const appUrl = `hnwealth://kite-connected?until=${encodeURIComponent(String(expiresAt))}`;
+  const dashboardUrl = `/trading/?kite=connected&until=${encodeURIComponent(String(expiresAt))}`;
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kite Connected</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background:#090b0f; color:#f4efe8; padding:28px; max-width:560px; margin:0 auto; line-height:1.45; }
+  .wrap { min-height:80vh; display:flex; flex-direction:column; justify-content:center; gap:14px; }
+  .pill { display:inline-flex; align-items:center; align-self:flex-start; border:1px solid #2d6a4f; color:#74c69d; border-radius:999px; padding:6px 10px; font-size:12px; font-weight:800; letter-spacing:.04em; }
+  h1 { font-size:28px; margin:0; }
+  p { color:#b8b0a6; margin:0; }
+  a.btn { display:block; text-align:center; margin-top:10px; padding:13px 14px; border-radius:10px; font-weight:850; text-decoration:none; }
+  a.primary { background:#f4a261; color:#090b0f; }
+  a.secondary { border:1px solid #43392f; color:#f4efe8; }
+  small { color:#7e756c; }
+</style></head>
+<body>
+<main class="wrap">
+  <div class="pill">KITE CONNECTED</div>
+  <h1>Return to Wealth</h1>
+  <p>${escapeHtml(userName)} is connected. The token is stored on the server until ${new Date(expiresAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.</p>
+  <p>No dashboard key is needed for this OAuth return step.</p>
+  <a class="btn primary" href="${appUrl}">Open Wealth app</a>
+  <a class="btn secondary" href="${dashboardUrl}">Open web dashboard</a>
+  <small>If the app does not open automatically, tap “Open Wealth app”.</small>
+</main>
+<script>
+  setTimeout(function () { window.location.href = ${JSON.stringify(appUrl)}; }, 350);
+</script>
+</body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+    },
+  });
 }
 
 function escapeHtml(s) {

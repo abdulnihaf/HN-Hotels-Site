@@ -113,6 +113,11 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Owner-facing dashboard truth is now: **Today: OBSERVE + PAPER scout, no broker order.** The broker order surface remains `daily_verdicts.picks_json`; `alternatives_json.machine_execution_plan` stays intelligence-only. Real orders still require `TRADE + non-empty picks_json + broker_facing_picks_authorized + healthy sources + active stable-IP proxy`.
 - iOS Now/Execute/Stocks/Lab surfaces now treat OBSERVE as intelligence-only, keep SIM default, preserve last-known Kite connected state during refresh, and disable broker controls unless `executionGate.trade_authorized` is true.
 
+## Build 27 — Kite OAuth return does not fall into dashboard key gate (2026-06-30, Codex)
+- Regression corrected after owner test: successful Kite OAuth was still server-redirecting to `/trading/?kite=connected`, so a mobile browser without the stored dashboard key showed the web dashboard key gate even though Kite had connected correctly.
+- Backend callback now stores the token, then renders a lightweight “Kite connected / Return to Wealth” page with no dashboard-key requirement. It attempts `hnwealth://kite-connected` and keeps a manual “Open Wealth app” button plus a web-dashboard fallback link.
+- iOS registers `hnwealth` URL scheme and refreshes the Now tab when opened via `hnwealth://kite-connected`, so the app returns to connected state instead of exposing the web dashboard gate.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).

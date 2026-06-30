@@ -198,6 +198,11 @@ struct HomeView: View {
         }
         .tint(HK.accent)
         .task { await vm.refresh() }
+        .onOpenURL { url in
+            guard url.scheme == "hnwealth" else { return }
+            tab = 0
+            Task { await vm.refresh() }
+        }
     }
 }
 
