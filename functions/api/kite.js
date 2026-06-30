@@ -79,6 +79,10 @@ export async function onRequest(context) {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Vary': 'x-api-key',
   };
   if (request.method === 'OPTIONS') return new Response(null, { headers });
 
