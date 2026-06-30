@@ -118,8 +118,14 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Backend callback now stores the token, then renders a lightweight “Kite connected / Return to Wealth” page with no dashboard-key requirement. It attempts `hnwealth://kite-connected` and keeps a manual “Open Wealth app” button plus a web-dashboard fallback link.
 - iOS registers `hnwealth` URL scheme and refreshes the Now tab when opened via `hnwealth://kite-connected`, so the app returns to connected state instead of exposing the web dashboard gate.
 
+## Build 28 — Stocks winners sort + owner-facing learning language (2026-06-30, Codex)
+- Stocks now separates intelligence from execution more cleanly: the “Winners today” bucket and the Winners segment rank by actual positive day-change first, so the highest earner is first instead of liquidity ordering hiding the winner list.
+- Owner-facing proof language now says **learning / scout / broker ready** instead of raw `NO_EDGE`/`REJECTED` language. The internal broker/research contract remains unchanged; the app avoids implying a real-money edge while still showing the learning trail.
+- Build 25/26/27 broker gates are untouched: Execute remains locked unless `executionGate.trade_authorized` is true, Lab remains the separate SIM/tiny-real test lane, and all Kite mutations still route server-side.
+- Shipped **TestFlight build 28** for `com.hnhotels.wealth`; App Store Connect readback: **VALID**, build id `0bbaca6b-8c8e-4196-9466-049b5960e6eb`, assigned to internal group `0cd3994a-c901-4cbd-9fc8-2f892bcdbdbf`, `usesNonExemptEncryption=false`.
+
 ## Next (the gaps — for the intraday-profit objective)
-1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
+1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 09:40 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).
 3. **Live position management** — per-position price vs stop/target, trailing, "exit now", flat-by-15:10 guard.
 4. **Confidence + freshness at the point of action** — never a confident button over a 25% signal.

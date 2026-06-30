@@ -18,7 +18,7 @@ struct ScoutLadderStrip: View {
     private let order = ["REJECTED", "PAPER_SCOUT", "TOKEN_SCOUT", "WATCH_SCOUT", "DEPLOYABLE"]
     private func short(_ s: String) -> String {
         switch s {
-        case "REJECTED": return "Reject"
+        case "REJECTED": return "Learn"
         case "PAPER_SCOUT": return "Paper"
         case "TOKEN_SCOUT": return "Token"
         case "WATCH_SCOUT": return "Watch"

@@ -20,11 +20,13 @@ how the cockpit's growth is locked in and can never regress.
 # CHECK SRC|ScoutView.swift|TODAY'S SCOUT|Scout view (ladder + why-this + why-not + plan + lesson)
 # CHECK SRC|StocksView.swift|BROWSE ALL|All-stocks bucket-grid front door (every stock visible)
 # CHECK SRC|StocksView.swift|bucketGrid|Bucket grid component
+# CHECK SRC|StocksView.swift|Winners today|Today's winners bucket label
+# CHECK SRC|StocksView.swift|Highest gainers first|Today's winners sort by actual gain
 # CHECK SRC|StocksView.swift|Price graph|Stock price graph in the detail sheet
 # CHECK SRC|StocksView.swift|import Charts|Swift Charts framework for the graphs
 # CHECK SRC|StocksView.swift|FiveLightStrip|The 5-light teaching primitive
 # CHECK SRC|StocksView.swift|TideCard|Market-tide / regime header
-# CHECK SRC|ProofStateView.swift|SignalProofCard|Honest proof-state (REJECTED/WATCH/DEPLOYABLE)
+# CHECK SRC|ProofStateView.swift|SignalProofCard|Honest proof-state (learning/scout/broker-ready)
 # CHECK SRC|ExecuteView.swift|Order witness|Order-path Face-ID/result witness
 # CHECK SRC|HomeView.swift|StocksView|Stocks tab mounted in the tab bar
 # CHECK SRC|Theme.swift|func hkGlass|Liquid Glass material system (iOS 26) with flat fallback

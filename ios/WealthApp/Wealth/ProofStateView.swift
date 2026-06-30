@@ -8,9 +8,9 @@ private enum WealthProofState {
 
     var label: String {
         switch self {
-        case .rejected: return "REJECTED"
-        case .watch: return "WATCH / SCOUT"
-        case .deployable: return "DEPLOYABLE"
+        case .rejected: return "LEARNING"
+        case .watch: return "SCOUT"
+        case .deployable: return "BROKER READY"
         case .unknown: return "UNKNOWN"
         }
     }
@@ -26,9 +26,9 @@ private enum WealthProofState {
 
     var headline: String {
         switch self {
-        case .rejected: return "No buy signal is allowed"
+        case .rejected: return "Learning mode"
         case .watch: return "Research signal only"
-        case .deployable: return "Signal cleared the proof gates"
+        case .deployable: return "Broker signal cleared"
         case .unknown: return "Proof state not loaded"
         }
     }
@@ -139,7 +139,7 @@ struct SignalProofCard: View {
     private func summaryText(for state: WealthProofState) -> String {
         switch state {
         case .rejected:
-            return "The research stack found opportunity, but the tested selection did not beat the required OOS, fold, and random-null gates."
+            return "The research stack found opportunity, but the tested selection has not yet passed the required OOS, fold, and random-null gates for money."
         case .watch:
             return "There may be selection skill here, but one or more proof gates are incomplete. This can be watched or paper-scouted, not bought with size."
         case .deployable:
@@ -154,7 +154,7 @@ struct SignalProofCard: View {
         let chain = vm.chainHealth
         let universe = rd?.universe_syms ?? 0
         let bars = rd?.bars_total ?? 0
-        let verdict = (rd?.verdict ?? "missing").uppercased()
+        let verdict = displayVerdict(rd?.verdict)
         let z = rd?.random_null?.z_vs_null
         let folds = rd?.folds_positive ?? "n/a"
         let overall = (chain?.overall ?? "missing").uppercased()
@@ -222,8 +222,16 @@ struct SignalProofCard: View {
     private var metricLine: String {
         guard let rd = vm.researchDepth else { return "" }
         let trades = rd.oos_trades.map(formatCount) ?? "n/a"
-        let edge = pct(rd.random_null?.edge_vs_null)
-        return "OOS trades \(trades) · edge vs random \(edge) · cost \(pct(rd.cost_assumption_pct))"
+        let skill = pct(rd.random_null?.edge_vs_null)
+        return "OOS trades \(trades) · skill vs random \(skill) · cost \(pct(rd.cost_assumption_pct))"
+    }
+
+    private func displayVerdict(_ raw: String?) -> String {
+        let v = (raw ?? "missing").uppercased()
+        if v == "NO_EDGE" || v.contains("NO_EDGE") { return "LEARNING" }
+        if v.contains("DEPLOY") { return "BROKER READY" }
+        if v.contains("EDGE") || v.contains("CANDIDATE") || v.contains("THIN") { return "SCOUT" }
+        return v
     }
 
     private func formatCount(_ n: Int) -> String {

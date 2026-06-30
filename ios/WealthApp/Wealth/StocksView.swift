@@ -6,7 +6,7 @@ import Charts
 //  beautiful, and TEACHING. Built for a beginner owner:
 //   • A market-tide header (the regime + breadth + VIX in plain words).
 //   • A composite-sorted, scannable list of engine setups + the recognizable
-//     watchlist + the day's movers (segmented).
+//     watchlist + the day's winners (segmented).
 //   • Each card carries the 5-LIGHT strip (per-dimension engine scores) + a
 //     composite strength meter + an intraday move bar.
 //   • Tap → a detail sheet that explains every light in plain words, shows the
@@ -18,8 +18,8 @@ import Charts
 //     flow has real data for ~11/20, macro 4/20, sentiment/quality/retail ~0.)
 //   - Pre-market / when live LTP == last close, we show YESTERDAY'S CLOSE and say
 //     "live at open" — never a faked live tick.
-//   - The engine edge is UNPROVEN. Every actionable surface says so. These are
-//     candidates to learn from, not sure things.
+//   - The selection skill is still learning. Every actionable surface says so.
+//     These are candidates to learn from, not sure things.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // MARK: - Light model
@@ -53,7 +53,7 @@ private struct Light: Identifiable {
     var id: Int { n }
 }
 
-// Exactly-50 == the engine's neutral default == no edge / no data → grey.
+// Exactly-50 == the engine's neutral default == no proven signal / no data → grey.
 private func classify(_ v: Double?) -> LightState {
     guard let v = v, v != 50 else { return .off }
     if v >= 67 { return .good }
@@ -183,7 +183,7 @@ struct StocksView: View {
     var goToExecute: () -> Void
 
     private enum Segment: String, CaseIterable, Identifiable {
-        case setups = "Top setups", watchlist = "Watchlist", movers = "Movers"
+        case setups = "Top setups", watchlist = "Watchlist", movers = "Winners"
         var id: String { rawValue }
     }
     @State private var segment: Segment = .setups
@@ -193,7 +193,7 @@ struct StocksView: View {
     // The bucket front door — every stock visible, organised (not a 1,248-row dump).
     private let bucketDefs: [(key: String, label: String, icon: String)] = [
         ("gapped_up", "Gapped up", "arrow.up.forward"),
-        ("up_today", "Up today", "chart.line.uptrend.xyaxis"),
+        ("up_today", "Winners today", "chart.line.uptrend.xyaxis"),
         ("big_movers", "Big movers", "bolt.fill"),
         ("big_money", "Big money", "indianrupeesign.circle.fill"),
         ("fno", "F&O", "f.square.fill"),
@@ -219,12 +219,50 @@ struct StocksView: View {
         }
     }
     private func analysedRows(_ b: String) -> [StockIntel] {
-        (vm.universe?.stocks ?? [])
-            .filter { inBucket(b, $0) }
-            .sorted { ($0.turnover_cr ?? 0) > ($1.turnover_cr ?? 0) }
+        sortedAnalysed((vm.universe?.stocks ?? []).filter { inBucket(b, $0) }, bucket: b)
             .prefix(120)
             .map { a in StockIntel(symbol: a.symbol, price: a.asWatchlist, signal: signalMap[a.symbol],
                                    plan: a.symbol == pickSymbol ? vm.verdict?.plan : nil, marketLive: marketLive) }
+    }
+
+    // Bucket-specific ordering. "Winners today" must be by actual gain first, not liquidity.
+    private func sortedAnalysed(_ rows: [AnalysedStock], bucket: String) -> [AnalysedStock] {
+        rows.sorted { a, b in
+            switch bucket {
+            case "up_today":
+                return sort(a, b, by: { $0.change_pct })
+            case "gapped_up":
+                return sort(a, b, by: { $0.gap_pct })
+            case "big_movers":
+                return sort(a, b, by: { abs($0.change_pct ?? 0) })
+            case "big_money":
+                return sort(a, b, by: { $0.turnover_cr })
+            default:
+                return sort(a, b, by: { $0.turnover_cr })
+            }
+        }
+    }
+
+    private func sort(_ a: AnalysedStock, _ b: AnalysedStock, by value: (AnalysedStock) -> Double?) -> Bool {
+        let av = value(a) ?? -Double.greatestFiniteMagnitude
+        let bv = value(b) ?? -Double.greatestFiniteMagnitude
+        if av != bv { return av > bv }
+        return (a.turnover_cr ?? 0) > (b.turnover_cr ?? 0)
+    }
+
+    private func bucketFooter(_ b: String) -> String {
+        switch b {
+        case "up_today":
+            return "Highest gainers first. This is market reading and learning, not broker trade authorization."
+        case "gapped_up":
+            return "Largest opening gaps first. Gap strength is a research signal, not a broker order."
+        case "big_movers":
+            return "Largest percentage moves first, up or down. Use the 5 lights to learn whether the move has support."
+        case "big_money":
+            return "Highest traded value first. Liquidity helps execution, but it is not a buy signal by itself."
+        default:
+            return "Top 120 by traded value. Tap any stock for its graph + the 5 lights."
+        }
     }
 
     private var marketLive: Bool { vm.intel?.in_market_hours == true }
@@ -270,8 +308,16 @@ struct StocksView: View {
             return (vm.stockPicker?.watchlist ?? [])
                 .map { intel(symbol: $0.symbol, price: $0, signal: signalMap[$0.symbol]) }
         case .movers:
+            let winners = (vm.universe?.stocks ?? []).filter { ($0.change_pct ?? 0) > 0 }
+            if !winners.isEmpty {
+                return sortedAnalysed(winners, bucket: "up_today")
+                    .prefix(30)
+                    .map { a in StockIntel(symbol: a.symbol, price: a.asWatchlist, signal: signalMap[a.symbol],
+                                           plan: a.symbol == pickSymbol ? vm.verdict?.plan : nil, marketLive: marketLive) }
+            }
             return (vm.stockPicker?.top_movers ?? [])
-                .sorted { abs($0.change_pct ?? 0) > abs($1.change_pct ?? 0) }
+                .filter { (($0.live_change_pct ?? $0.change_pct) ?? 0) > 0 }
+                .sorted { (($0.live_change_pct ?? $0.change_pct) ?? -Double.greatestFiniteMagnitude) > (($1.live_change_pct ?? $1.change_pct) ?? -Double.greatestFiniteMagnitude) }
                 .map { intel(symbol: $0.symbol, price: $0, signal: signalMap[$0.symbol]) }
         }
     }
@@ -293,7 +339,7 @@ struct StocksView: View {
                             ForEach(arows) { st in
                                 StockCard(intel: st, rank: nil).onTapGesture { selected = st }
                             }
-                            Text("Top 120 by traded value. Tap any stock for its graph + the 5 lights.")
+                            Text(bucketFooter(b))
                                 .font(.system(size: 10)).foregroundColor(HK.textFaint).multilineTextAlignment(.center)
                         }
                     } else {
@@ -412,7 +458,7 @@ struct StocksView: View {
             case .watchlist:
                 Text("Large, recognizable names you can learn on. Engine lights appear when a stock also has a live signal.")
             case .movers:
-                Text("Today's biggest moves by %. A move with green lights behind it is worth more than a move alone.")
+                Text("Today's winners by %. A winner with green lights behind it teaches more than a price move alone.")
             }
         }
         .font(.system(size: 10)).foregroundColor(HK.textFaint)
@@ -664,7 +710,7 @@ private struct StockDetailSheet: View {
                 lightsCard
                 if let plan = intel.plan { planCard(plan) } else { noPlanCard }
                 rationaleCard
-                Text("The engine's edge is unproven. Treat this as a teaching tool first until the proof ladder graduates.")
+                Text("Selection skill is still learning. Treat this as a teaching tool first until the proof ladder graduates.")
                     .font(.system(size: 11)).foregroundColor(HK.textFaint)
             }
             .padding(18)

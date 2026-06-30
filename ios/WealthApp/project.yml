@@ -21,7 +21,7 @@ targets:
       properties:
         CFBundleDisplayName: Wealth
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "27"
+        CFBundleVersion: "28"
         CFBundleURLTypes:
           - CFBundleURLName: com.hnhotels.wealth
             CFBundleURLSchemes:
