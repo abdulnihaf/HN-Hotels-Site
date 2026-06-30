@@ -90,6 +90,15 @@ final class WealthVM: ObservableObject {
     var deployablePaise: Int { Int(config["today_deployable_paise"] ?? "") ?? 0 }
     // Robust: trust EITHER source. A single slow/failed status fetch must not show a false "Connect Kite".
     var kiteConnected: Bool { kite?.connected == true || plan?.state?.kite_connected == true }
+    var kiteStatusKnown: Bool { kite != nil || plan?.state?.kite_connected != nil }
+    var executionGateUnavailable: Bool {
+        executionGate?.reasons?.contains { $0.code == "gate_missing" } == true || (executionGate == nil && !loading)
+    }
+    var stableIpConfigured: Bool {
+        if executionGate?.stable_ip_proxy_configured == true { return true }
+        let base = config["kite_order_base"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !base.isEmpty
+    }
     var brokerPick: VerdictPick? { executionGate?.matched_pick ?? verdict?.primaryPick }
     var orderReady: Bool {
         executionGate?.trade_authorized == true && verdict?.decision?.uppercased() == "TRADE" && brokerPick != nil
@@ -279,15 +288,20 @@ struct TodayView: View {
                         HStack {
                             Text("Kite").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
                             Spacer()
-                            if vm.kite?.connected == true {
+                            if vm.kiteConnected {
                                 Pill(text: "CONNECTED", color: HK.ready)
+                            } else if !vm.kiteStatusKnown && vm.loading {
+                                Pill(text: "CHECKING", color: HK.running)
                             } else {
                                 Pill(text: (vm.kite?.reason ?? "not connected").uppercased(), color: HK.running)
                             }
                         }
                         if let n = vm.kite?.user_name { Row(label: "Account", value: n) }
-                        if vm.kite?.connected == true, let m = vm.kite?.expires_in_min {
+                        if vm.kiteConnected, let m = vm.kite?.expires_in_min {
                             Row(label: "Token expires in", value: "\(m) min")
+                        } else if !vm.kiteStatusKnown && vm.loading {
+                            Text("Checking the broker token from trade.hnhotels.in.")
+                                .font(.system(size: 12)).foregroundColor(HK.textDim)
                         } else {
                             Text("Connect Kite from the Capital tab to enable live data + orders.")
                                 .font(.system(size: 12)).foregroundColor(HK.textDim)
@@ -382,9 +396,12 @@ struct CapitalView: View {
                     // Kite connect
                     Card {
                         Text("Kite / Zerodha").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
-                        if vm.kite?.connected == true {
+                        if vm.kiteConnected {
                             Row(label: "Status", value: "Connected", valueColor: HK.ready)
                             if let n = vm.kite?.user_name { Row(label: "Account", value: n) }
+                        } else if !vm.kiteStatusKnown && vm.loading {
+                            Text("Checking broker connection from the backend.")
+                                .font(.system(size: 12)).foregroundColor(HK.textDim)
                         } else {
                             Text("Not connected (\(vm.kite?.reason ?? "—")). Tap to log in with your Zerodha credentials — fund the account first.")
                                 .font(.system(size: 12)).foregroundColor(HK.textDim)
@@ -616,7 +633,8 @@ struct OpsView: View {
     private func actionItems() -> [OpsAction] {
         var out: [OpsAction] = []
         // Kite connection
-        if vm.kite?.connected != true {
+        if !vm.kiteConnected {
+            if !vm.kiteStatusKnown && vm.loading { return out }
             let reason = vm.kite?.reason ?? "not connected"
             out.append(OpsAction(title: reason == "expired" ? "Reconnect Kite (token expired)" : "Connect Kite",
                                  detail: "Kite tokens die daily ~6am IST. Tap Connect Kite on the Now tab. No live data/orders without it.",

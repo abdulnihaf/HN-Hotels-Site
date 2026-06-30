@@ -129,6 +129,11 @@ struct NowView: View {
                 sub: "NSE is shut today. Last session was \(MarketCalendar.dayShort(MarketCalendar.lastTradingDay())); it reopens \(MarketCalendar.dayShort(next)) 9:15 AM and the engine composes its next call \(MarketCalendar.weekday(next)) 09:40. Nothing to do — rest.",
                 tone: HK.idle, action: .none)
         }
+        if !vm.kiteStatusKnown && vm.loading {
+            return Situation(headline: "Checking Kite connection",
+                             sub: "Reading the backend broker token and today's plan. No order can fire while this is unknown.",
+                             tone: HK.running, action: .none)
+        }
         if !kiteOK {
             return Situation(headline: "Connect Kite to begin",
                              sub: "Your broker link powers live prices and orders. It's a 30-second login each morning — tokens reset overnight.",
@@ -304,7 +309,8 @@ struct NowView: View {
             HStack {
                 Text("Setup").font(.system(size: 13, weight: .bold)).foregroundColor(HK.textFaint)
                 Spacer()
-                Pill(text: kiteOK ? "KITE OK" : "KITE OFF", color: kiteOK ? HK.ready : HK.running)
+                Pill(text: kiteOK ? "KITE OK" : (!vm.kiteStatusKnown && vm.loading ? "CHECKING" : "KITE OFF"),
+                     color: kiteOK ? HK.ready : HK.running)
                 Pill(text: vm.config["block_real_orders"] == "1" ? "SHADOW" : "REAL", color: vm.config["block_real_orders"] == "1" ? HK.ready : HK.error)
             }
             Text("Today's size").font(.system(size: 12)).foregroundColor(HK.textDim)

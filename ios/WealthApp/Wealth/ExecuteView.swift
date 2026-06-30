@@ -66,10 +66,16 @@ struct ExecuteView: View {
 
                     if !kiteOK {
                         Card {
-                            Text("Kite not connected").font(.system(size: 14, weight: .bold)).foregroundColor(HK.running)
-                            Text("Connect Kite to place orders. Until then no order can fire (the server rejects with kite_expired).")
-                                .font(.system(size: 12)).foregroundColor(HK.textDim)
-                            KiteConnectButton(vm: vm)
+                            if !vm.kiteStatusKnown && vm.loading {
+                                Text("Checking Kite connection").font(.system(size: 14, weight: .bold)).foregroundColor(HK.running)
+                                Text("Reading broker state from the backend. No order can fire while this is unknown.")
+                                    .font(.system(size: 12)).foregroundColor(HK.textDim)
+                            } else {
+                                Text("Kite not connected").font(.system(size: 14, weight: .bold)).foregroundColor(HK.running)
+                                Text("Connect Kite to place orders. Until then no order can fire (the server rejects with kite_expired).")
+                                    .font(.system(size: 12)).foregroundColor(HK.textDim)
+                                KiteConnectButton(vm: vm)
+                            }
                         }
                     }
 
@@ -197,8 +203,7 @@ struct ExecuteView: View {
                         .foregroundColor(vm.orderReady ? HK.ready : HK.running)
                 }
                 Spacer()
-                Pill(text: vm.executionGate?.stable_ip_proxy_configured == true ? "STABLE-IP OK" : "NO STABLE-IP",
-                     color: vm.executionGate?.stable_ip_proxy_configured == true ? HK.ready : HK.error)
+                Pill(text: stableIpPill.0, color: stableIpPill.1)
             }
             Row(label: "Decision", value: (vm.executionGate?.decision ?? vm.verdict?.decision ?? "—").uppercased(),
                 valueColor: vm.orderReady ? HK.ready : HK.textDim)
@@ -225,6 +230,12 @@ struct ExecuteView: View {
                 }
             }
         }
+    }
+
+    private var stableIpPill: (String, Color) {
+        if vm.stableIpConfigured { return ("STABLE-IP OK", HK.ready) }
+        if vm.executionGateUnavailable { return ("GATE UNKNOWN", HK.running) }
+        return ("NO STABLE-IP", HK.error)
     }
 
     @ViewBuilder

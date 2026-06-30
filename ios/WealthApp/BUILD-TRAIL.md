@@ -115,6 +115,14 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Existing Execution Lab `simulate=1` behavior remains separate and intact; `wealth-engine/workers/wealth-verdict` intelligence logic is consumed only, not changed in this lane.
 - Verification: `ship-check.sh` passed **31/31**, `node --check functions/api/kite.js`, mocked D1 guard harness passed OBSERVE/source-health/paper/no-proxy/proxy cases, clean simulator build passed, Release archive/export/upload passed, and ASC processing reached `VALID`. No live broker order was sent.
 
+## Build 23 — connected-state and stable-IP display fix (2026-06-30, Codex)
+- Shipped **TestFlight build 23** for `com.hnhotels.wealth`; upload delivery UUID `5358b2b4-cec3-4c93-b337-933e18404672`. App Store Connect readback: **VALID**, `APP_STORE_ELIGIBLE`, `USES-NON-EXEMPT-ENCRYPTION=false`.
+- Fixed the build-22 false disconnected state: the app now trusts either `/api/kite?action=status` or `todays_plan.state.kite_connected`, and shows a temporary **Checking Kite connection** state instead of a false **Connect Kite to begin** while endpoints are still loading.
+- Fixed the stable-IP pill: Execute now derives **STABLE-IP OK** from the live execution gate or configured `kite_order_base`; gate-unavailable is shown separately from truly missing stable-IP.
+- Reframed the old random-null/NO_EDGE card as **Research proof** and explicitly states it is a historical proof ladder, not today's real broker order gate. Kite/broker status no longer upgrades or downgrades the research proof state.
+- Production backend note: the live Pages function was separately deployed from clean branch `codex/wealth-kite-gate-prod-20260630` with only `functions/api/kite.js`, so `/api/kite?action=execution_gate` no longer returns `unknown action`.
+- Verification: production `execution_gate` returns `stable_ip_proxy_configured=true` and `no_morning_verdict` for `2026-06-30`; paper and real bracket attempts both stop at the verdict gate with no broker call; stable-IP proxy order path rejects unsigned direct calls with `403`; ship gate passed **31/31**; simulator build passed; simulator screenshots verified Now says connected/set and Execute shows **STABLE-IP OK** with OBSERVE/no morning verdict; Release archive/export/upload passed.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).
