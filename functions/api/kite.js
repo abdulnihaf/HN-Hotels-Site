@@ -443,7 +443,7 @@ export async function onRequest(context) {
 // and fund-check here (the bracket already ran BOTH upstream once), so the bracket
 // normal path stays byte-for-byte identical: same single fund-check, same single
 // kiteFetch BUY. is_exit / bypass_funds_check make the direction explicit.
-async function placeOrder(env, db, kiteHeaders, body) {
+async function placeOrder(env, db, kiteHeaders, body, opts = {}) {
   const required = ['exchange', 'tradingsymbol', 'transaction_type', 'quantity'];
   for (const f of required) {
     if (!body[f]) throw new Error(`Missing required field: ${f}`);
@@ -460,8 +460,25 @@ async function placeOrder(env, db, kiteHeaders, body) {
   const skipFundCheck = internal || body.bypass_funds_check === true || isExit;
   const isBrokerEntry = body.transaction_type === 'BUY' && !isExit && !internal;
   const dryRun = isDryRun(body);
+  const technicalSmoke = opts.technicalSmoke === true;
 
-  if (isBrokerEntry) {
+  if (technicalSmoke) {
+    const smokeOk = body.exchange === 'NSE' &&
+      body.tradingsymbol === 'IDEA' &&
+      body.transaction_type === 'BUY' &&
+      body.quantity === 1 &&
+      body.product === 'MIS' &&
+      (body.order_type || 'MARKET') === 'MARKET';
+    if (!smokeOk) {
+      return {
+        ok: false,
+        error: 'invalid_technical_smoke_order',
+        message: 'Technical smoke test is restricted to BUY 1 NSE:IDEA MIS MARKET only.',
+      };
+    }
+  }
+
+  if (isBrokerEntry && !technicalSmoke) {
     const gate = await assertBrokerFacingPickAllowed(db, body, { dryRun });
     if (!gate.ok) {
       await logKite(db, '/execution_gate place_order', 'POST', 403, 0, gate.error);
@@ -496,7 +513,8 @@ async function placeOrder(env, db, kiteHeaders, body) {
       attempted_order: { ...body, quantity: body.quantity, tradingsymbol: body.tradingsymbol },
     };
   }
-  if (isBrokerEntry && !ORDER_PROXY?.base) {
+  const isSim = body.simulate === true || body.simulate === '1';
+  if (!dryRun && !isSim && !ORDER_PROXY?.base) {
     await logKite(db, '/execution_gate place_order', 'POST', 503, 0, 'stable_ip_proxy_missing');
     return {
       ok: false,
@@ -577,7 +595,6 @@ async function placeOrder(env, db, kiteHeaders, body) {
   // Internal bracket buys skip this (the bracket already deduped on kite_bracket_orders).
   const DEDUPE_WINDOW_MS = 120000;
   const idemTag = body.tag ? String(body.tag).slice(0, 20) : null;
-  const isSim = body.simulate === true || body.simulate === '1';
   if (!internal && idemTag) {
     // Fix 1B — SIM must NEVER poison the real dedupe. A simulate=1 order records a
     // lab_runs row with mode='sim'; if those rows were dedupe-eligible, a SIM test
@@ -2172,11 +2189,17 @@ async function pollOrder(kiteHeaders, orderId, tries = 6) {
 }
 
 async function pipelineTest(env, db, kiteHeaders, body) {
-  const symbol = String(body.symbol || 'IDEA').toUpperCase();   // ultra-cheap, ultra-liquid → ~₹8 test
-  const qty = Math.max(1, parseInt(body.qty, 10) || 1);
+  const symbol = String(body.symbol || body.tradingsymbol || 'IDEA').toUpperCase();   // ultra-cheap, ultra-liquid → ~₹8 test
+  const qty = Math.max(1, parseInt(body.qty ?? body.quantity, 10) || 1);
   const simulate = body.simulate === true || body.simulate === '1';
   const steps = [];
   const add = (name, ok, detail, raw) => { steps.push({ name, ok, detail, raw: raw ?? null, at: Date.now() }); return ok; };
+
+  if (symbol !== 'IDEA' || qty !== 1) {
+    add('smoke_guard', false, 'Technical smoke test is restricted to BUY→SELL 1 IDEA only.');
+    return { ok: false, overall: 'fail', failed_step: 'smoke_guard', symbol, qty, steps,
+      summary: 'Technical smoke test refused before broker contact: only 1 share of IDEA is allowed for the pre-trade roundtrip.' };
+  }
 
   if (simulate) {
     add('connect', true, 'Broker connection reachable (simulated path).');
@@ -2196,8 +2219,8 @@ async function pipelineTest(env, db, kiteHeaders, body) {
   const buy = await placeOrder(env, db, kiteHeaders, {
     exchange: 'NSE', tradingsymbol: symbol, transaction_type: 'BUY', quantity: qty,
     product: 'MIS', order_type: 'MARKET', validity: 'DAY', tag: 'HN_WE_PIPETEST',
-    bypass_funds_check: true,
-  });
+    enforce_notional_cap: true, ref_price: 20, bypass_funds_check: true,
+  }, { technicalSmoke: true });
   if (buy.blocked) { add('place_buy', false, 'Real orders are OFF (practice mode). Turn on real orders to run the live test.', buy);
     return { ok: false, overall: 'blocked', symbol, qty, steps, summary: 'Real orders are blocked — this is the practice setting.' }; }
   if (!buy.ok) { add('place_buy', false, buy.error || 'Buy order was not accepted.', buy);
