@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -278,7 +279,17 @@ fun StaffShell(me: JSONObject) {
             openCard = { id -> nav.add(Screen.Card(id, cur.outlet, cur.date)) },
             openPlace = { nav.add(Screen.Place(cur.outlet, cur.date)) },
             setOutletDate = { o, d -> nav[nav.lastIndex] = Screen.Day(o, d) })
-        is Screen.Card -> CardScreen(me, cur) { nav.removeAt(nav.lastIndex) }
+        is Screen.Card -> CardScreen(me, cur,
+            back = { nav.removeAt(nav.lastIndex) },
+            deleted = {
+                nav.removeAt(nav.lastIndex)
+                val i = nav.lastIndex
+                when (val prev = nav[i]) {
+                    is Screen.PurchaseDay -> nav[i] = Screen.PurchaseDay(prev.date)
+                    is Screen.Day -> nav[i] = Screen.Day(prev.outlet, prev.date)
+                    else -> {}
+                }
+            })
         is Screen.Place -> PlaceScreen(me, cur, back = { nav.removeAt(nav.lastIndex) }) { nav.removeAt(nav.lastIndex) }
         is Screen.Directory -> CatalogDirectoryScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
@@ -699,6 +710,7 @@ fun StatusPill(status: String) {
         "RECEIVED" -> Color(0xFFE6F2E6) to GoodG
         "RAISED" -> Color(0xFFEAF1FF) to Color(0xFF2563EB)
         "PAID", "RECONCILED" -> Color(0xFFE9E3F5) to Color(0xFF5B3FA0)
+        "CANCELLED" -> Color(0xFFFFE8E1) to WarnA
         else -> Sand to Muted
     }
     Surface(color = pair.first, shape = RoundedCornerShape(6.dp)) {
@@ -709,12 +721,13 @@ fun StatusPill(status: String) {
 
 // ---- Card detail + receive ------------------------------------------------
 @Composable
-fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
+fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit, deleted: () -> Unit) {
     var data by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf("") }
     var actionError by remember { mutableStateOf("") }
     var receiving by remember { mutableStateOf(false) }
     var editingItems by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var goodsImage by remember { mutableStateOf("") }
     var billImage by remember { mutableStateOf("") }
@@ -740,6 +753,35 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
     val events = data?.optJSONArray("events")?.toObjList() ?: emptyList()
     val status = card?.optString("status") ?: ""
     val canEditItems = caps.contains("sauda.place") && status in listOf("REQUESTED", "ORDERED")
+    val canDeleteOrder = caps.contains("sauda.place") && status in listOf("REQUESTED", "ORDERED") && !receiving && !editingItems
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) confirmDelete = false },
+            icon = { Icon(Icons.Filled.Delete, null, tint = WarnA) },
+            title = { Text("Delete this order card?") },
+            text = { Text("This removes it from today's purchase board, but keeps the card lines and event trail for audit.") },
+            dismissButton = {
+                TextButton(onClick = { if (!busy) confirmDelete = false }) { Text("Cancel") }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (busy) return@Button
+                        busy = true; actionError = ""
+                        scope.launch {
+                            val r = Api.post("delete-order", JSONObject()
+                                .put("order_id", s.id)
+                                .put("reason", "deleted from Android purchase card"))
+                            busy = false
+                            if (r.optBoolean("ok")) { confirmDelete = false; deleted() }
+                            else { confirmDelete = false; actionError = r.optString("error") }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = WarnA)
+                ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text("Delete") }
+            }
+        )
+    }
     Scaffold(topBar = { HnBar(card?.optString("vendor_name") ?: "Order",
         subtitle = card?.let { rupee(it.optInt("expected_amount_paise")) + " · " + status }, onBack = back) }) { p ->
         Column(Modifier.padding(p).fillMaxSize()) {
@@ -829,19 +871,29 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit) {
                                 }
                             } else {
                                 if (canEditItems && !receiving) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            actionError = ""; editRemoved.clear(); editQty.clear(); editRate.clear()
-                                            lines.forEach {
-                                                val id = it.optInt("id")
-                                                editQty[id] = numStr(it.optDouble("qty_ordered", 0.0))
-                                                editRate[id] = rupeeTextFromPaise(it.optInt("unit_cost_paise"))
-                                            }
-                                            editingItems = true
-                                        },
-                                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) { Icon(Icons.Filled.Edit, null, tint = Maroon); Spacer(Modifier.width(8.dp)); Text("Edit items", color = Maroon, fontWeight = FontWeight.SemiBold) }
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                actionError = ""; editRemoved.clear(); editQty.clear(); editRate.clear()
+                                                lines.forEach {
+                                                    val id = it.optInt("id")
+                                                    editQty[id] = numStr(it.optDouble("qty_ordered", 0.0))
+                                                    editRate[id] = rupeeTextFromPaise(it.optInt("unit_cost_paise"))
+                                                }
+                                                editingItems = true
+                                            },
+                                            modifier = Modifier.weight(1f).height(48.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) { Icon(Icons.Filled.Edit, null, tint = Maroon); Spacer(Modifier.width(8.dp)); Text("Edit", color = Maroon, fontWeight = FontWeight.SemiBold) }
+                                        if (canDeleteOrder) {
+                                            OutlinedButton(
+                                                onClick = { actionError = ""; confirmDelete = true },
+                                                modifier = Modifier.weight(1f).height(48.dp),
+                                                shape = RoundedCornerShape(10.dp),
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = WarnA)
+                                            ) { Icon(Icons.Filled.Delete, null, tint = WarnA); Spacer(Modifier.width(8.dp)); Text("Delete", fontWeight = FontWeight.SemiBold) }
+                                        }
+                                    }
                                     Spacer(Modifier.height(10.dp))
                                 }
                                 if (status == "REQUESTED" && caps.contains("sauda.place")) Button(
@@ -1009,6 +1061,7 @@ fun PurchaseEventTrail(events: List<JSONObject>) {
                     "receive" -> "Received with proof"
                     "payment-request" -> "Payment requested"
                     "paid" -> "Marked paid"
+                    "delete-order" -> "Order card deleted"
                     "place" -> "Order card created"
                     "demand" -> "Demand routed"
                     else -> ev.optString("event_type")
@@ -1443,10 +1496,29 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
     val draft = remember { mutableStateListOf<JSONObject>() }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var masterBusy by remember { mutableStateOf(false) }
+    var masterError by remember { mutableStateOf("") }
+    var addVendorOpen by remember { mutableStateOf(false) }
+    var addProductOpen by remember { mutableStateOf(false) }
+    var newVendorName by remember { mutableStateOf("") }
+    var newVendorCategory by remember { mutableStateOf("") }
+    var newVendorFulfilment by remember { mutableStateOf("deliver") }
+    var newVendorPay by remember { mutableStateOf("per") }
+    var newVendorPhone by remember { mutableStateOf("") }
+    var newVendorVpa by remember { mutableStateOf("") }
+    var newItemLabel by remember { mutableStateOf("") }
+    var newItemUnit by remember { mutableStateOf("kg") }
+    var newItemCategory by remember { mutableStateOf("") }
+    var newItemPriceMode by remember { mutableStateOf("live") }
+    var newItemRate by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
+    suspend fun loadCatalog(): JSONObject {
         val r = Api.get("action=catalog&outlet=${s.outlet}")
         if (r.optBoolean("ok")) cat = r else error = r.optString("error")
+        return r
+    }
+    LaunchedEffect(Unit) {
+        loadCatalog()
     }
     val vendors = cat?.optJSONArray("vendors")?.toObjList() ?: emptyList()
     val vendorByKey = vendors.associateBy { it.optString("vendor_key") }
@@ -1484,31 +1556,282 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                 .put("unit_cost_paise", if (it2.optString("price_mode") != "live") pr else 0))
         }
     }
-    fun addManualItem() {
-        val label = searchText.ifEmpty { "New item" }
+    fun addCreatedItemToDraft(it2: JSONObject) {
+        val code = it2.optString("item_code")
+        if (code.isEmpty()) return
+        vendorKey = it2.optString("default_vendor").ifEmpty { vendorKey }
+        if (draft.none { d -> d.optString("item_code") == code }) {
+            draft.add(JSONObject().put("item_code", code).put("item_label", it2.optString("label"))
+                .put("qty", 1).put("uom", it2.optString("unit"))
+                .put("unit_cost_paise", if (it2.optString("price_mode") != "live") it2.optInt("price_paise") else 0))
+        }
+    }
+    fun openProductDialog(defaultLabel: String = searchText) {
         if (vendorKey.isEmpty()) {
-            error = "Pick a vendor first, then add the missing item."
+            error = "Pick or add a vendor first, then add the product."
             return
         }
-        draft.add(JSONObject().put("item_code", "").put("item_label", label)
-            .put("qty", 1).put("uom", "unit").put("unit_cost_paise", 0)
-            .put("flag", "new item - confirm master").put("raw", label))
-        itemQuery = ""
-        error = "Added as a flagged item. Master data can be cleaned later."
+        masterError = ""
+        newItemLabel = defaultLabel.trim()
+        newItemUnit = "kg"
+        newItemCategory = vendorByKey[vendorKey]?.optString("category").orEmpty()
+        newItemPriceMode = "live"
+        newItemRate = ""
+        addProductOpen = true
+    }
+    if (addVendorOpen) {
+        AlertDialog(
+            onDismissRequest = { if (!masterBusy) addVendorOpen = false },
+            title = { Text("Add vendor", color = Ink, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = newVendorName,
+                        onValueChange = { newVendorName = it; masterError = "" },
+                        singleLine = true,
+                        label = { Text("Vendor name *") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newVendorCategory,
+                        onValueChange = { newVendorCategory = it; masterError = "" },
+                        singleLine = true,
+                        label = { Text("Category *") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newVendorPhone,
+                        onValueChange = { newVendorPhone = it.replace(Regex("[^0-9+]"), "").take(16); masterError = "" },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        label = { Text("Phone / WhatsApp *") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newVendorVpa,
+                        onValueChange = { newVendorVpa = it.trim(); masterError = "" },
+                        singleLine = true,
+                        label = { Text("UPI VPA") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Fulfilment *", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                        listOf("deliver" to "Delivery", "collect" to "Collect", "standing" to "Standing", "porter" to "Porter", "bus" to "Bus").forEach { opt ->
+                            FilterChip(
+                                selected = newVendorFulfilment == opt.first,
+                                onClick = { newVendorFulfilment = opt.first; masterError = "" },
+                                label = { Text(opt.second, maxLines = 1) },
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("Payment rule *", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                        listOf("per" to "Per bill", "khata_roll" to "Running khata", "khata_periodic" to "Periodic khata").forEach { opt ->
+                            FilterChip(
+                                selected = newVendorPay == opt.first,
+                                onClick = { newVendorPay = opt.first; masterError = "" },
+                                label = { Text(opt.second, maxLines = 1) },
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
+                    }
+                    if (masterError.isNotEmpty()) Text(masterError, color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (masterBusy) return@Button
+                        val name = newVendorName.trim()
+                        val category = newVendorCategory.trim()
+                        val phone = newVendorPhone.trim()
+                        if (name.isEmpty() || category.isEmpty() || phone.isEmpty()) {
+                            masterError = "Vendor name, category, phone, fulfilment and payment rule are mandatory."
+                            return@Button
+                        }
+                        masterBusy = true; masterError = ""
+                        scope.launch {
+                            val r = Api.post("add-vendor", JSONObject()
+                                .put("outlet", s.outlet)
+                                .put("name", name)
+                                .put("category", category)
+                                .put("fulfilment", newVendorFulfilment)
+                                .put("pay_behaviour", newVendorPay)
+                                .put("phone", phone)
+                                .put("vpa", newVendorVpa.trim()))
+                            masterBusy = false
+                            if (r.optBoolean("ok")) {
+                                val v = r.optJSONObject("vendor") ?: JSONObject()
+                                val key = v.optString("vendor_key")
+                                if (key.isNotEmpty()) vendorKey = key
+                                draft.clear()
+                                addVendorOpen = false
+                                newItemLabel = searchText
+                                newItemCategory = category
+                                newItemUnit = "kg"
+                                newItemPriceMode = "live"
+                                newItemRate = ""
+                                loadCatalog()
+                                addProductOpen = true
+                                error = if (r.optBoolean("existed")) "Vendor already existed. Add product under it." else "Vendor added. Add product under it."
+                            } else masterError = r.optString("error", "vendor add failed")
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Maroon)
+                ) {
+                    if (masterBusy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                    else Text("Save vendor")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { if (!masterBusy) addVendorOpen = false }) { Text("Cancel") }
+            }
+        )
+    }
+    if (addProductOpen) {
+        AlertDialog(
+            onDismissRequest = { if (!masterBusy) addProductOpen = false },
+            title = { Text("Add product", color = Ink, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    Text("Vendor: ${vendorName}", color = Muted, fontSize = 12.sp)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newItemLabel,
+                        onValueChange = { newItemLabel = it; masterError = "" },
+                        singleLine = true,
+                        label = { Text("Product name *") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newItemUnit,
+                        onValueChange = { newItemUnit = it.trim(); masterError = "" },
+                        singleLine = true,
+                        label = { Text("Unit *") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newItemCategory,
+                        onValueChange = { newItemCategory = it; masterError = "" },
+                        singleLine = true,
+                        label = { Text("Category *") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Price mode *", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                        FilterChip(
+                            selected = newItemPriceMode == "live",
+                            onClick = { newItemPriceMode = "live"; masterError = "" },
+                            label = { Text("Live bill rate") },
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        FilterChip(
+                            selected = newItemPriceMode == "fixed",
+                            onClick = { newItemPriceMode = "fixed"; masterError = "" },
+                            label = { Text("Fixed expected rate") }
+                        )
+                    }
+                    if (newItemPriceMode == "fixed") {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = newItemRate,
+                            onValueChange = { newItemRate = it.replace(Regex("[^0-9.]"), ""); masterError = "" },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            label = { Text("Expected rate ₹ *") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (masterError.isNotEmpty()) Text(masterError, color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (masterBusy) return@Button
+                        val label = newItemLabel.trim()
+                        val unit = newItemUnit.trim()
+                        val category = newItemCategory.trim()
+                        val pricePaise = paiseFromRupeeText(newItemRate)
+                        if (vendorKey.isEmpty()) {
+                            masterError = "Pick or add vendor first."
+                            return@Button
+                        }
+                        if (label.isEmpty() || unit.isEmpty() || category.isEmpty()) {
+                            masterError = "Product name, unit, category and price mode are mandatory."
+                            return@Button
+                        }
+                        if (newItemPriceMode == "fixed" && pricePaise <= 0) {
+                            masterError = "Enter expected rate for fixed-rate product."
+                            return@Button
+                        }
+                        masterBusy = true; masterError = ""
+                        scope.launch {
+                            val r = Api.post("add-item", JSONObject()
+                                .put("outlet", s.outlet)
+                                .put("vendor_key", vendorKey)
+                                .put("label", label)
+                                .put("unit", unit)
+                                .put("category", category)
+                                .put("price_mode", newItemPriceMode)
+                                .put("price_paise", if (newItemPriceMode == "fixed") pricePaise else 0))
+                            masterBusy = false
+                            if (r.optBoolean("ok")) {
+                                val it2 = r.optJSONObject("item")
+                                if (it2 != null) addCreatedItemToDraft(it2)
+                                addProductOpen = false
+                                itemQuery = ""
+                                loadCatalog()
+                                error = if (r.optBoolean("existed")) "Product already existed. Added to order card." else "Product added to master and order card."
+                            } else masterError = r.optString("error", "product add failed")
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Maroon)
+                ) {
+                    if (masterBusy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                    else Text("Save product")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { if (!masterBusy) addProductOpen = false }) { Text("Cancel") }
+            }
+        )
     }
     Scaffold(topBar = { HnBar("Place order", subtitle = prettyDate(s.date), onBack = back) }) { p ->
         Column(Modifier.padding(p).fillMaxSize().padding(16.dp)) {
             if (cat == null && error.isEmpty()) { Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) { CircularProgressIndicator(color = Maroon) }; return@Column }
-            Box {
-                OutlinedButton(onClick = { vendorMenu = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
-                    Icon(Icons.Filled.Store, null, tint = Maroon); Spacer(Modifier.width(8.dp))
-                    Text(vendorName, color = Ink, modifier = Modifier.weight(1f)); Icon(Icons.Filled.ArrowDropDown, null)
-                }
-                DropdownMenu(expanded = vendorMenu, onDismissRequest = { vendorMenu = false }) {
-                    vendors.forEach { v ->
-                        DropdownMenuItem(text = { Text(v.optString("name")) }, onClick = {
-                            vendorKey = v.optString("vendor_key"); vendorMenu = false; draft.clear(); error = "" })
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { vendorMenu = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
+                        Icon(Icons.Filled.Store, null, tint = Maroon); Spacer(Modifier.width(8.dp))
+                        Text(vendorName, color = Ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis); Icon(Icons.Filled.ArrowDropDown, null)
                     }
+                    DropdownMenu(expanded = vendorMenu, onDismissRequest = { vendorMenu = false }) {
+                        vendors.forEach { v ->
+                            DropdownMenuItem(text = { Text(v.optString("name")) }, onClick = {
+                                vendorKey = v.optString("vendor_key"); vendorMenu = false; draft.clear(); error = "" })
+                        }
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = {
+                    masterError = ""; error = ""
+                    newVendorName = ""; newVendorCategory = ""; newVendorFulfilment = "deliver"
+                    newVendorPay = "per"; newVendorPhone = ""; newVendorVpa = ""
+                    addVendorOpen = true
+                }, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)) {
+                    Icon(Icons.Filled.AddCircleOutline, null, tint = Maroon)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Vendor", color = Maroon, maxLines = 1)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -1523,6 +1846,18 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                 label = { Text(if (vendorKey.isNotEmpty()) "Search ${vendorName}" else "Search all items") },
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (vendorKey.isNotEmpty()) "Products will be added under $vendorName." else "Pick or add vendor before adding product.",
+                    color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 2
+                )
+                TextButton(onClick = { openProductDialog(searchText) }, enabled = vendorKey.isNotEmpty()) {
+                    Icon(Icons.Filled.AddCircleOutline, null, tint = if (vendorKey.isNotEmpty()) Maroon else Muted)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Product", color = if (vendorKey.isNotEmpty()) Maroon else Muted)
+                }
+            }
             Spacer(Modifier.height(10.dp))
             if (draft.isNotEmpty()) {
                 Surface(shape = RoundedCornerShape(10.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
@@ -1600,11 +1935,15 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                 Box(Modifier.weight(1f), Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
                         Text("No matching items.", color = Muted, fontSize = 15.sp, textAlign = TextAlign.Center)
+                        Text(
+                            if (vendorKey.isEmpty()) "Pick or add a vendor first." else "Add this as a product under $vendorName.",
+                            color = Muted, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp)
+                        )
                         Spacer(Modifier.height(12.dp))
-                        OutlinedButton(onClick = { addManualItem() }, shape = RoundedCornerShape(10.dp)) {
+                        OutlinedButton(onClick = { openProductDialog(searchText) }, enabled = vendorKey.isNotEmpty(), shape = RoundedCornerShape(10.dp)) {
                             Icon(Icons.Filled.AddCircleOutline, null, tint = Maroon)
                             Spacer(Modifier.width(8.dp))
-                            Text("Add as flagged item", color = Maroon)
+                            Text("Add product", color = Maroon)
                         }
                     }
                 }

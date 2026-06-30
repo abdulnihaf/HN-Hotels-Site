@@ -9,8 +9,11 @@
 //   GET  ?action=purchase_day_pdf&date=     -> printable A4 purchase day
 //   GET  ?action=day&outlet=&date=          -> vendor cards (one vendor one card) for one outlet
 //   GET  ?action=card&id=                   -> one card with its lines + event trail
+//   POST ?action=add-vendor {outlet,name,category,fulfilment,pay_behaviour,phone,vpa?}
+//   POST ?action=add-item {outlet,vendor_key,label,unit,category,price_mode,price_paise?}
 //   POST ?action=place    {outlet,vendor_key,for_date,lines:[...]}  -> upsert card + lines
 //   POST ?action=edit-lines {order_id,lines:[...]} -> replace pre-receive order lines + audit trail
+//   POST ?action=delete-order {order_id}    -> cancel pre-receive card + audit trail
 //   POST ?action=receive  {order_id,lines:[{line_id,qty_received,receive_state}],note}
 //   POST ?action=route    {labels:[...]}    -> resolve free labels -> item_code+vendor (decode aid)
 
@@ -144,10 +147,10 @@ async function purchaseDayRows(db, u, date, brandFilter) {
             o.brand outlet_brand, o.name outlet_name,
             (SELECT COUNT(*) FROM purchase_order_lines l WHERE l.order_id=po.id) line_count,
             (SELECT COUNT(*) FROM purchase_order_lines l WHERE l.order_id=po.id AND l.qty_received IS NOT NULL) recv_count
-       FROM purchase_orders po
-       JOIN vendors v ON v.vendor_key=po.vendor_key
-       JOIN outlets o ON o.outlet_id=po.outlet_id
-      WHERE po.for_date=? AND po.outlet_id IN (${placeholders})${bf.sql}
+      FROM purchase_orders po
+      JOIN vendors v ON v.vendor_key=po.vendor_key
+      JOIN outlets o ON o.outlet_id=po.outlet_id
+      WHERE po.for_date=? AND po.outlet_id IN (${placeholders}) AND po.status<>'CANCELLED'${bf.sql}
       ORDER BY o.brand, v.name`).bind(date, ...ids, ...bf.vals).all()).results || [];
   const linesByOrder = {};
   if (cards.length) {
@@ -240,6 +243,20 @@ function buildResolver(items, aliases) {
     }
     return bestS >= 0.5 ? best : '';
   };
+}
+
+function keySlug(s, fallback) {
+  const out = norm(s).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 54);
+  return out || fallback;
+}
+async function uniqueTextKey(db, table, col, base) {
+  const root = keySlug(base, col);
+  for (let i = 0; i < 100; i++) {
+    const k = i === 0 ? root : `${root}_${i + 1}`;
+    const row = await db.prepare(`SELECT ${col} FROM ${table} WHERE ${col}=?`).bind(k).first();
+    if (!row) return k;
+  }
+  return `${root}_${Date.now()}`;
 }
 
 export async function onRequest(context) {
@@ -383,7 +400,7 @@ export async function onRequest(context) {
                 (SELECT COUNT(*) FROM purchase_order_lines l WHERE l.order_id=po.id) line_count,
                 (SELECT COUNT(*) FROM purchase_order_lines l WHERE l.order_id=po.id AND l.qty_received IS NOT NULL) recv_count
            FROM purchase_orders po JOIN vendors v ON v.vendor_key=po.vendor_key
-          WHERE po.outlet_id=? AND po.for_date=? ORDER BY po.expected_amount_paise DESC, v.name`)
+          WHERE po.outlet_id=? AND po.for_date=? AND po.status<>'CANCELLED' ORDER BY po.expected_amount_paise DESC, v.name`)
         .bind(outlet, date).all()).results || [];
       return J({ ok: true, outlet, date, cards });
     }
@@ -421,6 +438,84 @@ export async function onRequest(context) {
           unit: it?.unit || '', price_paise: it && it.price_mode !== 'live' ? it.price_paise : 0 };
       });
       return J({ ok: true, routed: out });
+    }
+
+    // ---------- MASTER: add a vendor with mandatory operational details ----------
+    if (action === 'add-vendor' && req.method === 'POST') {
+      if (!can(u, 'sauda.place')) return J({ ok: false, error: 'not permitted to add vendors' }, 403);
+      const b = await req.json().catch(() => ({}));
+      const outlet = String(b.outlet || '').trim();
+      const name = String(b.name || '').trim();
+      const category = String(b.category || '').trim();
+      const fulfilment = String(b.fulfilment || '').trim();
+      const pay = String(b.pay_behaviour || '').trim();
+      const phone = String(b.phone || '').trim();
+      const vpa = String(b.vpa || '').trim();
+      const validFulfilment = new Set(['deliver', 'collect', 'standing', 'porter', 'bus']);
+      const validPay = new Set(['per', 'khata_roll', 'khata_periodic']);
+      if (!outlet || !name || !category || !fulfilment || !pay || !phone) {
+        return J({ ok: false, error: 'vendor name, category, fulfilment, payment rule and phone are required' }, 400);
+      }
+      if (!validFulfilment.has(fulfilment)) return J({ ok: false, error: 'invalid fulfilment rule' }, 400);
+      if (!validPay.has(pay)) return J({ ok: false, error: 'invalid payment rule' }, 400);
+      if (!outletOk(u, outlet)) return J({ ok: false, error: 'outlet not permitted' }, 403);
+      const o = await db.prepare(`SELECT brand FROM outlets WHERE outlet_id=? AND status='active'`).bind(outlet).first();
+      if (!o) return J({ ok: false, error: 'unknown outlet' }, 400);
+      const duplicate = await db.prepare(
+        `SELECT vendor_key,name,brand,category,fulfilment,pay_behaviour,phone,vpa_json
+           FROM vendors WHERE lower(name)=lower(?) AND (brand=? OR brand='both') AND active=1 LIMIT 1`)
+        .bind(name, o.brand).first();
+      if (duplicate) return J({ ok: true, vendor: duplicate, existed: true });
+      const vendorKey = await uniqueTextKey(db, 'vendors', 'vendor_key', `${o.brand}_${name}`);
+      const vpaJson = vpa ? JSON.stringify([vpa]) : '[]';
+      await db.prepare(
+        `INSERT INTO vendors (vendor_key,name,brand,category,fulfilment,pay_behaviour,phone,vpa_json,aliases_json,active,updated_at)
+         VALUES (?,?,?,?,?,?,?,?, '[]',1,?)`)
+        .bind(vendorKey, name, o.brand, category, fulfilment, pay, phone, vpaJson, istNow()).run();
+      const vendor = await db.prepare(
+        `SELECT vendor_key,name,brand,category,fulfilment,pay_behaviour,phone,vpa_json
+           FROM vendors WHERE vendor_key=?`).bind(vendorKey).first();
+      return J({ ok: true, vendor, existed: false });
+    }
+
+    // ---------- MASTER: add a product under a known vendor ----------
+    if (action === 'add-item' && req.method === 'POST') {
+      if (!can(u, 'sauda.place')) return J({ ok: false, error: 'not permitted to add products' }, 403);
+      const b = await req.json().catch(() => ({}));
+      const outlet = String(b.outlet || '').trim();
+      const vendorKey = String(b.vendor_key || '').trim();
+      const label = String(b.label || b.item_label || '').trim();
+      const unit = String(b.unit || '').trim();
+      const category = String(b.category || '').trim();
+      const priceMode = String(b.price_mode || 'live').trim();
+      const pricePaise = Math.max(0, Math.round(Number(b.price_paise || 0)));
+      if (!outlet || !vendorKey || !label || !unit || !category || !priceMode) {
+        return J({ ok: false, error: 'vendor, product name, unit, category and price mode are required' }, 400);
+      }
+      if (!['fixed', 'live'].includes(priceMode)) return J({ ok: false, error: 'invalid price mode' }, 400);
+      if (priceMode === 'fixed' && pricePaise <= 0) return J({ ok: false, error: 'expected rate required for fixed-rate products' }, 400);
+      if (!outletOk(u, outlet)) return J({ ok: false, error: 'outlet not permitted' }, 403);
+      const o = await db.prepare(`SELECT brand FROM outlets WHERE outlet_id=? AND status='active'`).bind(outlet).first();
+      if (!o) return J({ ok: false, error: 'unknown outlet' }, 400);
+      const vendor = await db.prepare(`SELECT vendor_key,brand FROM vendors WHERE vendor_key=? AND active=1`).bind(vendorKey).first();
+      if (!vendor) return J({ ok: false, error: 'unknown vendor' }, 400);
+      if (vendor.brand !== 'both' && vendor.brand !== o.brand) return J({ ok: false, error: 'vendor does not belong to this outlet brand' }, 400);
+      const duplicate = await db.prepare(
+        `SELECT item_code,label,unit,pack_label,price_paise,price_mode,default_vendor,category,brand
+           FROM items WHERE lower(label)=lower(?) AND default_vendor=? AND active=1 LIMIT 1`)
+        .bind(label, vendorKey).first();
+      if (duplicate) {
+        return J({ ok: true, item: { ...duplicate, hindi_label: hindiLabelFor(duplicate, ''), search_text: [duplicate.label, duplicate.item_code, duplicate.category, duplicate.unit].join(' ') }, existed: true });
+      }
+      const itemCode = await uniqueTextKey(db, 'items', 'item_code', `${o.brand}_${vendorKey}_${label}`);
+      await db.prepare(
+        `INSERT INTO items (item_code,label,unit,pack_label,price_paise,price_mode,default_vendor,category,brand,active)
+         VALUES (?,?,?,?,?,?,?,?,?,1)`)
+        .bind(itemCode, label, unit, '', priceMode === 'fixed' ? pricePaise : 0, priceMode, vendorKey, category, o.brand).run();
+      const item = await db.prepare(
+        `SELECT item_code,label,unit,pack_label,price_paise,price_mode,default_vendor,category,brand
+           FROM items WHERE item_code=?`).bind(itemCode).first();
+      return J({ ok: true, item: { ...item, hindi_label: hindiLabelFor(item, ''), search_text: [item.label, item.item_code, item.category, item.unit].join(' ') }, existed: false });
     }
 
     // ---------- DEMAND: outlet staff adds item-first demand; system groups by vendor ----------
@@ -463,7 +558,9 @@ export async function onRequest(context) {
         await db.prepare(
           `INSERT INTO purchase_orders (outlet_id,vendor_key,for_date,status,source,ordered_at,ordered_by)
            VALUES (?,?,?,'REQUESTED','outlet-demand',?,?)
-           ON CONFLICT(outlet_id,vendor_key,for_date) DO UPDATE SET updated_at=?`)
+           ON CONFLICT(outlet_id,vendor_key,for_date) DO UPDATE SET
+             status=CASE WHEN status='CANCELLED' THEN 'REQUESTED' ELSE status END,
+             updated_at=?`)
           .bind(outlet, vendorKey, for_date, istNow(), u.name, istNow()).run();
         const card = await db.prepare(
           `SELECT id FROM purchase_orders WHERE outlet_id=? AND vendor_key=? AND for_date=?`)
@@ -501,7 +598,9 @@ export async function onRequest(context) {
       await db.prepare(
         `INSERT INTO purchase_orders (outlet_id,vendor_key,for_date,status,source,ordered_at,ordered_by)
          VALUES (?,?,?, 'ORDERED','manual',?,?)
-         ON CONFLICT(outlet_id,vendor_key,for_date) DO UPDATE SET updated_at=?`)
+         ON CONFLICT(outlet_id,vendor_key,for_date) DO UPDATE SET
+           status=CASE WHEN status='CANCELLED' THEN 'ORDERED' ELSE status END,
+           updated_at=?`)
         .bind(outlet, vendor_key, for_date, istNow(), u.name, istNow()).run();
       const card = await db.prepare(
         `SELECT id FROM purchase_orders WHERE outlet_id=? AND vendor_key=? AND for_date=?`)
@@ -609,6 +708,34 @@ export async function onRequest(context) {
         })));
       await db.batch(stmts);
       return J({ ok: true, order_id, expected_amount_paise: expected, lines_updated: normalized.length, lines_removed: removeIds.length });
+    }
+
+    // ---------- DELETE: cancel a pre-receive card without destroying its trail ----------
+    if (action === 'delete-order' && req.method === 'POST') {
+      if (!can(u, 'sauda.place')) return J({ ok: false, error: 'not permitted to delete order cards' }, 403);
+      const b = await req.json().catch(() => ({}));
+      const order_id = b.order_id;
+      if (!order_id) return J({ ok: false, error: 'order_id required' }, 400);
+      const po = await db.prepare(`SELECT id,outlet_id,status,expected_amount_paise,vendor_key,for_date FROM purchase_orders WHERE id=?`).bind(order_id).first();
+      if (!po) return J({ ok: false, error: 'card not found' }, 404);
+      if (!outletOk(u, po.outlet_id)) return J({ ok: false, error: 'outlet not permitted' }, 403);
+      if (!['REQUESTED', 'ORDERED'].includes(po.status)) {
+        return J({ ok: false, error: 'order cards can only be deleted before receiving proof' }, 400);
+      }
+      const lines = (await db.prepare(
+        `SELECT id,item_code,item_label,qty_ordered,uom,unit_cost_paise,line_amount_paise,flag
+           FROM purchase_order_lines WHERE order_id=? ORDER BY id`).bind(order_id).all()).results || [];
+      await writePurchaseEvent(db, order_id, 'delete-order', u, {
+        previous_status: po.status,
+        outlet_id: po.outlet_id,
+        vendor_key: po.vendor_key,
+        for_date: po.for_date,
+        expected_amount_paise: Number(po.expected_amount_paise || 0),
+        lines: lines.map(purchaseLineSnapshot),
+        reason: String(b.reason || 'deleted from Android purchase card').slice(0, 240),
+      });
+      await db.prepare(`UPDATE purchase_orders SET status='CANCELLED', updated_at=? WHERE id=?`).bind(istNow(), order_id).run();
+      return J({ ok: true, order_id, status: 'CANCELLED' });
     }
 
     // ---------- ORDERED: purchase person confirms vendor order was placed ----------
