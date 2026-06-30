@@ -425,6 +425,21 @@ at bootstrap and routes a gap to whoever owns that step. The earlier "open quest
 `docs/NIHAF-AGENT-SAUDA-BUILD-PROMPT.md` are re-routed: the operational ones go to the STAFF (via the
 bootstrap ask), only owner-policy stays with Nihaf.
 
+## 17. PAYMENT RECONCILE — UPI asks Nihaf, else it's cash by Bashir *(2026-07-01, Nihaf — keep minimal)*
+
+When a purchase needs settling, the agent decides the method by the money trail, two ways only:
+- **UPI:** the agent tracks the UPI / bank feed; if a UPI transaction plausibly matches the vendor +
+  amount, it **ASKS NIHAF to confirm**: *"Was this ₹X UPI to [vendor] for [vendor]'s [date] purchase?"* →
+  Yes = reconcile as UPI-paid, **linked to that transaction**. UPI confirmation is NIHAF's because the
+  UPI leaves his account (money = owner gate, consistent with §16). He answers Yes/No; nothing auto-matches.
+- **Cash:** if NO UPI transaction matches → the payment is **CASH**, and **cash is paid by BASHIR** →
+  record as cash-by-Bashir. Bashir owns the cash payment (so an unaccounted cash payment is attributed
+  to him, per the seal-or-attribute rule §15).
+
+So a payment seals one of exactly two ways: **UPI (Nihaf-confirmed, transaction-linked)** or **cash
+(Bashir)**. This is the reconcile + attribution for the pay leg of the lifecycle. Keep everything else
+minimal — get this loop working before adding rails.
+
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
 witness is Nihaf. A wrong line in a spine is worse than no spine — correct it here first.*
