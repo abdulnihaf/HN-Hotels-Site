@@ -91,11 +91,13 @@ final class WealthVM: ObservableObject {
     }
     var totalCapitalPaise: Int { Int(config["total_capital_paise"] ?? "") ?? 0 }
     var deployablePaise: Int { Int(config["today_deployable_paise"] ?? "") ?? 0 }
-    // Trust the plan only while /api/kite/status is still unknown. Once status arrives,
-    // it is authoritative because the backend validates the token against Kite.
+    // Display fails open on a positive broker-derived signal: after OAuth, iOS/edge caches
+    // can briefly retain the old negative status while todays_plan already sees the fresh
+    // server token. Real order placement remains server-guarded by /api/kite.
     var kiteConnected: Bool {
-        if let kite { return kite.connected == true }
-        return plan?.state?.kite_connected == true
+        if kite?.connected == true { return true }
+        if plan?.state?.kite_connected == true { return true }
+        return false
     }
     var kiteStatusKnown: Bool { kite != nil || plan?.state?.kite_connected != nil }
     var executionGateUnavailable: Bool {

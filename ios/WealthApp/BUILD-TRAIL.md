@@ -134,6 +134,11 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Removed visible `trade.hnhotels.in` labels from the lock/header copy; that domain remains only the secure backend broker gate, not a user-facing destination.
 - Bumped TestFlight build to **24** so Nihaf installs the broker-status fix, not build 23's optimistic fallback.
 
+## Build 25 — live-device Kite cache hotfix (2026-06-30, Codex)
+- Real iPhone build-24 UI probing showed the backend was broker-verified connected, but the app could still render stale `KITE OFF` / `Connect Kite` after refresh because an old negative `/api/kite?action=status` response overrode `todays_plan.state.kite_connected=true`.
+- Added no-store/no-cache headers to `/api/kite` and made the Swift client bypass local/remote URL cache on every Wealth API request.
+- Changed `WealthVM.kiteConnected` display logic to trust either a broker-validated status success or a positive `todays_plan.state.kite_connected`; real order placement remains fully guarded by the server execution gate.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).

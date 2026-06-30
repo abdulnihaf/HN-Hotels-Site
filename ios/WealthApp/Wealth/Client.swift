@@ -746,9 +746,11 @@ actor WealthClient {
         if !items.isEmpty { comps.queryItems = items }
         guard let url = comps.url else { throw WealthError.badURL }
 
-        var req = URLRequest(url: url, timeoutInterval: 18)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 18)
         req.httpMethod = method
         req.setValue(key, forHTTPHeaderField: "x-api-key")
+        req.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        req.setValue("no-cache", forHTTPHeaderField: "Pragma")
         if let rawBody {
             req.httpBody = rawBody
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
