@@ -283,6 +283,44 @@ swappable instead of scattered and uncontrolled. Its decision logic, in order:
 Prices and model-ids live in the `MODELS` config table — swapping a model string or a price is a
 one-line edit, no code change. `USD_INR = 88` is the only FX assumption (refine with a live feed later).
 
+## 13. PURCHASES = AGENT #1's SUBSTRATE — layer pulled, AGENT DEFERRED *(2026-07-01)*
+
+**Decision (Nihaf, 2026-07-01):** the purchasing build — database, frontend, technical wiring — is
+still being shaped. Agent #1 does **NOT** come out until that **entity ring closes**. COA reason: the
+agent is the *action ring*; it can only sit on a *closed entity ring*. Releasing it onto a moving
+schema would mean constant re-training + false alarms against a target still in flux. Pulling this
+layer was the step that makes the agent possible later — it is not the agent itself.
+
+**Canonical layer (the REAL one — not the legacy sprawl):**
+HN Staff Android app `android/HNStaff` → `functions/api/ops.js` (deployed as `hn-ops-api`) → **D1 `hn-ops`**.
+Tables: `purchase_orders` (one card per outlet×vendor×date), `purchase_order_lines` (item lines — every
+discrepancy signal lives here: `item_code`, `qty_ordered`, `unit_cost_paise`, `qty_received`,
+`receive_state`, `flag`), `purchase_event_log` (the trail), `items`+`item_aliases` (master + normalization),
+`purchase_price_history`. **Do NOT wire the agent to the OLD parallel stores** `sauda_purchase`/`buy_lines`/
+`sauda_*` in D1 `hn-hiring` — that is the legacy four-app sprawl this rebuild replaces.
+
+**Lifecycle (`purchase_orders.status`):** REQUESTED (demand, `sauda.demand`) → ORDERED (place,
+`sauda.place`) → RECEIVED (`sauda.receive`; backend already FORCES goods+bill photo, qty>0, rate>0) →
+RAISED → PAID → RECONCILED. Payment is already gated on complete receive proof.
+
+**Discrepancy = STAGE-AWARE (this is the anti-false-alarm rule).** A blank price or a missing item is
+NOT a defect by itself — only against the stage + the item's `price_mode`:
+- **price-missing:** `unit_cost_paise=0` is a defect ONLY for `price_mode='fixed'` items, OR any line still
+  `0` after status=RECEIVED. A `live`-priced line at ORDERED with `0` is NORMAL (rate comes from the bill).
+- **item-not-entered:** an expected item (a REQUESTED demand line, or a recurring item in
+  `purchase_price_history`) with no matching ORDERED line by cutoff. Sub-case: `item_code=''` + `flag` set =
+  un-normalized item ("typed but unmapped").
+- **(later):** `qty_received` NULL past cutoff · `receive_state` in short/over/missing · RECEIVED never RAISED/PAID.
+Responsible person = the **staff PIN on that stage**. Close = the proof exists in the trail.
+
+**Gate before agent #1 is built:** (1) the purchasing build closes; (2) re-derive these rules against the
+FINAL schema (this layer is in flux — treat the columns above as a 2026-07-01 snapshot); (3) confirm whether
+*receive* actually happens in-app — live snapshot 2026-07-01: **32 orders all ORDERED, 0 received, 36/78
+lines unpriced**, which may mean receive happens on paper / web, not the app (only Nihaf holds this truth).
+
+This section is the **L0 detect-rule + L4 reconciliation draft** for agent #1, captured for resume. Build
+it only after the purchasing build closes.
+
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
 witness is Nihaf. A wrong line in a spine is worse than no spine — correct it here first.*
