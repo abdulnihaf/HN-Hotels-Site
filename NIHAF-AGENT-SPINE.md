@@ -365,6 +365,29 @@ daily or specific days? chicken literally every operating day?); (2) the operati
 absence isn't false-flagged; (3) whether "not bought today" is a real allowed state per group. Agent still
 **DEFERRED** per §13 until the purchasing build closes; this is its L3 (intelligence) + L4 (reconciliation) design.
 
+## 15. THE PURPOSE — SEAL or ATTRIBUTE, never a silent leak *(2026-07-01, Nihaf — doctrine)*
+
+**The agent's objective is NOT to find the discrepancy. It is to SEAL it.** Two terminal outcomes only,
+and the trail is what guarantees them:
+1. **SEALED** — the gap is closed before any money is lost: the responsible staff fills the missing entry
+   (or marks a legitimate "not bought today"). The day's purchasing cost is made whole → **₹0 financial loss.**
+2. **ATTRIBUTED LOSS** — if a loss IS incurred, it happens ONLY after the agent has demonstrably notified the
+   responsible staff **multiple times** and they stayed reluctant. The loss is then **owned by that staff**,
+   proven by the trail. An anonymous leak ("the P&L is just wrong, nobody knows why") becomes a named,
+   documented failure.
+
+**There is no third exit.** Every material gap ends as prevented or attributed — never a silent leak. The
+shift: the agent is a **loss-sealer + accountability engine**, not a detector. Its success metric is "₹ loss
+sealed" + "zero unattributed loss", not "discrepancies found".
+
+**The trail IS the source of truth (Nihaf, verbatim).** Every notification, delivery, acknowledgement, and
+action is timestamped in `purchase_event_log` + the comms log. That record is what makes both outcomes
+airtight: it certifies the cost is whole, OR it carries the proof that staff X was warned N times and chose
+not to act. Responsibility is sealed onto the trail, not argued from memory.
+
+This is COA exact: don't chase what's lost — close the space so the wrong move can't happen; and where it
+still happens, the trail names who let it. See the diagram drawn 2026-07-01.
+
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
 witness is Nihaf. A wrong line in a spine is worse than no spine — correct it here first.*
