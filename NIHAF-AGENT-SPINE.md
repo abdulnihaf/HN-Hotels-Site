@@ -350,6 +350,18 @@ Cabbage absent → ignore.
 - **T3 never-chase**: stock-up / occasional (the 58 Dry Goods, 32 Packaging, masala) — bought in bulk
   periodically; daily absence is normal.
 
+**Confirmed essentials (Nihaf, 2026-07-01):** HE → **chicken = hard** (very much daily); **mutton =
+optional** (off by default). NCH → **milk = hard** + **buns = hard** ("and all that" = the other daily
+NCH staples — learned by recurrence + the bootstrap ask, NOT enumerated by Nihaf, per §16).
+
+**WHY completeness matters beyond P&L (Nihaf, 2026-07-01) — the bill→pay chain:** a purchase that is
+never *entered* never generates its vendor **BILL**, and so never generates the **PAYMENT**. The entry
+is the HEAD of the chain: missing entry = an **unbilled, unpaid vendor**, not just a P&L gap. So
+"confirm any other item properly" means the day's completeness gates real money going OUT — which is
+why (a) Zoya's confirm-done is **soft-blocked**, never a blind tap, and (b) the agent learns the full
+expected daily basket from **recurrence + the bootstrap ask**, so it can flag a missing *non-headline*
+item too as the trail grows — without Nihaf ever listing items.
+
 **Reconcile before raising (anti-false-alarm law):** a missing T1 group is a *candidate*; clear benign
 reasons first (outlet closed today? a day-of-week the group isn't bought? menu still sells it?) before
 raising. The reconcile + the buyer's answer are themselves trail.
