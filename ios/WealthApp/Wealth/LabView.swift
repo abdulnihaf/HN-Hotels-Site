@@ -41,7 +41,6 @@ final class LabVM: ObservableObject {
     @Published var killReport: String?
     @Published var recentRuns: [LabRun] = []
     @Published var quantStatus: QuantControlStatus?
-    @Published var quantTick: QuantTickResult?
     @Published var quantBusy = false
     @Published var quantError: String?
 
@@ -86,19 +85,6 @@ final class LabVM: ObservableObject {
         }
         quantBusy = false
     }
-
-    func runPaperTimerTick() async {
-        quantBusy = true
-        quantError = nil
-        do {
-            quantTick = try await WealthClient.shared.quantControlTick(mode: "paper", allowReal: false)
-            quantStatus = try? await WealthClient.shared.quantControlStatus()
-        } catch {
-            quantTick = nil
-            quantError = (error as? WealthError)?.errorDescription ?? error.localizedDescription
-        }
-        quantBusy = false
-    }
 }
 
 struct LabView: View {
@@ -113,7 +99,7 @@ struct LabView: View {
                 VStack(spacing: 14) {
                     preflightStrip
                     modeToggle
-                    quantAtmosphereCard
+                    quantProofTrailCard
                     recentLabTrailCard
                     if let n = authNote {
                         Text(n).font(.system(size: 12)).foregroundColor(HK.error)
@@ -187,30 +173,30 @@ struct LabView: View {
         }
     }
 
-    // ── Quant atmosphere: Lab proof first, timer/control second, real locked last ──
-    private var quantAtmosphereCard: some View {
+    // ── Quant proof trail: Lab proves; Execute operates. ──
+    private var quantProofTrailCard: some View {
         Card {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "scope")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(HK.accent)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Quant atmosphere")
+                    Text("Quant proof trail")
                         .font(.system(size: 14, weight: .heavy))
                         .foregroundColor(HK.text)
-                    Text("Start with Lab proof, then run a paper timer tick, then keep real automation locked until the server gate is green.")
+                    Text("Lab is only for proving the pipe. Timer execution, overrides, and any future real automation controls live in Execute.")
                         .font(.system(size: 12))
                         .foregroundColor(HK.textDim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Pill(text: quantControlPill.0, color: quantControlPill.1)
+                Pill(text: quantProofPill.0, color: quantProofPill.1)
             }
 
             HStack(spacing: 8) {
                 trailChip("1", "Lab test", vm.kiteConnected ? "Kite ready" : "connect Kite", vm.kiteConnected ? HK.ready : HK.running)
-                trailChip("2", "Paper tick", lab.quantStatus?.timer?.available == true ? "ready" : "pending", lab.quantStatus?.timer?.available == true ? HK.ready : HK.running)
-                trailChip("3", "Real timer", realTimerReady ? "armed" : "locked", realTimerReady ? HK.error : HK.ready)
+                trailChip("2", "Trail", lab.quantStatus?.timer?.available == true ? "visible" : "pending", lab.quantStatus?.timer?.available == true ? HK.ready : HK.running)
+                trailChip("3", "Execute", "controls there", HK.accent)
             }
 
             Divider().background(HK.lineSoft)
@@ -244,31 +230,14 @@ struct LabView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let tick = lab.quantTick {
-                Text("Last paper tick: \(tick.decision ?? "—") → \(tick.state_after ?? "—")")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(tick.ok == true ? HK.ready : HK.error)
+            Button {
+                Task { await lab.refreshTrail() }
+            } label: {
+                Label(lab.quantBusy ? "Loading…" : "Refresh proof trail", systemImage: "arrow.clockwise")
+                    .font(.system(size: 12, weight: .bold))
+                    .frame(maxWidth: .infinity)
             }
-
-            HStack(spacing: 8) {
-                Button {
-                    Task { await lab.refreshTrail() }
-                } label: {
-                    Label(lab.quantBusy ? "Loading…" : "Refresh trail", systemImage: "arrow.clockwise")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                }
-                .disabled(lab.quantBusy)
-
-                Button {
-                    Task { await lab.runPaperTimerTick() }
-                } label: {
-                    Label("Paper timer tick", systemImage: "play.circle.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                }
-                .disabled(lab.quantBusy || lab.quantStatus?.timer?.available != true)
-            }
+            .disabled(lab.quantBusy)
         }
     }
 
@@ -314,15 +283,11 @@ struct LabView: View {
         }
     }
 
-    private var quantControlPill: (String, Color) {
+    private var quantProofPill: (String, Color) {
         if lab.quantBusy { return ("LOADING", HK.running) }
-        if lab.quantStatus != nil { return ("CONTROL TRAIL", HK.ready) }
+        if lab.quantStatus != nil { return ("PROOF TRAIL", HK.ready) }
         if lab.quantError != nil { return ("API PENDING", HK.running) }
         return ("NOT LOADED", HK.idle)
-    }
-
-    private var realTimerReady: Bool {
-        lab.quantStatus?.next_tick?.real_enabled == true && lab.quantStatus?.gate?.trade_authorized == true
     }
 
     private func trailChip(_ n: String, _ title: String, _ sub: String, _ color: Color) -> some View {

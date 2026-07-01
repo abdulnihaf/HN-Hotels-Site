@@ -8,8 +8,10 @@ struct QuantControlStatus: Decodable {
     let trade_date: String?
     let generated_at: Double?
     let phase: String?
+    let config: [String: String]?
     let gate: ExecutionGate?
     let scout: QuantScoutPlan?
+    let override: QuantOverride?
     let timer: QuantTimerTrail?
     let broker: QuantBrokerTrail?
     let lab: QuantLabTrail?
@@ -75,6 +77,23 @@ struct QuantTimerEvent: Decodable, Identifiable {
         case ltp_paise, entry_paise, stop_paise, target_paise, qty, pnl_pct
         case broker_order_id, broker_status, failure_code
     }
+}
+
+struct QuantOverride: Decodable {
+    let active: Bool?
+    let id: Int?
+    let trade_date: String?
+    let status: String?
+    let actor: String?
+    let reason: String?
+    let symbol: String?
+    let exchange: String?
+    let product: String?
+    let entry_paise: Int?
+    let stop_paise: Int?
+    let target_paise: Int?
+    let qty: Int?
+    let expires_at: String?
 }
 
 struct QuantBrokerTrail: Decodable {
@@ -157,6 +176,15 @@ struct QuantTickResult: Decodable {
     let error: String?
 }
 
+struct QuantCommandResult: Decodable {
+    let ok: Bool?
+    let id: Int?
+    let trade_date: String?
+    let changes: Int?
+    let override: QuantOverride?
+    let error: String?
+}
+
 extension WealthClient {
     func quantControlStatus() async throws -> QuantControlStatus {
         let data = try await request(path: "/api/quant-control", query: ["action": "status"])
@@ -173,5 +201,41 @@ extension WealthClient {
                                      rawBody: raw)
         do { return try JSONDecoder().decode(QuantTickResult.self, from: data) }
         catch { throw WealthError.server("Decode quant_control_tick: \(error.localizedDescription)") }
+    }
+
+    func quantControlSetOverride(symbol: String,
+                                 entry: Double,
+                                 stop: Double,
+                                 target: Double,
+                                 qty: Int,
+                                 reason: String) async throws -> QuantCommandResult {
+        let body: [String: Any] = [
+            "symbol": symbol.uppercased(),
+            "exchange": "NSE",
+            "product": "MIS",
+            "entry": entry,
+            "stop": stop,
+            "target": target,
+            "qty": max(1, qty),
+            "reason": reason,
+            "actor": "ios_execute_tab"
+        ]
+        let raw = try JSONSerialization.data(withJSONObject: body)
+        let data = try await request(path: "/api/quant-control",
+                                     query: ["action": "override_set"],
+                                     method: "POST",
+                                     rawBody: raw)
+        do { return try JSONDecoder().decode(QuantCommandResult.self, from: data) }
+        catch { throw WealthError.server("Decode quant_control_override_set: \(error.localizedDescription)") }
+    }
+
+    func quantControlClearOverride(reason: String = "ios_execute_tab_clear") async throws -> QuantCommandResult {
+        let raw = try JSONSerialization.data(withJSONObject: ["reason": reason])
+        let data = try await request(path: "/api/quant-control",
+                                     query: ["action": "override_clear"],
+                                     method: "POST",
+                                     rawBody: raw)
+        do { return try JSONDecoder().decode(QuantCommandResult.self, from: data) }
+        catch { throw WealthError.server("Decode quant_control_override_clear: \(error.localizedDescription)") }
     }
 }

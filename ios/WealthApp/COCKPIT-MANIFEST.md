@@ -40,11 +40,16 @@ how the cockpit's growth is locked in and can never regress.
 # CHECK SRC|LabView.swift|private var killBar|Execution Lab kill-switch (square-off-all) present
 # CHECK SRC|LabView.swift|equityRoundTrip|Execution Lab equity round-trip scenario
 # CHECK SRC|LabView.swift|tinyReal|Execution Lab SIM/TINY-REAL mode toggle
-# CHECK SRC|LabView.swift|quantAtmosphereCard|Execution Lab shows Quant timer/control trail after lab proof
+# CHECK SRC|LabView.swift|quantProofTrailCard|Execution Lab shows Quant proof trail but no timer execution controls
 # CHECK SRC|LabView.swift|recentLabTrailCard|Execution Lab shows recent broker/test proof history
 # CHECK SRC|LabClient.swift|func labSquareOffAll|Execution Lab client wired to the hardened door
 # CHECK SRC|QuantControlClient.swift|func quantControlStatus|iOS client can read Quant control status
 # CHECK SRC|QuantControlClient.swift|func quantControlTick|iOS client can request a paper timer tick
+# CHECK SRC|QuantControlClient.swift|func quantControlSetOverride|iOS client can set a timer override from Execute
+# CHECK SRC|QuantControlClient.swift|func quantControlClearOverride|iOS client can clear a timer override from Execute
+# CHECK SRC|ExecuteView.swift|quantExecutionCard|Execute tab owns Quant timer execution controls
+# CHECK SRC|ExecuteView.swift|saveTimerOverride|Execute tab can save the timer override
+# CHECK SRC|ExecuteView.swift|runRealTimerTick|Execute tab has a Face-ID-gated real timer tick path
 # CHECK SRC|HomeView.swift|LabView(vm: vm)|Execution Lab tab wired into the TabView
 
 ## Required live data (endpoints — must respond with the marker field)
