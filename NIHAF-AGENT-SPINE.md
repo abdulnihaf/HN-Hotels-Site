@@ -489,6 +489,40 @@ itself, without him.
 the system's job is to walk it to exact from the real trail and heal its own drift — self-learning what a
 day is, self-healing when it's wrong.
 
+## 19. NEVER FALSE-ALARM — the suppressor ladder *(2026-07-01, from a 12-angle read of 50 real POs)*
+
+> Full design: `docs/NIHAF-AGENT-FALSE-ALARM-TRAINING.md`. This is the summary; that goal — **zero false
+> alarms, better silent than crying wolf** — governs everything the agent emits.
+
+**The rule:** the agent may only chase what a **month of real behaviour proves is expected TODAY**, and every
+candidate gap must survive a fixed **ladder of suppressors** before any human is contacted; if any check is
+uncertain it **asks (First Law), never asserts**.
+
+**Train = build a deterministic expectation table, then suppress:** Stage 0 **canonicalise**
+(name-resolve variant families to one entity + unit-convert to one base — but never cross a real boundary,
+Kabab-chili ≠ Kabab-chicken, morning≠evening milk); Stage 1 **derive** per-item CLASS from NORMAL days —
+**TRUE-DAILY** (≥90%, maxgap≤1: HE shawarma; NCH milk-pair/buns/butter/cutlet/lemon), **PERIODIC** (own
+cadence: egg alt-day, sugar 4-day), **DEEP-BULK** (tea powder/spices/packaging — never flag on absence),
+plus the **vendor-fills allow-set** (blank "—" ≥30% of days = legitimately blank).
+
+**The suppressor ladder (survive EVERY rung), ranked by false-alarms killed:**
+1. **DAY-STATE gate (biggest):** classify the day first — DATA-GAP (both brands ≥2 days, e.g. 18–24 Jun) →
+   0 alarms + quiet note to Nihaf · NO-LIST (one brand one day, e.g. NCH 9 & 13 Jun) → 0 alarms + gentle
+   confirm to sender · PARTIAL/RESTOCK (count far off median, or restock signature, e.g. HE 28–29 Jun) →
+   suppress all daily-item flags. Only HAS-PO-NORMAL days proceed.
+2. **RECURRENCE-CLASS:** only TRUE-DAILY flags same-day absence; PERIODIC only past its own max gap; DEEP-BULK never.
+3. **VALUE (~₹300 floor):** below = auto-attributed trivial (kills lemon/chilli/coriander noise).
+4. **SUBSTITUTION-GROUP:** judge the group (chicken forms / oil / milk-pair), not the SKU.
+5. **CO-OCCURRENCE:** auto-alarm only on near-1.0 locks (milk-morning⟷evening); buffers never flag on absence.
+6. **CONFIDENCE:** not "expected" until ≥10 delivered days in a rolling ~21-day window.
+
+**Stage 3 — resolve, don't assert:** a survivor is ONE question to the right sender (Azeem→HE, Nafees/
+Basheer→NCH), closed SEALED or ATTRIBUTED, never re-nagged; blank "—" judged line-present not number-filled;
+re-run monthly (self-learning §18). **Confidently flag only:** a TRUE-DAILY anchor truly absent on a full
+list · a broken milk-pair lock · a material PERIODIC item past its own max gap · an ORDERED-but-never-priced
+item (billing gap) · a list from an unknown sender. **Ask (never assume):** per-item price · NO-LIST vs
+missed-ingest · DATA-GAP vs export-fail · any unresolved item/unit · a cross-brand item (flag, don't reassign).
+
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
 witness is Nihaf. A wrong line in a spine is worse than no spine — correct it here first.*
