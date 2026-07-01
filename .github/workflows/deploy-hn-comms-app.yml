@@ -87,9 +87,16 @@ jobs:
           </html>
           HTML
 
+      - name: Ensure APK Pages project exists
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler@3.90.0 pages project create hn-comms-app --production-branch=main || true
+
       - name: Deploy APK install page
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy /tmp/hn-comms-app-dist --project-name=hn-comms-app --branch=main
+          command: pages deploy /tmp/hn-comms-app-dist --project-name=hn-comms-app --branch=main --commit-dirty=true
