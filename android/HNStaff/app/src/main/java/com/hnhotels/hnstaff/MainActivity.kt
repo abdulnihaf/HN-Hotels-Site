@@ -6,6 +6,9 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -23,6 +26,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,7 +41,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -1457,36 +1463,72 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
     }
 }
 
-data class UpiApp(val label: String, val packageName: String)
+data class UpiApp(val label: String, val packageName: String, val mark: String, val bg: Color, val fg: Color)
 private val UpiApps = listOf(
-    UpiApp("PhonePe", "com.phonepe.app"),
-    UpiApp("GPay", "com.google.android.apps.nbu.paisa.user"),
-    UpiApp("Paytm", "net.one97.paytm"),
-    UpiApp("CRED", "com.dreamplug.androidapp"),
-    UpiApp("BHIM", "in.org.npci.upiapp")
+    UpiApp("PhonePe", "com.phonepe.app", "P", Color(0xFF4B248C), Color.White),
+    UpiApp("GPay", "com.google.android.apps.nbu.paisa.user", "GPay", Color(0xFFEAF1FF), Color(0xFF1A73E8)),
+    UpiApp("Paytm", "net.one97.paytm", "Paytm", Color(0xFFE5F5FF), Color(0xFF003DA6)),
+    UpiApp("CRED", "com.dreamplug.androidapp", "CRED", Color(0xFF111111), Color.White),
+    UpiApp("BHIM", "in.org.npci.upiapp", "BHIM", Color(0xFFFFF0E0), Color(0xFFE65100))
 )
 
 @Composable
 fun UpiShortcutRow(vpa: String, amount: String, openApp: (UpiApp) -> Unit) {
-    Surface(shape = RoundedCornerShape(10.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(12.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ContentCopy, null, tint = Maroon, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
+                Surface(shape = RoundedCornerShape(10.dp), color = Color.White, modifier = Modifier.size(42.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.ContentCopy, null, tint = Maroon, modifier = Modifier.size(20.dp))
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (vpa.isNotEmpty()) vpa else "UPI ID not saved", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("Amount: ${amount.ifEmpty { "enter manually" }}", color = Muted, fontSize = 11.sp, maxLines = 1)
+                    Text(if (vpa.isNotEmpty()) vpa else "UPI ID not saved", color = Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("UPI ID copies automatically. Enter ${amount.ifEmpty { "amount" }} manually in the app.", color = Muted, fontSize = 11.sp, maxLines = 2)
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 UpiApps.forEach { app ->
-                    OutlinedButton(onClick = { openApp(app) }, enabled = vpa.isNotEmpty(), shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), modifier = Modifier.padding(end = 8.dp)) {
-                        Text(app.label, color = if (vpa.isNotEmpty()) Maroon else Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    UpiPaymentTile(app, enabled = vpa.isNotEmpty()) { openApp(app) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UpiPaymentTile(app: UpiApp, enabled: Boolean, onClick: () -> Unit) {
+    val ctx = LocalContext.current
+    val appIcon = remember(app.packageName) { paymentAppIconBitmap(ctx, app.packageName) }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White,
+        tonalElevation = 1.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Sand),
+        modifier = Modifier.padding(end = 10.dp).width(82.dp).height(94.dp).clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = if (enabled) app.bg else Sand,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (appIcon != null) {
+                        Image(
+                            bitmap = appIcon.asImageBitmap(),
+                            contentDescription = app.label,
+                            modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
+                        )
+                    } else {
+                        Text(app.mark, color = if (enabled) app.fg else Muted, fontWeight = FontWeight.Black, fontSize = if (app.mark.length > 2) 11.sp else 20.sp)
                     }
                 }
             }
+            Spacer(Modifier.height(7.dp))
+            Text(app.label, color = if (enabled) Ink else Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -2440,6 +2482,21 @@ fun firstVpa(rawJson: String): String {
     } catch (e: Exception) {
         rawJson.split(',', ';', '\n').map { it.trim().trim('[', ']', '"') }.firstOrNull { it.contains("@") } ?: ""
     }
+}
+fun paymentAppIconBitmap(ctx: Context, packageName: String): Bitmap? = try {
+    drawableToBitmap(ctx.packageManager.getApplicationIcon(packageName))
+} catch (e: Exception) {
+    null
+}
+fun drawableToBitmap(drawable: Drawable): Bitmap {
+    if (drawable is BitmapDrawable && drawable.bitmap != null) return drawable.bitmap
+    val w = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
+    val h = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bitmap
 }
 fun openUpiApp(ctx: Context, app: UpiApp, vpa: String) {
     if (vpa.isBlank()) {
