@@ -40,7 +40,11 @@ how the cockpit's growth is locked in and can never regress.
 # CHECK SRC|LabView.swift|private var killBar|Execution Lab kill-switch (square-off-all) present
 # CHECK SRC|LabView.swift|equityRoundTrip|Execution Lab equity round-trip scenario
 # CHECK SRC|LabView.swift|tinyReal|Execution Lab SIM/TINY-REAL mode toggle
+# CHECK SRC|LabView.swift|quantAtmosphereCard|Execution Lab shows Quant timer/control trail after lab proof
+# CHECK SRC|LabView.swift|recentLabTrailCard|Execution Lab shows recent broker/test proof history
 # CHECK SRC|LabClient.swift|func labSquareOffAll|Execution Lab client wired to the hardened door
+# CHECK SRC|QuantControlClient.swift|func quantControlStatus|iOS client can read Quant control status
+# CHECK SRC|QuantControlClient.swift|func quantControlTick|iOS client can request a paper timer tick
 # CHECK SRC|HomeView.swift|LabView(vm: vm)|Execution Lab tab wired into the TabView
 
 ## Required live data (endpoints — must respond with the marker field)

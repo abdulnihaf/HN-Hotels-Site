@@ -21,6 +21,7 @@ crons = [
   "0 3 * * 1-5",            # 4. Daily briefing    08:30 IST M-F
   "*/5 3-10 * * 1-5",       # 5. Cascade alerts    every 5 min market (offset 0)
   "*/2 3-10 * * 1-5",       # 6. Stop-loss watcher every 2 min market
+  "2-59/3 3-10 * * 1-5",    # 6q. Quant timer      every 3 min market — paper by default, real gated server-side
   "3-58/5 3-10 * * 1-5",    # 6a. Paper-trade auto-close every 5 min market (offset 3) — closes on stop/target
   "1-56/5 3-10 * * 1-5",    # 6b. Kite reconcile   every 5 min market (offset 1) — holdings, funds, orders, trades
   "15 3 * * 1-5",           # 6c. Sync instruments 08:45 IST — Kite NSE instruments CSV → kite_instruments
@@ -65,3 +66,5 @@ KITE_API_KEY = "85yfvys3t9t66l35"
 
 # Secrets (wrangler secret put):
 #   DASHBOARD_KEY   — same key as Pages site
+# Optional vars/secrets:
+#   QUANT_CONTROL_BASE — defaults to https://trade.hnhotels.in; set only if control API host changes
