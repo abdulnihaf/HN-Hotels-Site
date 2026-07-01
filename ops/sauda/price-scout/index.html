@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sauda Price Scout</title>
+  <meta name="theme-color" content="#0b0d0f">
+  <style>
+    :root {
+      --bg: #0b0d0f;
+      --panel: #14181d;
+      --panel-2: #1b2027;
+      --line: rgba(255,255,255,.1);
+      --text: #f4f6f8;
+      --muted: #9aa3ad;
+      --faint: #65707c;
+      --green: #46d08b;
+      --green-bg: rgba(70,208,139,.12);
+      --amber: #e0ad47;
+      --amber-bg: rgba(224,173,71,.14);
+      --red: #ff6666;
+      --red-bg: rgba(255,102,102,.13);
+      --blue: #6ca8ff;
+      --blue-bg: rgba(108,168,255,.13);
+      --gold: #d6a656;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.4; }
+    button, input { font: inherit; }
+    button { min-height: 44px; border: 0; border-radius: 8px; cursor: pointer; }
+    a { color: inherit; }
+    .num { font-variant-numeric: tabular-nums; }
+    .hidden { display: none !important; }
+
+    .gate {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: calc(24px + var(--safe-top)) 18px calc(24px + var(--safe-bottom));
+    }
+    .gate-box {
+      width: min(360px, 100%);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .gate h1 { margin: 0 0 4px; font-size: 22px; }
+    .gate p { margin: 0 0 18px; color: var(--muted); }
+    .pin-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+    .pin-row input {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f1216;
+      color: var(--text);
+      padding: 0 12px;
+    }
+    .pin-row button { background: var(--gold); color: #1c1304; font-weight: 750; padding: 0 18px; }
+    .err { min-height: 18px; margin-top: 10px; color: var(--red); font-size: 12px; }
+
+    .shell { min-height: 100dvh; padding-bottom: calc(22px + var(--safe-bottom)); }
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(11,13,15,.94);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+      padding: calc(12px + var(--safe-top)) 14px 12px;
+    }
+    .top-row { display: flex; align-items: center; gap: 10px; }
+    .back {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--muted);
+    }
+    .title { min-width: 0; flex: 1; }
+    .title h1 { margin: 0; font-size: 20px; }
+    .title .sub { margin-top: 2px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .refresh { width: 44px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+
+    .wrap { width: min(1320px, 100%); margin: 0 auto; padding: 14px; }
+    .strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .metric {
+      min-height: 76px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .metric .k { color: var(--muted); font-size: 12px; }
+    .metric .v { margin-top: 4px; font-size: 22px; font-weight: 800; }
+    .metric.green .v { color: var(--green); }
+    .metric.amber .v { color: var(--amber); }
+    .metric.red .v { color: var(--red); }
+    .metric.blue .v { color: var(--blue); }
+
+    .sources {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .source {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 10px;
+      min-height: 74px;
+    }
+    .source b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .source .counts { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+    }
+    .pill.live { color: var(--green); background: var(--green-bg); border-color: rgba(70,208,139,.25); }
+    .pill.stale { color: var(--amber); background: var(--amber-bg); border-color: rgba(224,173,71,.25); }
+    .pill.dead { color: var(--red); background: var(--red-bg); border-color: rgba(255,102,102,.25); }
+    .pill.pin { color: var(--blue); background: var(--blue-bg); border-color: rgba(108,168,255,.25); }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .toolbar input {
+      min-height: 44px;
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0 12px;
+    }
+    .toolbar select {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0 12px;
+    }
+
+    .items { display: grid; gap: 12px; }
+    .item {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .item-head {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      align-items: center;
+    }
+    .thumb {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #0f1216;
+      display: grid;
+      place-items: center;
+      color: var(--faint);
+      overflow: hidden;
+      font-weight: 800;
+    }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .item-name { min-width: 0; }
+    .item-name h2 { margin: 0; font-size: 17px; }
+    .item-name .meta { margin-top: 4px; color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .health { text-align: right; min-width: 128px; }
+    .health b { display: block; font-size: 13px; }
+    .health span { color: var(--muted); font-size: 12px; }
+
+    .item-grid {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px;
+    }
+    .facts {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    .fact {
+      border: 1px solid var(--line);
+      background: #101419;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .fact .label { color: var(--muted); font-size: 12px; }
+    .fact .value { margin-top: 4px; font-weight: 800; font-size: 15px; }
+    .fact .small { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+    .candidates {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .candidate {
+      min-width: 0;
+      border: 1px solid var(--line);
+      background: #101419;
+      border-radius: 8px;
+      padding: 10px;
+      display: grid;
+      gap: 9px;
+    }
+    .candidate.live { border-color: rgba(70,208,139,.32); }
+    .candidate.stale { border-color: rgba(224,173,71,.26); }
+    .candidate.dead { border-color: rgba(255,102,102,.28); }
+    .cand-top { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; }
+    .cand-img {
+      width: 54px;
+      height: 54px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0b0d0f;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--faint);
+      font-size: 11px;
+    }
+    .cand-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cand-title { min-width: 0; }
+    .cand-title b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cand-title a { display: block; margin-top: 4px; color: var(--blue); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cand-data { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .mini { min-width: 0; }
+    .mini span { display: block; color: var(--muted); font-size: 11px; }
+    .mini b { display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .actions button {
+      min-height: 38px;
+      padding: 0 6px;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .actions button.exact { color: var(--green); }
+    .actions button.sub { color: var(--blue); }
+    .actions button.emergency { color: var(--amber); }
+    .actions button.reject { color: var(--red); }
+    .actions button:disabled { opacity: .45; cursor: wait; }
+
+    .status {
+      position: fixed;
+      left: 50%;
+      bottom: calc(18px + var(--safe-bottom));
+      transform: translateX(-50%);
+      z-index: 30;
+      max-width: min(520px, calc(100vw - 28px));
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 40px rgba(0,0,0,.4);
+      color: var(--text);
+    }
+    .status.ok { border-color: rgba(70,208,139,.35); }
+    .status.err { border-color: rgba(255,102,102,.4); }
+
+    @media (max-width: 1120px) {
+      .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sources { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .item-grid { grid-template-columns: 1fr; }
+      .candidates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 680px) {
+      .wrap { padding: 10px; }
+      .strip, .sources, .candidates { grid-template-columns: 1fr; }
+      .toolbar { grid-template-columns: 1fr; }
+      .item-head { grid-template-columns: 54px minmax(0, 1fr); }
+      .thumb { width: 54px; height: 54px; }
+      .health { grid-column: 1 / -1; text-align: left; min-width: 0; }
+      .actions { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <section id="gate" class="gate">
+    <div class="gate-box">
+      <h1>Sauda Price Scout</h1>
+      <p>Owner and purchase PIN</p>
+      <div class="pin-row">
+        <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password">
+        <button id="enter">Open</button>
+      </div>
+      <div id="gateErr" class="err"></div>
+    </div>
+  </section>
+
+  <main id="shell" class="shell hidden">
+    <header class="top">
+      <div class="top-row">
+        <a class="back" href="/ops/sauda/" aria-label="Sauda">S</a>
+        <div class="title">
+          <h1>Price Scout</h1>
+          <div id="stamp" class="sub">Loading</div>
+        </div>
+        <button id="refresh" class="refresh" aria-label="Refresh">R</button>
+      </div>
+    </header>
+    <div class="wrap">
+      <section id="metrics" class="strip"></section>
+      <section id="sources" class="sources"></section>
+      <section class="toolbar">
+        <input id="q" type="search" placeholder="Search item, source, SKU">
+        <select id="state">
+          <option value="">All states</option>
+          <option value="CROWN_LIVE">Crowned</option>
+          <option value="NEEDS_MAPPING">Needs mapping</option>
+          <option value="PIN_STALE">Pinned stale</option>
+          <option value="NO_LIVE_CANDIDATE">No live candidate</option>
+        </select>
+      </section>
+      <section id="items" class="items"></section>
+    </div>
+  </main>
+  <div id="status" class="status hidden"></div>
+
+  <script>
+    const API = '/api/sauda-price';
+    const LS_PIN = 'hn_sauda_price_pin';
+    const state = { pin: localStorage.getItem(LS_PIN) || '', data: null, busy: false, candidates: new Map() };
+
+    const el = {
+      gate: document.getElementById('gate'),
+      shell: document.getElementById('shell'),
+      pin: document.getElementById('pin'),
+      enter: document.getElementById('enter'),
+      gateErr: document.getElementById('gateErr'),
+      refresh: document.getElementById('refresh'),
+      stamp: document.getElementById('stamp'),
+      metrics: document.getElementById('metrics'),
+      sources: document.getElementById('sources'),
+      items: document.getElementById('items'),
+      q: document.getElementById('q'),
+      state: document.getElementById('state'),
+      status: document.getElementById('status'),
+    };
+
+    el.pin.value = state.pin;
+    el.enter.addEventListener('click', openWithPin);
+    el.pin.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') openWithPin(); });
+    el.refresh.addEventListener('click', () => load());
+    el.q.addEventListener('input', renderItems);
+    el.state.addEventListener('change', renderItems);
+
+    if (state.pin) openWithPin();
+
+    async function openWithPin() {
+      const pin = el.pin.value.trim();
+      if (!pin) return;
+      state.pin = pin;
+      localStorage.setItem(LS_PIN, pin);
+      el.gate.classList.add('hidden');
+      el.shell.classList.remove('hidden');
+      await load();
+    }
+
+    async function load() {
+      try {
+        el.gateErr.textContent = '';
+        el.refresh.disabled = true;
+        const res = await fetch(`${API}?action=dashboard&limit=30&pin=${encodeURIComponent(state.pin)}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'load failed');
+        state.data = data;
+        render();
+      } catch (err) {
+        state.data = null;
+        el.shell.classList.add('hidden');
+        el.gate.classList.remove('hidden');
+        el.gateErr.textContent = String(err.message || err);
+      } finally {
+        el.refresh.disabled = false;
+      }
+    }
+
+    function render() {
+      const d = state.data;
+      el.stamp.textContent = `${d.generated_at_ist} | ${d.laws.money}`;
+      const items = d.items || [];
+      const hooks = d.hooks || {};
+      el.metrics.innerHTML = [
+        metric('Price-find', hooks['price-find']?.ready || 0, `${hooks['price-find']?.blocked || 0} blocked`, 'green'),
+        metric('Stale-scout', hooks['stale-scout']?.alerts || 0, 'source/item alerts', 'amber'),
+        metric('Drift-alert', hooks['drift-alert']?.alerts || 0, 'paid above crown', 'red'),
+        metric('MVP items', items.length, 'data-derived queue', 'blue'),
+      ].join('');
+      el.sources.innerHTML = (d.source_health || []).map(sourceCard).join('');
+      renderItems();
+    }
+
+    function renderItems() {
+      if (!state.data) return;
+      const q = el.q.value.trim().toLowerCase();
+      const want = el.state.value;
+      state.candidates = new Map();
+      const rows = (state.data.items || []).filter((item) => {
+        if (want && item.health?.state !== want) return false;
+        if (!q) return true;
+        const hay = [
+          item.label,
+          item.item_code,
+          item.crown?.title,
+          ...(item.candidates || []).flatMap((c) => [c.source_key, c.title, c.pack_size]),
+        ].join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+      el.items.innerHTML = rows.length ? rows.map(itemCard).join('') : `<div class="metric"><div class="k">No matching rows</div></div>`;
+      bindCandidateButtons();
+    }
+
+    function metric(k, v, sub, color) {
+      return `<div class="metric ${color}"><div class="k">${esc(k)}</div><div class="v num">${esc(v)}</div><div class="k">${esc(sub)}</div></div>`;
+    }
+
+    function sourceCard(s) {
+      return `<article class="source">
+        <b>${esc(s.label || s.source_key)}</b>
+        <div class="counts">
+          ${pill('LIVE', s.live, 'live')}
+          ${pill('STALE', s.stale, 'stale')}
+          ${pill('DEAD', s.dead, 'dead')}
+        </div>
+      </article>`;
+    }
+
+    function itemCard(item) {
+      const visual = item.visual || {};
+      const img = imageMarkup(visual.image_url, item.label);
+      const crown = item.crown;
+      const healthClass = item.health?.state === 'CROWN_LIVE' ? 'live' : item.health?.state === 'PIN_STALE' ? 'stale' : 'dead';
+      return `<article class="item" data-item="${escAttr(item.item_code)}">
+        <div class="item-head">
+          <div class="thumb">${img || initials(item.label)}</div>
+          <div class="item-name">
+            <h2>${esc(item.label)}</h2>
+            <div class="meta">
+              <span>${esc(item.unit || 'unit')}</span>
+              <span>rank ${esc(item.mvp_rank || '-')}</span>
+              ${visual.image_r2_key ? `<span>image key set</span>` : ''}
+            </div>
+          </div>
+          <div class="health">
+            ${pill(item.health?.state || 'NO_STATE', '', healthClass)}
+            <span>${item.health?.live_candidates || 0} live / ${item.health?.candidate_count || 0} candidates</span>
+          </div>
+        </div>
+        <div class="item-grid">
+          <div class="facts">
+            ${fact('Current paid/local', money(item.current_paid_local?.rate_paise), item.current_paid_local?.source || '')}
+            ${fact('Live crown', crown ? `${esc(crown.source_key)} | ${money(crown.unit_price_paise || crown.price_paise)}` : 'No crown', crown ? crown.title : 'Pinned live mapping required')}
+            ${fact('Hyperpure', sourceLine(item.compare?.hyperpure), item.compare?.hyperpure?.title || '')}
+            ${fact('Quick-commerce', sourceLine(item.compare?.quick_commerce), item.compare?.quick_commerce?.title || '')}
+            ${fact('Trend', trendText(item.trend), 'paid rate against live crown')}
+          </div>
+          <div class="candidates">
+            ${(item.candidates || []).map((c) => candidateCard(c, item.item_code)).join('') || `<div class="fact"><div class="label">Candidates</div><div class="value">None</div></div>`}
+          </div>
+        </div>
+      </article>`;
+    }
+
+    function candidateCard(c, itemCode) {
+      const liveClass = (c.live_state || '').toLowerCase();
+      state.candidates.set(c.candidate_id, { ...c, item_code: itemCode });
+      return `<article class="candidate ${escAttr(liveClass)}">
+        <div class="cand-top">
+          <div class="cand-img">${imageMarkup(c.image_url, c.title) || 'IMG'}</div>
+          <div class="cand-title">
+            <b title="${escAttr(c.title)}">${esc(c.title || '-')}</b>
+            <a href="${escAttr(c.url || '#')}" target="_blank" rel="noreferrer">${esc(c.source_key)} | ${esc(c.pack_size || c.unit_label || 'pack')}</a>
+          </div>
+        </div>
+        <div class="counts">
+          ${pill(c.live_state || 'STALE', '', liveClass === 'live' ? 'live' : liveClass === 'dead' ? 'dead' : 'stale')}
+          ${c.is_pinned ? pill('PIN', '', 'pin') : ''}
+          ${pill(c.match_decision || 'PENDING', '', '')}
+        </div>
+        <div class="cand-data">
+          <div class="mini"><span>Price</span><b>${money(c.price_paise)}</b></div>
+          <div class="mini"><span>Unit</span><b>${money(c.unit_price_paise)}</b></div>
+          <div class="mini"><span>Captured</span><b>${shortDate(c.captured_at)}</b></div>
+          <div class="mini"><span>Evidence</span><b>${esc(c.source_row || 'scout')}</b></div>
+        </div>
+        <div class="actions">
+          <button class="exact" data-decision="EXACT" data-candidate="${escAttr(c.candidate_id)}">Exact</button>
+          <button class="sub" data-decision="SUBSTITUTE" data-candidate="${escAttr(c.candidate_id)}">Sub</button>
+          <button class="emergency" data-decision="EMERGENCY" data-candidate="${escAttr(c.candidate_id)}">Emergency</button>
+          <button class="reject" data-decision="REJECT" data-candidate="${escAttr(c.candidate_id)}">Reject</button>
+        </div>
+      </article>`;
+    }
+
+    function bindCandidateButtons() {
+      document.querySelectorAll('.actions button').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          if (state.busy) return;
+          state.busy = true;
+          btn.disabled = true;
+          try {
+            const candidate = state.candidates.get(btn.dataset.candidate);
+            if (!candidate) throw new Error('candidate missing');
+            const res = await fetch(`${API}?action=candidate-decision&pin=${encodeURIComponent(state.pin)}`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                candidate_id: btn.dataset.candidate,
+                decision: btn.dataset.decision,
+                candidate,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'save failed');
+            toast(`${btn.dataset.decision} saved`, 'ok');
+            await load();
+          } catch (err) {
+            toast(String(err.message || err), 'err');
+          } finally {
+            state.busy = false;
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    function fact(label, value, small) {
+      return `<div class="fact"><div class="label">${esc(label)}</div><div class="value">${value}</div>${small ? `<div class="small">${esc(small)}</div>` : ''}</div>`;
+    }
+
+    function sourceLine(c) {
+      return c ? `${esc(c.source_key)} | ${money(c.unit_price_paise || c.price_paise)}` : 'No live row';
+    }
+
+    function trendText(t) {
+      if (!t || t.paid_vs_crown_delta_paise == null) return 'No live delta';
+      const sign = t.paid_vs_crown_delta_paise > 0 ? '+' : '';
+      return `${sign}${money(t.paid_vs_crown_delta_paise)} (${t.paid_above_crown_pct || 0}%)`;
+    }
+
+    function pill(label, value, cls) {
+      const text = value === '' || value == null ? label : `${label} ${value}`;
+      return `<span class="pill ${cls || ''}">${esc(text)}</span>`;
+    }
+
+    function imageMarkup(src, alt) {
+      if (!src) return '';
+      return `<img src="${escAttr(src)}" alt="${escAttr(alt || '')}" loading="lazy" onerror="this.remove()">`;
+    }
+
+    function initials(s) {
+      return esc(String(s || 'SX').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase() || 'SX');
+    }
+
+    function money(paise) {
+      if (paise == null || paise === '') return '-';
+      const n = Number(paise);
+      if (!Number.isFinite(n)) return '-';
+      return `Rs ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(n / 100)}`;
+    }
+
+    function shortDate(s) {
+      if (!s) return '-';
+      const d = new Date(String(s).replace(' ', 'T'));
+      if (Number.isNaN(d.getTime())) return s.slice(0, 16);
+      return d.toLocaleString('en-IN', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function toast(msg, cls) {
+      el.status.textContent = msg;
+      el.status.className = `status ${cls || ''}`;
+      el.status.classList.remove('hidden');
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.status.classList.add('hidden'), 2400);
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    function escAttr(s) { return esc(s); }
+  </script>
+</body>
+</html>
