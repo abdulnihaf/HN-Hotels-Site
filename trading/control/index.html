@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Quant Control Room</title>
+<link rel="manifest" href="/trading/manifest.json">
+<meta name="theme-color" content="#080d18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --bg:#080d18; --panel:#111827; --panel2:#172033; --line:#2a3448;
+    --text:#eef3ff; --muted:#93a0b8; --green:#2fd477; --red:#ff5a61;
+    --amber:#f4b044; --blue:#54a7ff; --cyan:#30d5c8; --violet:#8b6cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:14px;padding-top:env(safe-area-inset-top,14px);font-variant-numeric:tabular-nums}
+  header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
+  h1{font-size:18px;line-height:1.2}
+  .sub{display:block;color:var(--muted);font-size:11px;font-weight:400;margin-top:4px}
+  .nav{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .nav a{color:var(--muted);text-decoration:none;border:1px solid var(--line);background:var(--panel2);border-radius:14px;padding:5px 10px;font-size:11px}
+  .nav a.active{color:var(--cyan);border-color:var(--cyan);background:rgba(48,213,200,.12)}
+  button,.btn{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font-weight:700;padding:10px 13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  button.primary{background:var(--cyan);color:#001311;border-color:var(--cyan)}
+  button.danger{background:rgba(255,90,97,.14);border-color:var(--red);color:var(--red)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  input,select{width:100%;min-height:42px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:9px 10px;font-size:14px}
+  label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px}
+  .pin{max-width:390px;margin:82px auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px}
+  .grid{display:grid;gap:12px}
+  .cols3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .cols2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:11px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .hero{border-left:4px solid var(--amber)}
+  .hero.TRADE{border-left-color:var(--green)}
+  .hero.OBSERVE{border-left-color:var(--amber)}
+  .hero.SIT_OUT,.hero.BLOCKED{border-left-color:var(--red)}
+  .big{font-size:30px;font-weight:850;line-height:1}
+  .small{font-size:11px;color:var(--muted);line-height:1.45}
+  .pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:10px;font-weight:800;letter-spacing:.3px;border:1px solid transparent}
+  .pill.ok{color:var(--green);background:rgba(47,212,119,.13);border-color:rgba(47,212,119,.35)}
+  .pill.warn{color:var(--amber);background:rgba(244,176,68,.13);border-color:rgba(244,176,68,.35)}
+  .pill.err{color:var(--red);background:rgba(255,90,97,.13);border-color:rgba(255,90,97,.35)}
+  .pill.info{color:var(--blue);background:rgba(84,167,255,.13);border-color:rgba(84,167,255,.35)}
+  .metric{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px}
+  .metric .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .metric .v{font-size:18px;font-weight:800;margin-top:3px;word-break:break-word}
+  .row{display:grid;grid-template-columns:110px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+  .row:last-child{border-bottom:none}
+  .row .name{font-weight:800}
+  .row .detail{color:var(--muted);font-size:11px;line-height:1.35}
+  .feed{display:flex;flex-direction:column;gap:7px;max-height:420px;overflow:auto}
+  .event{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:12px}
+  .event .top{display:flex;justify-content:space-between;gap:8px;margin-bottom:5px;align-items:center}
+  .event .body{color:var(--muted);font-size:11px;line-height:1.4}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .formgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+  .notice{border-left:3px solid var(--blue);background:rgba(84,167,255,.09);padding:10px;border-radius:7px;color:var(--muted);font-size:12px;line-height:1.45}
+  .notice.red{border-left-color:var(--red);background:rgba(255,90,97,.09)}
+  .notice.green{border-left-color:var(--green);background:rgba(47,212,119,.09)}
+  pre{white-space:pre-wrap;word-break:break-word;background:#050912;border:1px solid var(--line);border-radius:8px;padding:10px;color:#cbd5e1;font-size:11px;max-height:260px;overflow:auto}
+  @media(max-width:900px){.cols3,.cols2,.formgrid{grid-template-columns:1fr}.row{grid-template-columns:1fr}.big{font-size:25px}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const STORE_KEY = 'wealth_dashboard_key';
+let KEY = localStorage.getItem(STORE_KEY) || '';
+let DATA = null;
+
+function esc(s){return String(s == null ? '' : s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function rs(p){if(p==null)return '-'; const r=p/100; return 'Rs ' + (Math.abs(r)>=100000?(r/100000).toFixed(2)+'L':r.toLocaleString('en-IN',{maximumFractionDigits:2}));}
+function px(p){if(p==null)return '-'; return 'Rs ' + (p/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function pct(v){return v==null?'-':(v>0?'+':'')+Number(v).toFixed(2)+'%';}
+function t(ms){if(!ms)return '-'; return new Date(ms).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'});}
+function isoTime(s){if(!s)return '-'; return new Date(s).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+function pill(state){
+  const st=String(state||'').toLowerCase();
+  const cls=st.includes('ready')||st==='trade'||st==='complete'||st==='ok'||st==='flat_now'?'ok':st.includes('block')||st.includes('reject')||st.includes('off')||st.includes('missing')?'err':st.includes('manual')||st.includes('observe')||st.includes('paper')?'warn':'info';
+  return `<span class="pill ${cls}">${esc(state||'-')}</span>`;
+}
+
+function gate(err){
+  document.getElementById('root').innerHTML = `<div class="pin">
+    <h1>Quant Control Room<span class="sub">Enter dashboard key</span></h1>
+    <input id="pin" type="password" placeholder="dashboard key" style="margin:14px 0 10px">
+    <button class="primary" onclick="login()">Unlock</button>
+    ${err?`<div class="small" style="color:var(--red);margin-top:8px">${esc(err)}</div>`:''}
+  </div>`;
+  const input=document.getElementById('pin');
+  input.focus();
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+}
+
+async function login(){
+  const v=document.getElementById('pin').value.trim();
+  if(!v)return;
+  KEY=v;
+  const ok=await load();
+  if(ok)localStorage.setItem(STORE_KEY,v);
+}
+
+async function api(path, opts){
+  const joiner = path.includes('?') ? '&' : '?';
+  const r = await fetch(path + joiner + 'key=' + encodeURIComponent(KEY), Object.assign({headers:{'x-api-key':KEY}}, opts||{}));
+  if(r.status===401){localStorage.removeItem(STORE_KEY);KEY='';gate('Wrong key');throw new Error('unauthorized');}
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return await r.json();
+}
+
+async function load(){
+  if(!KEY){gate();return false;}
+  try{
+    DATA=await api('/api/quant-control?action=status');
+    render();
+    return true;
+  }catch(e){
+    document.getElementById('root').innerHTML=`<div class="pin"><h1>Quant Control Room</h1><div class="small" style="color:var(--red);margin:12px 0">${esc(e.message)}</div><button onclick="gate()">Retry</button></div>`;
+    return false;
+  }
+}
+
+function header(){
+  return `<header>
+    <div>
+      <h1>Quant Control Room<span class="sub">${esc(DATA.trade_date)} · ${esc(DATA.phase)} · next tick ${esc(DATA.next_tick.interval_sec)} sec</span></h1>
+      <nav class="nav">
+        <a href="/trading/">Hub</a><a href="/trading/today/">Today</a><a href="/trading/desk/">Desk</a><a href="/trading/execute/">Execute</a><a class="active" href="/trading/control/">Control</a><a href="/trading/ops/">Ops</a>
+      </nav>
+    </div>
+    <div class="actions" style="margin-top:0">
+      <button onclick="runTick('paper')">Paper Tick</button>
+      <button class="danger" onclick="runTick('real')" ${canRealButton()?'':'disabled'}>Real Tick</button>
+      <button onclick="load()">Refresh</button>
+    </div>
+  </header>`;
+}
+
+function canRealButton(){
+  return DATA?.next_tick?.real_enabled && DATA?.gate?.trade_authorized === true;
+}
+
+function renderHero(){
+  const g=DATA.gate||{}, scout=DATA.scout||{}, broker=DATA.broker||{};
+  const cls=g.decision||'BLOCKED';
+  const open=(broker.positions||[]).filter(p=>p.quantity!==0);
+  return `<section class="grid cols3">
+    <div class="card hero ${esc(cls)}">
+      <h2>Strategy Gate ${pill(g.decision||'unknown')}</h2>
+      <div class="big">${g.trade_authorized?'TRADE':'BLOCKED'}</div>
+      <div class="small" style="margin-top:8px">${esc((g.blocked_reasons||[]).join(' · ') || g.owner_truth || 'No blocker returned')}</div>
+    </div>
+    <div class="card">
+      <h2>Timer Plan ${pill(scout.edge_state||'no scout')}</h2>
+      <div class="metric"><div class="k">Primary</div><div class="v">${esc(scout.primary_symbol||'-')}</div></div>
+      <div class="small" style="margin-top:8px">Entry ${px(scout.entry_paise)} · stop ${px(scout.stop_paise)} · target ${px(Math.max(scout.target_paise||0, Math.round((scout.entry_paise||0)*1.05))||scout.target_paise)} · qty ${esc(scout.qty||'-')}</div>
+    </div>
+    <div class="card">
+      <h2>Broker Book ${open.length?pill('open_positions'):pill('flat_now')}</h2>
+      <div class="big">${open.length ? open.length + ' OPEN' : 'FLAT'}</div>
+      <div class="small" style="margin-top:8px">${broker.orders?.length||0} orders · ${broker.trades?.length||0} fills today · flat proof: ${esc((broker.flat_symbols||[]).join(', ')||'-')}</div>
+    </div>
+  </section>`;
+}
+
+function renderLayers(){
+  const witness=DATA.witness||{}, scout=DATA.scout||{}, gate=DATA.gate||{}, timer=DATA.timer||{};
+  const latest=(timer.events||[])[0]||null;
+  return `<section class="grid cols2">
+    <div class="card"><h2>Opportunity Layer ${pill('oracle_proven')}</h2>
+      <div class="notice green">Oracle layer proves the market often contains plus-five intraday opportunity. The live product must now measure capture, not argue from human limits.</div>
+      <div class="grid cols3" style="margin-top:10px">
+        <div class="metric"><div class="k">F&O bar5 long</div><div class="v">5.92%</div></div>
+        <div class="metric"><div class="k">Oracle best-to-high</div><div class="v">2.85%/day</div></div>
+        <div class="metric"><div class="k">Ideal dip oracle</div><div class="v">0.69%/day</div></div>
+      </div>
+    </div>
+    <div class="card"><h2>Causal Edge Layer ${pill(witness.decision||gate.decision||'not_proven')}</h2>
+      <div class="metric"><div class="k">Today selected</div><div class="v">${esc(witness.selected_symbol||gate.recommended_symbol||'-')}</div></div>
+      <div class="small" style="margin-top:8px">${esc(witness.why_this||gate.owner_truth||'Causal slot edge must be proven by OOS net, folds, p-value, null, and forward trail.')}</div>
+    </div>
+    <div class="card"><h2>Timer Execution Layer ${pill(latest?latest.state_after:'waiting')}</h2>
+      <div class="metric"><div class="k">Latest decision</div><div class="v">${esc(latest?latest.decision:'no tick')}</div></div>
+      <div class="small" style="margin-top:8px">Entry deadline ${esc(DATA.next_tick.entry_deadline_ist)} · exit ${esc(DATA.next_tick.hard_exit_ist)} · mode ${esc(DATA.next_tick.default_mode)}</div>
+    </div>
+    <div class="card"><h2>Broker Gate Layer ${pill(gate.trade_authorized?'deployable':'blocked')}</h2>
+      <div class="metric"><div class="k">Authority</div><div class="v">${esc(gate.execution_authority||'-')}</div></div>
+      <div class="small" style="margin-top:8px">${esc((gate.blocked_reasons||[]).join(' · ')||'Broker-facing picks authorized.')}</div>
+    </div>
+  </section>`;
+}
+
+function renderCapabilities(){
+  return `<section class="card"><h2>Execution Possibilities</h2>
+    ${(DATA.capabilities||[]).map(c=>`<div class="row">
+      <div class="name">${esc(c.id)}</div>
+      <div class="detail">${esc(c.detail)}</div>
+      <div>${pill(c.state)}</div>
+    </div>`).join('')}
+  </section>`;
+}
+
+function renderTimer(){
+  const ev=DATA.timer?.events||[];
+  const rows=ev.length?ev.map(e=>`<div class="event">
+    <div class="top"><strong>${esc(e.symbol||'-')} · ${esc(e.decision)}</strong>${pill(e.state_after)}</div>
+    <div class="body">${isoTime(e.ts)} · ltp ${px(e.ltp_paise)} · entry ${px(e.entry_paise)} · stop ${px(e.stop_paise)} · target ${px(e.target_paise)} · pnl ${pct(e.pnl_pct)}<br>${esc(e.trigger?.reason||'')}</div>
+  </div>`).join(''):`<div class="notice ${DATA.timer?.available?'':'red'}">${DATA.timer?.available?'No timer events for this date yet.':'Timer migration is not applied in D1 yet.'}</div>`;
+  return `<section class="card"><h2>Forward Timer Trail <span>${pill(DATA.timer?.available?'ready':'migration_pending')}</span></h2><div class="feed">${rows}</div></section>`;
+}
+
+function renderBroker(){
+  const orders=DATA.broker?.orders||[];
+  const trades=DATA.broker?.trades||[];
+  return `<section class="grid cols2">
+    <div class="card"><h2>Broker Orders</h2><div class="feed">
+      ${orders.length?orders.map(o=>`<div class="event"><div class="top"><strong>${esc(o.tradingsymbol)} ${esc(o.transaction_type)} x${esc(o.quantity)}</strong>${pill(o.status)}</div><div class="body">${t(o.placed_at)} · ${esc(o.product)} ${esc(o.order_type)} · avg ${px(o.average_price_paise)} · tag ${esc(o.tag||'-')}<br>${esc(o.order_id)}</div></div>`).join(''):'<div class="notice">No broker orders for this date.</div>'}
+    </div></div>
+    <div class="card"><h2>Broker Fills</h2><div class="feed">
+      ${trades.length?trades.map(x=>`<div class="event"><div class="top"><strong>${esc(x.tradingsymbol)} ${esc(x.transaction_type)} x${esc(x.quantity)}</strong>${pill('fill')}</div><div class="body">${t(x.filled_at)} · avg ${px(x.average_price_paise)} · order ${esc(x.order_id)}</div></div>`).join(''):'<div class="notice">No fills reconciled for this date.</div>'}
+    </div></div>
+  </section>`;
+}
+
+function renderManual(){
+  const o=DATA.override||{};
+  return `<section class="card">
+    <h2>Manual Tick / Override / Option Simulation</h2>
+    ${o.active?`<div class="notice green">Active override: ${esc(o.symbol)} entry ${px(o.entry_paise)} stop ${px(o.stop_paise)} target ${px(o.target_paise)} qty ${esc(o.qty)} · ${esc(o.reason)}</div>`:''}
+    <div class="notice">Manual controls still pass through the same server gates. Real equity entry requires TRADE + broker-facing picks + real switches. NFO is buyer-only, index-only, and margin-capped.</div>
+    <div class="formgrid" style="margin-top:12px">
+      <div><label>Symbol</label><input id="mSymbol" placeholder="SETL"></div>
+      <div><label>Entry</label><input id="mEntry" inputmode="decimal" placeholder="269.90"></div>
+      <div><label>Stop</label><input id="mStop" inputmode="decimal" placeholder="261.80"></div>
+      <div><label>Target</label><input id="mTarget" inputmode="decimal" placeholder="283.40"></div>
+      <div><label>Qty</label><input id="mQty" inputmode="numeric" placeholder="1"></div>
+    </div>
+    <div class="actions">
+      <button onclick="manualTick('paper')">Manual Paper Tick</button>
+      <button class="danger" onclick="manualTick('real')" ${canRealButton()?'':'disabled'}>Manual Real Tick</button>
+      <button onclick="saveOverride()">Save Override</button>
+      <button onclick="clearOverride()" ${o.active?'':'disabled'}>Clear Override</button>
+    </div>
+    <div class="formgrid" style="margin-top:14px">
+      <div style="grid-column:span 2"><label>NFO Tradingsymbol</label><input id="oSymbol" placeholder="NIFTY2670223500CE"></div>
+      <div><label>Qty</label><input id="oQty" inputmode="numeric" placeholder="75"></div>
+      <div><label>Product</label><select id="oProduct"><option>NRML</option><option>MIS</option></select></div>
+      <div><label>Ref price</label><input id="oPrice" inputmode="decimal" placeholder="25.00"></div>
+    </div>
+    <div class="actions"><button onclick="simulateOption()">Simulate Option Buy Gate</button></div>
+    <div id="manualOut" style="margin-top:12px"></div>
+  </section>`;
+}
+
+function renderLab(){
+  const runs=DATA.lab?.runs||[];
+  return `<section class="card"><h2>Execution Lab Trail</h2><div class="feed">
+    ${runs.length?runs.map(r=>`<div class="event"><div class="top"><strong>${esc(r.kind)} ${esc(r.symbol||'')}</strong>${pill(r.status)}</div><div class="body">${esc(r.created_at||'')} · ${esc(r.mode)} · tag ${esc(r.tag||'-')} · ${esc(r.raw_error||'')}</div></div>`).join(''):'<div class="notice">No lab runs found.</div>'}
+  </div></section>`;
+}
+
+function renderRaw(){
+  return `<section class="card"><h2>Raw Gate Snapshot</h2><pre>${esc(JSON.stringify({gate:DATA.gate, scout:DATA.scout, next_tick:DATA.next_tick}, null, 2))}</pre></section>`;
+}
+
+function render(){
+  document.getElementById('root').innerHTML = `${header()}<main class="grid">
+    ${renderHero()}
+    ${renderLayers()}
+    ${renderCapabilities()}
+    <section class="grid cols2">${renderTimer()}${renderManual()}</section>
+    ${renderBroker()}
+    ${renderLab()}
+    ${renderRaw()}
+  </main>`;
+}
+
+async function runTick(mode){
+  const allow = mode === 'real';
+  const out = await api('/api/quant-control?action=tick', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':KEY},
+    body:JSON.stringify({mode, allow_real:allow})
+  });
+  alert(`${out.decision || 'tick'} · ${out.state_after || ''}`);
+  await load();
+}
+
+async function manualTick(mode){
+  const body={
+    mode,
+    allow_real: mode === 'real',
+    symbol:document.getElementById('mSymbol').value.trim(),
+    entry:document.getElementById('mEntry').value.trim(),
+    stop:document.getElementById('mStop').value.trim(),
+    target:document.getElementById('mTarget').value.trim(),
+    qty:document.getElementById('mQty').value.trim() || '1'
+  };
+  const out=await api('/api/quant-control?action=tick',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':KEY},body:JSON.stringify(body)});
+  document.getElementById('manualOut').innerHTML='<pre>'+esc(JSON.stringify(out,null,2))+'</pre>';
+  await load();
+}
+
+async function saveOverride(){
+  const reason=prompt('Override reason');
+  if(!reason)return;
+  const body={
+    actor:'owner_control',
+    reason,
+    symbol:document.getElementById('mSymbol').value.trim(),
+    entry:document.getElementById('mEntry').value.trim(),
+    stop:document.getElementById('mStop').value.trim(),
+    target:document.getElementById('mTarget').value.trim(),
+    qty:document.getElementById('mQty').value.trim() || '1'
+  };
+  const out=await api('/api/quant-control?action=override_set',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':KEY},body:JSON.stringify(body)});
+  document.getElementById('manualOut').innerHTML='<pre>'+esc(JSON.stringify(out,null,2))+'</pre>';
+  await load();
+}
+
+async function clearOverride(){
+  const out=await api('/api/quant-control?action=override_clear',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':KEY},body:JSON.stringify({reason:'owner_clear'})});
+  document.getElementById('manualOut').innerHTML='<pre>'+esc(JSON.stringify(out,null,2))+'</pre>';
+  await load();
+}
+
+async function simulateOption(){
+  const symbol=document.getElementById('oSymbol').value.trim().toUpperCase();
+  const qty=parseInt(document.getElementById('oQty').value,10)||1;
+  const product=document.getElementById('oProduct').value;
+  const price=parseFloat(document.getElementById('oPrice').value)||0;
+  if(!symbol){document.getElementById('manualOut').innerHTML='<div class="notice red">NFO tradingsymbol required.</div>';return;}
+  const out=await api('/api/kite?action=place_order',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':KEY},body:JSON.stringify({
+    exchange:'NFO', tradingsymbol:symbol, transaction_type:'BUY', quantity:qty,
+    product, order_type:'LIMIT', price, validity:'DAY', tag:'HNQT_OPT_SIM',
+    simulate:true, surface:'quant_control'
+  })});
+  document.getElementById('manualOut').innerHTML='<pre>'+esc(JSON.stringify(out,null,2))+'</pre>';
+}
+
+load();
+setInterval(()=>{if(KEY && document.visibilityState==='visible')load();},30000);
+</script>
+</body>
+</html>

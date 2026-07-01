@@ -118,6 +118,13 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Backend callback now stores the token, then renders a lightweight “Kite connected / Return to Wealth” page with no dashboard-key requirement. It attempts `hnwealth://kite-connected` and keeps a manual “Open Wealth app” button plus a web-dashboard fallback link.
 - iOS registers `hnwealth` URL scheme and refreshes the Now tab when opened via `hnwealth://kite-connected`, so the app returns to connected state instead of exposing the web dashboard gate.
 
+## Build 29 — Lab-first Quant control trail (2026-07-01, Codex)
+- Added the Quant timer/control trail inside the existing **Lab** tab instead of making automation the first action. The owner trail is now: prove the broker pipe in Lab → read recent Lab proof → load Quant control status → run a paper timer tick → keep real timer locked until the server execution gate and real switches are green.
+- New `QuantControlClient.swift` reads `/api/quant-control?action=status` and can request `/api/quant-control?action=tick` in paper mode. The UI is defensive: if the backend route is not deployed yet, Lab shows `API PENDING` while the existing Lab tests still work.
+- `LabView.swift` now has `quantAtmosphereCard` and `recentLabTrailCard`: Kite/token readiness, paper timer readiness, real timer lock/armed state, timer pick, entry/stop/target, latest tick, broker order/fill counts, and recent lab run history.
+- Lab is promoted into the visible tab row for this build: **Now · Stocks · Lab · Execute · More**. The old hidden-Lab-under-More placement was wrong for a test-first Quant rollout.
+- Locked into `COCKPIT-MANIFEST.md` with new source checks for the Quant control client and Lab trail cards. `project.yml` build number moved to 29. `build-and-install.sh` now uses the current checkout, generates Xcode project files, and builds the `WealthApp` scheme.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).

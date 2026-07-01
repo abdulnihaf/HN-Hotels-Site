@@ -977,6 +977,38 @@ async function paperTradeWatcher(env) {
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// CRON — Quant forward timer (3 min market hours)
+// Calls the Pages control endpoint so the timer, owner UI, and manual buttons
+// all use one state machine. Paper by default; real remains gated there.
+// ────────────────────────────────────────────────────────────────────────
+async function quantForwardTimer(env) {
+  const now = istNow();
+  if (!isISTMarketDay(now)) return { rows: 0, skipped: 'non-market-day' };
+  const istHour = (now.getUTCHours() * 60 + now.getUTCMinutes() + 330) % 1440 / 60;
+  if (istHour < 9.25 || istHour > 15.5) return { rows: 0, skipped: 'outside-market-hours' };
+  const cfg = await env.DB.prepare(
+    `SELECT config_key, config_value FROM user_config
+     WHERE config_key IN ('quant_timer_auto_enabled','quant_timer_default_mode')`
+  ).all().catch(() => ({ results: [] }));
+  const m = {};
+  for (const r of (cfg.results || [])) m[r.config_key] = r.config_value;
+  if (m.quant_timer_auto_enabled === '0') return { rows: 0, skipped: 'quant_timer_auto_enabled=0' };
+  if (!env.DASHBOARD_KEY) return { rows: 0, skipped: 'missing DASHBOARD_KEY secret' };
+
+  const base = env.QUANT_CONTROL_BASE || 'https://trade.hnhotels.in';
+  const mode = m.quant_timer_default_mode || 'paper';
+  const r = await fetch(`${base}/api/quant-control?action=tick`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': env.DASHBOARD_KEY },
+    body: JSON.stringify({ mode, source: 'wealth-orchestrator-cron' }),
+    signal: AbortSignal.timeout(25000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.ok === false) throw new Error(j.error || `quant timer HTTP ${r.status}`);
+  return { rows: j.persisted ? 1 : 0, decision: j.decision, state_after: j.state_after };
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════
 // AUDIT SCANNER (May 6 2026)
 //
@@ -1657,6 +1689,7 @@ const CRON_DISPATCH = {
   '0 3 * * 1-5':        { name: 'briefing_compile',  fn: compileDailyBriefing },    // 08:30 IST
   '*/5 3-10 * * 1-5':   { name: 'cascade_alerts',    fn: cascadeAlertDelta },       // every 5 min market (offset 0)
   '*/2 3-10 * * 1-5':   { name: 'stop_loss',         fn: stopLossWatcher },         // every 2 min market
+  '2-59/3 3-10 * * 1-5':{ name: 'quant_timer',       fn: quantForwardTimer },       // every 3 min — paper by default, real gated server-side
   '3-58/5 3-10 * * 1-5':{ name: 'paper_tick',        fn: paperTradeWatcher },       // every 5 min, offset 3 — paper trade auto-close
   '1-56/5 3-10 * * 1-5':{ name: 'reconcile_kite',    fn: reconcileKite },           // every 5 min, offset 1 — sync Kite holdings/funds/orders/trades
   '15 3 * * 1-5':       { name: 'sync_instruments',  fn: syncKiteInstruments },     // 08:45 IST — sync NSE instruments CSV (~80k rows)
@@ -1694,6 +1727,7 @@ const HTTP_HANDLERS = {
   briefing_compile:   compileDailyBriefing,
   cascade_alerts:     cascadeAlertDelta,
   stop_loss:          stopLossWatcher,
+  quant_timer:        quantForwardTimer,
   paper_tick:         paperTradeWatcher,
   kite_reminder:      kiteTokenReminder,
   portfolio_eod:      eodPortfolioSnapshot,

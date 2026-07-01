@@ -183,18 +183,18 @@ struct HomeView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            NowView(vm: vm, session: session, goToExecute: { tab = 2 })
+            NowView(vm: vm, session: session, goToExecute: { tab = 3 })
                 .tabItem { Label("Now", systemImage: "bolt.horizontal.circle.fill") }.tag(0)
-            StocksView(vm: vm, goToExecute: { tab = 2 })
+            StocksView(vm: vm, goToExecute: { tab = 3 })
                 .tabItem { Label("Stocks", systemImage: "chart.line.uptrend.xyaxis") }.tag(1)
-            ExecuteView(vm: vm)
-                .tabItem { Label("Execute", systemImage: "bolt.fill") }.tag(2)
-            SetupView(vm: vm)
-                .tabItem { Label("Today", systemImage: "sun.max.fill") }.tag(3)
-            OpsView(vm: vm)
-                .tabItem { Label("Ops", systemImage: "waveform.path.ecg") }.tag(4)
             LabView(vm: vm)
-                .tabItem { Label("Lab", systemImage: "testtube.2") }.tag(5)
+                .tabItem { Label("Lab", systemImage: "testtube.2") }.tag(2)
+            ExecuteView(vm: vm)
+                .tabItem { Label("Execute", systemImage: "bolt.fill") }.tag(3)
+            SetupView(vm: vm)
+                .tabItem { Label("Today", systemImage: "sun.max.fill") }.tag(4)
+            OpsView(vm: vm)
+                .tabItem { Label("Ops", systemImage: "waveform.path.ecg") }.tag(5)
         }
         .tint(HK.accent)
         .task { await vm.refresh() }

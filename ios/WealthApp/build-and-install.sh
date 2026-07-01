@@ -1,28 +1,48 @@
 #!/bin/bash
 set -e
-PROJECT="/Users/nihaf/Documents/Tech.nosync/HN-Hotels-Site/ios/WealthApp/WealthApp.xcodeproj"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PROJECT="$HERE/WealthApp.xcodeproj"
 DERIVED="/tmp/wealthbuild"
 TEAM="FZ58DQ52QS"
+SCHEME="WealthApp"
+PREFERRED_CORE_ID="${WEALTH_DEVICE_CORE_ID:-0EEE75EE-0499-5DD7-A0E8-E150A7CEDBA3}"
 
 DASH_KEY=$(grep 'DASHBOARD_API_KEY' ~/.hn-assets.env | grep -v '^#' | head -1 | sed "s/.*='//;s/'.*$//")
 if [ -n "$DASH_KEY" ]; then
-  cat > /Users/nihaf/Documents/Tech.nosync/HN-Hotels-Site/ios/WealthApp/Wealth/Secrets.swift << 'SWIFT_END'
+  cat > "$HERE/Wealth/Secrets.swift" << 'SWIFT_END'
 enum Secrets {
 SWIFT_END
-  echo "    static let dashboardKey = \"$DASH_KEY\"" >> /Users/nihaf/Documents/Tech.nosync/HN-Hotels-Site/ios/WealthApp/Wealth/Secrets.swift
-  echo "}" >> /Users/nihaf/Documents/Tech.nosync/HN-Hotels-Site/ios/WealthApp/Wealth/Secrets.swift
+  echo "    static let dashboardKey = \"$DASH_KEY\"" >> "$HERE/Wealth/Secrets.swift"
+  echo "}" >> "$HERE/Wealth/Secrets.swift"
   echo "Secrets.swift injected."
 fi
 
-UDID=$(xcrun xctrace list devices 2>/dev/null | grep -iE 'iphone' | grep -viE 'simulator' | sed -nE 's/.*\(([0-9A-Fa-f-]{25,})\).*/\1/p' | head -1)
-CORE_ID=$(xcrun devicectl list devices 2>/dev/null | awk '/iPhone/ && $3 ~ /^[0-9A-Fa-f-]{36}$/ {print $3; exit}')
-echo "Device: $UDID / $CORE_ID"
+cd "$HERE"
+xcodegen generate
+
+CORE_ID=""
+for attempt in 1 2 3 4 5; do
+  DEVICES="$(xcrun devicectl list devices 2>/dev/null || true)"
+  if echo "$DEVICES" | awk -v id="$PREFERRED_CORE_ID" '$0 ~ id && $0 !~ /unavailable/ && ($0 ~ /available/ || $0 ~ /connected/) {found=1} END {exit found ? 0 : 1}'; then
+    CORE_ID="$PREFERRED_CORE_ID"
+    break
+  fi
+  sleep 2
+done
+
+if [ -z "$CORE_ID" ]; then
+  echo "Preferred Wealth iPhone is not available: $PREFERRED_CORE_ID"
+  echo "$DEVICES" | awk '/iPhone/ {print}'
+  echo "Refusing to install onto a different iPhone. Set WEALTH_DEVICE_CORE_ID explicitly to override."
+  exit 2
+fi
+echo "Device core id: $CORE_ID"
 
 xcodebuild \
   -project "$PROJECT" \
-  -scheme Wealth \
+  -scheme "$SCHEME" \
   -configuration Debug \
-  -destination "id=${UDID}" \
+  -destination "generic/platform=iOS" \
   -derivedDataPath "$DERIVED" \
   -allowProvisioningUpdates \
   -allowProvisioningDeviceRegistration \
