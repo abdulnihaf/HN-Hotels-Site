@@ -140,7 +140,7 @@ class CommsApi(
         client.newCall(request).execute().use { response ->
             val body = response.body ?: throw IllegalStateException("Empty media response")
             if (!response.isSuccessful) {
-                throw IllegalStateException("HTTP ${response.code}: ${body.string().take(240)}")
+                throw IllegalStateException("HTTP ${response.code}: ${serverErrorMessage(body.string())}")
             }
             val mediaType = body.contentType()?.toString() ?: response.header("content-type").orEmpty().ifBlank { "application/octet-stream" }
             val directory = File(context.cacheDir, "HNCommsMedia").also { it.mkdirs() }
@@ -183,7 +183,7 @@ class CommsApi(
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw IllegalStateException("HTTP ${response.code}: ${body.take(240)}")
+                throw IllegalStateException("HTTP ${response.code}: ${serverErrorMessage(body)}")
             }
             return JSONObject(body)
         }
@@ -229,6 +229,12 @@ private fun extensionFor(contentType: String, msgType: String): String {
 
 private fun safeFilename(raw: String): String =
     raw.replace(Regex("[^A-Za-z0-9._() -]+"), "_").take(180).ifBlank { "media" }
+
+private fun serverErrorMessage(body: String): String =
+    runCatching { JSONObject(body).optString("error") }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() }
+        ?: body.take(240)
 
 private fun <T> JSONArray.mapObjects(block: (JSONObject) -> T): List<T> =
     List(length()) { index -> block(getJSONObject(index)) }

@@ -21,7 +21,7 @@ targets:
       properties:
         CFBundleDisplayName: HN Comms
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "5"
+        CFBundleVersion: "6"
         CFBundleIconName: AppIcon
         HNCommsDefaultKey: "$(HN_COMMS_APP_KEY)"
         ITSAppUsesNonExemptEncryption: false
@@ -45,7 +45,7 @@ targets:
       properties:
         CFBundleDisplayName: HN Comms
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "5"
+        CFBundleVersion: "6"
         CFBundleIconName: AppIcon
         HNCommsDefaultKey: "$(HN_COMMS_APP_KEY)"
         ITSAppUsesNonExemptEncryption: false

@@ -215,7 +215,11 @@ async function fetchMedia(env, url) {
   });
   const meta = await metaResp.json().catch(() => ({}));
   if (!metaResp.ok || meta.error || !meta.url) {
-    return bad(meta?.error?.message || 'Meta media lookup failed', metaResp.status || 502, { meta });
+    return bad(
+      'This saved WhatsApp file is not currently retrievable from Meta. It may be old/expired or the brand token may not have access to that media object.',
+      metaResp.status === 400 ? 410 : (metaResp.status || 502),
+      { meta_error: meta?.error?.message || 'Meta media lookup failed' }
+    );
   }
 
   const mediaResp = await fetch(meta.url, {

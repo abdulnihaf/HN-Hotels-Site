@@ -78,6 +78,15 @@ struct CommsClient {
         return decoder
     }
 
+    private func serverErrorMessage(from data: Data) -> String {
+        if let payload = try? decoder.decode(ApiErrorPayload.self, from: data),
+           let error = payload.error,
+           !error.isEmpty {
+            return error
+        }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
     func threads(brand: BrandFilter, leadStatus: LeadStatusFilter, category: InboxCategory, query: String) async throws -> [CommsThread] {
         var items: [URLQueryItem] = [
             URLQueryItem(name: "action", value: "threads"),
@@ -199,8 +208,7 @@ struct CommsClient {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 { throw CommsClientError.unauthorized }
         if !(200..<300).contains(status) {
-            let bodyText = String(data: responseData, encoding: .utf8) ?? ""
-            throw CommsClientError.http(status, bodyText)
+            throw CommsClientError.http(status, serverErrorMessage(from: responseData))
         }
         return try decoder.decode(SendReplyResponse.self, from: responseData)
     }
@@ -223,8 +231,7 @@ struct CommsClient {
         let status = http?.statusCode ?? 0
         if status == 401 { throw CommsClientError.unauthorized }
         if !(200..<300).contains(status) {
-            let bodyText = String(data: data, encoding: .utf8) ?? ""
-            throw CommsClientError.http(status, bodyText)
+            throw CommsClientError.http(status, serverErrorMessage(from: data))
         }
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("HNCommsMedia", isDirectory: true)
@@ -282,11 +289,14 @@ struct CommsClient {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 { throw CommsClientError.unauthorized }
         if !(200..<300).contains(status) {
-            let bodyText = String(data: data, encoding: .utf8) ?? ""
-            throw CommsClientError.http(status, bodyText)
+            throw CommsClientError.http(status, serverErrorMessage(from: data))
         }
         return try decoder.decode(T.self, from: data)
     }
+}
+
+private struct ApiErrorPayload: Decodable {
+    let error: String?
 }
 
 struct EmptyResponse: Decodable {
