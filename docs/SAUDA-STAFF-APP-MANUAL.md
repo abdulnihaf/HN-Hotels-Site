@@ -87,7 +87,7 @@ A **⚠ note** on a line (e.g. "price is per box — confirm at bill") means the
 - **Before login:** tap **Update app** on the PIN screen. If a newer app exists, the installer opens directly.
 - **After login:** if a newer app exists, she also sees an **"Update available"** banner on the home screen → tap **Update**.
 - First update asks **allow this source** once. After that, updates are one tap.
-- If Android says **package conflict**, uninstall the old debug build of HN Ops once, then install version `2.5`. This is a one-time signing correction; future updates use the stable HN Ops signing key.
+- If Android says **package conflict** on older builds, install version `2.6` from the download page. Version `2.6` uses the clean HN Ops package ID, so it installs separately from the older debug-signed HN Staff/HN Ops build. Open the new **HN Ops** icon after install; the old icon can be removed later.
 
 ---
 
