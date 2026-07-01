@@ -19,8 +19,8 @@ android {
         applicationId = "com.hnhotels.comms"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
         buildConfigField("String", "HN_COMMS_APP_KEY", hnCommsAppKey.asBuildConfigString())
     }
 
