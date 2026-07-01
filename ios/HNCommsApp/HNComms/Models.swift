@@ -100,6 +100,48 @@ struct WabaTemplate: Identifiable, Decodable, Hashable {
     var stableId: String { id ?? "\(name):\(language ?? "en")" }
 }
 
+struct StaffMember: Identifiable, Decodable, Hashable {
+    let id: Int
+    let name: String
+    let phone: String
+    let e164: String
+    let brand: String
+    let role: String
+    let wabaStatus: String
+    let wabaConsentedAt: String?
+}
+
+struct CampaignTemplate: Identifiable, Decodable, Hashable {
+    let id: String
+    let name: String
+    let status: String
+    let category: String
+    let language: String
+    let bodyText: String
+    let varCount: Int
+}
+
+struct AutomationTrailItem: Identifiable, Decodable, Hashable {
+    let id: Int
+    let alertId: String
+    let tier: String
+    let brand: String
+    let channel: String
+    let recipientPhone: String
+    let templateName: String
+    let templateVars: [String]
+    let bodyText: String
+    let status: String
+    let providerMsgId: String
+    let errorText: String
+    let sentAt: String
+    let deliveredAt: String
+    let readAt: String
+    let ackedAt: String
+    let ackAction: String
+    let createdAt: String
+}
+
 struct TemplateComponent: Decodable, Hashable {
     let type: String?
     let text: String?
@@ -129,6 +171,22 @@ struct TemplatesResponse: Decodable {
     let templates: [WabaTemplate]
 }
 
+struct StaffResponse: Decodable {
+    let ok: Bool
+    let staff: [StaffMember]
+}
+
+struct CampaignTemplatesResponse: Decodable {
+    let ok: Bool
+    let brand: String
+    let templates: [CampaignTemplate]
+}
+
+struct AutomationTrailResponse: Decodable {
+    let ok: Bool
+    let trail: [AutomationTrailItem]
+}
+
 struct SendReplyResponse: Decodable {
     let ok: Bool
     let sendMode: String?
@@ -137,4 +195,21 @@ struct SendReplyResponse: Decodable {
     let messageId: Int?
     let error: String?
     let metaStatus: Int?
+}
+
+struct StaffCampaignResponse: Decodable {
+    let ok: Bool
+    let total: Int
+    let sent: Int
+    let failed: Int
+    let results: [StaffCampaignResult]
+}
+
+struct StaffCampaignResult: Decodable, Hashable {
+    let phone: String
+    let ok: Bool
+    let status: Int?
+    let providerMsgId: String?
+    let outboxId: Int?
+    let error: String?
 }

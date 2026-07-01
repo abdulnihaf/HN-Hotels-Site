@@ -6,7 +6,17 @@ struct ContentView: View {
     var body: some View {
         Group {
             if model.isConfigured {
-                InboxRootView(model: model)
+                TabView {
+                    InboxRootView(model: model)
+                        .tabItem {
+                            Label("Messages", systemImage: "bubble.left.and.bubble.right")
+                        }
+
+                    AutomationView(model: model)
+                        .tabItem {
+                            Label("Automation", systemImage: "bolt.horizontal.circle")
+                        }
+                }
             } else {
                 SettingsView(model: model)
             }
@@ -364,6 +374,198 @@ struct MessageBubble: View {
             .commsGlass(cornerRadius: 18, tint: message.isOutbound ? .teal : .secondary, interactive: false)
             if !message.isOutbound { Spacer(minLength: 42) }
         }
+    }
+}
+
+struct AutomationView: View {
+    @Bindable var model: CommsAppModel
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    campaignPanel
+                    trailPanel
+                }
+                .padding()
+            }
+            .background(CommsBackdrop())
+            .navigationTitle("Automation")
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        Task { await model.loadAutomation() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .accessibilityLabel("Refresh automation")
+                }
+            }
+        }
+        .task {
+            await model.loadAutomation()
+        }
+    }
+
+    private var campaignPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Staff Campaign")
+                        .font(.title3.weight(.semibold))
+                    Text("SparkSol WABA · template sends only")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(model.selectedStaffPhones.count) selected")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.teal)
+            }
+
+            Picker("Template", selection: $model.selectedCampaignTemplate) {
+                if model.campaignTemplates.isEmpty {
+                    Text("No approved templates").tag("")
+                } else {
+                    ForEach(model.campaignTemplates) { template in
+                        Text(template.name).tag(template.name)
+                    }
+                }
+            }
+            .pickerStyle(.menu)
+
+            TextField("Template variables, comma separated", text: $model.campaignVarsDraft)
+                .textFieldStyle(.plain)
+                .padding(12)
+                .commsGlass(cornerRadius: 18, tint: .teal, interactive: true)
+
+            LazyVStack(spacing: 8) {
+                ForEach(model.staffMembers) { staff in
+                    StaffSelectionRow(
+                        staff: staff,
+                        isSelected: model.selectedStaffPhones.contains(staff.e164)
+                    ) {
+                        if model.selectedStaffPhones.contains(staff.e164) {
+                            model.selectedStaffPhones.remove(staff.e164)
+                        } else {
+                            model.selectedStaffPhones.insert(staff.e164)
+                        }
+                    }
+                }
+            }
+
+            Button {
+                Task { await model.sendStaffCampaign() }
+            } label: {
+                HStack {
+                    if model.isCampaignSending {
+                        ProgressView()
+                    }
+                    Text("Send Selected")
+                        .font(.headline)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            .commsGlass(cornerRadius: 20, tint: .teal, interactive: true)
+            .disabled(model.isCampaignSending || model.selectedStaffPhones.isEmpty || model.selectedCampaignTemplate.isEmpty)
+        }
+        .padding(14)
+        .commsGlass(cornerRadius: 26, tint: .teal)
+    }
+
+    private var trailPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("WhatsApp Trail")
+                .font(.title3.weight(.semibold))
+            if model.automationTrail.isEmpty {
+                ContentUnavailableView("No WABA trail yet", systemImage: "clock.badge.questionmark")
+                    .frame(maxWidth: .infinity)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(model.automationTrail) { item in
+                        AutomationTrailRow(item: item)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .commsGlass(cornerRadius: 26, tint: .indigo)
+    }
+}
+
+struct StaffSelectionRow: View {
+    let staff: StaffMember
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 10) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? .teal : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(staff.name.isEmpty ? staff.e164 : staff.name)
+                        .font(.subheadline.weight(.semibold))
+                    Text([staff.brand, staff.role, staff.e164].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text(staff.wabaStatus)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(staff.wabaStatus == "opted_in" ? .green : .orange)
+            }
+            .padding(10)
+            .commsGlass(cornerRadius: 18, tint: isSelected ? .teal : .secondary, interactive: true)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct AutomationTrailRow: View {
+    let item: AutomationTrailItem
+
+    private var statusColor: Color {
+        switch item.status {
+        case "sent", "delivered", "read": .green
+        case "failed": .red
+        case "skipped": .orange
+        default: .secondary
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(item.templateName.isEmpty ? item.bodyText : item.templateName)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Spacer()
+                Text(item.status)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(statusColor)
+            }
+            HStack(spacing: 8) {
+                Text(item.brand)
+                Text(item.tier)
+                Text(item.recipientPhone)
+                Spacer()
+                Text(shortTime(item.sentAt.isEmpty ? item.createdAt : item.sentAt))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            if !item.errorText.isEmpty {
+                Text(item.errorText)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+            }
+        }
+        .padding(10)
+        .commsGlass(cornerRadius: 18, tint: statusColor)
     }
 }
 

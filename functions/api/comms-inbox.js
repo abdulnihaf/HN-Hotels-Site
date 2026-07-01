@@ -180,6 +180,29 @@ function publicMessage(row) {
   };
 }
 
+function publicOutbox(row) {
+  return {
+    id: row.id,
+    alert_id: row.alert_id || '',
+    tier: row.tier || '',
+    brand: row.brand || '',
+    channel: row.channel || '',
+    recipient_phone: row.recipient_phone || '',
+    template_name: row.template_name || '',
+    template_vars: parseJson(row.template_vars, []),
+    body_text: row.body_text || '',
+    status: row.status || '',
+    provider_msg_id: row.provider_msg_id || '',
+    error_text: row.error_text || '',
+    sent_at: row.sent_at || '',
+    delivered_at: row.delivered_at || '',
+    read_at: row.read_at || '',
+    acked_at: row.acked_at || '',
+    ack_action: row.ack_action || '',
+    created_at: row.created_at || '',
+  };
+}
+
 function parseJson(raw, fallback) {
   if (!raw) return fallback;
   try { return JSON.parse(raw); } catch { return fallback; }
@@ -309,6 +332,85 @@ async function listTemplates(env, url) {
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || data.error) return bad(data?.error?.message || 'Meta template lookup failed', resp.status || 502, { meta: data });
   return json({ ok: true, brand, templates: data.data || [], paging: data.paging || null });
+}
+
+async function listStaff(env) {
+  const rows = await env.DB.prepare(`
+    SELECT
+      hr.id, hr.name, hr.phone, hr.brand_label, hr.job_name,
+      MAX(CASE WHEN co.channel = 'waba' THEN co.status END) AS waba_status,
+      MAX(CASE WHEN co.channel = 'waba' THEN co.consented_at END) AS waba_consented_at
+    FROM hr_employees hr
+    LEFT JOIN comms_optin co
+      ON co.phone = (CASE WHEN length(trim(hr.phone)) = 10 THEN '91' || trim(hr.phone) ELSE trim(hr.phone) END)
+     AND co.brand = 'sparksol'
+    WHERE hr.is_active = 1
+      AND hr.phone IS NOT NULL
+      AND trim(hr.phone) != ''
+    GROUP BY hr.id
+    ORDER BY hr.brand_label, hr.name
+  `).all();
+  return json({
+    ok: true,
+    staff: (rows.results || []).map(row => ({
+      id: row.id,
+      name: row.name || '',
+      phone: row.phone || '',
+      e164: normalizePhone(row.phone || ''),
+      brand: row.brand_label || '',
+      role: row.job_name || '',
+      waba_status: row.waba_status || 'not-tracked',
+      waba_consented_at: row.waba_consented_at || null,
+    })),
+  });
+}
+
+async function listAutomationTrail(env, url) {
+  const brand = (url.searchParams.get('brand') || 'all').toLowerCase();
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '80', 10) || 80, 200);
+  const params = [];
+  let where = "WHERE channel = 'waba'";
+  if (brand !== 'all') {
+    where += ' AND brand = ?';
+    params.push(brand);
+  }
+  const rows = await env.DB.prepare(`
+    SELECT id, alert_id, tier, brand, channel, recipient_phone, template_name, template_vars,
+           body_text, status, provider_msg_id, error_text, sent_at, delivered_at, read_at,
+           acked_at, ack_action, created_at
+      FROM comms_outbox
+     ${where}
+     ORDER BY COALESCE(sent_at, created_at) DESC, id DESC
+     LIMIT ?
+  `).bind(...params, limit).all();
+  return json({ ok: true, trail: (rows.results || []).map(publicOutbox), limit });
+}
+
+async function listStaffCampaignTemplates(env) {
+  const cfg = brandConfig(env, 'sparksol');
+  if (!cfg?.token || !cfg?.waba_id) return bad('SparkSol WABA templates not configured', 500);
+  const resp = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${cfg.waba_id}/message_templates?limit=100&fields=name,status,category,language,components,id`, {
+    headers: { authorization: `Bearer ${cfg.token}` },
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error) return bad(data?.error?.message || 'Meta template lookup failed', resp.status || 502, { meta: data });
+  const templates = (data.data || [])
+    .filter(t => t.status === 'APPROVED')
+    .map(t => {
+      const body = (t.components || []).find(c => c.type === 'BODY');
+      const text = body?.text || '';
+      const varCount = (text.match(/\{\{\d+\}\}/g) || []).length;
+      return {
+        id: t.id || `${t.name}:${t.language || 'en'}`,
+        name: t.name,
+        status: t.status,
+        category: t.category || '',
+        language: t.language || 'en',
+        body_text: text,
+        var_count: varCount,
+      };
+    });
+  return json({ ok: true, brand: 'sparksol', templates });
 }
 
 async function uploadWabaMedia(env, { brand, file }) {
@@ -490,6 +592,63 @@ async function sendReply(env, body) {
   }, result.ok ? 200 : 502);
 }
 
+async function sendStaffCampaign(env, body) {
+  const template = String(body.template || body.template_name || '').trim();
+  const recipients = Array.isArray(body.recipients) ? body.recipients.map(normalizePhone).filter(Boolean) : [];
+  const vars = Array.isArray(body.vars) ? body.vars.map(v => String(v)) : [];
+  const language = body.language || 'en';
+  const actor = String(body.actor || 'hn-comms-app').slice(0, 80);
+
+  if (!template) return bad('template required');
+  if (!recipients.length) return bad('recipients required');
+  if (recipients.length > 200) return bad('max 200 recipients per campaign');
+
+  const stamp = Date.now();
+  const results = [];
+  for (let i = 0; i < recipients.length; i += 1) {
+    const phone = recipients[i];
+    let result = null;
+    let errText = null;
+    try {
+      result = await sendWaba(env, { brand: 'sparksol', phone, template, vars, language });
+      errText = result.ok ? null : providerError(result.response);
+    } catch (err) {
+      result = { ok: false, status: 500, provider_msg_id: null, response: { error: err?.message || String(err) } };
+      errText = providerError(result.response);
+    }
+    const outboxId = await logOutbox(env, {
+      alert_id: `hn_comms_staff_campaign:${stamp}:${i}`,
+      tier: 'staff-campaign',
+      brand: 'sparksol',
+      channel: 'waba',
+      recipient_phone: phone,
+      template_name: template,
+      template_vars: vars,
+      body_text: `[staff campaign] ${template}`,
+      status: result.ok ? 'sent' : 'failed',
+      provider_msg_id: result.provider_msg_id || null,
+      provider_response: { actor, response: result.response },
+      error_text: errText,
+    });
+    results.push({
+      phone,
+      ok: !!result.ok,
+      status: result.status || null,
+      provider_msg_id: result.provider_msg_id || null,
+      outbox_id: outboxId,
+      error: errText,
+    });
+  }
+
+  return json({
+    ok: results.every(r => r.ok),
+    total: results.length,
+    sent: results.filter(r => r.ok).length,
+    failed: results.filter(r => !r.ok).length,
+    results,
+  });
+}
+
 async function sendAttachment(env, form) {
   const brand = String(form.get('brand') || '').toLowerCase();
   const phone = normalizePhone(form.get('phone') || form.get('wa_id') || '');
@@ -640,6 +799,9 @@ export async function onRequest(context) {
     if (action === 'thread') return await loadThread(env, url);
     if (action === 'quick-replies') return await listQuickReplies(env, url);
     if (action === 'templates') return await listTemplates(env, url);
+    if (action === 'staff') return await listStaff(env);
+    if (action === 'staff-templates') return await listStaffCampaignTemplates(env);
+    if (action === 'automation-trail') return await listAutomationTrail(env, url);
     return bad('unknown action', 404);
   }
 
@@ -660,6 +822,7 @@ export async function onRequest(context) {
   if (!requireAuth(env, request, body)) return bad('unauthorized', 401);
 
   if (action === 'reply' || body.action === 'reply') return await sendReply(env, body);
+  if (action === 'staff-campaign' || body.action === 'staff_campaign') return await sendStaffCampaign(env, body);
   if (action === 'mark-read' || body.action === 'mark_read') return await markRead(env, body);
   return bad('unknown action', 404);
 }
