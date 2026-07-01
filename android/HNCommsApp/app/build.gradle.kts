@@ -4,6 +4,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+val hnCommsAppKey = providers.gradleProperty("HN_COMMS_APP_KEY")
+    .orElse(providers.environmentVariable("HN_COMMS_APP_KEY"))
+    .orElse("")
+    .get()
+
 android {
     namespace = "com.hnhotels.comms"
     compileSdk = 35
@@ -12,12 +19,14 @@ android {
         applicationId = "com.hnhotels.comms"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+        buildConfigField("String", "HN_COMMS_APP_KEY", hnCommsAppKey.asBuildConfigString())
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {

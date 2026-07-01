@@ -19,6 +19,12 @@ const CORS_HEADERS = {
   'access-control-allow-headers': 'content-type, authorization, x-dashboard-key, x-comms-key',
 };
 
+const BRAND_LABELS = {
+  he: 'Hamza Express',
+  nch: 'Nawabi Chai House',
+  sparksol: 'SparkSol',
+};
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -65,7 +71,20 @@ function brandConfig(env, brand) {
       token: env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
     };
   }
+  if (b === 'sparksol') {
+    return {
+      brand: 'sparksol',
+      label: 'SparkSol',
+      phone_id: env.WA_SPARKSOL_PHONE_ID,
+      waba_id: env.WA_SPARKSOL_WABA_ID || env.WABA_ID,
+      token: env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+    };
+  }
   return null;
+}
+
+function brandError() {
+  return 'brand must be he, nch, or sparksol';
 }
 
 function mediaKindFor(file, requested) {
@@ -105,7 +124,7 @@ function publicThread(row) {
   return {
     thread_id: row.thread_id,
     brand: row.brand,
-    brand_label: row.brand === 'he' ? 'Hamza Express' : row.brand === 'nch' ? 'Nawabi Chai House' : row.brand,
+    brand_label: BRAND_LABELS[row.brand] || row.brand,
     phone: row.phone,
     wa_id: row.wa_id,
     display_name: row.display_name || '',
@@ -264,7 +283,7 @@ async function listQuickReplies(env, url) {
 async function listTemplates(env, url) {
   const brand = (url.searchParams.get('brand') || 'he').toLowerCase();
   const cfg = brandConfig(env, brand);
-  if (!cfg) return bad('brand must be he or nch');
+  if (!cfg) return bad(brandError());
   if (!cfg.token) return bad(`WABA token missing for ${brand}`, 500);
   if (!cfg.waba_id) return bad(`WABA id missing for ${brand}`, 500, { phone_id: cfg.phone_id || null });
 
@@ -281,7 +300,7 @@ async function listTemplates(env, url) {
 
 async function uploadWabaMedia(env, { brand, file }) {
   const cfg = brandConfig(env, brand);
-  if (!cfg) return { ok: false, status: 400, response: { error: 'brand must be he or nch' } };
+  if (!cfg) return { ok: false, status: 400, response: { error: brandError() } };
   if (!cfg.token || !cfg.phone_id) {
     return { ok: false, status: 500, response: { error: `WABA media upload not configured for ${brand}` } };
   }
@@ -309,7 +328,7 @@ async function uploadWabaMedia(env, { brand, file }) {
 
 async function sendWabaMedia(env, { brand, phone, mediaKind, mediaId, caption, filename }) {
   const cfg = brandConfig(env, brand);
-  if (!cfg) return { ok: false, status: 400, response: { error: 'brand must be he or nch' } };
+  if (!cfg) return { ok: false, status: 400, response: { error: brandError() } };
   if (!cfg.token || !cfg.phone_id) {
     return { ok: false, status: 500, response: { error: `WABA media send not configured for ${brand}` } };
   }
@@ -370,7 +389,7 @@ async function sendReply(env, body) {
   const language = body.language || 'en';
   const buttons = Array.isArray(body.buttons) ? body.buttons : [];
 
-  if (!brandConfig(env, brand)) return bad('brand must be he or nch');
+  if (!brandConfig(env, brand)) return bad(brandError());
   if (!phone) return bad('phone required');
   if (!text && !templateName) return bad('text or template_name required');
 
@@ -465,7 +484,7 @@ async function sendAttachment(env, form) {
   const caption = String(form.get('caption') || '').trim();
   const file = form.get('file');
 
-  if (!brandConfig(env, brand)) return bad('brand must be he or nch');
+  if (!brandConfig(env, brand)) return bad(brandError());
   if (!phone) return bad('phone required');
   if (!file || typeof file === 'string' || !file.size) return bad('file required');
 
@@ -575,17 +594,21 @@ async function health(env) {
   const have = new Set((rows.results || []).map(r => r.name));
   return json({
     ok: true,
-    tables: Object.fromEntries(tables.map(t => [t, have.has(t)])),
-    brands: {
-      he: {
-        phone_id_configured: !!brandConfig(env, 'he')?.phone_id,
-        waba_id_configured: !!brandConfig(env, 'he')?.waba_id,
-      },
-      nch: {
-        phone_id_configured: !!brandConfig(env, 'nch')?.phone_id,
-        waba_id_configured: !!brandConfig(env, 'nch')?.waba_id,
-      },
+    auth: {
+      hn_comms_app_key_configured: !!env.HN_COMMS_APP_KEY,
+      dashboard_key_fallback_configured: !!(env.DASHBOARD_KEY || env.DASHBOARD_API_KEY),
+      active_source: env.HN_COMMS_APP_KEY ? 'HN_COMMS_APP_KEY' : (env.DASHBOARD_KEY || env.DASHBOARD_API_KEY) ? 'DASHBOARD_KEY' : 'none',
     },
+    tables: Object.fromEntries(tables.map(t => [t, have.has(t)])),
+    brands: Object.fromEntries(['he', 'nch', 'sparksol'].map((brand) => {
+      const cfg = brandConfig(env, brand);
+      return [brand, {
+        label: cfg?.label || brand,
+        phone_id_configured: !!cfg?.phone_id,
+        waba_id_configured: !!cfg?.waba_id,
+        token_configured: !!cfg?.token,
+      }];
+    })),
   });
 }
 

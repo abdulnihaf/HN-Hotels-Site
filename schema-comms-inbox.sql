@@ -107,4 +107,5 @@ VALUES
   (1, 'all', 'Ask Details', 'Could you share a little more detail so we can help properly?', 10),
   (2, 'he', 'HE Pickup', 'Yes, Hamza Express pickup is available. Share what you would like and we will confirm.', 20),
   (3, 'nch', 'NCH Delivery', 'Yes, Nawabi Chai House delivery is available nearby. Please share your location pin.', 30),
-  (4, 'all', 'Human Follow-up', 'I am checking this with the team and will reply here shortly.', 40);
+  (4, 'all', 'Human Follow-up', 'I am checking this with the team and will reply here shortly.', 40),
+  (5, 'sparksol', 'Hiring Follow-up', 'Thanks for replying. Please share your name, role, and the best time for a quick call.', 50);

@@ -32,7 +32,11 @@ jobs:
 
       - name: Build APK
         working-directory: android/HNCommsApp
-        run: ./gradlew --no-daemon assembleDebug
+        env:
+          HN_COMMS_APP_KEY: ${{ secrets.HN_COMMS_APP_KEY }}
+        run: |
+          test -n "$HN_COMMS_APP_KEY"
+          ./gradlew --no-daemon assembleDebug
 
       - name: Prepare Pages artifact
         shell: bash

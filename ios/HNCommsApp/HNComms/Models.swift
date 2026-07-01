@@ -4,6 +4,7 @@ enum BrandFilter: String, CaseIterable, Identifiable {
     case all
     case he
     case nch
+    case sparksol
 
     var id: String { rawValue }
 
@@ -12,6 +13,7 @@ enum BrandFilter: String, CaseIterable, Identifiable {
         case .all: "All"
         case .he: "HE"
         case .nch: "NCH"
+        case .sparksol: "Spark"
         }
     }
 

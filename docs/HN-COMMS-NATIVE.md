@@ -1,6 +1,6 @@
 # HN Comms Native Inbox
 
-Standalone native iOS + Android inbox for HE/NCH WhatsApp Business API messages.
+Standalone native iOS + Android inbox for HE/NCH/SparkSol WhatsApp Business API messages.
 
 ## Grounded State
 
@@ -26,7 +26,30 @@ Standalone native iOS + Android inbox for HE/NCH WhatsApp Business API messages.
   - `POST ?action=reply`
   - `POST multipart ?action=attachment`
   - `POST ?action=mark-read`
-- `functions/api/comms-webhook.js` now mirrors inbound HE/NCH customer messages and delivery/read/failed callbacks into the HN comms inbox tables before forwarding to the existing brand bot handlers.
+- `functions/api/comms-webhook.js` now mirrors inbound HE/NCH/SparkSol messages and delivery/read/failed callbacks into the HN comms inbox tables before forwarding eligible customer-flow payloads to the existing brand bot handlers.
+
+## Credential Map
+
+- Mobile app gate: `HN_COMMS_APP_KEY`
+  - Stored in GitHub Actions as `HN_COMMS_APP_KEY` for APK builds.
+  - Provisioned to Cloudflare Pages as `HN_COMMS_APP_KEY` for `/api/comms-inbox`.
+  - This is not a Meta token and is safe to rotate independently from WhatsApp.
+- Hamza Express WABA:
+  - Phone number id: `WA_HE_PHONE_ID`
+  - WABA id: `WA_HE_WABA_ID`
+  - Send token: `WA_HE_TOKEN`, falling back to `WA_COMMS_TOKEN` or `WA_ACCESS_TOKEN`
+- Nawabi Chai House WABA:
+  - Phone number id: `WA_NCH_PHONE_ID`
+  - WABA id: `WA_NCH_WABA_ID`
+  - Send token: `WA_NCH_TOKEN`, falling back to `WA_COMMS_TOKEN` or `WA_ACCESS_TOKEN`
+- SparkSol staff/HR WABA:
+  - Phone number id: `WA_SPARKSOL_PHONE_ID`
+  - WABA id: `WA_SPARKSOL_WABA_ID`
+  - Send token: `WA_SPARKSOL_TOKEN`, falling back to `WA_COMMS_TOKEN` or `WA_ACCESS_TOKEN`
+
+If a mobile key is missing, regenerate/store it with `hn-save HN_COMMS_APP_KEY ...`, then set it at GitHub repo `abdulnihaf/HN-Hotels-Site` -> Settings -> Secrets and variables -> Actions -> Repository secrets -> `HN_COMMS_APP_KEY`. The backend deploy workflow provisions the same value to Cloudflare Pages.
+
+If a WABA token is missing or expired, regenerate it in Meta Business Settings -> Users -> System users -> select the HN system user -> Generate new token -> select the WhatsApp app/WABA asset -> include `whatsapp_business_messaging` and `whatsapp_business_management`, then store it in Cloudflare Workers & Pages -> `hn-hotels-site` -> Settings -> Variables and Secrets -> Production using the matching `WA_*_TOKEN` name above.
 
 ## Send Rules
 
@@ -55,10 +78,14 @@ Before production use:
    - `WA_NCH_WABA_ID`
    - `WA_HE_TOKEN` or `WA_COMMS_TOKEN` or `WA_ACCESS_TOKEN`
    - `WA_NCH_TOKEN` or `WA_COMMS_TOKEN` or `WA_ACCESS_TOKEN`
-   - `HN_COMMS_APP_KEY` or `DASHBOARD_KEY`
+   - `WA_SPARKSOL_PHONE_ID`
+   - `WA_SPARKSOL_WABA_ID`
+   - `WA_SPARKSOL_TOKEN` or `WA_COMMS_TOKEN` or `WA_ACCESS_TOKEN`
+   - `HN_COMMS_APP_KEY`
 4. POST a real inbound message to each WABA line and verify:
    - `GET /api/comms-inbox?action=threads&brand=he`
    - `GET /api/comms-inbox?action=threads&brand=nch`
+   - `GET /api/comms-inbox?action=threads&brand=sparksol`
    - Thread opens with `service_window_open:true`.
 5. Send one test free-form reply inside the window and confirm `comms_outbox` plus `comms_messages` both show the attempt/result.
 
@@ -87,9 +114,10 @@ Before production use:
   - APK: `https://hn-comms-app.pages.dev/HN-Comms.apk`
   - Version metadata: `https://hn-comms-app.pages.dev/version.json`
   - Workflow: `.github/workflows/deploy-hn-comms-app.yml`
-- Compose UI supports inbox search/filter, thread view, quick replies, approved templates, text replies, and document/image/video/audio attachment picking.
+- Compose UI supports inbox search/filter across HE/NCH/SparkSol, thread view, quick replies, approved templates, text replies, and document/image/video/audio attachment picking.
+- Release APKs are built with `HN_COMMS_APP_KEY` from GitHub Secrets; Meta WABA tokens are never embedded in the app.
 - Local verification:
-  - `JAVA_HOME=/opt/homebrew/Cellar/openjdk/26.0.1/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew --no-daemon assembleDebug`
+  - `JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home" ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew --no-daemon assembleDebug`
 - Debug APK:
   - `android/HNCommsApp/app/build/outputs/apk/debug/app-debug.apk`
   - local copy: `/Users/nihaf/Desktop/HNComms_2026-07-01/HNComms-debug.apk`

@@ -10,8 +10,11 @@ compatibility_flags = ["nodejs_compat"]
 # WA_NCH_TOKEN                 — Optional NCH-specific Meta token; falls back to WA_ACCESS_TOKEN/WA_COMMS_TOKEN
 # WA_NCH_PHONE_ID              — NCH WhatsApp phone number ID, required for unified comms inbox
 # WA_NCH_WABA_ID               — NCH WhatsApp Business Account ID, required for NCH template listing
+# WA_SPARKSOL_TOKEN            — SparkSol staff/HR WABA token
+# WA_SPARKSOL_PHONE_ID         — SparkSol staff/HR WhatsApp phone number ID
+# WA_SPARKSOL_WABA_ID          — SparkSol WABA ID, required for SparkSol template listing
 # WA_COMMS_TOKEN               — Optional shared WABA token for comms-only sends
-# HN_COMMS_APP_KEY             — Optional mobile-app API key; falls back to DASHBOARD_KEY
+# HN_COMMS_APP_KEY             — Dedicated mobile-app API key; app build + Pages Function must match
 # DASHBOARD_KEY                — Dashboard authentication key
 # GEMINI_API_KEY               — Google Gemini API key for AI role mapping
 # GOOGLE_PLACES_API_KEY        — Google Places API (New). Used by /api/gbp-cockpit for review aggregates and by expansion intelligence

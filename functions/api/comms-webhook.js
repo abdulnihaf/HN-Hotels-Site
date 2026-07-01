@@ -103,7 +103,7 @@ async function persistCommsWebhookEvent(env, { brand, phone_number_id, event_kin
 
 async function persistInboundCommsMessage(env, { value, message, payload, business_phone_id }) {
   const brand = brandFromPhoneId(env, business_phone_id);
-  if (!brand || brand === 'sparksol' || !message?.from) return;
+  if (!brand || !message?.from) return;
 
   const phone = normalizePhone(message.from);
   const threadId = `${brand}:${phone}`;
@@ -182,7 +182,7 @@ async function persistInboundCommsMessage(env, { value, message, payload, busine
 
 async function mirrorCommsStatus(env, { value, status, payload, business_phone_id }) {
   const brand = brandFromPhoneId(env, business_phone_id);
-  if (!brand || brand === 'sparksol') return;
+  if (!brand) return;
   const wamid = status?.id || null;
   const phone = normalizePhone(status?.recipient_id || '');
   await persistCommsWebhookEvent(env, {

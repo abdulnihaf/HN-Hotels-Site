@@ -104,15 +104,31 @@ struct InboxListView: View {
 
 struct ThreadRow: View {
     let thread: CommsThread
+    private var brandColor: Color {
+        switch thread.brand {
+        case "he": .indigo
+        case "nch": .green
+        case "sparksol": .orange
+        default: .secondary
+        }
+    }
+    private var brandInitials: String {
+        switch thread.brand {
+        case "he": "HE"
+        case "nch": "NCH"
+        case "sparksol": "SP"
+        default: String(thread.brand.prefix(2)).uppercased()
+        }
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(thread.brand == "he" ? Color.indigo.opacity(0.18) : Color.green.opacity(0.18))
-                Text(thread.brand.uppercased())
+                    .fill(brandColor.opacity(0.18))
+                Text(brandInitials)
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(thread.brand == "he" ? .indigo : .green)
+                    .foregroundStyle(brandColor)
             }
             .frame(width: 42, height: 42)
 

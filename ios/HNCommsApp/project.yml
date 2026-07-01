@@ -20,8 +20,9 @@ targets:
       properties:
         CFBundleDisplayName: HN Comms
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         CFBundleIconName: AppIcon
+        HNCommsDefaultKey: "$(HN_COMMS_APP_KEY)"
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: "Unlock HN Comms without typing the API key again."
         UILaunchScreen: {}

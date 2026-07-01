@@ -179,7 +179,7 @@ struct EmptyResponse: Decodable {
 @Observable
 final class CommsAppModel {
     var baseURL: String = KeychainStore.get("baseURL") ?? "https://hnhotels.in"
-    var apiKey: String = KeychainStore.get("apiKey") ?? ""
+    var apiKey: String = KeychainStore.get("apiKey") ?? (Bundle.main.object(forInfoDictionaryKey: "HNCommsDefaultKey") as? String ?? "")
     var selectedBrand: BrandFilter = .all
     var selectedLeadStatus: LeadStatusFilter = .all
     var query: String = ""

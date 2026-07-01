@@ -85,7 +85,7 @@ class CommsStore(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("hn-comms", Context.MODE_PRIVATE)
     var baseUrl by mutableStateOf(prefs.getString("baseUrl", "https://hnhotels.in") ?: "https://hnhotels.in")
-    var apiKey by mutableStateOf(prefs.getString("apiKey", "") ?: "")
+    var apiKey by mutableStateOf(prefs.getString("apiKey", null) ?: BuildConfig.HN_COMMS_APP_KEY)
     var selectedBrand by mutableStateOf("all")
     var selectedLeadStatus by mutableStateOf("all")
     var query by mutableStateOf("")
@@ -320,7 +320,7 @@ fun InboxScreen(store: CommsStore) {
             )
             FilterRow(
                 selected = store.selectedBrand,
-                values = listOf("all" to "All", "he" to "HE", "nch" to "NCH"),
+                values = listOf("all" to "All", "he" to "HE", "nch" to "NCH", "sparksol" to "Spark"),
                 onSelect = { store.selectedBrand = it }
             )
             FilterRow(
@@ -401,7 +401,18 @@ fun ThreadCard(thread: CommsThread, onClick: () -> Unit) {
 
 @Composable
 fun BrandBadge(brand: String) {
-    val color = if (brand == "he") Color(0xFF4F46E5) else Color(0xFF16A34A)
+    val color = when (brand) {
+        "he" -> Color(0xFF4F46E5)
+        "nch" -> Color(0xFF16A34A)
+        "sparksol" -> Color(0xFFB45309)
+        else -> Color(0xFF64748B)
+    }
+    val label = when (brand) {
+        "he" -> "HE"
+        "nch" -> "NCH"
+        "sparksol" -> "SP"
+        else -> brand.take(2).uppercase()
+    }
     Box(
         modifier = Modifier
             .size(44.dp)
@@ -409,7 +420,7 @@ fun BrandBadge(brand: String) {
             .background(color.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center
     ) {
-        Text(brand.uppercase(), color = color, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+        Text(label, color = color, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
     }
 }
 
