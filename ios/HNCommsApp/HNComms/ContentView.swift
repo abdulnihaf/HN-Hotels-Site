@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @State private var model = CommsAppModel()
@@ -9,12 +10,12 @@ struct ContentView: View {
                 TabView {
                     InboxRootView(model: model)
                         .tabItem {
-                            Label("Messages", systemImage: "bubble.left.and.bubble.right")
+                            Label("Inbox", systemImage: "bubble.left.and.bubble.right")
                         }
 
                     AutomationView(model: model)
                         .tabItem {
-                            Label("Automation", systemImage: "bolt.horizontal.circle")
+                            Label("From Darbar", systemImage: "person.2.wave.2")
                         }
                 }
             } else {
@@ -120,6 +121,13 @@ struct InboxListView: View {
             }
             .pickerStyle(.segmented)
 
+            Picker("Lane", selection: $model.selectedCategory) {
+                ForEach(InboxCategory.allCases) { category in
+                    Text(category == .fromDarbar ? "Darbar" : category.title).tag(category)
+                }
+            }
+            .pickerStyle(.segmented)
+
             Picker("Lead", selection: $model.selectedLeadStatus) {
                 ForEach(LeadStatusFilter.allCases) { status in
                     Text(status.title).tag(status)
@@ -165,7 +173,7 @@ struct ThreadRow: View {
                     }
                 }
 
-                Text(thread.lastBody.isEmpty ? thread.formattedPhone : thread.lastBody)
+            Text(thread.lastBody.isEmpty ? thread.formattedPhone : thread.lastBody)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -173,6 +181,10 @@ struct ThreadRow: View {
                 HStack(spacing: 8) {
                     Label(thread.serviceWindowOpen ? "Open" : "Template", systemImage: thread.serviceWindowOpen ? "timer" : "doc.text")
                         .foregroundStyle(thread.serviceWindowOpen ? .teal : .orange)
+                    if !sourceLabel.isEmpty {
+                        Text(sourceLabel)
+                            .foregroundStyle(.teal)
+                    }
                     Text(thread.leadStatus)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -184,6 +196,14 @@ struct ThreadRow: View {
         }
         .padding(12)
         .commsGlass(cornerRadius: 22, tint: color, interactive: true)
+    }
+
+    private var sourceLabel: String {
+        switch thread.leadSource {
+        case "hiring": "Hiring"
+        case "darbar_staff": "From Darbar"
+        default: ""
+        }
     }
 }
 
@@ -256,10 +276,25 @@ struct ContactHeader: View {
             HStack {
                 Chip(text: "Lead: \(thread.leadStatus)", color: .blue)
                 if !thread.leadSource.isEmpty {
-                    Chip(text: thread.leadSource, color: .purple)
+                    Chip(text: sourceTitle(thread.leadSource), color: .purple)
                 }
                 if !thread.assignedTo.isEmpty {
                     Chip(text: thread.assignedTo, color: .green)
+                }
+            }
+
+            if let context = thread.leadContext,
+               !context.primary.isEmpty || !context.secondary.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    if !context.primary.isEmpty {
+                        Text(context.primary)
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    if !context.secondary.isEmpty {
+                        Text(context.secondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -271,6 +306,7 @@ struct ContactHeader: View {
 struct ComposerView: View {
     @Bindable var model: CommsAppModel
     let thread: CommsThread
+    @State private var showingFileImporter = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -292,6 +328,41 @@ struct ComposerView: View {
                 }
             }
 
+            if let template = model.selectedReplyTemplate {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label(template.name, systemImage: "doc.text")
+                            .font(.caption.weight(.semibold))
+                        Spacer()
+                        Button {
+                            model.selectedReplyTemplate = nil
+                            model.replyTemplateVarsDraft = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if template.variableCount > 0 {
+                        TextField("Variables, comma separated", text: $model.replyTemplateVarsDraft)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .commsGlass(cornerRadius: 16, tint: .orange, interactive: true)
+                    }
+                    Button {
+                        Task { await model.sendSelectedTemplate() }
+                    } label: {
+                        Label("Send Template", systemImage: "paperplane.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 9)
+                    .commsGlass(cornerRadius: 16, tint: .orange, interactive: true)
+                    .disabled(model.isSending)
+                }
+                .padding(10)
+                .commsGlass(cornerRadius: 18, tint: .orange)
+            }
+
             HStack(alignment: .bottom, spacing: 10) {
                 TextField(thread.serviceWindowOpen ? "Reply" : "Template required", text: $model.replyDraft, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -301,13 +372,33 @@ struct ComposerView: View {
                     .padding(.vertical, 10)
                     .commsGlass(cornerRadius: 18, tint: thread.serviceWindowOpen ? .teal : .orange, interactive: thread.serviceWindowOpen)
 
+                Button {
+                    showingFileImporter = true
+                } label: {
+                    if model.isAttachmentSending {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "paperclip")
+                    }
+                }
+                .frame(width: 36, height: 36)
+                .buttonStyle(.plain)
+                .commsGlass(cornerRadius: 18, tint: thread.serviceWindowOpen ? .teal : .secondary, interactive: thread.serviceWindowOpen)
+                .disabled(!thread.serviceWindowOpen || model.isAttachmentSending)
+                .accessibilityLabel("Attach")
+
                 Menu {
                     if model.templates.isEmpty {
                         Text("No approved templates")
                     } else {
                         ForEach(model.templates, id: \.stableId) { template in
                             Button(template.name) {
-                                Task { await model.sendTemplate(template) }
+                                if template.variableCount == 0 {
+                                    Task { await model.sendTemplate(template) }
+                                } else {
+                                    model.selectedReplyTemplate = template
+                                    model.replyTemplateVarsDraft = ""
+                                }
                             }
                         }
                     }
@@ -337,6 +428,16 @@ struct ComposerView: View {
         }
         .padding(12)
         .commsGlass(cornerRadius: 26, tint: brandColor(for: thread.brand))
+        .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    Task { await model.sendAttachment(fileURL: url) }
+                }
+            case .failure(let error):
+                model.errorMessage = error.localizedDescription
+            }
+        }
     }
 }
 
@@ -390,7 +491,7 @@ struct AutomationView: View {
                 .padding()
             }
             .background(CommsBackdrop())
-            .navigationTitle("Automation")
+            .navigationTitle("From Darbar")
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button {
@@ -411,9 +512,9 @@ struct AutomationView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Staff Campaign")
+                    Text("From Darbar")
                         .font(.title3.weight(.semibold))
-                    Text("SparkSol WABA · template sends only")
+                    Text("SparkSol WABA · template only")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -623,6 +724,19 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .commsGlass(cornerRadius: 18, tint: .red, interactive: true)
+
+                    if model.isConfigured {
+                        Button {
+                            Task { await model.requestNotifications() }
+                        } label: {
+                            Label(model.notificationsEnabled ? "Notifications On" : "Enable Notifications",
+                                  systemImage: model.notificationsEnabled ? "bell.badge.fill" : "bell")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.vertical, 10)
+                        .commsGlass(cornerRadius: 18, tint: .indigo, interactive: true)
+                    }
                 }
                 .padding()
             }
@@ -643,6 +757,14 @@ struct Chip: View {
             .padding(.vertical, 4)
             .commsGlass(cornerRadius: 14, tint: color)
             .foregroundStyle(color)
+    }
+}
+
+func sourceTitle(_ raw: String) -> String {
+    switch raw {
+    case "hiring": "Hiring"
+    case "darbar_staff": "From Darbar"
+    default: raw
     }
 }
 
