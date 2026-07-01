@@ -42,12 +42,22 @@ The phone asks to "allow this source" only the **first** time. After that, insta
 ## 5. Place or confirm an order
 1. Tap **Place order** (bottom-right).
 2. **Pick the vendor** from the list.
-3. Tap **+** on each item you want → a **quantity box** appears → type the amount (e.g. Maida → `10`), the unit (kg) is shown. Tap **✕** to remove a line.
-4. The running total shows at the bottom (**N items · ₹ expected**).
-5. Tap **Place order**. The card now appears on the day board under that vendor.
-6. If the card came from Azeem/Nafees demand, open it and tap **Vendor order placed** after the real order is placed.
+3. Search the product under that vendor.
+4. If the product already exists, tap **+** on the product row → a **quantity box** and **unit box** appear. For half kg, type `0.5` and keep unit `kg`. If the bill itself is in grams, type `500` and change unit to `g`. Tap **✕** to remove a line.
+5. If the product is missing, tap **Product** next to the search box. This opens **Add product**.
+6. Fill **Product name**, **Unit**, **Category**, and **Price mode**. Choose **Live bill rate** if the rate changes bill-to-bill, or **Fixed expected rate** if the expected rate should be saved.
+7. Tap **Save product**. The app saves it under the selected vendor and immediately adds it to the order card.
+8. The running total shows at the bottom (**N items · ₹ expected**).
+9. Tap **Place order**. The card now appears on the day board under that vendor.
+10. If the card came from Azeem/Nafees demand, open it and tap **Vendor order placed** after the real order is placed.
 
 > Add items only for **one vendor** per order. For a second vendor, place another order — that keeps "one vendor, one card, one payment."
+
+**Exact Add Product path:** Open **HN Staff** → enter Zoya PIN `2026` → **Sauda** → **Place order** → select **HE/NCH** date if needed → **Pick vendor** or tap **Vendor** to add one → search product → tap **Product** / **Add product** → **Save product**.
+
+The product button is intentionally not a top-level tab. A product belongs under a vendor, so the app unlocks **Product** only after a vendor is selected.
+
+**Unit rule in version 2.1:** do not create a second product just because one purchase is half kg. Keep the master item as kg and enter decimal quantity (`0.5 kg`). Change the line unit only when the vendor bill uses another unit, such as `g`, `pcs`, `box`, or `L`; the saved rate is then read against that line unit.
 
 ---
 

@@ -1028,6 +1028,7 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit, deleted: () -> 
     val recvQty = remember { mutableStateMapOf<Int, String>() }
     val recvRate = remember { mutableStateMapOf<Int, String>() }
     val editQty = remember { mutableStateMapOf<Int, String>() }
+    val editUom = remember { mutableStateMapOf<Int, String>() }
     val editRate = remember { mutableStateMapOf<Int, String>() }
     val editRemoved = remember { mutableStateListOf<Int>() }
     val scope = rememberCoroutineScope()
@@ -1091,8 +1092,10 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit, deleted: () -> 
                                     l = l,
                                     removed = editRemoved.contains(id),
                                     qtyVal = editQty[id] ?: numStr(l.optDouble("qty_ordered", 0.0)),
+                                    uomVal = editUom[id] ?: l.optString("uom"),
                                     rateVal = editRate[id] ?: rupeeTextFromPaise(l.optInt("unit_cost_paise")),
                                     onQty = { editQty[id] = it },
+                                    onUom = { editUom[id] = it },
                                     onRate = { editRate[id] = it },
                                     onToggleRemove = {
                                         if (editRemoved.contains(id)) editRemoved.remove(id) else editRemoved.add(id)
@@ -1121,7 +1124,7 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit, deleted: () -> 
                                 }
                                 Row {
                                     OutlinedButton(onClick = {
-                                        editingItems = false; actionError = ""; editRemoved.clear(); editQty.clear(); editRate.clear()
+                                        editingItems = false; actionError = ""; editRemoved.clear(); editQty.clear(); editUom.clear(); editRate.clear()
                                     }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Cancel") }
                                     Spacer(Modifier.width(12.dp))
                                     Button(
@@ -1134,7 +1137,12 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit, deleted: () -> 
                                             }
                                             val bad = kept.firstOrNull { l -> (editQty[l.optInt("id")]?.toDoubleOrNull() ?: l.optDouble("qty_ordered", 0.0)) <= 0.0 }
                                             if (bad != null) {
-                                                actionError = "Enter quantity for every item."
+                                                actionError = "Enter quantity for every item. Half kg is 0.5 kg."
+                                                return@Button
+                                            }
+                                            val missingUom = kept.firstOrNull { l -> (editUom[l.optInt("id")] ?: l.optString("uom")).trim().isEmpty() }
+                                            if (missingUom != null) {
+                                                actionError = "Enter unit for every item."
                                                 return@Button
                                             }
                                             busy = true; actionError = ""
@@ -1147,14 +1155,14 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit, deleted: () -> 
                                                         .put("item_code", l.optString("item_code"))
                                                         .put("item_label", l.optString("item_label"))
                                                         .put("qty_ordered", editQty[id] ?: numStr(l.optDouble("qty_ordered", 0.0)))
-                                                        .put("uom", l.optString("uom"))
+                                                        .put("uom", (editUom[id] ?: l.optString("uom")).trim())
                                                         .put("unit_cost_paise", paiseFromRupeeText(editRate[id] ?: rupeeTextFromPaise(l.optInt("unit_cost_paise"))))
                                                         .put("flag", l.optString("flag")))
                                                 }
                                                 val r = Api.post("edit-lines", JSONObject().put("order_id", s.id).put("lines", arr))
                                                 busy = false
                                                 if (r.optBoolean("ok")) {
-                                                    editingItems = false; editRemoved.clear(); editQty.clear(); editRate.clear(); load()
+                                                    editingItems = false; editRemoved.clear(); editQty.clear(); editUom.clear(); editRate.clear(); load()
                                                 } else actionError = r.optString("error")
                                             }
                                         },
@@ -1172,6 +1180,7 @@ fun CardScreen(me: JSONObject, s: Screen.Card, back: () -> Unit, deleted: () -> 
                                                 lines.forEach {
                                                     val id = it.optInt("id")
                                                     editQty[id] = numStr(it.optDouble("qty_ordered", 0.0))
+                                                    editUom[id] = it.optString("uom")
                                                     editRate[id] = rupeeTextFromPaise(it.optInt("unit_cost_paise"))
                                                 }
                                                 editingItems = true
@@ -1313,14 +1322,14 @@ fun LineRow(l: JSONObject, receiving: Boolean, recvVal: String, rateVal: String,
 }
 
 @Composable
-fun EditableOrderLineRow(l: JSONObject, removed: Boolean, qtyVal: String, rateVal: String,
-                         onQty: (String) -> Unit, onRate: (String) -> Unit, onToggleRemove: () -> Unit) {
-    val uom = l.optString("uom").ifEmpty { "u" }
+fun EditableOrderLineRow(l: JSONObject, removed: Boolean, qtyVal: String, uomVal: String, rateVal: String,
+                         onQty: (String) -> Unit, onUom: (String) -> Unit, onRate: (String) -> Unit, onToggleRemove: () -> Unit) {
+    val uom = uomVal.ifEmpty { "u" }
     Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(l.optString("item_label"), fontWeight = FontWeight.Medium, color = if (removed) Muted else Ink,
                 fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (removed) "will be removed from this card" else "edit ordered qty and expected rate",
+            Text(if (removed) "will be removed from this card" else "qty can be decimal; unit is editable",
                 color = if (removed) WarnA else Muted, fontSize = 11.sp)
         }
         if (!removed) {
@@ -1328,6 +1337,10 @@ fun EditableOrderLineRow(l: JSONObject, removed: Boolean, qtyVal: String, rateVa
                 value = qtyVal, onValueChange = { onQty(it.replace(Regex("[^0-9.]"), "")) }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.width(82.dp), label = { Text("qty", fontSize = 10.sp) })
+            Spacer(Modifier.width(6.dp))
+            OutlinedTextField(
+                value = uomVal, onValueChange = { onUom(cleanUnitText(it)) }, singleLine = true,
+                modifier = Modifier.width(66.dp), label = { Text("unit", fontSize = 10.sp) })
             Spacer(Modifier.width(6.dp))
             OutlinedTextField(
                 value = rateVal, onValueChange = { onRate(it.replace(Regex("[^0-9.]"), "")) }, singleLine = true,
@@ -1776,6 +1789,7 @@ fun DemandScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () -
                                 draft.forEachIndexed { idx, d ->
                                     DemandDraftLine(d,
                                         onQty = { qv -> draft[idx] = JSONObject(d.toString()).put("qty", qv.ifEmpty { "0" }) },
+                                        onUom = { uv -> draft[idx] = JSONObject(d.toString()).put("uom", uv) },
                                         onRemove = { draft.removeAt(idx) })
                                 }
                             }
@@ -1799,6 +1813,14 @@ fun DemandScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () -
             Button(
                 onClick = {
                     if (busy || draft.isEmpty()) return@Button
+                    if (draft.any { it.optDouble("qty", 0.0) <= 0.0 }) {
+                        error = "Enter quantity for every item. Half kg is 0.5 kg."
+                        return@Button
+                    }
+                    if (draft.any { it.optString("uom").trim().isEmpty() }) {
+                        error = "Enter unit for every item."
+                        return@Button
+                    }
                     busy = true; error = ""
                     scope.launch {
                         val r = Api.post("demand", JSONObject()
@@ -1837,21 +1859,31 @@ fun DemandItemRow(it2: JSONObject, inDraft: Boolean, onSpeak: () -> Unit, onAdd:
 }
 
 @Composable
-fun DemandDraftLine(line: JSONObject, onQty: (String) -> Unit, onRemove: () -> Unit) {
+fun DemandDraftLine(line: JSONObject, onQty: (String) -> Unit, onUom: (String) -> Unit, onRemove: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(line.optString("item_label"), color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(line.optString("hindi_label").ifEmpty { "Hindi pending" }, color = Muted, fontSize = 11.sp)
+            Text(
+                line.optString("hindi_label").ifEmpty { "Hindi pending" } + " · 0.5 kg ok",
+                color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
         }
         OutlinedTextField(
             value = line.optString("qty").ifEmpty { "1" },
             onValueChange = { v -> onQty(v.replace(Regex("[^0-9.]"), "")) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.width(78.dp),
+            modifier = Modifier.width(74.dp),
             textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
         )
-        Text(line.optString("uom"), color = Muted, fontSize = 11.sp, modifier = Modifier.width(42.dp).padding(start = 4.dp))
+        Spacer(Modifier.width(6.dp))
+        OutlinedTextField(
+            value = line.optString("uom"),
+            onValueChange = { v -> onUom(cleanUnitText(v)) },
+            singleLine = true,
+            modifier = Modifier.width(62.dp),
+            label = { Text("unit", fontSize = 10.sp) }
+        )
         IconButton(onClick = onRemove) { Icon(Icons.Filled.Close, "remove", tint = WarnA) }
     }
 }
@@ -2087,7 +2119,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = newItemUnit,
-                        onValueChange = { newItemUnit = it.trim(); masterError = "" },
+                        onValueChange = { newItemUnit = cleanUnitText(it); masterError = "" },
                         singleLine = true,
                         label = { Text("Unit *") },
                         modifier = Modifier.fillMaxWidth()
@@ -2243,6 +2275,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                             DraftLineEditor(
                                 line = d,
                                 onQty = { q -> draft[idx] = JSONObject(d.toString()).put("qty", q.ifEmpty { "0" }) },
+                                onUom = { u -> draft[idx] = JSONObject(d.toString()).put("uom", u) },
                                 onRemove = { draft.removeAt(idx) }
                             )
                         }
@@ -2251,7 +2284,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                 Spacer(Modifier.height(10.dp))
             }
             if (displayItems.isNotEmpty()) {
-                if (vendorKey.isNotEmpty()) Text("Tap +, then set the quantity", color = Muted, fontSize = 12.sp)
+                if (vendorKey.isNotEmpty()) Text("Tap +, then set quantity and unit. Half kg = 0.5 kg.", color = Muted, fontSize = 12.sp)
                 LazyColumn(Modifier.weight(1f)) {
                     items(displayItems) { it2 ->
                         val code = it2.optString("item_code")
@@ -2295,10 +2328,16 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                                             draft[idx] = JSONObject(inDraft.toString()).put("qty", q.ifEmpty { "0" }) },
                                         singleLine = true,
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                        modifier = Modifier.width(88.dp),
+                                        modifier = Modifier.width(78.dp),
                                         textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center))
                                     Spacer(Modifier.width(4.dp))
-                                    Text(unit, color = Muted, fontSize = 12.sp, modifier = Modifier.width(46.dp))
+                                    OutlinedTextField(
+                                        value = inDraft.optString("uom").ifEmpty { unit },
+                                        onValueChange = { v -> draft[idx] = JSONObject(inDraft.toString()).put("uom", cleanUnitText(v)) },
+                                        singleLine = true,
+                                        modifier = Modifier.width(62.dp),
+                                        label = { Text("unit", fontSize = 10.sp) }
+                                    )
                                     IconButton(onClick = { draft.removeAt(idx) }) { Icon(Icons.Filled.Close, "remove", tint = WarnA) }
                                 }
                             }
@@ -2333,7 +2372,16 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
             if (error.isNotEmpty()) Text("⚠ $error", color = WarnA, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
             Button(
                 onClick = {
-                    if (busy || draft.isEmpty()) return@Button; busy = true; error = ""
+                    if (busy || draft.isEmpty()) return@Button
+                    if (draft.any { it.optDouble("qty", 0.0) <= 0.0 }) {
+                        error = "Enter quantity for every item. Half kg is 0.5 kg."
+                        return@Button
+                    }
+                    if (draft.any { it.optString("uom").trim().isEmpty() }) {
+                        error = "Enter unit for every item."
+                        return@Button
+                    }
+                    busy = true; error = ""
                     scope.launch {
                         val r = Api.post("place", JSONObject()
                             .put("outlet", s.outlet).put("vendor_key", vendorKey).put("for_date", s.date)
@@ -2353,22 +2401,30 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
 
 // ---- shared bits ----------------------------------------------------------
 @Composable
-fun DraftLineEditor(line: JSONObject, onQty: (String) -> Unit, onRemove: () -> Unit) {
+fun DraftLineEditor(line: JSONObject, onQty: (String) -> Unit, onUom: (String) -> Unit, onRemove: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(line.optString("item_label"), color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (line.optString("flag").isNotEmpty()) Text(line.optString("flag"), color = WarnA, fontSize = 10.sp)
+            else Text("Half kg = 0.5 kg. Change unit only if bill uses another unit.", color = Muted, fontSize = 10.sp, maxLines = 2)
         }
         OutlinedTextField(
             value = numStr(line.optDouble("qty", 1.0)),
             onValueChange = { v -> onQty(v.replace(Regex("[^0-9.]"), "")) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.width(82.dp),
+            modifier = Modifier.width(76.dp),
             textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
         )
-        Text(line.optString("uom"), color = Muted, fontSize = 11.sp, modifier = Modifier.width(42.dp).padding(start = 4.dp))
+        Spacer(Modifier.width(6.dp))
+        OutlinedTextField(
+            value = line.optString("uom"),
+            onValueChange = { v -> onUom(cleanUnitText(v)) },
+            singleLine = true,
+            modifier = Modifier.width(62.dp),
+            label = { Text("unit", fontSize = 10.sp) }
+        )
         IconButton(onClick = onRemove) { Icon(Icons.Filled.Close, "remove", tint = WarnA) }
     }
 }
@@ -2395,6 +2451,7 @@ fun CenterMsg(msg: String, onRetry: (() -> Unit)?) {
 }
 
 fun numStr(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else d.toString()
+fun cleanUnitText(s: String): String = s.replace(Regex("[^A-Za-z0-9./ -]"), "").take(12)
 fun JSONArray.toStrList(): List<String> = (0 until length()).map { optString(it) }
 fun JSONArray.toObjList(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 fun JSONObject.optDoubleOrNull(key: String): Double? {

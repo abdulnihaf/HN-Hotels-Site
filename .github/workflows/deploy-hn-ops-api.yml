@@ -38,14 +38,14 @@ jobs:
           rm -rf /tmp/hn-ops-api-dist
           mkdir -p /tmp/hn-ops-api-dist/functions/api /tmp/hn-ops-api-dist/get
           cp functions/api/ops.js /tmp/hn-ops-api-dist/functions/api/ops.js
-          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff-2.0.apk
+          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff-2.1.apk
           cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 20,
-            "versionName": "2.0",
-            "url": "https://hn-ops-api.pages.dev/HN-Staff-2.0.apk",
-            "notes": "Sauda 2.0: actionable Vendor Diary with Diary/Payments/Add tabs, visible payment buttons, visual UPI app tiles for PhonePe/GPay/Paytm/CRED/BHIM, manual UPI handoff, and WABA audit hooks."
+            "versionCode": 21,
+            "versionName": "2.1",
+            "url": "https://hn-ops-api.pages.dev/HN-Staff-2.1.apk",
+            "notes": "Sauda 2.1: flexible purchase units. Use decimal quantities like 0.5 kg for half kg, or override the line unit to g/pcs/L when the vendor bill uses that unit."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -68,8 +68,8 @@ jobs:
             <main>
               <h1>HN Staff</h1>
               <p>Install the current Android staff app for Sauda purchase work.</p>
-              <a href="/HN-Staff-2.0.apk">Download & install 2.0</a>
-              <small>Version 2.0 · HN Hotels Pvt Ltd</small>
+              <a href="/HN-Staff-2.1.apk">Download & install 2.1</a>
+              <small>Version 2.1 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>
