@@ -523,6 +523,46 @@ list · a broken milk-pair lock · a material PERIODIC item past its own max gap
 item (billing gap) · a list from an unknown sender. **Ask (never assume):** per-item price · NO-LIST vs
 missed-ingest · DATA-GAP vs export-fail · any unresolved item/unit · a cross-brand item (flag, don't reassign).
 
+## 20. WIRING TO HN STAFF 2.0 — the agent↔app contract *(audited live 2026-07-01)*
+
+**HN Staff 2.0** (versionCode 20, `HN-Staff-2.0.apk`) = the actionable **Vendor Diary** (Diary/Payments/Add
+tabs) + payment buttons + **UPI app tiles** (PhonePe/GPay/Paytm/CRED/BHIM) + manual UPI handoff + **WABA audit
+hooks**. Backend = `functions/api/ops.js` (deployed `hn-ops-api.pages.dev/api/ops`, from branch
+`codex/sauda-zoya-fixes` — CODEX's lane) → **D1 `hn-ops`**. Schema UNCHANGED (same 14 tables); 2.0 reuses
+`purchase_orders` pay-fields + `vendor_ledger` + `purchase_event_log`. ops.js actions: me · catalog ·
+purchase_day · **vendor_diary** *(2.0)* · day · card · route · add-vendor · add-item · demand · place ·
+edit-lines · delete-order · mark-ordered · receive · **payment** *(2.0)*.
+
+**What 2.0 already gives the agent (do NOT rebuild):**
+- **Send path exists:** ops.js has brand-scoped `sendWabaTemplate` (tokens ops/he/nch/**sparksol**) + audit
+  hooks `dispatchOrderPlacedWaba` (templates `sauda_vendor_order_placed_v1`, `sauda_staff_order_placed_v1`)
+  and `dispatchPaymentDoneWaba`. Plus `_lib/comms-core.js` (`sendWaba/Sms/Voice`, `runEscalation`, gap_minutes).
+- **Payment fields for §17:** `payment` action gates on receive-proof + all-lines-received-priced, then sets
+  `status` RAISED|PAID + `pay_method` + `bank_ref` (the UPI ref) + `paid_at`, logs `purchase_event_log`
+  ('paid'/'payment-request'). So the agent reads pay_method/bank_ref → **UPI (ref present) = ask Nihaf to
+  confirm the trade; no UPI = cash = Bashir** (§17).
+
+**The wiring (grounded):**
+- **READ** ← the agent (a SEPARATE cron worker it owns, bound to D1 `hn-ops` as read-only) reads
+  `purchase_orders` (status/dates/pay_method/bank_ref), `purchase_order_lines` (item/qty/price/received),
+  `purchase_event_log` (the shared trail), `purchase_media` (proof), `vendor_ledger` (diary), `items`+`item_aliases`
+  (normalise), `staff` (pin→name→role), `vendors`. (Or via ops.js read endpoints day/card/vendor_diary + admin pin.)
+- **DETECT** = the §19 suppressor ladder on that live data (§0 no-assumptions, §14 value×completeness, §18 self-learn).
+- **ACT** = reuse comms-core / the existing WABA path (sparksol for staff/owner); NEW chase templates
+  (Zoya-missing-category, Bashir-price, owner-threshold) need Meta approval — the one blocking gate.
+- **TRAIL** = read + append to `purchase_event_log` (nudge/remind/escalate/sealed/attributed) — extends 2.0's audit hooks.
+- **ISOLATION** = the agent is its OWN worker; it never edits ops.js or codex's deploy branch (lane law). Reads the
+  same D1, reuses comms-core.
+
+**SHADOW-VERIFIED on live 2.0 data (2026-07-01, latest = 30 Jun):** the wired detection fired exactly HE
+chicken-absent + NCH milk-absent (buns covered) and nothing else. All orders still ORDERED (0 received/paid)
+→ the agent would also raise the "ordered-but-never-priced/billed" gap. No false positives.
+
+**Build order (close-the-circle) + Nihaf gates:** (1) ship the read+detect worker in SHADOW (no sends) — done in
+proof above; (2) get the new chase templates Meta-approved + Nihaf's standing-auth for Sparksol staff sends;
+(3) turn sends on with quiet-hours. Gates that need Nihaf: the WABA template approval + standing-auth + the
+outward-send go. Everything up to sends is safe to build now.
+
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
 witness is Nihaf. A wrong line in a spine is worse than no spine — correct it here first.*
