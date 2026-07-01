@@ -212,6 +212,623 @@ function threadIdFor(brand, phone) {
   return `${brand}:${normalizePhone(phone)}`;
 }
 
+function brandFromPhoneId(env, phoneId) {
+  if (!phoneId) return null;
+  if (phoneId === env.WA_NCH_PHONE_ID) return 'nch';
+  if (phoneId === env.WA_SPARKSOL_PHONE_ID) return 'sparksol';
+  if (phoneId === env.WA_HE_PHONE_ID || phoneId === env.WA_PHONE_ID) return 'he';
+  return null;
+}
+
+function brandFromLabel(label, fallback = 'he') {
+  const s = String(label || '').toLowerCase();
+  if (s.includes('nawabi') || s.includes('nch')) return 'nch';
+  if (s.includes('spark')) return 'sparksol';
+  if (s.includes('hamza') || s === 'he') return 'he';
+  if (['he', 'nch', 'sparksol'].includes(s)) return s;
+  return fallback;
+}
+
+function coerceBrand(raw, fallback = 'he') {
+  const b = String(raw || '').toLowerCase();
+  if (['he', 'nch', 'sparksol'].includes(b)) return b;
+  if (b === 'hq') return 'sparksol';
+  return brandFromLabel(raw, fallback);
+}
+
+function normalizeIso(raw, fallback = nowIso()) {
+  if (!raw) return fallback;
+  const value = String(raw);
+  if (/^\d+$/.test(value)) {
+    const n = parseInt(value, 10);
+    const ms = value.length <= 10 ? n * 1000 : n;
+    const d = new Date(ms);
+    return Number.isFinite(d.getTime()) ? d.toISOString() : fallback;
+  }
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z';
+  const d = new Date(normalized);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : fallback;
+}
+
+function serviceWindowExpiresAt(inboundIso) {
+  const t = new Date(inboundIso).getTime();
+  return Number.isFinite(t) ? new Date(t + 24 * 60 * 60 * 1000).toISOString() : null;
+}
+
+function safeStringify(value, max = 10000) {
+  try { return JSON.stringify(value || {}).slice(0, max); } catch { return '{}'; }
+}
+
+function safeParse(raw) {
+  if (!raw || typeof raw !== 'string') return raw && typeof raw === 'object' ? raw : null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function quoteIdent(name) {
+  const n = String(name || '');
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(n)) throw new Error(`unsafe identifier: ${n}`);
+  return `"${n}"`;
+}
+
+async function tableExists(env, table) {
+  const row = await env.DB.prepare(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`
+  ).bind(table).first();
+  return !!row?.name;
+}
+
+async function tableColumns(env, table) {
+  if (!(await tableExists(env, table))) return [];
+  const rows = await env.DB.prepare(`PRAGMA table_info(${quoteIdent(table)})`).all();
+  return (rows.results || []).map(r => r.name);
+}
+
+async function tableCount(env, table) {
+  if (!(await tableExists(env, table))) return 0;
+  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${quoteIdent(table)}`).first();
+  return row?.n || 0;
+}
+
+async function historySources(env) {
+  const tables = [
+    'conversations',
+    'messages',
+    'webhook_events',
+    'comms_webhook_events',
+    'comms_outbox',
+    'comms_threads',
+    'comms_messages',
+  ];
+  const sources = {};
+  for (const table of tables) {
+    const exists = await tableExists(env, table);
+    sources[table] = {
+      exists,
+      count: exists ? await tableCount(env, table) : 0,
+      columns: exists ? await tableColumns(env, table) : [],
+    };
+  }
+  return json({ ok: true, sources });
+}
+
+function wabaMessageBody(m) {
+  if (!m) return '';
+  if (m.type === 'text') return m.text?.body || '';
+  if (m.type === 'button') return m.button?.text || m.button?.payload || '';
+  if (m.type === 'interactive') {
+    return m.interactive?.button_reply?.title
+      || m.interactive?.button_reply?.id
+      || m.interactive?.list_reply?.title
+      || m.interactive?.list_reply?.id
+      || '[interactive]';
+  }
+  if (m.type === 'image') return m.image?.caption || '[image]';
+  if (m.type === 'video') return m.video?.caption || '[video]';
+  if (m.type === 'document') return m.document?.filename || m.document?.caption || '[document]';
+  if (m.type === 'audio') return '[audio]';
+  if (m.type === 'sticker') return '[sticker]';
+  if (m.type === 'location') return `${m.location?.latitude || ''},${m.location?.longitude || ''}`;
+  if (m.type === 'contacts') {
+    const c = m.contacts?.[0];
+    return c ? `${c.name?.formatted_name || 'Contact'} ${c.phones?.[0]?.phone || ''}`.trim() : '[contact]';
+  }
+  if (m.type === 'reaction') return m.reaction?.emoji || '[reaction]';
+  if (m.type === 'order') return '[cart/order]';
+  return `[${m.type || 'message'}]`;
+}
+
+function wabaMediaId(m) {
+  return m?.image?.id || m?.video?.id || m?.audio?.id || m?.document?.id || m?.sticker?.id || null;
+}
+
+function contactDisplayName(value, waId) {
+  const contact = (value?.contacts || []).find(c => c.wa_id === waId) || value?.contacts?.[0];
+  return contact?.profile?.name || '';
+}
+
+async function upsertThreadForMessage(env, message) {
+  const brand = coerceBrand(message.brand);
+  const phone = normalizePhone(message.phone);
+  const threadId = threadIdFor(brand, phone);
+  const createdAt = normalizeIso(message.created_at);
+  const direction = message.direction === 'outbound' ? 'outbound' : 'inbound';
+  const lastInboundAt = direction === 'inbound' ? createdAt : null;
+  const lastOutboundAt = direction === 'outbound' ? createdAt : null;
+  const unreadIncrement = direction === 'inbound' && message.status === 'unread' ? 1 : 0;
+  const serviceExpires = direction === 'inbound' ? serviceWindowExpiresAt(createdAt) : null;
+
+  await env.DB.prepare(`
+    INSERT INTO comms_threads
+      (thread_id, brand, phone, wa_id, phone_number_id, display_name, status,
+       last_message_at, last_inbound_at, last_outbound_at, last_body, last_direction,
+       last_msg_type, unread_count, service_window_expires_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(thread_id) DO UPDATE SET
+       wa_id = COALESCE(excluded.wa_id, comms_threads.wa_id),
+       phone_number_id = COALESCE(excluded.phone_number_id, comms_threads.phone_number_id),
+       display_name = COALESCE(NULLIF(excluded.display_name, ''), comms_threads.display_name),
+       status = CASE
+         WHEN comms_threads.status = 'closed' AND excluded.last_direction = 'inbound' THEN 'open'
+         ELSE comms_threads.status
+       END,
+       last_message_at = CASE
+         WHEN comms_threads.last_message_at IS NULL OR excluded.last_message_at >= comms_threads.last_message_at
+         THEN excluded.last_message_at ELSE comms_threads.last_message_at END,
+       last_inbound_at = CASE
+         WHEN excluded.last_inbound_at IS NOT NULL
+          AND (comms_threads.last_inbound_at IS NULL OR excluded.last_inbound_at >= comms_threads.last_inbound_at)
+         THEN excluded.last_inbound_at ELSE comms_threads.last_inbound_at END,
+       last_outbound_at = CASE
+         WHEN excluded.last_outbound_at IS NOT NULL
+          AND (comms_threads.last_outbound_at IS NULL OR excluded.last_outbound_at >= comms_threads.last_outbound_at)
+         THEN excluded.last_outbound_at ELSE comms_threads.last_outbound_at END,
+       last_body = CASE
+         WHEN comms_threads.last_message_at IS NULL OR excluded.last_message_at >= comms_threads.last_message_at
+         THEN excluded.last_body ELSE comms_threads.last_body END,
+       last_direction = CASE
+         WHEN comms_threads.last_message_at IS NULL OR excluded.last_message_at >= comms_threads.last_message_at
+         THEN excluded.last_direction ELSE comms_threads.last_direction END,
+       last_msg_type = CASE
+         WHEN comms_threads.last_message_at IS NULL OR excluded.last_message_at >= comms_threads.last_message_at
+         THEN excluded.last_msg_type ELSE comms_threads.last_msg_type END,
+       unread_count = comms_threads.unread_count + excluded.unread_count,
+       service_window_expires_at = CASE
+         WHEN excluded.service_window_expires_at IS NOT NULL
+          AND (comms_threads.service_window_expires_at IS NULL OR excluded.service_window_expires_at >= comms_threads.service_window_expires_at)
+         THEN excluded.service_window_expires_at ELSE comms_threads.service_window_expires_at END,
+       updated_at = excluded.updated_at
+  `).bind(
+    threadId,
+    brand,
+    phone,
+    normalizePhone(message.wa_id || phone),
+    message.phone_number_id || null,
+    String(message.display_name || '').slice(0, 160),
+    createdAt,
+    lastInboundAt,
+    lastOutboundAt,
+    String(message.body || '').slice(0, 500),
+    direction,
+    message.msg_type || 'text',
+    unreadIncrement,
+    serviceExpires,
+    createdAt,
+    nowIso(),
+  ).run();
+}
+
+async function insertHistoryMessage(env, message) {
+  const brand = coerceBrand(message.brand);
+  const phone = normalizePhone(message.phone);
+  if (!brand || !phone) return { inserted: false, reason: 'missing_brand_or_phone' };
+  if (message.outbox_id) {
+    const existing = await env.DB.prepare(
+      `SELECT id FROM comms_messages WHERE outbox_id = ? LIMIT 1`
+    ).bind(message.outbox_id).first();
+    if (existing?.id) return { inserted: false, reason: 'duplicate_outbox_id' };
+  }
+  const threadId = threadIdFor(brand, phone);
+  const direction = message.direction === 'outbound' ? 'outbound' : 'inbound';
+  const status = message.status || (direction === 'inbound' ? 'received' : 'sent');
+  const createdAt = normalizeIso(message.created_at);
+
+  // Ensure the parent thread exists before inserting the child message. The
+  // second upsert below applies the unread increment only after the message
+  // insert succeeds, keeping repeated imports idempotent.
+  await upsertThreadForMessage(env, {
+    ...message,
+    brand,
+    phone,
+    direction,
+    status: status === 'unread' ? 'received' : status,
+    created_at: createdAt,
+  });
+
+  const inserted = await env.DB.prepare(`
+    INSERT OR IGNORE INTO comms_messages
+      (thread_id, brand, phone, direction, msg_type, body, template_name, wamid,
+       status, provider_response, error_text, media_id, raw_payload, outbox_id, actor, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    RETURNING id
+  `).bind(
+    threadId,
+    brand,
+    phone,
+    direction,
+    message.msg_type || 'text',
+    String(message.body || '').slice(0, 4000),
+    message.template_name || null,
+    message.wamid || null,
+    status,
+    message.provider_response ? safeStringify(message.provider_response, 4000) : null,
+    message.error_text || null,
+    message.media_id || null,
+    message.raw_payload ? safeStringify(message.raw_payload, 10000) : null,
+    message.outbox_id || null,
+    message.actor || 'history-import',
+    createdAt,
+  ).first();
+
+  if (!inserted?.id) return { inserted: false, reason: 'duplicate_wamid' };
+  await upsertThreadForMessage(env, { ...message, brand, phone, direction, status, created_at: createdAt });
+  return { inserted: true, id: inserted.id };
+}
+
+function addByBrand(stats, brand, inserted) {
+  const b = coerceBrand(brand);
+  stats.by_brand[b] = stats.by_brand[b] || { inserted: 0, skipped: 0 };
+  stats.by_brand[b][inserted ? 'inserted' : 'skipped'] += 1;
+}
+
+function blankImportStats(source, limit, offset) {
+  return { source, limit, offset, scanned: 0, extracted: 0, inserted: 0, skipped: 0, by_brand: {} };
+}
+
+function extractWabaMessagesFromPayload(env, payload, fallback = {}) {
+  const found = [];
+  const pushFromValue = (value, rawContext) => {
+    const phoneNumberId = value?.metadata?.phone_number_id || fallback.phone_number_id || null;
+    const brand = brandFromPhoneId(env, phoneNumberId)
+      || brandFromLabel(fallback.brand_label, fallback.brand || 'he');
+    const contacts = value?.contacts || [];
+    for (const m of value?.messages || []) {
+      const phone = normalizePhone(m.from || fallback.phone || '');
+      if (!phone) continue;
+      found.push({
+        brand,
+        phone,
+        wa_id: phone,
+        phone_number_id: phoneNumberId,
+        display_name: contactDisplayName({ contacts }, m.from) || fallback.display_name || '',
+        direction: 'inbound',
+        msg_type: m.type || fallback.msg_type || 'text',
+        body: wabaMessageBody(m),
+        wamid: m.id || fallback.wamid || null,
+        status: 'unread',
+        media_id: wabaMediaId(m),
+        raw_payload: rawContext || m,
+        created_at: normalizeIso(m.timestamp || fallback.created_at),
+      });
+    }
+  };
+
+  if (!payload) return found;
+  if (Array.isArray(payload.entry)) {
+    for (const entry of payload.entry) {
+      for (const change of entry.changes || []) pushFromValue(change.value || {}, payload);
+    }
+    return found;
+  }
+  if (Array.isArray(payload.messages)) {
+    pushFromValue(payload, payload);
+    return found;
+  }
+  if (payload.id && payload.from) {
+    found.push({
+      brand: brandFromLabel(fallback.brand_label, fallback.brand || 'he'),
+      phone: normalizePhone(payload.from || fallback.phone || ''),
+      wa_id: normalizePhone(payload.from || fallback.phone || ''),
+      phone_number_id: fallback.phone_number_id || null,
+      display_name: fallback.display_name || '',
+      direction: 'inbound',
+      msg_type: payload.type || fallback.msg_type || 'text',
+      body: wabaMessageBody(payload),
+      wamid: payload.id || fallback.wamid || null,
+      status: 'unread',
+      media_id: wabaMediaId(payload),
+      raw_payload: payload,
+      created_at: normalizeIso(payload.timestamp || fallback.created_at),
+    });
+  }
+  return found.filter(m => m.phone);
+}
+
+function extractWabaStatusesFromPayload(env, payload, fallback = {}) {
+  const found = [];
+  const pushFromValue = (value, rawContext) => {
+    const phoneNumberId = value?.metadata?.phone_number_id || fallback.phone_number_id || null;
+    const brand = brandFromPhoneId(env, phoneNumberId)
+      || brandFromLabel(fallback.brand_label, fallback.brand || 'he');
+    for (const s of value?.statuses || []) {
+      found.push({
+        brand,
+        wamid: s.id || fallback.wamid || null,
+        phone: normalizePhone(s.recipient_id || fallback.phone || ''),
+        status: s.status || fallback.status || 'status',
+        error_text: s.errors?.[0]?.title || s.errors?.[0]?.message || fallback.error_text || null,
+        raw_payload: rawContext || s,
+        created_at: normalizeIso(s.timestamp || fallback.created_at),
+      });
+    }
+  };
+  if (!payload) return found;
+  if (Array.isArray(payload.entry)) {
+    for (const entry of payload.entry) {
+      for (const change of entry.changes || []) pushFromValue(change.value || {}, payload);
+    }
+    return found;
+  }
+  if (Array.isArray(payload.statuses)) {
+    pushFromValue(payload, payload);
+    return found;
+  }
+  return found;
+}
+
+async function mirrorHistoryStatus(env, status) {
+  if (!status?.wamid) return false;
+  await env.DB.prepare(`
+    UPDATE comms_messages
+       SET status = ?,
+           provider_response = COALESCE(provider_response, ?),
+           error_text = COALESCE(error_text, ?)
+     WHERE wamid = ?
+  `).bind(status.status, safeStringify(status.raw_payload, 4000), status.error_text || null, status.wamid).run();
+
+  if (status.status === 'delivered') {
+    await env.DB.prepare(`
+      UPDATE comms_outbox
+         SET status = 'delivered',
+             delivered_at = COALESCE(delivered_at, ?)
+       WHERE provider_msg_id = ?
+    `).bind(status.created_at, status.wamid).run();
+  } else if (status.status === 'read') {
+    await env.DB.prepare(`
+      UPDATE comms_outbox
+         SET status = 'read',
+             read_at = COALESCE(read_at, ?)
+       WHERE provider_msg_id = ?
+    `).bind(status.created_at, status.wamid).run();
+  } else if (status.status === 'failed') {
+    await env.DB.prepare(`
+      UPDATE comms_outbox
+         SET status = 'failed',
+             error_text = COALESCE(error_text, ?)
+       WHERE provider_msg_id = ?
+    `).bind(status.error_text || 'WABA failed', status.wamid).run();
+  }
+  return true;
+}
+
+async function importLegacyConversations(env, { limit, offset }) {
+  const stats = blankImportStats('conversations', limit, offset);
+  if (!(await tableExists(env, 'conversations'))) return stats;
+  const rows = await env.DB.prepare(`
+    SELECT c.*, cam.brand AS campaign_brand, cam.name AS campaign_name
+      FROM conversations c
+      LEFT JOIN campaigns cam ON cam.id = c.campaign_id
+     ORDER BY c.created_at ASC, c.id ASC
+     LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+  for (const row of rows.results || []) {
+    stats.scanned += 1;
+    const direction = row.direction === 'outbound' ? 'outbound' : 'inbound';
+    const brand = brandFromLabel(row.campaign_brand, 'he');
+    const phone = normalizePhone(row.phone || '');
+    if (!phone) { stats.skipped += 1; continue; }
+    stats.extracted += 1;
+    const result = await insertHistoryMessage(env, {
+      brand,
+      phone,
+      wa_id: phone,
+      display_name: row.candidate_name || '',
+      direction,
+      msg_type: row.msg_type || 'text',
+      body: row.body || '',
+      wamid: row.wamid || `legacy:conversation:${row.id}`,
+      status: direction === 'inbound'
+        ? (row.status === 'read' ? 'read' : 'unread')
+        : (row.status || 'sent'),
+      media_id: row.media_id || null,
+      raw_payload: { source: 'conversations', row },
+      created_at: row.created_at,
+    });
+    stats[result.inserted ? 'inserted' : 'skipped'] += 1;
+    addByBrand(stats, brand, result.inserted);
+  }
+  return stats;
+}
+
+async function importLegacyMessages(env, { limit, offset }) {
+  const stats = blankImportStats('messages', limit, offset);
+  if (!(await tableExists(env, 'messages'))) return stats;
+  const rows = await env.DB.prepare(`
+    SELECT m.*, cam.brand AS campaign_brand, cam.name AS campaign_name, cam.template_name AS campaign_template
+      FROM messages m
+      LEFT JOIN campaigns cam ON cam.id = m.campaign_id
+     ORDER BY COALESCE(m.sent_at, m.queued_at, m.delivered_at, m.read_at, m.failed_at) ASC, m.id ASC
+     LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+  for (const row of rows.results || []) {
+    stats.scanned += 1;
+    const phone = normalizePhone(row.phone || '');
+    if (!phone) { stats.skipped += 1; continue; }
+    const brand = brandFromLabel(row.campaign_brand, 'he');
+    const vars = safeParse(row.template_params);
+    const varsText = Array.isArray(vars) && vars.length ? ` ${vars.join(' | ')}` : '';
+    const templateName = row.campaign_template || row.template_name || '';
+    const body = templateName
+      ? `[template] ${templateName}${varsText}`
+      : `[outbound] ${row.campaign_name || 'WhatsApp message'}${varsText}`;
+    stats.extracted += 1;
+    const result = await insertHistoryMessage(env, {
+      brand,
+      phone,
+      wa_id: phone,
+      display_name: row.candidate_name || '',
+      direction: 'outbound',
+      msg_type: 'template',
+      body,
+      template_name: templateName || null,
+      wamid: row.wamid || `legacy:message:${row.id}`,
+      status: row.status || 'queued',
+      provider_response: row.error_message ? { error: row.error_message, code: row.error_code || null } : null,
+      error_text: row.error_message || null,
+      raw_payload: { source: 'messages', row },
+      created_at: row.sent_at || row.queued_at || row.delivered_at || row.read_at || row.failed_at,
+    });
+    stats[result.inserted ? 'inserted' : 'skipped'] += 1;
+    addByBrand(stats, brand, result.inserted);
+  }
+  return stats;
+}
+
+async function importWebhookTable(env, { table, rawColumn, limit, offset }) {
+  const stats = blankImportStats(table, limit, offset);
+  if (!(await tableExists(env, table))) return stats;
+  const columns = await tableColumns(env, table);
+  if (!columns.includes(rawColumn)) return stats;
+  const orderColumns = ['received_at', 'timestamp', 'created_at']
+    .filter(c => columns.includes(c))
+    .map(quoteIdent);
+  const orderExpr = orderColumns.length > 1
+    ? `COALESCE(${orderColumns.join(', ')})`
+    : (orderColumns[0] || quoteIdent('id'));
+  const rows = await env.DB.prepare(`
+    SELECT *
+      FROM ${quoteIdent(table)}
+     ORDER BY ${orderExpr} ASC, id ASC
+     LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+  for (const row of rows.results || []) {
+    stats.scanned += 1;
+    const payload = safeParse(row[rawColumn]);
+    if (!payload) { stats.skipped += 1; continue; }
+    const fallback = {
+      brand: row.brand || null,
+      phone_number_id: row.phone_number_id || null,
+      phone: row.wa_id || row.phone || null,
+      wamid: row.message_id || row.wamid || null,
+      msg_type: row.status || row.event_kind || row.event_type || null,
+      created_at: row.received_at || row.timestamp || row.created_at || null,
+    };
+    const messages = extractWabaMessagesFromPayload(env, payload, fallback);
+    const statuses = extractWabaStatusesFromPayload(env, payload, fallback);
+    stats.extracted += messages.length + statuses.length;
+    for (const message of messages) {
+      const result = await insertHistoryMessage(env, {
+        ...message,
+        wamid: message.wamid || `legacy:${table}:${row.id}:${stats.extracted}`,
+        raw_payload: { source: table, source_id: row.id, payload: message.raw_payload || payload },
+      });
+      stats[result.inserted ? 'inserted' : 'skipped'] += 1;
+      addByBrand(stats, message.brand, result.inserted);
+    }
+    for (const status of statuses) {
+      const ok = await mirrorHistoryStatus(env, status);
+      stats[ok ? 'inserted' : 'skipped'] += 1;
+      addByBrand(stats, status.brand, ok);
+    }
+  }
+  return stats;
+}
+
+async function importCommsOutbox(env, { limit, offset }) {
+  const stats = blankImportStats('comms_outbox', limit, offset);
+  if (!(await tableExists(env, 'comms_outbox'))) return stats;
+  const rows = await env.DB.prepare(`
+    SELECT *
+      FROM comms_outbox
+     WHERE channel = 'waba'
+     ORDER BY COALESCE(sent_at, created_at) ASC, id ASC
+     LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+  for (const row of rows.results || []) {
+    stats.scanned += 1;
+    const phone = normalizePhone(row.recipient_phone || '');
+    if (!phone) { stats.skipped += 1; continue; }
+    const brand = coerceBrand(row.brand, 'sparksol');
+    stats.extracted += 1;
+    const result = await insertHistoryMessage(env, {
+      brand,
+      phone,
+      wa_id: phone,
+      direction: 'outbound',
+      msg_type: row.template_name ? 'template' : 'text',
+      body: row.body_text || (row.template_name ? `[template] ${row.template_name}` : '[outbound WABA]'),
+      template_name: row.template_name || null,
+      wamid: row.provider_msg_id || `outbox:${row.id}`,
+      status: row.status || 'sent',
+      provider_response: safeParse(row.provider_response) || null,
+      error_text: row.error_text || null,
+      raw_payload: { source: 'comms_outbox', row },
+      outbox_id: row.id,
+      actor: row.tier || 'automation',
+      created_at: row.sent_at || row.created_at,
+    });
+    stats[result.inserted ? 'inserted' : 'skipped'] += 1;
+    addByBrand(stats, brand, result.inserted);
+  }
+  return stats;
+}
+
+function mergeImportStats(items) {
+  const total = { scanned: 0, extracted: 0, inserted: 0, skipped: 0, by_brand: {} };
+  for (const item of items) {
+    total.scanned += item.scanned || 0;
+    total.extracted += item.extracted || 0;
+    total.inserted += item.inserted || 0;
+    total.skipped += item.skipped || 0;
+    for (const [brand, counts] of Object.entries(item.by_brand || {})) {
+      total.by_brand[brand] = total.by_brand[brand] || { inserted: 0, skipped: 0 };
+      total.by_brand[brand].inserted += counts.inserted || 0;
+      total.by_brand[brand].skipped += counts.skipped || 0;
+    }
+  }
+  return total;
+}
+
+async function importHistory(env, body) {
+  const source = String(body.source || 'all').toLowerCase();
+  const requestedLimit = parseInt(body.limit || '500', 10) || 500;
+  const limit = source === 'all'
+    ? Math.min(requestedLimit, 150)
+    : Math.min(requestedLimit, 1000);
+  const offset = Math.max(parseInt(body.offset || '0', 10) || 0, 0);
+  const jobs = [];
+
+  if (source === 'all' || source === 'conversations') jobs.push(importLegacyConversations(env, { limit, offset }));
+  if (source === 'all' || source === 'messages') jobs.push(importLegacyMessages(env, { limit, offset }));
+  if (source === 'all' || source === 'webhook_events') jobs.push(importWebhookTable(env, { table: 'webhook_events', rawColumn: 'raw_payload', limit, offset }));
+  if (source === 'all' || source === 'comms_webhook_events') jobs.push(importWebhookTable(env, { table: 'comms_webhook_events', rawColumn: 'raw_json', limit, offset }));
+  if (source === 'all' || source === 'comms_outbox') jobs.push(importCommsOutbox(env, { limit, offset }));
+  if (!jobs.length) return bad('unknown history source');
+
+  const results = [];
+  for (const job of jobs) results.push(await job);
+  const total = mergeImportStats(results);
+  return json({
+    ok: true,
+    source,
+    limit,
+    offset,
+    results,
+    total,
+    next_offset: offset + limit,
+    note: 'No WhatsApp sends are performed by this import. It only normalizes already-saved D1 history into comms_threads/comms_messages.',
+  });
+}
+
 async function listThreads(env, url) {
   const brand = url.searchParams.get('brand') || 'all';
   const leadStatus = url.searchParams.get('lead_status') || 'all';
@@ -802,6 +1419,7 @@ export async function onRequest(context) {
     if (action === 'staff') return await listStaff(env);
     if (action === 'staff-templates') return await listStaffCampaignTemplates(env);
     if (action === 'automation-trail') return await listAutomationTrail(env, url);
+    if (action === 'history-sources') return await historySources(env);
     return bad('unknown action', 404);
   }
 
@@ -824,5 +1442,6 @@ export async function onRequest(context) {
   if (action === 'reply' || body.action === 'reply') return await sendReply(env, body);
   if (action === 'staff-campaign' || body.action === 'staff_campaign') return await sendStaffCampaign(env, body);
   if (action === 'mark-read' || body.action === 'mark_read') return await markRead(env, body);
+  if (action === 'import-history' || body.action === 'import_history') return await importHistory(env, body);
   return bad('unknown action', 404);
 }
