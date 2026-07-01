@@ -606,11 +606,19 @@ export async function onRequest(context) {
         v.cards.push({
           id: r.id,
           outlet_id: r.outlet_id,
+          vendor_key: r.vendor_key,
+          vendor_name: r.vendor_name,
+          fulfilment: r.fulfilment || '',
+          pay_behaviour: r.pay_behaviour || '',
+          phone: r.phone || '',
+          vpa_json: r.vpa_json || '[]',
           brand: r.brand,
           outlet_name: r.outlet_name,
           for_date: r.for_date,
           status: r.status,
           amount_paise: amount,
+          expected_amount_paise: Math.max(0, Math.round(Number(r.expected_amount_paise || 0))),
+          pay_amount_paise: Math.max(0, Math.round(Number(r.pay_amount_paise || 0))),
           line_count: Number(r.line_count || 0),
           pay_method: r.pay_method || '',
           bank_ref: r.bank_ref || '',
@@ -623,7 +631,7 @@ export async function onRequest(context) {
         outstanding_paise: vendors.reduce((n, v) => n + v.outstanding_paise, 0),
         paid_paise: vendors.reduce((n, v) => n + v.paid_paise, 0),
       };
-      return J({ ok: true, date, days, brand: brandFilter, vendors, summary });
+      return J({ ok: true, date, days, brand: brandFilter, outlets: allowed, vendors, summary });
     }
 
     // ---------- day board: one vendor = one card ----------

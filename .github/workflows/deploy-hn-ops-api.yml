@@ -41,10 +41,10 @@ jobs:
           cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 10,
-            "versionName": "1.9",
+            "versionCode": 11,
+            "versionName": "1.9.1",
             "url": "https://hn-ops-api.pages.dev/HN-Staff.apk",
-            "notes": "Sauda local vendor purchasing is wired end-to-end: vendor diary, payment request trail, manual UPI app handoff, and WABA audit hooks for order placed and payment done."
+            "notes": "Sauda vendor diary is now actionable: Diary, Payments, and Add tabs; payment button visible in the payment queue; manual UPI app handoff and WABA audit hooks remain wired."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -68,7 +68,7 @@ jobs:
               <h1>HN Staff</h1>
               <p>Install the current Android staff app for Sauda purchase work.</p>
               <a href="/HN-Staff.apk">Download & install</a>
-              <small>Version 1.9 · HN Hotels Pvt Ltd</small>
+              <small>Version 1.9.1 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>

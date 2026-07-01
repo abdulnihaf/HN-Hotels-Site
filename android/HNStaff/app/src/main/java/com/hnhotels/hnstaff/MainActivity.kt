@@ -186,7 +186,7 @@ sealed class Screen {
     data class PurchaseDay(val date: String) : Screen()
     data class Day(val outlet: String, val date: String) : Screen()
     data class Card(val id: Int, val outlet: String, val date: String) : Screen()
-    data class Place(val outlet: String, val date: String) : Screen()
+    data class Place(val outlet: String, val date: String, val vendorKey: String = "") : Screen()
     data class Directory(val outlet: String, val date: String) : Screen()
     data class VendorDiary(val date: String) : Screen()
     data class Chicken(val date: String) : Screen()
@@ -299,9 +299,10 @@ fun StaffShell(me: JSONObject) {
         is Screen.Directory -> CatalogDirectoryScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
             openPlace = { nav.add(Screen.Place(cur.outlet, cur.date)) })
-        is Screen.VendorDiary -> VendorDiaryScreen(cur,
+        is Screen.VendorDiary -> VendorDiaryScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
             openCard = { id, outlet -> nav.add(Screen.Card(id, outlet, cur.date)) },
+            openPlace = { outlet, vendorKey -> nav.add(Screen.Place(outlet, cur.date, vendorKey)) },
             setDate = { d -> nav[nav.lastIndex] = Screen.VendorDiary(d) })
         is Screen.Chicken -> ChickenScreen(cur, back = { nav.removeAt(nav.lastIndex) },
             setDate = { d -> nav[nav.lastIndex] = Screen.Chicken(d) })
@@ -639,8 +640,11 @@ fun CatalogItemRow(item: JSONObject, vendorByKey: Map<String, JSONObject>, histo
 
 // ---- Vendor diary: local vendors, requests, paid trail ---------------------
 @Composable
-fun VendorDiaryScreen(s: Screen.VendorDiary, back: () -> Unit, openCard: (Int, String) -> Unit, setDate: (String) -> Unit) {
+fun VendorDiaryScreen(me: JSONObject, s: Screen.VendorDiary, back: () -> Unit,
+                      openCard: (Int, String) -> Unit, openPlace: (String, String) -> Unit,
+                      setDate: (String) -> Unit) {
     var brand by remember { mutableStateOf("all") }
+    var tab by remember { mutableStateOf(0) }
     var diary by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -653,8 +657,28 @@ fun VendorDiaryScreen(s: Screen.VendorDiary, back: () -> Unit, openCard: (Int, S
     }
     LaunchedEffect(s.date, brand) { load() }
     val vendors = diary?.optJSONArray("vendors")?.toObjList() ?: emptyList()
+    val outlets = diary?.optJSONArray("outlets")?.toObjList() ?: emptyList()
     val summary = diary?.optJSONObject("summary")
-    Scaffold(topBar = { HnBar("Vendor diary", subtitle = "Local purchase trail", onBack = back) }) { p ->
+    val caps = me.optJSONArray("capabilities")?.toStrList() ?: emptyList()
+    val canAdd = caps.contains("sauda.place") || caps.contains("sauda.demand")
+    val placeOutlet = when (brand) {
+        "HE" -> outlets.firstOrNull { it.optString("brand") == "HE" }?.optString("outlet_id")
+        "NCH" -> outlets.firstOrNull { it.optString("brand") == "NCH" }?.optString("outlet_id")
+        else -> outlets.firstOrNull()?.optString("outlet_id")
+    } ?: ""
+    val paymentCards = vendorDiaryPaymentCards(vendors)
+    Scaffold(
+        topBar = { HnBar("Vendor diary", subtitle = "Local purchase trail", onBack = back) },
+        floatingActionButton = {
+            if (canAdd && placeOutlet.isNotEmpty()) ExtendedFloatingActionButton(
+                onClick = { openPlace(placeOutlet, "") },
+                containerColor = Maroon,
+                contentColor = Color.White,
+                icon = { Icon(Icons.Filled.Add, null) },
+                text = { Text("Add purchase") }
+            )
+        }
+    ) { p ->
         Column(Modifier.padding(p).fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
@@ -668,18 +692,41 @@ fun VendorDiaryScreen(s: Screen.VendorDiary, back: () -> Unit, openCard: (Int, S
                 FilterChip(selected = brand == "HE", onClick = { brand = "HE" }, label = { Text("HE") }, modifier = Modifier.padding(end = 8.dp))
                 FilterChip(selected = brand == "NCH", onClick = { brand = "NCH" }, label = { Text("NCH") })
             }
+            TabRow(selectedTabIndex = tab, containerColor = Color.White, contentColor = Maroon) {
+                listOf("Diary", "Payments", "Add").forEachIndexed { idx, label ->
+                    Tab(
+                        selected = tab == idx,
+                        onClick = { tab = idx },
+                        text = { Text(label, fontWeight = if (tab == idx) FontWeight.Bold else FontWeight.Medium) }
+                    )
+                }
+            }
             HorizontalDivider(color = Sand, modifier = Modifier.padding(top = 6.dp))
             when {
                 error.isNotEmpty() -> CenterMsg("⚠ $error") { load() }
                 diary == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = Maroon) }
-                vendors.isEmpty() -> CenterMsg("No vendor trail in this window.", null)
-                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 10.dp, 16.dp, 24.dp)) {
+                tab == 2 -> VendorDiaryAddTab(canAdd, placeOutlet, brand, openPlace)
+                tab == 1 -> {
+                    if (paymentCards.isEmpty()) CenterMsg("No payment cards in this diary window.\nReceive a bill first, then this tab becomes the payment queue.", null)
+                    else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 10.dp, 16.dp, 96.dp)) {
+                        item {
+                            VendorDiarySummary(summary)
+                            Spacer(Modifier.height(10.dp))
+                        }
+                        items(paymentCards) { c ->
+                            VendorPaymentRow(me, c, openCard) { load() }
+                            Spacer(Modifier.height(12.dp))
+                        }
+                    }
+                }
+                vendors.isEmpty() -> VendorDiaryEmpty(canAdd, placeOutlet, openPlace)
+                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 10.dp, 16.dp, 96.dp)) {
                     item {
                         VendorDiarySummary(summary)
                         Spacer(Modifier.height(10.dp))
                     }
                     items(vendors) { v ->
-                        VendorDiaryCard(v, openCard)
+                        VendorDiaryCard(v, openCard, canAdd, placeOutlet, openPlace)
                         Spacer(Modifier.height(10.dp))
                     }
                 }
@@ -701,7 +748,58 @@ fun VendorDiarySummary(s: JSONObject?) {
 }
 
 @Composable
-fun VendorDiaryCard(v: JSONObject, openCard: (Int, String) -> Unit) {
+fun VendorDiaryEmpty(canAdd: Boolean, placeOutlet: String, openPlace: (String, String) -> Unit) {
+    Box(Modifier.fillMaxSize().padding(24.dp), Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("No vendor trail in this window.", color = Muted, fontSize = 15.sp, textAlign = TextAlign.Center)
+            if (canAdd && placeOutlet.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = { openPlace(placeOutlet, "") },
+                    colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Icon(Icons.Filled.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add purchase")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VendorDiaryAddTab(canAdd: Boolean, placeOutlet: String, brand: String, openPlace: (String, String) -> Unit) {
+    Box(Modifier.fillMaxSize().padding(16.dp), Alignment.TopCenter) {
+        Surface(shape = RoundedCornerShape(12.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Add local purchase", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Creates the normal one-vendor Sauda card for this diary date. Add vendor, product, quantity and expected rate from the purchase flow.",
+                    color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = { if (placeOutlet.isNotEmpty()) openPlace(placeOutlet, "") },
+                    enabled = canAdd && placeOutlet.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Maroon),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    Icon(Icons.Filled.AddShoppingCart, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (brand == "all") "Add purchase card" else "Add $brand purchase")
+                }
+                if (!canAdd || placeOutlet.isEmpty()) {
+                    Text("Your role cannot add purchase cards for this selection.", color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VendorDiaryCard(v: JSONObject, openCard: (Int, String) -> Unit,
+                    canAdd: Boolean, placeOutlet: String, openPlace: (String, String) -> Unit) {
     val cards = v.optJSONArray("cards")?.toObjList() ?: emptyList()
     Surface(shape = RoundedCornerShape(12.dp), color = Color.White, tonalElevation = 1.dp,
         border = androidx.compose.foundation.BorderStroke(1.dp, Sand), modifier = Modifier.fillMaxWidth()) {
@@ -742,6 +840,71 @@ fun VendorDiaryCard(v: JSONObject, openCard: (Int, String) -> Unit) {
                     }
                 }
                 if ((v.optInt("order_count")) > 4) Text("+${v.optInt("order_count") - 4} older cards", color = Muted, fontSize = 11.sp)
+            }
+            if (canAdd && placeOutlet.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { openPlace(placeOutlet, v.optString("vendor_key")) },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    Icon(Icons.Filled.Add, null, tint = Maroon, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add purchase", color = Maroon, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VendorPaymentRow(me: JSONObject, c: JSONObject, openCard: (Int, String) -> Unit, onSaved: () -> Unit) {
+    val status = c.optString("status")
+    val canOpenPayment = status in listOf("RECEIVED", "RAISED", "PAID", "RECONCILED")
+    Surface(shape = RoundedCornerShape(12.dp), color = Color.White, tonalElevation = 1.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Sand), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BrandPill(c.optString("brand"))
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(c.optString("vendor_name"), color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${prettyDate(c.optString("for_date"))} · ${c.optString("line_count")} items · ${c.optString("outlet_name")}",
+                        color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(rupee(c.optInt("amount_paise")), color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    StatusPill(status)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { openCard(c.optInt("id"), c.optString("outlet_id")) },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f).height(44.dp)
+                ) {
+                    Icon(Icons.Filled.ReceiptLong, null, tint = Maroon, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Open card", color = Maroon, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                }
+                if (!canOpenPayment) {
+                    OutlinedButton(
+                        onClick = { openCard(c.optInt("id"), c.optString("outlet_id")) },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Icon(Icons.Filled.Inventory2, null, tint = Maroon, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Receive first", color = Maroon, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    }
+                }
+            }
+            if (canOpenPayment) {
+                PaymentTrail(me, c, c.optInt("id"), onSaved)
+            } else {
+                Text("Payment opens after goods and bill proof are saved on this card.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
     }
@@ -1285,7 +1448,10 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
                     colors = ButtonDefaults.buttonColors(containerColor = Maroon),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth().height(46.dp)
-                ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text(if (requestOnly) "Request payment" else "Save payment trail") }
+                ) {
+                    if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                    else Text(if (requestOnly) "Request payment" else if (paid) "Mark paid" else "Save payment request")
+                }
             }
         }
     }
@@ -1657,7 +1823,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
         return
     }
     var cat by remember { mutableStateOf<JSONObject?>(null) }
-    var vendorKey by remember { mutableStateOf("") }
+    var vendorKey by remember(s.outlet, s.date, s.vendorKey) { mutableStateOf(s.vendorKey) }
     var vendorMenu by remember { mutableStateOf(false) }
     var itemQuery by remember { mutableStateOf("") }
     val draft = remember { mutableStateListOf<JSONObject>() }
@@ -2227,6 +2393,27 @@ fun itemMatches(item: JSONObject, query: String): Boolean {
     ).joinToString(" "))
     val termsOk = q.split(" ").filter { it.isNotEmpty() }.all { hay.contains(it) }
     return termsOk || compactNorm(hay).contains(compactNorm(query))
+}
+fun vendorDiaryPaymentCards(vendors: List<JSONObject>): List<JSONObject> {
+    val rows = mutableListOf<JSONObject>()
+    vendors.forEach { v ->
+        val cards = v.optJSONArray("cards")?.toObjList() ?: emptyList()
+        cards.forEach { c ->
+            rows.add(JSONObject(c.toString())
+                .put("vendor_key", v.optString("vendor_key"))
+                .put("vendor_name", v.optString("vendor_name"))
+                .put("fulfilment", v.optString("fulfilment"))
+                .put("pay_behaviour", v.optString("pay_behaviour"))
+                .put("phone", v.optString("phone"))
+                .put("vpa_json", v.optString("vpa_json"))
+                .put("expected_amount_paise", c.optInt("expected_amount_paise").takeIf { it > 0 } ?: c.optInt("amount_paise"))
+            )
+        }
+    }
+    val priority = mapOf("RECEIVED" to 0, "RAISED" to 1, "ORDERED" to 2, "REQUESTED" to 3, "PAID" to 4, "RECONCILED" to 5)
+    return rows.sortedWith(compareBy<JSONObject> { priority[it.optString("status")] ?: 9 }
+        .thenByDescending { it.optInt("amount_paise") }
+        .thenBy { it.optString("vendor_name") })
 }
 fun vendorTerms(v: JSONObject): String {
     val fulfilment = when (v.optString("fulfilment")) {
