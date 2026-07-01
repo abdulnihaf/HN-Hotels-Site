@@ -440,6 +440,39 @@ So a payment seals one of exactly two ways: **UPI (Nihaf-confirmed, transaction-
 (Bashir)**. This is the reconcile + attribution for the pay leg of the lifecycle. Keep everything else
 minimal — get this loop working before adding rails.
 
+## 18. THE DAILY BASKET IS SELF-LEARNING + SELF-HEALING — the seed only starts it *(2026-07-01, Nihaf)*
+
+The agent's **expectation model** — what a normal day looks like per brand (items, typical quantities,
+frequency tiers) — is seeded in `docs/NIHAF-AGENT-DAILY-BASKET.md` from 50 real POs (30 May–1 Jul). That
+seed is **NOT hand-fed once and frozen**. Nihaf's words: it is *"maybe on the higher side"* and he'll
+*"make it better and better"* — so the agent treats it as a **rough prior, not truth**, and improves it
+itself, without him.
+
+**SELF-LEARNING (re-derives from the live `hn-ops` trail — no hand-editing):**
+- On a **rolling window** (trailing ~30–60 days of real entered POs), recompute per brand each item's
+  frequency (% of days), typical quantity (median + range), and tier (daily / frequent / occasional / bulk).
+- Items that start recurring **auto-enter** the expected set; items that stop **drop out**; quantities
+  self-calibrate to recent medians — so a "higher-side" seed **corrects down toward reality**.
+- Later: per-weekday / seasonal shape; Nihaf's occasional corrections fold in as priors (human refinement
+  on top — never required for it to keep improving).
+
+**SELF-HEALING (auto-corrects its own model + data):**
+- **Variant-merge:** auto-detect near-duplicate item names (fuzzy + learned aliases) into families so counts
+  don't fragment (`Milk — morning` ↔ `Milk (morning)`, the oil family, cutlet pack sizes). A new spelling
+  maps to its family; a genuinely-new item is flagged to confirm (the bootstrap ask, §16).
+- **Robust stats:** median + robust bands, never mean — one outlier (egg 90 crate) cannot poison the
+  expectation; anomalies are flagged, not absorbed.
+- **Drift + confidence:** if its "missing" flags keep turning out fine, or its predicted qty is consistently
+  off, it **recalibrates instead of nagging** — it self-tunes its own false-alarm rate. On thin data it holds
+  back (less strict) until confident; strictness rises as the trail grows.
+- **No frozen truth:** every expectation carries a *confidence* + *last-recomputed date*; a wrong line
+  self-corrects on the next recompute — COA correct-or-loop applied to the model itself, so the baseline
+  can never rot into a stale wrong number.
+
+**Why:** Nihaf will keep improving it, but it must improve **without** him. The seed is deliberately rough;
+the system's job is to walk it to exact from the real trail and heal its own drift — self-learning what a
+day is, self-healing when it's wrong.
+
 ---
 *Truth-source: this is a hypothesis confirmed against the live trail + Nihaf's word; the final
 witness is Nihaf. A wrong line in a spine is worse than no spine — correct it here first.*
