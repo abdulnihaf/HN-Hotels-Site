@@ -3,6 +3,8 @@ package com.hnhotels.comms
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -130,6 +132,26 @@ class CommsApi(
         execute(request)
     }
 
+    suspend fun downloadMedia(context: Context, message: CommsMessage): DownloadedMedia = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url(mapOf("action" to "media", "message_id" to message.id.toString())))
+            .header("x-comms-key", apiKey)
+            .build()
+        client.newCall(request).execute().use { response ->
+            val body = response.body ?: throw IllegalStateException("Empty media response")
+            if (!response.isSuccessful) {
+                throw IllegalStateException("HTTP ${response.code}: ${body.string().take(240)}")
+            }
+            val mediaType = body.contentType()?.toString() ?: response.header("content-type").orEmpty().ifBlank { "application/octet-stream" }
+            val directory = File(context.cacheDir, "HNCommsMedia").also { it.mkdirs() }
+            val filename = safeFilename("${message.id}-${message.mediaTitle}${extensionFor(mediaType, message.msgType)}")
+            val target = File(directory, filename)
+            target.writeBytes(body.bytes())
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
+            DownloadedMedia(uri, mediaType)
+        }
+    }
+
     suspend fun markRead(threadId: String) {
         post(
             mapOf("action" to "mark-read"),
@@ -177,6 +199,8 @@ class CommsApi(
     }
 }
 
+data class DownloadedMedia(val uri: Uri, val mimeType: String)
+
 private fun displayName(context: Context, uri: Uri): String {
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         if (cursor.moveToFirst()) {
@@ -186,6 +210,25 @@ private fun displayName(context: Context, uri: Uri): String {
     }
     return uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { "attachment" } ?: "attachment"
 }
+
+private fun extensionFor(contentType: String, msgType: String): String {
+    val lowered = contentType.lowercase()
+    return when {
+        lowered.contains("pdf") -> ".pdf"
+        lowered.contains("png") -> ".png"
+        lowered.contains("jpeg") || lowered.contains("jpg") -> ".jpg"
+        lowered.contains("mp4") -> ".mp4"
+        lowered.contains("mpeg") || lowered.contains("mp3") -> ".mp3"
+        msgType == "image" -> ".jpg"
+        msgType == "video" -> ".mp4"
+        msgType == "audio" -> ".mp3"
+        msgType == "document" -> ".bin"
+        else -> ""
+    }
+}
+
+private fun safeFilename(raw: String): String =
+    raw.replace(Regex("[^A-Za-z0-9._() -]+"), "_").take(180).ifBlank { "media" }
 
 private fun <T> JSONArray.mapObjects(block: (JSONObject) -> T): List<T> =
     List(length()) { index -> block(getJSONObject(index)) }
@@ -225,6 +268,7 @@ private fun JSONObject.toMessage() = CommsMessage(
     wamid = s("wamid"),
     status = s("status"),
     errorText = s("error_text"),
+    mediaId = s("media_id"),
     actor = s("actor"),
     createdAt = s("created_at"),
 )

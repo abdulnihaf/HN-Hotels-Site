@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -72,6 +73,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -241,6 +243,12 @@ class CommsStore(context: Context) {
             error = it.message
         }
         sending = false
+    }
+
+    suspend fun downloadMedia(context: Context, message: CommsMessage): DownloadedMedia? {
+        return runCatching { api.downloadMedia(context, message) }
+            .onFailure { error = it.message }
+            .getOrNull()
     }
 
     suspend fun sendTemplate(template: WabaTemplate, vars: List<String>) {
@@ -660,6 +668,7 @@ fun BrandBadge(brand: String) {
 @Composable
 fun ThreadScreen(store: CommsStore) {
     val thread = store.currentThread ?: return
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var templatesOpen by remember { mutableStateOf(false) }
@@ -790,7 +799,19 @@ fun ThreadScreen(store: CommsStore) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(store.messages, key = { it.id }) { message ->
-                    MessageBubble(message)
+                    MessageBubble(
+                        message = message,
+                        onOpenMedia = {
+                            scope.launch {
+                                val media = store.downloadMedia(context, message) ?: return@launch
+                                val intent = Intent(Intent.ACTION_VIEW)
+                                    .setDataAndType(media.uri, media.mimeType)
+                                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                runCatching { context.startActivity(intent) }
+                                    .onFailure { store.error = "No app available to open this file." }
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -825,7 +846,7 @@ fun ContactPanel(thread: CommsThread) {
 }
 
 @Composable
-fun MessageBubble(message: CommsMessage) {
+fun MessageBubble(message: CommsMessage, onOpenMedia: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (message.outbound) Arrangement.End else Arrangement.Start) {
         Column(
             modifier = Modifier
@@ -838,8 +859,23 @@ fun MessageBubble(message: CommsMessage) {
             if (message.templateName.isNotBlank()) {
                 Text(message.templateName, color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
             }
-            if (message.msgType in listOf("image", "video", "audio", "document", "sticker")) {
-                Text("${message.msgType.uppercase()} ${message.body}".trim())
+            if (message.hasMedia) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF1F5F9))
+                        .clickable(onClick = onOpenMedia)
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.AttachFile, contentDescription = null, tint = Color(0xFF0F766E))
+                    Column(Modifier.weight(1f)) {
+                        Text(message.mediaTitle, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(message.msgType.uppercase(), color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             } else {
                 Text(message.body)
             }

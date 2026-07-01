@@ -54,10 +54,16 @@ data class CommsMessage(
     val wamid: String,
     val status: String,
     val errorText: String,
+    val mediaId: String,
     val actor: String,
     val createdAt: String,
 ) {
     val outbound: Boolean get() = direction == "outbound"
+    val hasMedia: Boolean get() = mediaId.isNotBlank() || msgType in listOf("image", "video", "audio", "document", "sticker")
+    val mediaTitle: String get() {
+        val cleaned = body.replace(Regex("^\\[[^]]+]\\s*"), "")
+        return cleaned.ifBlank { msgType.replaceFirstChar { it.uppercase() } }
+    }
 }
 
 data class QuickReply(

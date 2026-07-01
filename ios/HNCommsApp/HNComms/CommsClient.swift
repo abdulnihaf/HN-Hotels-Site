@@ -205,6 +205,37 @@ struct CommsClient {
         return try decoder.decode(SendReplyResponse.self, from: responseData)
     }
 
+    func downloadMedia(message: CommsMessage) async throws -> URL {
+        guard var components = URLComponents(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw CommsClientError.badURL
+        }
+        components.path = "/api/comms-inbox"
+        components.queryItems = [
+            URLQueryItem(name: "action", value: "media"),
+            URLQueryItem(name: "message_id", value: "\(message.id)"),
+        ]
+        guard let url = components.url else { throw CommsClientError.badURL }
+
+        var request = URLRequest(url: url)
+        request.setValue(apiKey, forHTTPHeaderField: "x-comms-key")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
+        if status == 401 { throw CommsClientError.unauthorized }
+        if !(200..<300).contains(status) {
+            let bodyText = String(data: data, encoding: .utf8) ?? ""
+            throw CommsClientError.http(status, bodyText)
+        }
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("HNCommsMedia", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let suggested = response.suggestedFilename ?? message.mediaTitle
+        let filename = safeFilename("\(message.id)-\(suggested)")
+        let target = directory.appendingPathComponent(filename)
+        try data.write(to: target, options: [.atomic])
+        return target
+    }
+
     func sendStaffCampaign(template: String, recipients: [String], vars: [String]) async throws -> StaffCampaignResponse {
         try await request(
             method: "POST",
@@ -362,8 +393,14 @@ final class CommsAppModel {
             let rows = try await client.threads(brand: selectedBrand, leadStatus: selectedLeadStatus, category: selectedCategory, query: query)
             handleThreadNotifications(rows, silent: silent)
             threads = rows
-            if selectedThreadID == nil {
-                selectedThreadID = rows.first?.threadId
+            if let selectedThreadID,
+               !rows.contains(where: { $0.threadId == selectedThreadID }) {
+                self.selectedThreadID = nil
+                currentThread = nil
+                messages = []
+            } else if selectedThreadID == nil {
+                currentThread = nil
+                messages = []
             }
             errorMessage = nil
         } catch {
@@ -404,7 +441,11 @@ final class CommsAppModel {
     }
 
     func loadSelectedThread(markRead: Bool = false) async {
-        guard let selectedThreadID else { return }
+        guard let selectedThreadID else {
+            currentThread = nil
+            messages = []
+            return
+        }
         do {
             let response = try await client.thread(id: selectedThreadID)
             currentThread = response.thread
@@ -511,6 +552,15 @@ final class CommsAppModel {
         }
     }
 
+    func mediaPreviewURL(for message: CommsMessage) async -> URL? {
+        do {
+            return try await client.downloadMedia(message: message)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func loadAutomation() async {
         guard isConfigured else { return }
         do {
@@ -574,6 +624,13 @@ final class CommsAppModel {
             }
         }
     }
+}
+
+private func safeFilename(_ raw: String) -> String {
+    let cleaned = raw
+        .replacingOccurrences(of: #"[^\w.\-() ]+"#, with: "_", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    return cleaned.isEmpty ? UUID().uuidString : String(cleaned.prefix(180))
 }
 
 private extension Data {
