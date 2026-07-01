@@ -348,7 +348,7 @@ final class CommsAppModel {
     }
 
     var pollKey: String {
-        "\(isConfigured)-\(selectedCategory.rawValue)-\(selectedBrand.rawValue)-\(selectedLeadStatus.rawValue)-\(query)-\(selectedThreadID ?? "")"
+        "\(isConfigured)-\(selectedCategory.rawValue)-\(selectedBrand.rawValue)-\(selectedLeadStatus.rawValue)-\(query)"
     }
 
     var unreadTotal: Int {
@@ -403,17 +403,13 @@ final class CommsAppModel {
             let rows = try await client.threads(brand: selectedBrand, leadStatus: selectedLeadStatus, category: selectedCategory, query: query)
             handleThreadNotifications(rows, silent: silent)
             threads = rows
-            if let selectedThreadID,
-               !rows.contains(where: { $0.threadId == selectedThreadID }) {
-                self.selectedThreadID = nil
-                currentThread = nil
-                messages = []
-            } else if selectedThreadID == nil {
+            if selectedThreadID == nil {
                 currentThread = nil
                 messages = []
             }
             errorMessage = nil
         } catch {
+            if isCancellationError(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -456,12 +452,14 @@ final class CommsAppModel {
             messages = []
             return
         }
+        let requestedThreadID = selectedThreadID
         do {
-            let response = try await client.thread(id: selectedThreadID)
+            let response = try await client.thread(id: requestedThreadID)
+            guard self.selectedThreadID == requestedThreadID else { return }
             currentThread = response.thread
             messages = response.messages
             if markRead {
-                try await client.markRead(threadId: selectedThreadID)
+                try await client.markRead(threadId: requestedThreadID)
                 await loadThreads(silent: true)
             }
             async let replies = client.quickReplies(brand: response.thread.brand)
@@ -470,6 +468,7 @@ final class CommsAppModel {
             templates = ((try? await templateRows) ?? []).filter { $0.status == "APPROVED" }
             errorMessage = nil
         } catch {
+            if isCancellationError(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -489,6 +488,7 @@ final class CommsAppModel {
             await loadSelectedThread(markRead: false)
             await loadThreads(silent: true)
         } catch {
+            if isCancellationError(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -508,6 +508,7 @@ final class CommsAppModel {
             await loadSelectedThread(markRead: false)
             await loadThreads(silent: true)
         } catch {
+            if isCancellationError(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -558,6 +559,7 @@ final class CommsAppModel {
             await loadSelectedThread(markRead: false)
             await loadThreads(silent: true)
         } catch {
+            if isCancellationError(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -566,6 +568,7 @@ final class CommsAppModel {
         do {
             return try await client.downloadMedia(message: message)
         } catch {
+            if isCancellationError(error) { return nil }
             errorMessage = error.localizedDescription
             return nil
         }
@@ -585,6 +588,7 @@ final class CommsAppModel {
             }
             errorMessage = nil
         } catch {
+            if isCancellationError(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -615,6 +619,7 @@ final class CommsAppModel {
             selectedStaffPhones = []
             await loadAutomation()
         } catch {
+            if isCancellationError(error) { return }
             errorMessage = error.localizedDescription
             await loadAutomation()
         }
@@ -623,17 +628,25 @@ final class CommsAppModel {
     func pollLoop() async {
         guard isConfigured else { return }
         await loadThreads(silent: false)
-        await loadSelectedThread(markRead: true)
         while !Task.isCancelled {
             do {
                 try await Task.sleep(for: .seconds(15))
                 await loadThreads(silent: true)
-                await loadSelectedThread(markRead: false)
+                if selectedThreadID != nil {
+                    await loadSelectedThread(markRead: false)
+                }
             } catch {
                 return
             }
         }
     }
+}
+
+private func isCancellationError(_ error: Error) -> Bool {
+    if error is CancellationError { return true }
+    if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+    let nsError = error as NSError
+    return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
 }
 
 private func safeFilename(_ raw: String) -> String {
