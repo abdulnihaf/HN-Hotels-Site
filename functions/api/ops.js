@@ -9,12 +9,14 @@
 //   GET  ?action=purchase_day_pdf&date=     -> printable A4 purchase day
 //   GET  ?action=day&outlet=&date=          -> vendor cards (one vendor one card) for one outlet
 //   GET  ?action=card&id=                   -> one card with its lines + event trail
+//   GET  ?action=vendor_diary&date=&days=   -> per-vendor local purchase ledger + pay queue
 //   POST ?action=add-vendor {outlet,name,category,fulfilment,pay_behaviour,phone,vpa?}
 //   POST ?action=add-item {outlet,vendor_key,label,unit,category,price_mode,price_paise?}
 //   POST ?action=place    {outlet,vendor_key,for_date,lines:[...]}  -> upsert card + lines
 //   POST ?action=edit-lines {order_id,lines:[...]} -> replace pre-receive order lines + audit trail
 //   POST ?action=delete-order {order_id}    -> cancel pre-receive card + audit trail
 //   POST ?action=receive  {order_id,lines:[{line_id,qty_received,receive_state}],note}
+//   POST ?action=payment  {order_id,pay_method,pay_amount_paise,bank_ref,paid}
 //   POST ?action=route    {labels:[...]}    -> resolve free labels -> item_code+vendor (decode aid)
 
 const J = (o, s = 200) => new Response(JSON.stringify(o), {
@@ -26,6 +28,7 @@ function istNow() {
   return d.toISOString().replace('T', ' ').slice(0, 19) + ' IST';
 }
 function istDate() { return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10); }
+const META_GRAPH_VERSION = 'v24.0';
 
 const ADMIN_CONSOLE_PIN = '5634';
 const ADMIN_CONSOLE_CAPS = [
@@ -212,6 +215,159 @@ function purchaseLineSnapshot(l) {
   };
 }
 
+function normalizePhone(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length === 10) return '91' + digits;
+  if (digits.length === 12 && digits.startsWith('91')) return digits;
+  if (digits.length === 13 && digits.startsWith('091')) return digits.slice(1);
+  return digits;
+}
+function rupeeText(paise) {
+  const n = Math.max(0, Math.round(Number(paise || 0)));
+  return 'Rs ' + Math.round(n / 100).toLocaleString('en-IN');
+}
+function wabaConfig(env, outletBrand) {
+  const b = String(outletBrand || '').toLowerCase();
+  const candidates = [
+    { brand: 'ops', phoneId: env.WA_OPS_PHONE_ID || env.WA_PHONE_ID, token: env.WA_OPS_TOKEN || env.WA_ACCESS_TOKEN || env.WA_COMMS_TOKEN },
+    { brand: 'he', phoneId: env.WA_HE_PHONE_ID, token: env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN },
+    { brand: 'sparksol', phoneId: env.WA_SPARKSOL_PHONE_ID, token: env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN },
+    b === 'nch' ? { brand: 'nch', phoneId: env.WA_NCH_PHONE_ID, token: env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN } : null,
+    b === 'he' ? { brand: 'he', phoneId: env.WA_HE_PHONE_ID, token: env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN } : null,
+  ].filter(Boolean);
+  return candidates.find(c => c.phoneId && c.token) || null;
+}
+async function sendWabaTemplate(env, outletBrand, phone, template, vars) {
+  const cfg = wabaConfig(env, outletBrand);
+  const to = normalizePhone(phone);
+  if (!cfg) return { ok: false, skipped: 'waba_not_configured' };
+  if (!to || to.length < 10) return { ok: false, skipped: 'phone_missing' };
+  const body = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'template',
+    template: {
+      name: template,
+      language: { code: 'en' },
+      components: [{
+        type: 'body',
+        parameters: (vars || []).map(v => ({ type: 'text', text: String(v || '-').slice(0, 900) })),
+      }],
+    },
+  };
+  const res = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${cfg.phoneId}/messages`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${cfg.token}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch {}
+  return {
+    ok: res.ok,
+    status: res.status,
+    brand: cfg.brand,
+    to,
+    template,
+    provider_msg_id: parsed?.messages?.[0]?.id || null,
+    error: res.ok ? null : (parsed?.error?.message || text.slice(0, 240)),
+  };
+}
+async function resolveStaffPhone(env, db, pin) {
+  const p = String(pin || '').trim();
+  if (!p) return '';
+  if (env.DB) {
+    for (const col of ['phone', 'mobile', 'whatsapp']) {
+      try {
+        const row = await env.DB.prepare(`SELECT ${col} phone FROM hr_employees WHERE staff_pin=? LIMIT 1`).bind(p).first();
+        const phone = normalizePhone(row?.phone || '');
+        if (phone) return phone;
+      } catch (_) {}
+    }
+  }
+  for (const col of ['phone', 'mobile', 'whatsapp']) {
+    try {
+      const row = await db.prepare(`SELECT ${col} phone FROM staff WHERE staff_pin=? LIMIT 1`).bind(p).first();
+      const phone = normalizePhone(row?.phone || '');
+      if (phone) return phone;
+    } catch (_) {}
+  }
+  return '';
+}
+async function purchaseActor(db, orderId, fallbackUser) {
+  try {
+    const ev = await db.prepare(
+      `SELECT actor_pin,actor_name FROM purchase_event_log
+        WHERE order_id=? AND event_type IN ('place','mark-ordered')
+        ORDER BY id ASC LIMIT 1`).bind(orderId).first();
+    if (ev?.actor_pin || ev?.actor_name) return { pin: ev.actor_pin || '', name: ev.actor_name || fallbackUser?.name || '' };
+  } catch (_) {}
+  return { pin: fallbackUser?.staff_pin || '', name: fallbackUser?.name || '' };
+}
+function lineSummary(lines) {
+  const parts = lines.slice(0, 8).map(l => {
+    const q = l.qty_ordered == null ? '' : `${Number(l.qty_ordered).toLocaleString('en-IN')} ${l.uom || ''}`.trim();
+    return `${l.item_label}${q ? ' - ' + q : ''}`;
+  });
+  if (lines.length > 8) parts.push(`+${lines.length - 8} more`);
+  return parts.join('; ').slice(0, 900) || 'items as per Sauda card';
+}
+async function orderSnapshot(db, orderId) {
+  const row = await db.prepare(
+    `SELECT po.id,po.outlet_id,po.vendor_key,po.for_date,po.status,po.expected_amount_paise,
+            po.pay_amount_paise,po.pay_method,po.bank_ref,po.ordered_by,
+            v.name vendor_name,v.phone vendor_phone,v.vpa_json,v.fulfilment,v.pay_behaviour,
+            o.brand outlet_brand,o.name outlet_name
+       FROM purchase_orders po
+       JOIN vendors v ON v.vendor_key=po.vendor_key
+       JOIN outlets o ON o.outlet_id=po.outlet_id
+      WHERE po.id=?`).bind(orderId).first();
+  if (!row) return null;
+  const lines = (await db.prepare(
+    `SELECT item_label,qty_ordered,uom,unit_cost_paise,line_amount_paise
+       FROM purchase_order_lines WHERE order_id=? ORDER BY id`).bind(orderId).all()).results || [];
+  return { ...row, lines, items_text: lineSummary(lines) };
+}
+async function dispatchOrderPlacedWaba(context, db, orderId, actorUser) {
+  const snap = await orderSnapshot(db, orderId);
+  if (!snap) return;
+  const actor = { pin: actorUser?.staff_pin || '', name: actorUser?.name || snap.ordered_by || 'HN Staff' };
+  const staffPhone = await resolveStaffPhone(context.env, db, actor.pin);
+  const amount = snap.expected_amount_paise ? rupeeText(snap.expected_amount_paise) : 'rate at bill';
+  const results = {
+    vendor: snap.vendor_phone ? await sendWabaTemplate(context.env, snap.outlet_brand, snap.vendor_phone, 'sauda_vendor_order_placed_v1', [
+      snap.vendor_name, snap.outlet_name, snap.for_date, snap.items_text, actor.name,
+    ]) : { ok: false, skipped: 'vendor_phone_missing' },
+    staff: staffPhone ? await sendWabaTemplate(context.env, snap.outlet_brand, staffPhone, 'sauda_staff_order_placed_v1', [
+      snap.outlet_name, snap.vendor_name, snap.for_date, snap.items_text, amount,
+    ]) : { ok: false, skipped: 'staff_phone_missing', actor_pin: actor.pin, actor_name: actor.name },
+  };
+  await writePurchaseEvent(db, orderId, 'waba-order-placed', actorUser, results);
+}
+async function dispatchPaymentDoneWaba(context, db, orderId, payerUser, amountPaise, method, ref) {
+  const snap = await orderSnapshot(db, orderId);
+  if (!snap) return;
+  const actor = await purchaseActor(db, orderId, payerUser);
+  const staffPhone = await resolveStaffPhone(context.env, db, actor.pin);
+  const amount = rupeeText(amountPaise || snap.pay_amount_paise || snap.expected_amount_paise);
+  const methodRef = [method || 'upi', ref || 'ref pending'].filter(Boolean).join(' / ');
+  const results = {
+    vendor: snap.vendor_phone ? await sendWabaTemplate(context.env, snap.outlet_brand, snap.vendor_phone, 'sauda_vendor_payment_done_v1', [
+      snap.vendor_name, snap.outlet_name, amount, payerUser?.name || 'HN Hotels', methodRef,
+    ]) : { ok: false, skipped: 'vendor_phone_missing' },
+    staff: staffPhone ? await sendWabaTemplate(context.env, snap.outlet_brand, staffPhone, 'sauda_staff_payment_done_v1', [
+      snap.vendor_name, snap.outlet_name, amount, methodRef, payerUser?.name || 'HN Hotels',
+    ]) : { ok: false, skipped: 'staff_phone_missing', actor_pin: actor.pin, actor_name: actor.name },
+  };
+  await writePurchaseEvent(db, orderId, 'waba-payment-done', payerUser, results);
+}
+function waitUntil(context, promise) {
+  const guarded = promise.catch(async e => {
+    try { console.error('purchase waba dispatch failed', e?.message || e); } catch (_) {}
+  });
+  if (context.waitUntil) context.waitUntil(guarded);
+}
+
 // ---- safe deterministic resolver: free label -> item_code (mirror of build_seed.py) ----
 const STOP = new Set(['kg','g','gm','gms','gram','grams','l','ltr','litre','ml','pc','pcs','piece','pieces',
   'packet','pack','pkt','bundle','case','crate','box','bag','of','the','and','a']);
@@ -387,6 +543,87 @@ export async function onRequest(context) {
         <div class="summary"><div class="box"><b>${data.cards.length}</b><span>vendor cards</span></div><div class="box"><b>${lineCount}</b><span>order lines</span></div><div class="box"><b>${recvCount}</b><span>received lines</span></div><div class="box"><b>₹${Math.round(expected / 100).toLocaleString('en-IN')}</b><span>bill basis</span></div></div>
         ${sections || '<p>No purchase orders for this day.</p>'}</body></html>`;
       return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    }
+
+    // ---------- vendor diary: per-vendor outstanding + paid local trail ----------
+    if (action === 'vendor_diary') {
+      if (!can(u, 'sauda.demand') && !can(u, 'sauda.place') && !can(u, 'sauda.receive') && !can(u, 'sauda.raise') && !can(u, 'sauda.pay')) {
+        return J({ ok: false, error: 'not permitted for Sauda' }, 403);
+      }
+      const date = url.searchParams.get('date') || istDate();
+      const days = Math.max(1, Math.min(120, parseInt(url.searchParams.get('days') || '45', 10) || 45));
+      const brandFilter = url.searchParams.get('brand') || 'all';
+      const allowed = await allowedOutletRows(db, u);
+      const ids = allowed.map(o => o.outlet_id);
+      if (!ids.length) return J({ ok: true, date, days, brand: brandFilter, vendors: [], summary: { vendor_count: 0, open_cards: 0, outstanding_paise: 0, paid_paise: 0 } });
+      const placeholders = ids.map(() => '?').join(',');
+      const bf = brandPassSql('o', brandFilter);
+      const rows = (await db.prepare(
+        `SELECT po.id,po.outlet_id,po.vendor_key,po.for_date,po.status,
+                po.expected_amount_paise,po.pay_amount_paise,po.pay_method,po.bank_ref,
+                po.ordered_by,po.received_by,po.raised_by,po.paid_at,
+                v.name vendor_name,v.brand vendor_brand,v.fulfilment,v.pay_behaviour,v.phone,v.vpa_json,
+                o.brand,o.name outlet_name,
+                (SELECT COUNT(*) FROM purchase_order_lines l WHERE l.order_id=po.id) line_count
+           FROM purchase_orders po
+           JOIN vendors v ON v.vendor_key=po.vendor_key
+           JOIN outlets o ON o.outlet_id=po.outlet_id
+          WHERE po.outlet_id IN (${placeholders})
+            AND po.status<>'CANCELLED'
+            AND po.for_date >= date(?, '-' || ? || ' days')
+            AND po.for_date <= ?
+            ${bf.sql}
+          ORDER BY v.name, po.for_date DESC, po.id DESC`)
+        .bind(...ids, date, days - 1, date, ...bf.vals).all()).results || [];
+      const byVendor = new Map();
+      for (const r of rows) {
+        const key = r.vendor_key || r.vendor_name;
+        if (!byVendor.has(key)) byVendor.set(key, {
+          vendor_key: r.vendor_key,
+          vendor_name: r.vendor_name,
+          brand: r.vendor_brand || r.brand || '',
+          fulfilment: r.fulfilment || '',
+          pay_behaviour: r.pay_behaviour || '',
+          phone: r.phone || '',
+          vpa_json: r.vpa_json || '[]',
+          order_count: 0,
+          received_paise: 0,
+          raised_paise: 0,
+          paid_paise: 0,
+          outstanding_paise: 0,
+          latest_date: '',
+          latest_status: '',
+          cards: [],
+        });
+        const v = byVendor.get(key);
+        const amount = Math.max(0, Math.round(Number(r.pay_amount_paise || r.expected_amount_paise || 0)));
+        v.order_count += 1;
+        if (!v.latest_date || r.for_date > v.latest_date) { v.latest_date = r.for_date; v.latest_status = r.status; }
+        if (['RECEIVED', 'RAISED', 'PAID', 'RECONCILED'].includes(r.status)) v.received_paise += amount;
+        if (r.status === 'RAISED') v.raised_paise += amount;
+        if (['PAID', 'RECONCILED'].includes(r.status)) v.paid_paise += amount;
+        if (['RECEIVED', 'RAISED'].includes(r.status)) v.outstanding_paise += amount;
+        v.cards.push({
+          id: r.id,
+          outlet_id: r.outlet_id,
+          brand: r.brand,
+          outlet_name: r.outlet_name,
+          for_date: r.for_date,
+          status: r.status,
+          amount_paise: amount,
+          line_count: Number(r.line_count || 0),
+          pay_method: r.pay_method || '',
+          bank_ref: r.bank_ref || '',
+        });
+      }
+      const vendors = [...byVendor.values()].sort((a, b) => (b.outstanding_paise - a.outstanding_paise) || a.vendor_name.localeCompare(b.vendor_name));
+      const summary = {
+        vendor_count: vendors.length,
+        open_cards: vendors.reduce((n, v) => n + v.cards.filter(c => ['ORDERED', 'RECEIVED', 'RAISED'].includes(c.status)).length, 0),
+        outstanding_paise: vendors.reduce((n, v) => n + v.outstanding_paise, 0),
+        paid_paise: vendors.reduce((n, v) => n + v.paid_paise, 0),
+      };
+      return J({ ok: true, date, days, brand: brandFilter, vendors, summary });
     }
 
     // ---------- day board: one vendor = one card ----------
@@ -623,6 +860,7 @@ export async function onRequest(context) {
       await writePurchaseEvent(db, card.id, 'place', u, {
         outlet, for_date, vendor_key, lines_added: lines.length, expected_amount_paise: sum
       });
+      waitUntil(context, dispatchOrderPlacedWaba(context, db, card.id, u));
       return J({ ok: true, order_id: card.id, expected_amount_paise: sum, lines_added: lines.length });
     }
 
@@ -749,6 +987,7 @@ export async function onRequest(context) {
       await db.prepare(`UPDATE purchase_orders SET status='ORDERED', ordered_at=COALESCE(ordered_at,?), ordered_by=?, updated_at=? WHERE id=?`)
         .bind(istNow(), u.name, istNow(), order_id).run();
       await writePurchaseEvent(db, order_id, 'mark-ordered', u, { status: 'ORDERED' });
+      waitUntil(context, dispatchOrderPlacedWaba(context, db, order_id, u));
       return J({ ok: true, order_id, status: 'ORDERED' });
     }
 
@@ -847,6 +1086,9 @@ export async function onRequest(context) {
         pay_amount_paise: amount,
         bank_ref: String(b.bank_ref || '').slice(0, 160),
       });
+      if (paid) {
+        waitUntil(context, dispatchPaymentDoneWaba(context, db, order_id, u, amount, String(b.pay_method || '').slice(0, 40), String(b.bank_ref || '').slice(0, 160)));
+      }
       return J({ ok: true, order_id, status: paid ? 'PAID' : 'RAISED', pay_amount_paise: amount });
     }
 

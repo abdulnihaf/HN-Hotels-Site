@@ -1,6 +1,8 @@
 package com.hnhotels.hnstaff
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -9,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.util.Base64
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
@@ -185,6 +188,7 @@ sealed class Screen {
     data class Card(val id: Int, val outlet: String, val date: String) : Screen()
     data class Place(val outlet: String, val date: String) : Screen()
     data class Directory(val outlet: String, val date: String) : Screen()
+    data class VendorDiary(val date: String) : Screen()
     data class Chicken(val date: String) : Screen()
 }
 
@@ -272,6 +276,7 @@ fun StaffShell(me: JSONObject) {
             openCard = { id, outlet -> nav.add(Screen.Card(id, outlet, cur.date)) },
             openPlace = { outlet -> nav.add(Screen.Place(outlet, cur.date)) },
             openDirectory = { outlet -> nav.add(Screen.Directory(outlet, cur.date)) },
+            openVendorDiary = { nav.add(Screen.VendorDiary(cur.date)) },
             openChicken = { nav.add(Screen.Chicken(cur.date)) },
             setDate = { d -> nav[nav.lastIndex] = Screen.PurchaseDay(d) })
         is Screen.Day -> DayScreen(me, cur,
@@ -294,6 +299,10 @@ fun StaffShell(me: JSONObject) {
         is Screen.Directory -> CatalogDirectoryScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
             openPlace = { nav.add(Screen.Place(cur.outlet, cur.date)) })
+        is Screen.VendorDiary -> VendorDiaryScreen(cur,
+            back = { nav.removeAt(nav.lastIndex) },
+            openCard = { id, outlet -> nav.add(Screen.Card(id, outlet, cur.date)) },
+            setDate = { d -> nav[nav.lastIndex] = Screen.VendorDiary(d) })
         is Screen.Chicken -> ChickenScreen(cur, back = { nav.removeAt(nav.lastIndex) },
             setDate = { d -> nav[nav.lastIndex] = Screen.Chicken(d) })
     }
@@ -363,7 +372,8 @@ fun ChamberTile(name: String, sub: String, icon: androidx.compose.ui.graphics.ve
 @Composable
 fun PurchaseDayScreen(me: JSONObject, s: Screen.PurchaseDay, back: () -> Unit,
                       openCard: (Int, String) -> Unit, openPlace: (String) -> Unit,
-                      openDirectory: (String) -> Unit, openChicken: () -> Unit, setDate: (String) -> Unit) {
+                      openDirectory: (String) -> Unit, openVendorDiary: () -> Unit,
+                      openChicken: () -> Unit, setDate: (String) -> Unit) {
     var brand by remember { mutableStateOf("all") }
     var data by remember { mutableStateOf<JSONObject?>(null) }
     var error by remember { mutableStateOf("") }
@@ -413,6 +423,11 @@ fun PurchaseDayScreen(me: JSONObject, s: Screen.PurchaseDay, back: () -> Unit,
                         Spacer(Modifier.width(5.dp))
                         Text("Items", color = Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
+                }
+                OutlinedButton(onClick = openVendorDiary, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), modifier = Modifier.padding(end = 8.dp)) {
+                    Icon(Icons.Filled.MenuBook, null, tint = Maroon, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Diary", color = Maroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
                 if (canPlace || caps.contains("sauda.receive")) {
                     OutlinedButton(onClick = openChicken, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), modifier = Modifier.padding(end = 8.dp)) {
@@ -618,6 +633,116 @@ fun CatalogItemRow(item: JSONObject, vendorByKey: Map<String, JSONObject>, histo
         Column(horizontalAlignment = Alignment.End) {
             Text(priceText, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             Text(categoryShort(item.optString("category")), color = Muted, fontSize = 10.sp, maxLines = 1)
+        }
+    }
+}
+
+// ---- Vendor diary: local vendors, requests, paid trail ---------------------
+@Composable
+fun VendorDiaryScreen(s: Screen.VendorDiary, back: () -> Unit, openCard: (Int, String) -> Unit, setDate: (String) -> Unit) {
+    var brand by remember { mutableStateOf("all") }
+    var diary by remember { mutableStateOf<JSONObject?>(null) }
+    var error by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    fun load() {
+        diary = null; error = ""
+        scope.launch {
+            val r = Api.get("action=vendor_diary&date=${s.date}&brand=$brand&days=45")
+            if (r.optBoolean("ok")) diary = r else error = r.optString("error")
+        }
+    }
+    LaunchedEffect(s.date, brand) { load() }
+    val vendors = diary?.optJSONArray("vendors")?.toObjList() ?: emptyList()
+    val summary = diary?.optJSONObject("summary")
+    Scaffold(topBar = { HnBar("Vendor diary", subtitle = "Local purchase trail", onBack = back) }) { p ->
+        Column(Modifier.padding(p).fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                IconButton(onClick = { setDate(stepDate(s.date, -1)) }) { Icon(Icons.Filled.ChevronLeft, "prev", tint = Maroon) }
+                Text(prettyDate(s.date), fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp,
+                    modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                IconButton(onClick = { setDate(stepDate(s.date, 1)) }) { Icon(Icons.Filled.ChevronRight, "next", tint = Maroon) }
+            }
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp).horizontalScroll(rememberScrollState())) {
+                FilterChip(selected = brand == "all", onClick = { brand = "all" }, label = { Text("All HN") }, modifier = Modifier.padding(end = 8.dp))
+                FilterChip(selected = brand == "HE", onClick = { brand = "HE" }, label = { Text("HE") }, modifier = Modifier.padding(end = 8.dp))
+                FilterChip(selected = brand == "NCH", onClick = { brand = "NCH" }, label = { Text("NCH") })
+            }
+            HorizontalDivider(color = Sand, modifier = Modifier.padding(top = 6.dp))
+            when {
+                error.isNotEmpty() -> CenterMsg("⚠ $error") { load() }
+                diary == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = Maroon) }
+                vendors.isEmpty() -> CenterMsg("No vendor trail in this window.", null)
+                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 10.dp, 16.dp, 24.dp)) {
+                    item {
+                        VendorDiarySummary(summary)
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    items(vendors) { v ->
+                        VendorDiaryCard(v, openCard)
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VendorDiarySummary(s: JSONObject?) {
+    Surface(shape = RoundedCornerShape(10.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            SummaryBit((s?.optInt("vendor_count") ?: 0).toString(), "vendors", Modifier.weight(1f))
+            SummaryBit((s?.optInt("open_cards") ?: 0).toString(), "open", Modifier.weight(1f))
+            SummaryBit(rupee(s?.optInt("outstanding_paise") ?: 0), "to pay", Modifier.weight(1.2f))
+            SummaryBit(rupee(s?.optInt("paid_paise") ?: 0), "paid", Modifier.weight(1.2f))
+        }
+    }
+}
+
+@Composable
+fun VendorDiaryCard(v: JSONObject, openCard: (Int, String) -> Unit) {
+    val cards = v.optJSONArray("cards")?.toObjList() ?: emptyList()
+    Surface(shape = RoundedCornerShape(12.dp), color = Color.White, tonalElevation = 1.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Sand), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(color = Sand, shape = RoundedCornerShape(10.dp), modifier = Modifier.size(46.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Text(v.optString("vendor_name").take(1).uppercase(Locale.US), color = Maroon, fontWeight = FontWeight.Bold) }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(v.optString("vendor_name"), color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(listOf(v.optString("brand").ifEmpty { "HN" }, vendorTerms(v), v.optString("latest_date")).filter { it.isNotEmpty() }.joinToString(" · "),
+                        color = Muted, fontSize = 11.sp, maxLines = 2)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(rupee(v.optInt("outstanding_paise")), color = if (v.optInt("outstanding_paise") > 0) WarnA else GoodG,
+                        fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("to pay", color = Muted, fontSize = 10.sp)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth()) {
+                SummaryBit(v.optInt("order_count").toString(), "cards", Modifier.weight(1f))
+                SummaryBit(rupee(v.optInt("received_paise")), "received", Modifier.weight(1f))
+                SummaryBit(rupee(v.optInt("raised_paise")), "requested", Modifier.weight(1f))
+                SummaryBit(rupee(v.optInt("paid_paise")), "paid", Modifier.weight(1f))
+            }
+            if (cards.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                cards.take(4).forEach { c ->
+                    Row(Modifier.fillMaxWidth().clickable { openCard(c.optInt("id"), c.optString("outlet_id")) }.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        BrandPill(c.optString("brand"))
+                        Spacer(Modifier.width(8.dp))
+                        Text("${prettyDate(c.optString("for_date"))} · ${c.optString("status")}",
+                            color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(rupee(c.optInt("amount_paise")), color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                if ((v.optInt("order_count")) > 4) Text("+${v.optInt("order_count") - 4} older cards", color = Muted, fontSize = 11.sp)
+            }
         }
     }
 }
@@ -1061,6 +1186,8 @@ fun PurchaseEventTrail(events: List<JSONObject>) {
                     "receive" -> "Received with proof"
                     "payment-request" -> "Payment requested"
                     "paid" -> "Marked paid"
+                    "waba-order-placed" -> "WABA order alerts"
+                    "waba-payment-done" -> "WABA payment alerts"
                     "delete-order" -> "Order card deleted"
                     "place" -> "Order card created"
                     "demand" -> "Demand routed"
@@ -1096,6 +1223,8 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
     var busy by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
+    val vendorVpa = firstVpa(card.optString("vpa_json"))
     Surface(shape = RoundedCornerShape(12.dp), color = Color.White, tonalElevation = 1.dp,
         border = androidx.compose.foundation.BorderStroke(1.dp, Sand),
         modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
@@ -1118,6 +1247,10 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
                 Spacer(Modifier.width(8.dp))
                 OutlinedTextField(value = ref, onValueChange = { ref = it }, singleLine = true,
                     label = { Text("Ref") }, modifier = Modifier.weight(1.1f))
+            }
+            if (method == "upi" && canPay) {
+                Spacer(Modifier.height(8.dp))
+                UpiShortcutRow(vendorVpa, amount) { app -> openUpiApp(ctx, app, vendorVpa) }
             }
             if (canPay) {
                 Spacer(Modifier.height(6.dp))
@@ -1153,6 +1286,40 @@ fun PaymentTrail(me: JSONObject, card: JSONObject?, orderId: Int, onSaved: () ->
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth().height(46.dp)
                 ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text(if (requestOnly) "Request payment" else "Save payment trail") }
+            }
+        }
+    }
+}
+
+data class UpiApp(val label: String, val packageName: String)
+private val UpiApps = listOf(
+    UpiApp("PhonePe", "com.phonepe.app"),
+    UpiApp("GPay", "com.google.android.apps.nbu.paisa.user"),
+    UpiApp("Paytm", "net.one97.paytm"),
+    UpiApp("CRED", "com.dreamplug.androidapp"),
+    UpiApp("BHIM", "in.org.npci.upiapp")
+)
+
+@Composable
+fun UpiShortcutRow(vpa: String, amount: String, openApp: (UpiApp) -> Unit) {
+    Surface(shape = RoundedCornerShape(10.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.ContentCopy, null, tint = Maroon, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(if (vpa.isNotEmpty()) vpa else "UPI ID not saved", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Amount: ${amount.ifEmpty { "enter manually" }}", color = Muted, fontSize = 11.sp, maxLines = 1)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                UpiApps.forEach { app ->
+                    OutlinedButton(onClick = { openApp(app) }, enabled = vpa.isNotEmpty(), shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), modifier = Modifier.padding(end = 8.dp)) {
+                        Text(app.label, color = if (vpa.isNotEmpty()) Maroon else Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
     }
@@ -2077,6 +2244,37 @@ fun vendorTerms(v: JSONObject): String {
         else -> v.optString("pay_behaviour").ifEmpty { "payment rule not set" }
     }
     return "$fulfilment · $pay"
+}
+fun firstVpa(rawJson: String): String {
+    if (rawJson.isBlank()) return ""
+    return try {
+        val arr = JSONArray(rawJson)
+        (0 until arr.length()).map { arr.optString(it).trim() }.firstOrNull { it.isNotEmpty() } ?: ""
+    } catch (e: Exception) {
+        rawJson.split(',', ';', '\n').map { it.trim().trim('[', ']', '"') }.firstOrNull { it.contains("@") } ?: ""
+    }
+}
+fun openUpiApp(ctx: Context, app: UpiApp, vpa: String) {
+    if (vpa.isBlank()) {
+        Toast.makeText(ctx, "No UPI ID saved for this vendor", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val clip = ClipData.newPlainText("Vendor UPI ID", vpa)
+    (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+    val launch = ctx.packageManager.getLaunchIntentForPackage(app.packageName)
+    if (launch != null) {
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ctx.startActivity(launch)
+        Toast.makeText(ctx, "UPI ID copied. Enter amount manually.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${app.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        ctx.startActivity(market)
+    } catch (e: Exception) {
+        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=${app.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    Toast.makeText(ctx, "UPI ID copied. Install or open ${app.label}.", Toast.LENGTH_LONG).show()
 }
 
 @Composable

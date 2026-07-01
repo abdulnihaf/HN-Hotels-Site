@@ -41,10 +41,10 @@ jobs:
           cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 9,
-            "versionName": "1.8",
+            "versionCode": 10,
+            "versionName": "1.9",
             "url": "https://hn-ops-api.pages.dev/HN-Staff.apk",
-            "notes": "Sauda now supports deleting pre-receive purchase cards, adding vendors with required details, adding products under vendors, editable ordered items, and native MN Broilers chicken entry."
+            "notes": "Sauda local vendor purchasing is wired end-to-end: vendor diary, payment request trail, manual UPI app handoff, and WABA audit hooks for order placed and payment done."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -68,7 +68,7 @@ jobs:
               <h1>HN Staff</h1>
               <p>Install the current Android staff app for Sauda purchase work.</p>
               <a href="/HN-Staff.apk">Download & install</a>
-              <small>Version 1.8 · HN Hotels Pvt Ltd</small>
+              <small>Version 1.9 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>
