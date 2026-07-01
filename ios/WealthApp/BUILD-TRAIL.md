@@ -131,6 +131,12 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Real timer execution remains locked unless the backend reports both `quant_timer_real_enabled=true` and `execution_gate.trade_authorized=true`; Build 30 exposes the control surface without weakening the server broker contract.
 - Added `quantControlSetOverride` and `quantControlClearOverride` client calls, plus manifest checks that prevent future builds from moving execution controls back into Lab.
 
+## Build 31 — Execute tiny-real remote-control drill (2026-07-01, Codex)
+- Added a fixed **Tiny-real remote drill** inside Execute: Face-ID/passcode gated, buys **1 NSE:IDEA MIS** share through the hardened backend `pipeline_test`, confirms the fill, then immediately exits with a sell.
+- The D1/backend trail records this as `surface=execute_remote`, so a real remote-control proof is distinguishable from Lab testing while still using the capped technical-smoke route.
+- This does **not** unlock the Quant strategy path. The real timer tick remains gated by `quant_timer_real_enabled=true` plus `execution_gate.trade_authorized=true`; today can stay `OBSERVE` while the order pipe is proved separately.
+- Build number moved to 31 and the manifest now checks both `runTinyRealRemoteDrill` and `executeTinyRealRemoteDrill` so this real remote-control proof cannot disappear silently.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).

@@ -118,14 +118,19 @@ extension WealthClient {
     }
 
     /// Full equity round-trip (BUY → poll fill → exit) with a per-step log.
-    func labPipelineTest(symbol: String, qty: Int, sim: Bool) async throws -> LabResult {
+    func labPipelineTest(symbol: String, qty: Int, sim: Bool, surface: String = "lab") async throws -> LabResult {
         var q = ["action": "pipeline_test"]
         if sim { q["simulate"] = "1" }
-        let body: [String: Any] = ["tradingsymbol": symbol, "exchange": "NSE", "quantity": qty, "product": "MIS",
-                                   "bypass_market_hours": sim, "lab_tiny_real": !sim, "surface": "lab"]
+        let body: [String: Any] = ["symbol": symbol, "tradingsymbol": symbol, "exchange": "NSE", "quantity": qty, "product": "MIS",
+                                   "bypass_market_hours": sim, "lab_tiny_real": !sim, "surface": surface]
         let raw = try JSONSerialization.data(withJSONObject: body)
         let data = try await request(path: "/api/kite", query: q, method: "POST", rawBody: raw)
         return try labDecode(data, "pipeline_test")
+    }
+
+    /// Execute-tab tiny-real remote-control proof: fixed one-share IDEA round-trip.
+    func executeTinyRealRemoteDrill() async throws -> LabResult {
+        try await labPipelineTest(symbol: "IDEA", qty: 1, sim: false, surface: "execute_remote")
     }
 
     /// A single market order through the unified hardened door.
