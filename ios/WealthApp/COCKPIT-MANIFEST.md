@@ -50,6 +50,8 @@ how the cockpit's growth is locked in and can never regress.
 # CHECK SRC|ExecuteView.swift|quantExecutionCard|Execute tab owns Quant timer execution controls
 # CHECK SRC|ExecuteView.swift|saveTimerOverride|Execute tab can save the timer override
 # CHECK SRC|ExecuteView.swift|runRealTimerTick|Execute tab has a Face-ID-gated real timer tick path
+# CHECK SRC|ExecuteView.swift|runTinyRealRemoteDrill|Execute tab can run the capped tiny-real remote-control drill
+# CHECK SRC|LabClient.swift|func executeTinyRealRemoteDrill|Client exposes Execute-originated tiny-real remote drill
 # CHECK SRC|HomeView.swift|LabView(vm: vm)|Execution Lab tab wired into the TabView
 
 ## Required live data (endpoints — must respond with the marker field)

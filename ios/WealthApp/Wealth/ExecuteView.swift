@@ -104,6 +104,11 @@ struct ExecuteView: View {
     @State private var lastWasPractice = false
     @State private var orderWitness: OrderExecutionWitness?
     @State private var timerAuthNote: String?
+    @State private var showTinyRealRemoteConfirm = false
+    @State private var remoteDrillBusy = false
+    @State private var remoteDrillResult: LabResult?
+    @State private var remoteDrillError: String?
+    @State private var remoteDrillAuth: OrderAuthWitness?
 
     private var qty: Int { max(1, Int(qtyText) ?? 1) }
     private var entry: Double { Double(entryText) ?? 0 }
@@ -116,6 +121,9 @@ struct ExecuteView: View {
     private var timerOverrideValid: Bool { !symbol.isEmpty && entry > 0 && stop > 0 && target > 0 && qty >= 1 }
     private var quantRealReady: Bool {
         quant.status?.next_tick?.real_enabled == true && quant.status?.gate?.trade_authorized == true
+    }
+    private var remoteDrillCanRun: Bool {
+        kiteOK && isReal && !remoteDrillBusy && vm.executionGate?.in_market_hours != false
     }
 
     var body: some View {
@@ -216,6 +224,12 @@ struct ExecuteView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This asks the server to run the timer in real mode. The backend will still block unless the real switches, broker gate, symbol authority, and Face ID all pass.")
+        }
+        .alert("Run tiny-real remote drill?", isPresented: $showTinyRealRemoteConfirm) {
+            Button("Buy and exit 1 IDEA", role: .destructive) { runTinyRealRemoteDrill() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("REAL MONEY. This fixed technical proof buys 1 NSE:IDEA MIS share, confirms the fill, then immediately sells it. It does not use today's Quant pick or unlock the strategy gate.")
         }
     }
 
@@ -327,6 +341,66 @@ struct ExecuteView: View {
 
             Divider().background(HK.lineSoft)
 
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "antenna.radiowaves.left.and.right.circle.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(HK.error)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Tiny-real remote drill")
+                            .font(.system(size: 13, weight: .heavy))
+                            .foregroundColor(HK.text)
+                        Spacer()
+                        Pill(text: "REAL 1 SHARE", color: HK.error)
+                    }
+                    Text("Fixed proof: BUY 1 NSE:IDEA MIS at market, confirm, then immediately SELL. This proves remote real execution only; it does not trade today's strategy pick.")
+                        .font(.system(size: 12))
+                        .foregroundColor(HK.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !kiteOK {
+                        Text("Connect Kite before running the drill.")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(HK.error)
+                    } else if !isReal {
+                        Text("Real-order switch is blocked by server config.")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(HK.error)
+                    } else if vm.executionGate?.in_market_hours == false {
+                        Text("Tiny-real opens only during NSE regular market hours.")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(HK.textFaint)
+                    }
+                    if let auth = remoteDrillAuth {
+                        Text(auth.ok ? "Face ID/passcode accepted for the drill." : "Face ID/passcode failed: \(auth.detail)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(auth.ok ? HK.ready : HK.error)
+                    }
+                    if let r = remoteDrillResult {
+                        tinyRemoteResultBlock(r)
+                    }
+                    if let e = remoteDrillError {
+                        Text(e)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(HK.error)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Button {
+                        showTinyRealRemoteConfirm = true
+                    } label: {
+                        Label(remoteDrillBusy ? "Running…" : "Run tiny-real drill", systemImage: "bolt.badge.checkmark.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(remoteDrillCanRun ? HK.bg : HK.textFaint)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(RoundedRectangle(cornerRadius: HK.radiusSm)
+                                .fill(remoteDrillCanRun ? HK.error : HK.cardHi))
+                    }
+                    .disabled(!remoteDrillCanRun)
+                }
+            }
+
+            Divider().background(HK.lineSoft)
+
             Text("Timer override from this form").font(.system(size: 12, weight: .bold)).foregroundColor(HK.textFaint)
             labeledField("Timer entry ₹", text: $entryText, placeholder: "entry trigger", decimal: true)
             HStack(spacing: 8) {
@@ -390,6 +464,106 @@ struct ExecuteView: View {
         let sym = symbol.uppercased()
         Task {
             await quant.setOverride(symbol: sym, entry: entry, stop: stop, target: target, qty: qty)
+        }
+    }
+
+    @ViewBuilder
+    private func tinyRemoteResultBlock(_ r: LabResult) -> some View {
+        Divider().background(HK.lineSoft)
+        HStack {
+            Pill(text: r.didSucceed ? "ROUND TRIP PASS" : "CHECK REQUIRED",
+                 color: r.didSucceed ? HK.ready : HK.error)
+            Spacer()
+            if let mode = r.mode {
+                Text(mode.uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(HK.textFaint)
+            }
+        }
+        Text(r.summary ?? labFailureText(r))
+            .font(.system(size: 12))
+            .foregroundColor(r.didSucceed ? HK.textDim : HK.error)
+            .fixedSize(horizontal: false, vertical: true)
+        if let flat = r.flat {
+            Row(label: "Flat", value: flat ? "YES" : "CHECK POSITION", valueColor: flat ? HK.ready : HK.error)
+        }
+        if let steps = r.steps, !steps.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(steps.prefix(5).enumerated()), id: \.offset) { _, step in
+                    HStack(alignment: .top, spacing: 7) {
+                        Image(systemName: step.ok == true ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                            .foregroundColor(step.ok == true ? HK.ready : HK.error)
+                            .font(.system(size: 12, weight: .bold))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(step.name ?? "step")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(HK.text)
+                            if let detail = step.detail, !detail.isEmpty {
+                                Text(detail)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(HK.textDim)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func labFailureText(_ r: LabResult) -> String {
+        if let raw = r.rawError, !raw.isEmpty { return raw }
+        if let message = r.message, !message.isEmpty { return message }
+        if let summary = r.summary, !summary.isEmpty { return summary }
+        if r.error == "market_closed_preflight" {
+            return "NSE regular market is closed. The drill can run only Mon-Fri, 09:15-15:30 IST."
+        }
+        return r.error ?? r.reason ?? "Remote drill did not return a confirmed round trip."
+    }
+
+    private func runTinyRealRemoteDrill() {
+        guard remoteDrillCanRun else {
+            if !kiteOK {
+                remoteDrillError = "Kite is not connected."
+            } else if !isReal {
+                remoteDrillError = "Real orders are blocked by server config."
+            } else if vm.executionGate?.in_market_hours == false {
+                remoteDrillError = "NSE regular market is closed."
+            } else {
+                remoteDrillError = "Remote drill is not ready."
+            }
+            return
+        }
+        remoteDrillBusy = true
+        remoteDrillError = nil
+        remoteDrillResult = nil
+        remoteDrillAuth = nil
+        Task {
+            let auth = await authorizeOrder(isPractice: false)
+            await MainActor.run { remoteDrillAuth = auth }
+            guard auth.ok else {
+                await MainActor.run {
+                    remoteDrillBusy = false
+                    remoteDrillError = "Authorization failed — no broker request sent. \(auth.detail)"
+                }
+                return
+            }
+            do {
+                let r = try await WealthClient.shared.executeTinyRealRemoteDrill()
+                await MainActor.run {
+                    remoteDrillResult = r
+                    remoteDrillError = r.didSucceed ? nil : labFailureText(r)
+                    remoteDrillBusy = false
+                }
+                await quant.refresh()
+                await vm.refresh()
+            } catch {
+                await MainActor.run {
+                    remoteDrillResult = nil
+                    remoteDrillError = (error as? WealthError)?.errorDescription ?? error.localizedDescription
+                    remoteDrillBusy = false
+                }
+            }
         }
     }
 
