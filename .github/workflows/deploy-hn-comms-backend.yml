@@ -35,6 +35,16 @@ jobs:
           test -n "$HN_COMMS_APP_KEY"
           printf '%s' "$HN_COMMS_APP_KEY" | npx wrangler@3.90.0 pages secret put HN_COMMS_APP_KEY --project-name hn-hotels-site
 
+      - name: Provision Nawabi Chai House WABA token
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WA_NCH_TOKEN: ${{ secrets.WA_NCH_TOKEN }}
+        run: |
+          test -n "$WA_NCH_TOKEN"
+          printf '%s' "$WA_NCH_TOKEN" | npx wrangler@3.90.0 pages secret put WA_NCH_TOKEN --project-name hn-hotels-site
+
       - name: Apply D1 schema
         uses: cloudflare/wrangler-action@v3
         with:

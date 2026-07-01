@@ -112,6 +112,29 @@ struct CommsClient {
         return response.templates
     }
 
+    func staff() async throws -> [StaffMember] {
+        let response: StaffResponse = try await request(query: [
+            URLQueryItem(name: "action", value: "staff"),
+        ])
+        return response.staff
+    }
+
+    func staffTemplates() async throws -> [CampaignTemplate] {
+        let response: CampaignTemplatesResponse = try await request(query: [
+            URLQueryItem(name: "action", value: "staff-templates"),
+        ])
+        return response.templates
+    }
+
+    func automationTrail() async throws -> [AutomationTrailItem] {
+        let response: AutomationTrailResponse = try await request(query: [
+            URLQueryItem(name: "action", value: "automation-trail"),
+            URLQueryItem(name: "brand", value: "all"),
+            URLQueryItem(name: "limit", value: "120"),
+        ])
+        return response.trail
+    }
+
     func sendReply(brand: String, phone: String, text: String, templateName: String? = nil) async throws -> SendReplyResponse {
         var body: [String: Any] = [
             "brand": brand,
@@ -128,6 +151,19 @@ struct CommsClient {
             method: "POST",
             query: [URLQueryItem(name: "action", value: "reply")],
             body: body
+        )
+    }
+
+    func sendStaffCampaign(template: String, recipients: [String], vars: [String]) async throws -> StaffCampaignResponse {
+        try await request(
+            method: "POST",
+            query: [URLQueryItem(name: "action", value: "staff-campaign")],
+            body: [
+                "template": template,
+                "recipients": recipients,
+                "vars": vars,
+                "actor": "ios",
+            ]
         )
     }
 
@@ -189,9 +225,16 @@ final class CommsAppModel {
     var messages: [CommsMessage] = []
     var quickReplies: [QuickReply] = []
     var templates: [WabaTemplate] = []
+    var staffMembers: [StaffMember] = []
+    var campaignTemplates: [CampaignTemplate] = []
+    var automationTrail: [AutomationTrailItem] = []
+    var selectedStaffPhones: Set<String> = []
+    var selectedCampaignTemplate: String = ""
+    var campaignVarsDraft: String = ""
     var replyDraft: String = ""
     var isLoading = false
     var isSending = false
+    var isCampaignSending = false
     var errorMessage: String?
 
     var isConfigured: Bool {
@@ -218,6 +261,10 @@ final class CommsAppModel {
         selectedThreadID = nil
         currentThread = nil
         messages = []
+        staffMembers = []
+        campaignTemplates = []
+        automationTrail = []
+        selectedStaffPhones = []
     }
 
     func loadThreads(silent: Bool = false) async {
@@ -288,6 +335,55 @@ final class CommsAppModel {
             await loadThreads(silent: true)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadAutomation() async {
+        guard isConfigured else { return }
+        do {
+            async let staffRows = client.staff()
+            async let templateRows = client.staffTemplates()
+            async let trailRows = client.automationTrail()
+            staffMembers = (try await staffRows)
+            campaignTemplates = (try await templateRows)
+            automationTrail = (try await trailRows)
+            if selectedCampaignTemplate.isEmpty {
+                selectedCampaignTemplate = campaignTemplates.first?.name ?? ""
+            }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func sendStaffCampaign() async {
+        let recipients = staffMembers
+            .filter { selectedStaffPhones.contains($0.e164) }
+            .map(\.e164)
+        guard !selectedCampaignTemplate.isEmpty, !recipients.isEmpty else {
+            errorMessage = "Select a template and at least one staff member"
+            return
+        }
+        let vars = campaignVarsDraft
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        isCampaignSending = true
+        defer { isCampaignSending = false }
+        do {
+            let result = try await client.sendStaffCampaign(
+                template: selectedCampaignTemplate,
+                recipients: recipients,
+                vars: vars
+            )
+            if !result.ok {
+                errorMessage = "Campaign sent \(result.sent), failed \(result.failed)"
+            }
+            selectedStaffPhones = []
+            await loadAutomation()
+        } catch {
+            errorMessage = error.localizedDescription
+            await loadAutomation()
         }
     }
 
