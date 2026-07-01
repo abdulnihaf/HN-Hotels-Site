@@ -136,7 +136,9 @@ export async function sendWabaText(env, { brand, phone, body }) {
     env.WA_SPARKSOL_PHONE_ID;
   const token =
     b === 'sparksol' ? (env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN) :
-    (env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN);
+    b === 'nch'      ? (env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
+    b === 'he'       ? (env.WA_HE_TOKEN  || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN) :
+    (env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN);
   if (!phoneId || !token) {
     return { ok: false, status: 500, response: { error: 'WABA not configured for brand: ' + b } };
   }

@@ -1,0 +1,50 @@
+name: Deploy HN Comms Backend
+
+on:
+  push:
+    branches: [codex/comms-native-inbox]
+    paths:
+      - 'functions/api/comms-inbox.js'
+      - 'functions/api/comms-webhook.js'
+      - 'functions/api/_lib/comms-core.js'
+      - 'schema-comms-inbox.sql'
+      - 'wrangler.toml'
+      - '.github/workflows/deploy-hn-comms-backend.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: cf-pages-hn-comms-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Provision mobile app API key
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HN_COMMS_APP_KEY: ${{ secrets.HN_COMMS_APP_KEY }}
+        run: |
+          test -n "$HN_COMMS_APP_KEY"
+          printf '%s' "$HN_COMMS_APP_KEY" | npx wrangler@3.90.0 pages secret put HN_COMMS_APP_KEY --project-name hn-hotels-site
+
+      - name: Apply D1 schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute hn-hiring --remote --file=schema-comms-inbox.sql
+
+      - name: Deploy hnhotels.in backend
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy . --project-name=hn-hotels-site --branch=main

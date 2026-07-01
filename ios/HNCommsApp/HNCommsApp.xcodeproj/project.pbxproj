@@ -1,0 +1,210 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		26817AB212390E369124D5BC /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251E2F0E5B7B827519547BB6 /* App.swift */; };
+		4FF67A056E49A0F1D1BB85CC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 62D500C9F787C096E4F97F7C /* Assets.xcassets */; };
+		7286FB92CE4D17E35792CE84 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9739B3470D2F16260E857F29 /* Models.swift */; };
+		A7D335B979F6908ED4233830 /* CommsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CEB6D0CB46F45DC10B52FD /* CommsClient.swift */; };
+		DD5FEAA23CC19046147B970E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E00A5A8A917AD683CC52B56 /* ContentView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0940054FFFBCF5020586439A /* HNComms.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HNComms.entitlements; sourceTree = "<group>"; };
+		251E2F0E5B7B827519547BB6 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		5058D8B3B911CF3A61865069 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5E00A5A8A917AD683CC52B56 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		62D500C9F787C096E4F97F7C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		65CEB6D0CB46F45DC10B52FD /* CommsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommsClient.swift; sourceTree = "<group>"; };
+		85661E3E8FF4A41865CA72FF /* HNCommsApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HNCommsApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9739B3470D2F16260E857F29 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		31DB98DDC435FADAFF9E6842 /* HNComms */ = {
+			isa = PBXGroup;
+			children = (
+				251E2F0E5B7B827519547BB6 /* App.swift */,
+				62D500C9F787C096E4F97F7C /* Assets.xcassets */,
+				65CEB6D0CB46F45DC10B52FD /* CommsClient.swift */,
+				5E00A5A8A917AD683CC52B56 /* ContentView.swift */,
+				0940054FFFBCF5020586439A /* HNComms.entitlements */,
+				5058D8B3B911CF3A61865069 /* Info.plist */,
+				9739B3470D2F16260E857F29 /* Models.swift */,
+			);
+			path = HNComms;
+			sourceTree = "<group>";
+		};
+		BFD9EEA1A563F4393DF6BE48 = {
+			isa = PBXGroup;
+			children = (
+				31DB98DDC435FADAFF9E6842 /* HNComms */,
+				ED36375D02E2E6A121BA05A4 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		ED36375D02E2E6A121BA05A4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				85661E3E8FF4A41865CA72FF /* HNCommsApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		71823B3E8C92A48178FDE376 /* HNCommsApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 629467C6263C5C6B22812F3E /* Build configuration list for PBXNativeTarget "HNCommsApp" */;
+			buildPhases = (
+				89FF432662F86A005E68577E /* Sources */,
+				1A84C238094E0707DEB977EE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HNCommsApp;
+			packageProductDependencies = (
+			);
+			productName = HNCommsApp;
+			productReference = 85661E3E8FF4A41865CA72FF /* HNCommsApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1090247CB0980B5A375B6B12 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					71823B3E8C92A48178FDE376 = {
+						DevelopmentTeam = FZ58DQ52QS;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 033FA7886BC5D973EF541FA3 /* Build configuration list for PBXProject "HNCommsApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = BFD9EEA1A563F4393DF6BE48;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = ED36375D02E2E6A121BA05A4 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				71823B3E8C92A48178FDE376 /* HNCommsApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1A84C238094E0707DEB977EE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4FF67A056E49A0F1D1BB85CC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		89FF432662F86A005E68577E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				26817AB212390E369124D5BC /* App.swift in Sources */,
+				A7D335B979F6908ED4233830 /* CommsClient.swift in Sources */,
+				DD5FEAA23CC19046147B970E /* ContentView.swift in Sources */,
+				7286FB92CE4D17E35792CE84 /* Models.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0528C1D130B4EBCE7EE9CD72 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		1CDCF9A366DA6A3739F85F34 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = HNComms/HNComms.entitlements;
+				INFOPLIST_FILE = HNComms/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.comms;
+				PRODUCT_NAME = HNComms;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			};
+			name = Debug;
+		};
+		896D2D3F13DCC8E757185E57 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = HNComms/HNComms.entitlements;
+				INFOPLIST_FILE = HNComms/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.comms;
+				PRODUCT_NAME = HNComms;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			};
+			name = Release;
+		};
+		952F8710AA3DA76B03FBA790 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = FZ58DQ52QS;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		033FA7886BC5D973EF541FA3 /* Build configuration list for PBXProject "HNCommsApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				952F8710AA3DA76B03FBA790 /* Debug */,
+				0528C1D130B4EBCE7EE9CD72 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		629467C6263C5C6B22812F3E /* Build configuration list for PBXNativeTarget "HNCommsApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1CDCF9A366DA6A3739F85F34 /* Debug */,
+				896D2D3F13DCC8E757185E57 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1090247CB0980B5A375B6B12 /* Project object */;
+}

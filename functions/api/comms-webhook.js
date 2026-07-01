@@ -30,6 +30,186 @@ function normalizePhone(raw) {
   return digits;
 }
 
+function brandFromPhoneId(env, phoneId) {
+  if (phoneId === env.WA_NCH_PHONE_ID) return 'nch';
+  if (phoneId === env.WA_HE_PHONE_ID || phoneId === env.WA_PHONE_ID) return 'he';
+  if (phoneId === env.WA_SPARKSOL_PHONE_ID) return 'sparksol';
+  return null;
+}
+
+function messageTimestampIso(m) {
+  return m?.timestamp
+    ? new Date(parseInt(m.timestamp, 10) * 1000).toISOString()
+    : new Date().toISOString();
+}
+
+function messageBody(m) {
+  if (!m) return '';
+  if (m.type === 'text') return m.text?.body || '';
+  if (m.type === 'button') return m.button?.text || m.button?.payload || '';
+  if (m.type === 'interactive') {
+    return m.interactive?.button_reply?.title
+      || m.interactive?.button_reply?.id
+      || m.interactive?.list_reply?.title
+      || m.interactive?.list_reply?.id
+      || '[interactive]';
+  }
+  if (m.type === 'image') return m.image?.caption || '[image]';
+  if (m.type === 'video') return m.video?.caption || '[video]';
+  if (m.type === 'document') return m.document?.filename || m.document?.caption || '[document]';
+  if (m.type === 'audio') return '[audio]';
+  if (m.type === 'sticker') return '[sticker]';
+  if (m.type === 'location') return `${m.location?.latitude || ''},${m.location?.longitude || ''}`;
+  if (m.type === 'contacts') {
+    const c = m.contacts?.[0];
+    return c ? `${c.name?.formatted_name || 'Contact'} ${c.phones?.[0]?.phone || ''}`.trim() : '[contact]';
+  }
+  if (m.type === 'order') return '[cart/order]';
+  return `[${m.type || 'message'}]`;
+}
+
+function messageMediaId(m) {
+  return m?.image?.id || m?.video?.id || m?.audio?.id || m?.document?.id || m?.sticker?.id || null;
+}
+
+function contactName(value, waId) {
+  const contact = (value?.contacts || []).find(c => c.wa_id === waId) || value?.contacts?.[0];
+  return contact?.profile?.name || '';
+}
+
+function serviceWindowExpiresAt(inboundIso) {
+  const t = new Date(inboundIso).getTime();
+  return Number.isFinite(t) ? new Date(t + 24 * 60 * 60 * 1000).toISOString() : null;
+}
+
+async function persistCommsWebhookEvent(env, { brand, phone_number_id, event_kind, wa_id, message_id, raw_json }) {
+  try {
+    await env.DB.prepare(`
+      INSERT INTO comms_webhook_events
+        (brand, phone_number_id, event_kind, wa_id, message_id, raw_json, processed)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `).bind(
+      brand || null,
+      phone_number_id || null,
+      event_kind || 'other',
+      wa_id || null,
+      message_id || null,
+      JSON.stringify(raw_json || {}).slice(0, 20000),
+    ).run();
+  } catch (e) {
+    console.error('persistCommsWebhookEvent failed:', e?.message || e);
+  }
+}
+
+async function persistInboundCommsMessage(env, { value, message, payload, business_phone_id }) {
+  const brand = brandFromPhoneId(env, business_phone_id);
+  if (!brand || !message?.from) return;
+
+  const phone = normalizePhone(message.from);
+  const threadId = `${brand}:${phone}`;
+  const createdAt = messageTimestampIso(message);
+  const body = messageBody(message);
+  const mediaId = messageMediaId(message);
+  const msgType = message.type || 'text';
+  const wamid = message.id || null;
+
+  await persistCommsWebhookEvent(env, {
+    brand,
+    phone_number_id: business_phone_id,
+    event_kind: 'message',
+    wa_id: phone,
+    message_id: wamid,
+    raw_json: payload,
+  });
+
+  try {
+    const inserted = await env.DB.prepare(`
+      INSERT OR IGNORE INTO comms_messages
+        (thread_id, brand, phone, direction, msg_type, body, wamid, status,
+         media_id, raw_payload, created_at)
+      VALUES (?, ?, ?, 'inbound', ?, ?, ?, 'unread', ?, ?, ?)
+      RETURNING id
+    `).bind(
+      threadId,
+      brand,
+      phone,
+      msgType,
+      body,
+      wamid,
+      mediaId,
+      JSON.stringify(message).slice(0, 10000),
+      createdAt,
+    ).first();
+
+    if (!inserted?.id) return;
+
+    await env.DB.prepare(`
+      INSERT INTO comms_threads
+        (thread_id, brand, phone, wa_id, phone_number_id, display_name, status,
+         last_message_at, last_inbound_at, last_body, last_direction, last_msg_type,
+         unread_count, service_window_expires_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, 'inbound', ?, 1, ?, ?)
+      ON CONFLICT(thread_id) DO UPDATE SET
+         phone_number_id = excluded.phone_number_id,
+         display_name = COALESCE(NULLIF(excluded.display_name, ''), comms_threads.display_name),
+         status = CASE WHEN comms_threads.status = 'closed' THEN 'open' ELSE comms_threads.status END,
+         last_message_at = excluded.last_message_at,
+         last_inbound_at = excluded.last_inbound_at,
+         last_body = excluded.last_body,
+         last_direction = 'inbound',
+         last_msg_type = excluded.last_msg_type,
+         unread_count = comms_threads.unread_count + 1,
+         service_window_expires_at = excluded.service_window_expires_at,
+         updated_at = excluded.updated_at
+    `).bind(
+      threadId,
+      brand,
+      phone,
+      phone,
+      business_phone_id || null,
+      contactName(value, message.from),
+      createdAt,
+      createdAt,
+      body.slice(0, 500),
+      msgType,
+      serviceWindowExpiresAt(createdAt),
+      new Date().toISOString(),
+    ).run();
+  } catch (e) {
+    console.error('persistInboundCommsMessage failed:', e?.message || e);
+  }
+}
+
+async function mirrorCommsStatus(env, { value, status, payload, business_phone_id }) {
+  const brand = brandFromPhoneId(env, business_phone_id);
+  if (!brand) return;
+  const wamid = status?.id || null;
+  const phone = normalizePhone(status?.recipient_id || '');
+  await persistCommsWebhookEvent(env, {
+    brand,
+    phone_number_id: business_phone_id,
+    event_kind: 'status',
+    wa_id: phone,
+    message_id: wamid,
+    raw_json: payload,
+  });
+  if (!wamid) return;
+  try {
+    await env.DB.prepare(`
+      UPDATE comms_messages
+         SET status = ?,
+             provider_response = ?
+       WHERE wamid = ?
+    `).bind(
+      status?.status || 'status',
+      JSON.stringify(status || value || {}).slice(0, 4000),
+      wamid,
+    ).run();
+  } catch (e) {
+    console.error('mirrorCommsStatus failed:', e?.message || e);
+  }
+}
+
 const YES_RX = /^\s*(yes|y|ok|okay|haan|han|haa|sure|confirm|confirmed|consent|agree|agreed|haa\.?)\s*\.?\s*$/i;
 const NO_RX  = /^\s*(no|n|stop|nahi|nahin|opt[\s_-]?out|cancel|unsubscribe)\s*\.?\s*$/i;
 const ACK_RX = /^\s*(resolved?|done|fixed|cleared|ack(nowledge)?d?|✅)\s*\.?\s*$/i;
@@ -460,6 +640,7 @@ export async function onRequest(context) {
       const statuses = value?.statuses || [];
       for (const s of statuses) {
         await handleStatusUpdate(env, { msg_id: s?.id, status: s?.status, ts: s?.timestamp });
+        await mirrorCommsStatus(env, { value, status: s, payload, business_phone_id });
         handled.push({ type: 'status', id: s?.id, status: s?.status });
       }
 
@@ -475,6 +656,7 @@ export async function onRequest(context) {
           || m?.interactive?.button_reply?.title
           || m?.interactive?.list_reply?.title
           || '';
+        await persistInboundCommsMessage(env, { value, message: m, payload, business_phone_id });
         const result = await handleInboundMessage(env, {
           from_phone, msg_text, msg_id, business_phone_id,
           originBase: `${url.protocol}//${url.host}`,
