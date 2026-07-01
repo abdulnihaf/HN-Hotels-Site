@@ -50,14 +50,14 @@ jobs:
           rm -rf /tmp/hn-ops-api-dist
           mkdir -p /tmp/hn-ops-api-dist/functions/api /tmp/hn-ops-api-dist/get
           cp functions/api/ops.js /tmp/hn-ops-api-dist/functions/api/ops.js
-          cp android/HNStaff/app/build/outputs/apk/release/app-release.apk /tmp/hn-ops-api-dist/HN-Ops-2.4.apk
+          cp android/HNStaff/app/build/outputs/apk/release/app-release.apk /tmp/hn-ops-api-dist/HN-Ops-2.5.apk
           cp android/HNStaff/app/build/outputs/apk/release/app-release.apk /tmp/hn-ops-api-dist/HN-Ops.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 24,
-            "versionName": "2.4",
-            "url": "https://hn-ops-api.pages.dev/HN-Ops-2.4.apk",
-            "notes": "Sauda 2.4: stable signed HN Ops release. If Android shows package conflict, uninstall the old debug build once, then install 2.4; future updates will install normally."
+            "versionCode": 25,
+            "versionName": "2.5",
+            "url": "https://hn-ops-api.pages.dev/HN-Ops-2.5.apk",
+            "notes": "Sauda 2.5: adds Profile Settings and Logout. Stable signed HN Ops release; if Android shows package conflict, uninstall the old debug build once, then install 2.5."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -80,9 +80,9 @@ jobs:
             <main>
               <h1>HN Ops</h1>
               <p>Install the current Android ops app for Sauda purchase work.</p>
-              <a href="/HN-Ops-2.4.apk?v=24">Download & install 2.4</a>
+              <a href="/HN-Ops-2.5.apk?v=25">Download & install 2.5</a>
               <p class="note">If Android says package conflict, uninstall the old HN Ops once, then install this. Future updates will work normally.</p>
-              <small>Version 2.4 · HN Hotels Pvt Ltd</small>
+              <small>Version 2.5 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>

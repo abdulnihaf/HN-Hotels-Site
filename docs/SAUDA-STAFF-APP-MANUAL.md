@@ -19,6 +19,8 @@ The phone asks to "allow this source" only the **first** time. After that, insta
 ## 2. Logging in
 - Type the 4-digit PIN → tap **Enter**.
 - The PIN *is* the identity. Azeem/Nafees get a simple item-demand surface. Zoya/Bashir get the purchase bucket and proof/payment controls. Nobody picks a screen — the role decides.
+- On the home screen, tap the **profile** icon to open **Profile settings**. It shows the logged-in staff name, role, outlet scope, chambers, permissions, and app version.
+- Tap the **logout** icon, or open **Profile settings** → **Log out**, to return to the PIN screen.
 
 ---
 
@@ -57,7 +59,7 @@ The phone asks to "allow this source" only the **first** time. After that, insta
 
 The product button is intentionally not a top-level tab. A product belongs under a vendor, so the app unlocks **Product** only after a vendor is selected.
 
-**Unit rule in version 2.4:** do not create a second product just because one purchase is half kg. Keep the master item as kg and enter decimal quantity (`0.5 kg`). Change the line unit only when the vendor bill uses another unit, such as `g`, `pcs`, `box`, or `L`. If the line unit changes away from the master unit, the expected rate is cleared and that line becomes **rate at bill** so grams are never multiplied by a kg rate.
+**Unit rule in version 2.4 and later:** do not create a second product just because one purchase is half kg. Keep the master item as kg and enter decimal quantity (`0.5 kg`). Change the line unit only when the vendor bill uses another unit, such as `g`, `pcs`, `box`, or `L`. If the line unit changes away from the master unit, the expected rate is cleared and that line becomes **rate at bill** so grams are never multiplied by a kg rate.
 
 ---
 
@@ -85,7 +87,7 @@ A **⚠ note** on a line (e.g. "price is per box — confirm at bill") means the
 - **Before login:** tap **Update app** on the PIN screen. If a newer app exists, the installer opens directly.
 - **After login:** if a newer app exists, she also sees an **"Update available"** banner on the home screen → tap **Update**.
 - First update asks **allow this source** once. After that, updates are one tap.
-- If Android says **package conflict**, uninstall the old debug build of HN Ops once, then install version `2.4`. This is a one-time signing correction; future updates use the stable HN Ops signing key.
+- If Android says **package conflict**, uninstall the old debug build of HN Ops once, then install version `2.5`. This is a one-time signing correction; future updates use the stable HN Ops signing key.
 
 ---
 

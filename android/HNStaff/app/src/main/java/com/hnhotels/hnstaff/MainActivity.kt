@@ -155,6 +155,9 @@ object Updater {
         val p = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
         if (Build.VERSION.SDK_INT >= 28) p.longVersionCode else @Suppress("DEPRECATION") p.versionCode.toLong()
     } catch (e: Exception) { 0L }
+    fun installedName(ctx: Context): String = try {
+        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
+    } catch (e: Exception) { "" }
 
     suspend fun latest(): JSONObject? = withContext(Dispatchers.IO) {
         try {
@@ -198,6 +201,7 @@ object Updater {
 // ---- nav model ------------------------------------------------------------
 sealed class Screen {
     object Home : Screen()
+    object Profile : Screen()
     data class PurchaseDay(val date: String) : Screen()
     data class Day(val outlet: String, val date: String) : Screen()
     data class Card(val id: Int, val outlet: String, val date: String) : Screen()
@@ -222,7 +226,7 @@ fun App() {
     var me by remember { mutableStateOf<JSONObject?>(null) }
     val m = me
     if (m == null) PinGate { authed, pin -> PIN = pin; me = authed }
-    else StaffShell(m)
+    else StaffShell(m) { PIN = ""; me = null }
 }
 
 // ---- PIN gate -------------------------------------------------------------
@@ -331,7 +335,7 @@ fun HnOpsLogo() {
 
 // ---- shell + router -------------------------------------------------------
 @Composable
-fun StaffShell(me: JSONObject) {
+fun StaffShell(me: JSONObject, onLogout: () -> Unit) {
     val chambers = me.optJSONArray("chambers")?.toStrList() ?: emptyList()
     val caps = me.optJSONArray("capabilities")?.toStrList() ?: emptyList()
     val demandOnly = caps.contains("sauda.demand") && !caps.contains("sauda.place") && !caps.contains("sauda.receive") && !caps.contains("sauda.raise")
@@ -339,11 +343,12 @@ fun StaffShell(me: JSONObject) {
     val cur = nav.last()
     BackHandler(enabled = nav.size > 1) { nav.removeAt(nav.lastIndex) }
     when (cur) {
-        is Screen.Home -> HomeScreen(me, chambers) { d ->
+        is Screen.Home -> HomeScreen(me, chambers, openProfile = { nav.add(Screen.Profile) }, onLogout = onLogout) { d ->
             val outlets = me.optJSONArray("outlets") ?: JSONArray()
             val outlet = if (outlets.length() > 0) outlets.getJSONObject(0).optString("outlet_id") else ""
             if (demandOnly && outlet.isNotEmpty()) nav.add(Screen.Place(outlet, d)) else nav.add(Screen.PurchaseDay(d))
         }
+        is Screen.Profile -> ProfileSettingsScreen(me, back = { nav.removeAt(nav.lastIndex) }, onLogout = onLogout)
         is Screen.PurchaseDay -> PurchaseDayScreen(me, cur,
             back = { nav.removeAt(nav.lastIndex) },
             openCard = { id, outlet -> nav.add(Screen.Card(id, outlet, cur.date)) },
@@ -384,14 +389,14 @@ fun StaffShell(me: JSONObject) {
 
 // ---- Home: chamber tiles derived from role --------------------------------
 @Composable
-fun HomeScreen(me: JSONObject, chambers: List<String>, openSauda: (String) -> Unit) {
+fun HomeScreen(me: JSONObject, chambers: List<String>, openProfile: () -> Unit, onLogout: () -> Unit, openSauda: (String) -> Unit) {
     val ctx = LocalContext.current
     var upd by remember { mutableStateOf<JSONObject?>(null) }
     var updating by remember { mutableStateOf(false) }
     var updErr by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { upd = Updater.check(ctx) }
-    Scaffold(topBar = { HnBar("HN Hotels", subtitle = me.optString("name") + " · " + me.optString("role_label")) }) { p ->
+    Scaffold(topBar = { HnBar("HN Ops", subtitle = me.optString("name") + " · " + me.optString("role_label")) }) { p ->
         Column(Modifier.padding(p).padding(20.dp).fillMaxSize()) {
             val u = upd
             if (u != null) {
@@ -414,6 +419,8 @@ fun HomeScreen(me: JSONObject, chambers: List<String>, openSauda: (String) -> Un
                 if (updErr.isNotEmpty()) Text("⚠ $updErr", color = WarnA, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                 Spacer(Modifier.height(16.dp))
             }
+            AccountPanel(me, openProfile, onLogout)
+            Spacer(Modifier.height(18.dp))
             Text("Your work", color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(12.dp))
             if (chambers.contains("sauda"))
@@ -424,6 +431,199 @@ fun HomeScreen(me: JSONObject, chambers: List<String>, openSauda: (String) -> Un
             if (chambers.isEmpty()) Text("No chambers enabled for your role.", color = Muted)
         }
     }
+}
+
+@Composable
+fun AccountPanel(me: JSONObject, openProfile: () -> Unit, onLogout: () -> Unit) {
+    var confirmLogout by remember { mutableStateOf(false) }
+    if (confirmLogout) LogoutConfirmDialog(
+        onDismiss = { confirmLogout = false },
+        onConfirm = {
+            confirmLogout = false
+            onLogout()
+        }
+    )
+    Surface(shape = RoundedCornerShape(12.dp), color = Sand, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(12.dp), color = Color.White, modifier = Modifier.size(48.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(profileInitial(me), color = Maroon, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(me.optString("name").ifEmpty { "HN staff" }, color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(me.optString("role_label").ifEmpty { "Ops role" }, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            IconButton(onClick = openProfile) {
+                Icon(Icons.Filled.ManageAccounts, "profile settings", tint = Maroon)
+            }
+            IconButton(onClick = { confirmLogout = true }) {
+                Icon(Icons.Filled.Logout, "logout", tint = WarnA)
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileSettingsScreen(me: JSONObject, back: () -> Unit, onLogout: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var confirmLogout by remember { mutableStateOf(false) }
+    var updateBusy by remember { mutableStateOf(false) }
+    var updateMsg by remember { mutableStateOf("") }
+    if (confirmLogout) LogoutConfirmDialog(
+        onDismiss = { confirmLogout = false },
+        onConfirm = {
+            confirmLogout = false
+            onLogout()
+        }
+    )
+    Scaffold(topBar = { HnBar("Profile settings", subtitle = me.optString("name").ifEmpty { "HN Ops" }, onBack = back) }) { p ->
+        LazyColumn(Modifier.padding(p).fillMaxSize(), contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 24.dp)) {
+            item {
+                Surface(shape = RoundedCornerShape(12.dp), color = Maroon, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(14.dp), color = Color.White, modifier = Modifier.size(58.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(profileInitial(me), color = Maroon, fontWeight = FontWeight.Black, fontSize = 24.sp)
+                            }
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(me.optString("name").ifEmpty { "HN staff" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(me.optString("role_label").ifEmpty { "Ops role" }, color = Color.White.copy(alpha = 0.78f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+            item {
+                ProfileCard("Identity") {
+                    ProfileFact("Name", me.optString("name").ifEmpty { "Not set" })
+                    ProfileFact("Role", me.optString("role_label").ifEmpty { "Not set" })
+                    ProfileFact("PIN scope", me.optString("role").ifEmpty { "server controlled" })
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            item {
+                ProfileCard("Outlets") {
+                    JsonChipRow(outletLabels(me.optJSONArray("outlets")), emptyText = "No outlet scope")
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            item {
+                ProfileCard("Chambers") {
+                    JsonChipRow(me.optJSONArray("chambers")?.toStrList() ?: emptyList(), emptyText = "No chambers enabled")
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            item {
+                ProfileCard("Permissions") {
+                    JsonChipRow(me.optJSONArray("capabilities")?.toStrList() ?: emptyList(), emptyText = "No permissions enabled")
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            item {
+                ProfileCard("App") {
+                    ProfileFact("Version", Updater.installedName(ctx).ifEmpty { "unknown" })
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = {
+                            if (updateBusy) return@OutlinedButton
+                            updateBusy = true; updateMsg = ""
+                            scope.launch {
+                                val latest = Updater.latest()
+                                if (latest == null) {
+                                    updateMsg = "Cannot check update."
+                                } else if (latest.optLong("versionCode") <= Updater.installedCode(ctx)) {
+                                    updateMsg = "Already on latest ${latest.optString("versionName")}."
+                                } else {
+                                    val e = Updater.downloadAndInstall(ctx, latest.optString("url"))
+                                    updateMsg = e ?: "Installer opened for ${latest.optString("versionName")}."
+                                }
+                                updateBusy = false
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        if (updateBusy) CircularProgressIndicator(Modifier.size(18.dp), color = Maroon, strokeWidth = 2.dp)
+                        else {
+                            Icon(Icons.Filled.SystemUpdateAlt, null, tint = Maroon)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Check update", color = Maroon, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    if (updateMsg.isNotEmpty()) Text(updateMsg, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+            item {
+                OutlinedButton(
+                    onClick = { confirmLogout = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = WarnA),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    Icon(Icons.Filled.Logout, null, tint = WarnA)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Log out", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Surface(shape = RoundedCornerShape(12.dp), color = Color.White, tonalElevation = 1.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Sand), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(title, color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Spacer(Modifier.height(10.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+fun ProfileFact(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Muted, fontSize = 12.sp, modifier = Modifier.weight(0.8f))
+        Text(value, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1.2f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+fun JsonChipRow(values: List<String>, emptyText: String) {
+    if (values.isEmpty()) {
+        Text(emptyText, color = Muted, fontSize = 12.sp)
+        return
+    }
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        values.forEach { v ->
+            Surface(color = Sand, shape = RoundedCornerShape(8.dp), modifier = Modifier.padding(end = 8.dp)) {
+                Text(v, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun LogoutConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Filled.Logout, null, tint = WarnA) },
+        title = { Text("Log out?") },
+        text = { Text("This returns HN Ops to the PIN screen.") },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = WarnA)) {
+                Text("Log out")
+            }
+        }
+    )
 }
 
 @Composable
@@ -2625,6 +2825,20 @@ fun vendorTerms(v: JSONObject): String {
         else -> v.optString("pay_behaviour").ifEmpty { "payment rule not set" }
     }
     return "$fulfilment · $pay"
+}
+fun profileInitial(me: JSONObject): String {
+    val name = me.optString("name").trim()
+    return name.split(Regex("\\s+")).firstOrNull { it.isNotEmpty() }?.take(1)?.uppercase(Locale.US) ?: "H"
+}
+fun outletLabels(outlets: JSONArray?): List<String> {
+    if (outlets == null) return emptyList()
+    return (0 until outlets.length()).mapNotNull { i ->
+        val o = outlets.optJSONObject(i) ?: return@mapNotNull null
+        listOf(o.optString("brand"), o.optString("name").ifEmpty { o.optString("outlet_id") })
+            .filter { it.isNotEmpty() }
+            .joinToString(" · ")
+            .ifEmpty { null }
+    }
 }
 fun firstVpa(rawJson: String): String {
     if (rawJson.isBlank()) return ""
