@@ -12,6 +12,7 @@ struct ContentView: View {
             }
         }
         .tint(.teal)
+        .background(CommsBackdrop())
     }
 }
 
@@ -29,6 +30,7 @@ struct InboxRootView: View {
                 ContentUnavailableView("No Thread", systemImage: "bubble.left.and.bubble.right")
             }
         }
+        .background(CommsBackdrop())
         .task(id: model.pollKey) {
             await model.pollLoop()
         }
@@ -53,7 +55,8 @@ struct InboxListView: View {
         VStack(spacing: 0) {
             filterBar
                 .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding(.top, 6)
+                .padding(.bottom, 10)
 
             if model.isLoading && model.threads.isEmpty {
                 ProgressView()
@@ -62,13 +65,19 @@ struct InboxListView: View {
                 List(model.threads, selection: $model.selectedThreadID) { thread in
                     ThreadRow(thread: thread)
                         .tag(thread.threadId)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
                 .refreshable {
                     await model.loadThreads()
                 }
             }
         }
+        .background(CommsBackdrop())
         .searchable(text: $model.query)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -99,36 +108,24 @@ struct InboxListView: View {
             .pickerStyle(.menu)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(10)
+        .commsGlass(cornerRadius: 22, tint: .teal, interactive: true)
     }
 }
 
 struct ThreadRow: View {
     let thread: CommsThread
-    private var brandColor: Color {
-        switch thread.brand {
-        case "he": .indigo
-        case "nch": .green
-        case "sparksol": .orange
-        default: .secondary
-        }
-    }
-    private var brandInitials: String {
-        switch thread.brand {
-        case "he": "HE"
-        case "nch": "NCH"
-        case "sparksol": "SP"
-        default: String(thread.brand.prefix(2)).uppercased()
-        }
-    }
+    private var color: Color { brandColor(for: thread.brand) }
+    private var initials: String { brandInitials(for: thread.brand) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(brandColor.opacity(0.18))
-                Text(brandInitials)
+                    .fill(color.opacity(0.18))
+                Text(initials)
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(brandColor)
+                    .foregroundStyle(color)
             }
             .frame(width: 42, height: 42)
 
@@ -165,7 +162,8 @@ struct ThreadRow: View {
                 .font(.caption)
             }
         }
-        .padding(.vertical, 6)
+        .padding(12)
+        .commsGlass(cornerRadius: 22, tint: color, interactive: true)
     }
 }
 
@@ -177,7 +175,8 @@ struct ThreadDetailView: View {
             if let thread = model.currentThread {
                 ContactHeader(thread: thread)
                     .padding()
-                    .background(.thinMaterial)
+                    .padding(.horizontal)
+                    .padding(.top, 6)
 
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -187,8 +186,10 @@ struct ThreadDetailView: View {
                                     .id(message.id)
                             }
                         }
-                        .padding()
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
                     }
+                    .background(Color.clear)
                     .onChange(of: model.messages.count) { _, _ in
                         if let last = model.messages.last {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -197,10 +198,11 @@ struct ThreadDetailView: View {
                 }
 
                 ComposerView(model: model, thread: thread)
-                    .padding()
-                    .background(.bar)
+                    .padding(.horizontal)
+                    .padding(.bottom, 10)
             }
         }
+        .background(CommsBackdrop())
         .navigationTitle(model.currentThread?.title ?? "Thread")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -239,6 +241,8 @@ struct ContactHeader: View {
                 }
             }
         }
+        .padding(14)
+        .commsGlass(cornerRadius: 24, tint: brandColor(for: thread.brand))
     }
 }
 
@@ -255,18 +259,25 @@ struct ComposerView: View {
                             Button(reply.title) {
                                 model.replyDraft = reply.body
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.plain)
                             .controlSize(.small)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .commsGlass(cornerRadius: 16, tint: .teal, interactive: true)
                         }
                     }
+                    .padding(.vertical, 2)
                 }
             }
 
             HStack(alignment: .bottom, spacing: 10) {
                 TextField(thread.serviceWindowOpen ? "Reply" : "Template required", text: $model.replyDraft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
                     .lineLimit(1...5)
                     .disabled(!thread.serviceWindowOpen)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .commsGlass(cornerRadius: 18, tint: thread.serviceWindowOpen ? .teal : .orange, interactive: thread.serviceWindowOpen)
 
                 Menu {
                     if model.templates.isEmpty {
@@ -282,7 +293,8 @@ struct ComposerView: View {
                     Image(systemName: "doc.text")
                         .frame(width: 36, height: 36)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+                .commsGlass(cornerRadius: 18, tint: .orange, interactive: true)
                 .accessibilityLabel("Templates")
 
                 Button {
@@ -295,11 +307,14 @@ struct ComposerView: View {
                     }
                 }
                 .frame(width: 38, height: 36)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
+                .commsGlass(cornerRadius: 18, tint: .teal, interactive: true)
                 .disabled(model.isSending || model.replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !thread.serviceWindowOpen)
                 .accessibilityLabel("Send")
             }
         }
+        .padding(12)
+        .commsGlass(cornerRadius: 26, tint: brandColor(for: thread.brand))
     }
 }
 
@@ -334,8 +349,7 @@ struct MessageBubble: View {
                 }
             }
             .padding(12)
-            .background(message.isOutbound ? Color.teal.opacity(0.16) : Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .commsGlass(cornerRadius: 18, tint: message.isOutbound ? .teal : .secondary, interactive: false)
             if !message.isOutbound { Spacer(minLength: 42) }
         }
     }
@@ -347,25 +361,46 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Connection") {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Connection")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+
                     TextField("Server", text: $model.baseURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
+                        .textFieldStyle(.plain)
+                        .padding(12)
+                        .commsGlass(cornerRadius: 18, tint: .teal, interactive: true)
+
                     SecureField("API key", text: $model.apiKey)
                         .textInputAutocapitalization(.never)
-                }
-                Section {
+                        .textFieldStyle(.plain)
+                        .padding(12)
+                        .commsGlass(cornerRadius: 18, tint: .teal, interactive: true)
+
                     Button("Save") {
                         model.saveSettings()
                         dismiss()
                         Task { await model.loadThreads() }
                     }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .commsGlass(cornerRadius: 20, tint: .teal, interactive: true)
+
                     Button("Clear Key", role: .destructive) {
                         model.clearSettings()
                     }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .commsGlass(cornerRadius: 18, tint: .red, interactive: true)
                 }
+                .padding()
             }
+            .background(CommsBackdrop())
             .navigationTitle("Settings")
         }
     }
@@ -380,7 +415,7 @@ struct Chip: View {
             .font(.caption.weight(.medium))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Capsule().fill(color.opacity(0.14)))
+            .commsGlass(cornerRadius: 14, tint: color)
             .foregroundStyle(color)
     }
 }
