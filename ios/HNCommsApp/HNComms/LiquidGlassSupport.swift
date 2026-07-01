@@ -3,13 +3,13 @@ import SwiftUI
 struct CommsBackdrop: View {
     var body: some View {
         ZStack {
-            Color(.systemGroupedBackground)
+            platformGroupedBackground
             LinearGradient(
                 colors: [
                     Color.teal.opacity(0.18),
                     Color.indigo.opacity(0.12),
                     Color.orange.opacity(0.10),
-                    Color(.systemGroupedBackground)
+                    platformGroupedBackground
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -19,13 +19,21 @@ struct CommsBackdrop: View {
     }
 }
 
+private var platformGroupedBackground: Color {
+    #if os(macOS)
+    Color(nsColor: .windowBackgroundColor)
+    #else
+    Color(.systemGroupedBackground)
+    #endif
+}
+
 struct CommsGlassModifier: ViewModifier {
     let cornerRadius: CGFloat
     let tint: Color
     let interactive: Bool
 
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *) {
             content
                 .glassEffect(
                     interactive
@@ -54,7 +62,7 @@ extension View {
         spacing: CGFloat = 16,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *) {
             GlassEffectContainer(spacing: spacing) {
                 content()
             }

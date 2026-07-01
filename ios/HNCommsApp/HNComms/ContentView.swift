@@ -80,15 +80,25 @@ struct InboxListView: View {
         .background(CommsBackdrop())
         .searchable(text: $model.query)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    SettingsView(model: model)
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel("Settings")
+            #if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                settingsLink
             }
+            #else
+            ToolbarItem(placement: .topBarTrailing) {
+                settingsLink
+            }
+            #endif
         }
+    }
+
+    private var settingsLink: some View {
+        NavigationLink {
+            SettingsView(model: model)
+        } label: {
+            Image(systemName: "gearshape")
+        }
+        .accessibilityLabel("Settings")
     }
 
     private var filterBar: some View {
@@ -204,7 +214,9 @@ struct ThreadDetailView: View {
         }
         .background(CommsBackdrop())
         .navigationTitle(model.currentThread?.title ?? "Thread")
+        #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 }
 
@@ -367,6 +379,17 @@ struct SettingsView: View {
                         .font(.headline)
                         .foregroundStyle(.secondary)
 
+                    #if os(macOS)
+                    TextField("Server", text: $model.baseURL)
+                        .textFieldStyle(.plain)
+                        .padding(12)
+                        .commsGlass(cornerRadius: 18, tint: .teal, interactive: true)
+
+                    SecureField("API key", text: $model.apiKey)
+                        .textFieldStyle(.plain)
+                        .padding(12)
+                        .commsGlass(cornerRadius: 18, tint: .teal, interactive: true)
+                    #else
                     TextField("Server", text: $model.baseURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
@@ -379,6 +402,7 @@ struct SettingsView: View {
                         .textFieldStyle(.plain)
                         .padding(12)
                         .commsGlass(cornerRadius: 18, tint: .teal, interactive: true)
+                    #endif
 
                     Button("Save") {
                         model.saveSettings()

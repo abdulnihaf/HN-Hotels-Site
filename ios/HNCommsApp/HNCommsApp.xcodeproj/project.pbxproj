@@ -7,12 +7,20 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		003B414CB7BC4BE841ADAD67 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 62D500C9F787C096E4F97F7C /* Assets.xcassets */; };
+		0082BBE925DDA26C7A7FD456 /* MacInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 95E7FB5A8608C216CDCD0EC8 /* MacInfo.plist */; };
+		1142C81E87CEFE4BBCCFE101 /* CommsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CEB6D0CB46F45DC10B52FD /* CommsClient.swift */; };
 		26817AB212390E369124D5BC /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251E2F0E5B7B827519547BB6 /* App.swift */; };
 		4FF67A056E49A0F1D1BB85CC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 62D500C9F787C096E4F97F7C /* Assets.xcassets */; };
 		7286FB92CE4D17E35792CE84 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9739B3470D2F16260E857F29 /* Models.swift */; };
+		855B694D83B8C214BDAE41B4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9739B3470D2F16260E857F29 /* Models.swift */; };
+		970290ECC62C36781CC5968B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E00A5A8A917AD683CC52B56 /* ContentView.swift */; };
 		A60F50252FB7C565920710D7 /* LiquidGlassSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF1AE17E8E3088E197769CA /* LiquidGlassSupport.swift */; };
 		A7D335B979F6908ED4233830 /* CommsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CEB6D0CB46F45DC10B52FD /* CommsClient.swift */; };
+		BD14E0427E3944A67CF7A2E6 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251E2F0E5B7B827519547BB6 /* App.swift */; };
 		DD5FEAA23CC19046147B970E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E00A5A8A917AD683CC52B56 /* ContentView.swift */; };
+		DDECFA6F03E6ACB00EB7D371 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5058D8B3B911CF3A61865069 /* Info.plist */; };
+		FAF20BC57C8EDF7BF73148A6 /* LiquidGlassSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF1AE17E8E3088E197769CA /* LiquidGlassSupport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,7 +31,9 @@
 		62D500C9F787C096E4F97F7C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		65CEB6D0CB46F45DC10B52FD /* CommsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommsClient.swift; sourceTree = "<group>"; };
 		85661E3E8FF4A41865CA72FF /* HNCommsApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HNCommsApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8A3B643096EDA9D07241BAC3 /* HNCommsMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HNCommsMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BF1AE17E8E3088E197769CA /* LiquidGlassSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassSupport.swift; sourceTree = "<group>"; };
+		95E7FB5A8608C216CDCD0EC8 /* MacInfo.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = MacInfo.plist; sourceTree = "<group>"; };
 		9739B3470D2F16260E857F29 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -38,6 +48,7 @@
 				0940054FFFBCF5020586439A /* HNComms.entitlements */,
 				5058D8B3B911CF3A61865069 /* Info.plist */,
 				8BF1AE17E8E3088E197769CA /* LiquidGlassSupport.swift */,
+				95E7FB5A8608C216CDCD0EC8 /* MacInfo.plist */,
 				9739B3470D2F16260E857F29 /* Models.swift */,
 			);
 			path = HNComms;
@@ -55,6 +66,7 @@
 			isa = PBXGroup;
 			children = (
 				85661E3E8FF4A41865CA72FF /* HNCommsApp.app */,
+				8A3B643096EDA9D07241BAC3 /* HNCommsMac.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -62,6 +74,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		087CE9FD30DDD9180090C5A3 /* HNCommsMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 11FE7AEC5AD98FB820E47160 /* Build configuration list for PBXNativeTarget "HNCommsMac" */;
+			buildPhases = (
+				3CDBAEB0CA996EA57C52B46C /* Sources */,
+				4438BF062B5D9594F5F48396 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HNCommsMac;
+			packageProductDependencies = (
+			);
+			productName = HNCommsMac;
+			productReference = 8A3B643096EDA9D07241BAC3 /* HNCommsMac.app */;
+			productType = "com.apple.product-type.application";
+		};
 		71823B3E8C92A48178FDE376 /* HNCommsApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 629467C6263C5C6B22812F3E /* Build configuration list for PBXNativeTarget "HNCommsApp" */;
@@ -89,6 +119,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					087CE9FD30DDD9180090C5A3 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
 					71823B3E8C92A48178FDE376 = {
 						DevelopmentTeam = FZ58DQ52QS;
 						ProvisioningStyle = Automatic;
@@ -110,6 +144,7 @@
 			projectRoot = "";
 			targets = (
 				71823B3E8C92A48178FDE376 /* HNCommsApp */,
+				087CE9FD30DDD9180090C5A3 /* HNCommsMac */,
 			);
 		};
 /* End PBXProject section */
@@ -120,12 +155,34 @@
 			buildActionMask = 2147483647;
 			files = (
 				4FF67A056E49A0F1D1BB85CC /* Assets.xcassets in Resources */,
+				0082BBE925DDA26C7A7FD456 /* MacInfo.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4438BF062B5D9594F5F48396 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				003B414CB7BC4BE841ADAD67 /* Assets.xcassets in Resources */,
+				DDECFA6F03E6ACB00EB7D371 /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3CDBAEB0CA996EA57C52B46C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BD14E0427E3944A67CF7A2E6 /* App.swift in Sources */,
+				1142C81E87CEFE4BBCCFE101 /* CommsClient.swift in Sources */,
+				970290ECC62C36781CC5968B /* ContentView.swift in Sources */,
+				FAF20BC57C8EDF7BF73148A6 /* LiquidGlassSupport.swift in Sources */,
+				855B694D83B8C214BDAE41B4 /* Models.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		89FF432662F86A005E68577E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -147,10 +204,25 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = FZ58DQ52QS;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				SDKROOT = iphoneos;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				SWIFT_VERSION = 5.9;
 			};
 			name = Release;
+		};
+		0B2D8C58B96570017B5863E0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = HNComms/HNComms.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = HNComms/MacInfo.plist;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.comms.mac;
+				PRODUCT_NAME = HNComms;
+			};
+			name = Debug;
 		};
 		1CDCF9A366DA6A3739F85F34 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -163,6 +235,21 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 			};
 			name = Debug;
+		};
+		80CAA4F6A83C65E0156C1204 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = HNComms/HNComms.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = HNComms/MacInfo.plist;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hnhotels.comms.mac;
+				PRODUCT_NAME = HNComms;
+			};
+			name = Release;
 		};
 		896D2D3F13DCC8E757185E57 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -182,7 +269,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = FZ58DQ52QS;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				SDKROOT = iphoneos;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				SWIFT_VERSION = 5.9;
 			};
 			name = Debug;
@@ -195,6 +282,15 @@
 			buildConfigurations = (
 				952F8710AA3DA76B03FBA790 /* Debug */,
 				0528C1D130B4EBCE7EE9CD72 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		11FE7AEC5AD98FB820E47160 /* Build configuration list for PBXNativeTarget "HNCommsMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0B2D8C58B96570017B5863E0 /* Debug */,
+				80CAA4F6A83C65E0156C1204 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
