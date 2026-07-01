@@ -182,6 +182,58 @@ function publicMessage(row) {
   };
 }
 
+function mediaFilename(message, meta) {
+  const rawBody = String(message.body || '').replace(/^\[[^\]]+\]\s*/, '').trim();
+  const fromBody = rawBody && !rawBody.startsWith('[') ? rawBody : '';
+  const mime = String(meta?.mime_type || '').toLowerCase();
+  const ext = mime.includes('pdf') ? 'pdf'
+    : mime.includes('png') ? 'png'
+    : mime.includes('jpeg') || mime.includes('jpg') ? 'jpg'
+    : mime.includes('mp4') ? 'mp4'
+    : mime.includes('mpeg') ? 'mp3'
+    : 'bin';
+  const base = fromBody || `${message.msg_type || 'media'}-${message.id}.${ext}`;
+  return base.replace(/[^\w.\-() ]+/g, '_').slice(0, 160) || `media-${message.id}.${ext}`;
+}
+
+async function fetchMedia(env, url) {
+  const id = parseInt(url.searchParams.get('message_id') || url.searchParams.get('id') || '', 10);
+  if (!id) return bad('message_id required');
+  const message = await env.DB.prepare(`
+    SELECT id, brand, msg_type, body, media_id
+      FROM comms_messages
+     WHERE id = ?
+  `).bind(id).first();
+  if (!message) return bad('message not found', 404);
+  if (!message.media_id) return bad('message has no media', 404);
+
+  const cfg = brandConfig(env, message.brand);
+  if (!cfg?.token) return bad(`WABA token missing for ${message.brand}`, 500);
+
+  const metaResp = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(message.media_id)}`, {
+    headers: { authorization: `Bearer ${cfg.token}` },
+  });
+  const meta = await metaResp.json().catch(() => ({}));
+  if (!metaResp.ok || meta.error || !meta.url) {
+    return bad(meta?.error?.message || 'Meta media lookup failed', metaResp.status || 502, { meta });
+  }
+
+  const mediaResp = await fetch(meta.url, {
+    headers: { authorization: `Bearer ${cfg.token}` },
+  });
+  if (!mediaResp.ok) {
+    const text = await mediaResp.text().catch(() => '');
+    return bad(text || 'Meta media download failed', mediaResp.status || 502);
+  }
+  const headers = new Headers(CORS_HEADERS);
+  const contentType = meta.mime_type || mediaResp.headers.get('content-type') || 'application/octet-stream';
+  const filename = mediaFilename(message, meta);
+  headers.set('content-type', contentType);
+  headers.set('content-disposition', `inline; filename="${filename.replace(/"/g, '')}"`);
+  headers.set('cache-control', 'private, max-age=300');
+  return new Response(mediaResp.body, { status: 200, headers });
+}
+
 function publicOutbox(row) {
   return {
     id: row.id,
@@ -1628,6 +1680,7 @@ export async function onRequest(context) {
     if (action === 'health') return await health(env);
     if (action === 'threads') return await listThreads(env, url);
     if (action === 'thread') return await loadThread(env, url);
+    if (action === 'media') return await fetchMedia(env, url);
     if (action === 'quick-replies') return await listQuickReplies(env, url);
     if (action === 'templates') return await listTemplates(env, url);
     if (action === 'staff') return await listStaff(env);

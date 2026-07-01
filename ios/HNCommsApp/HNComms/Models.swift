@@ -138,6 +138,24 @@ struct CommsMessage: Identifiable, Decodable, Hashable {
     let createdAt: String
 
     var isOutbound: Bool { direction == "outbound" }
+    var hasMedia: Bool {
+        !mediaId.isEmpty || ["image", "video", "audio", "document", "sticker"].contains(msgType)
+    }
+
+    var mediaTitle: String {
+        let cleaned = body.replacingOccurrences(of: #"^\[[^\]]+\]\s*"#, with: "", options: .regularExpression)
+        return cleaned.isEmpty ? msgType.capitalized : cleaned
+    }
+
+    var mediaIcon: String {
+        switch msgType {
+        case "image", "sticker": "photo"
+        case "video": "video"
+        case "audio": "waveform"
+        case "document": "doc"
+        default: "paperclip"
+        }
+    }
 }
 
 struct QuickReply: Identifiable, Decodable, Hashable {

@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import QuickLook
 
 struct ContentView: View {
     @State private var model = CommsAppModel()
@@ -222,7 +223,7 @@ struct ThreadDetailView: View {
                     ScrollView {
                         LazyVStack(spacing: 10) {
                             ForEach(model.messages) { message in
-                                MessageBubble(message: message)
+                                MessageBubble(model: model, message: message)
                                     .id(message.id)
                             }
                         }
@@ -230,9 +231,9 @@ struct ThreadDetailView: View {
                         .padding(.vertical, 12)
                     }
                     .background(Color.clear)
-                    .onChange(of: model.messages.count) { _, _ in
+                    .task(id: model.messages.last?.id) {
                         if let last = model.messages.last {
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                            proxy.scrollTo(last.id, anchor: .bottom)
                         }
                     }
                 }
@@ -435,14 +436,20 @@ struct ComposerView: View {
                     Task { await model.sendAttachment(fileURL: url) }
                 }
             case .failure(let error):
-                model.errorMessage = error.localizedDescription
+                let nsError = error as NSError
+                if nsError.domain != NSCocoaErrorDomain || nsError.code != NSUserCancelledError {
+                    model.errorMessage = error.localizedDescription
+                }
             }
         }
     }
 }
 
 struct MessageBubble: View {
+    @Bindable var model: CommsAppModel
     let message: CommsMessage
+    @State private var previewURL: URL?
+    @State private var isOpeningMedia = false
 
     var body: some View {
         HStack {
@@ -453,9 +460,35 @@ struct MessageBubble: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text(message.body)
-                    .font(.body)
-                    .textSelection(.enabled)
+                if message.hasMedia {
+                    Button {
+                        Task { await openMedia() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isOpeningMedia {
+                                ProgressView()
+                            } else {
+                                Image(systemName: message.mediaIcon)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(message.mediaTitle)
+                                    .font(.body.weight(.semibold))
+                                    .lineLimit(2)
+                                Text(message.msgType.capitalized)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(10)
+                    .commsGlass(cornerRadius: 14, tint: .indigo, interactive: true)
+                } else {
+                    Text(message.body)
+                        .font(.body)
+                        .textSelection(.enabled)
+                }
                 HStack(spacing: 8) {
                     Text(shortTime(message.createdAt))
                     if message.isOutbound {
@@ -475,6 +508,14 @@ struct MessageBubble: View {
             .commsGlass(cornerRadius: 18, tint: message.isOutbound ? .teal : .secondary, interactive: false)
             if !message.isOutbound { Spacer(minLength: 42) }
         }
+        .quickLookPreview($previewURL)
+    }
+
+    private func openMedia() async {
+        guard !isOpeningMedia else { return }
+        isOpeningMedia = true
+        defer { isOpeningMedia = false }
+        previewURL = await model.mediaPreviewURL(for: message)
     }
 }
 
@@ -771,7 +812,21 @@ func sourceTitle(_ raw: String) -> String {
 func shortTime(_ raw: String?) -> String {
     guard let raw,
           let date = ISO8601DateFormatter().date(from: raw) else { return "" }
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .abbreviated
-    return formatter.localizedString(for: date, relativeTo: Date())
+    let calendar = Calendar.current
+    if calendar.isDateInToday(date) {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter.string(from: date)
+    }
+    if let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: Date())).day,
+       days < 7 {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
 }
