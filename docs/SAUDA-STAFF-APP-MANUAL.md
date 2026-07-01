@@ -1,6 +1,6 @@
-# HN Staff app — Sauda (purchase) · one-page manual
+# HN Ops app — Sauda (purchase) · one-page manual
 
-**What it is:** the staff app for Sauda purchase work. Azeem/Nafees create item-first demand without knowing vendors. Zoya/Bashir convert that demand into vendor orders, receiving proof, rates, and payment trail. Everything shown is decided by the staff PIN.
+**What it is:** the HN Ops Android app for Sauda purchase work. Azeem/Nafees create item-first demand without knowing vendors. Zoya/Bashir convert that demand into vendor orders, receiving proof, rates, and payment trail. Everything shown is decided by the staff PIN.
 
 The complete cross-chamber Android model is in `docs/HN-STAFF-ANDROID-UX-MODEL.md`. This page stays as the Sauda worker manual.
 
@@ -10,7 +10,7 @@ The complete cross-chamber Android model is in `docs/HN-STAFF-ANDROID-UX-MODEL.m
 1. Open the link on the phone: **https://hn-ops-api.pages.dev/get/**
 2. Tap **Download & install** → open the file → if asked, **allow install from this source** → **Install**.
 3. If a *Play Protect* warning shows, tap **Install anyway** (it's our own app).
-4. Open **HN Staff**, type the staff **PIN**.
+4. Open **HN Ops**, type the staff **PIN**.
 
 The phone asks to "allow this source" only the **first** time. After that, installs and updates are one tap.
 
@@ -53,7 +53,7 @@ The phone asks to "allow this source" only the **first** time. After that, insta
 
 > Add items only for **one vendor** per order. For a second vendor, place another order — that keeps "one vendor, one card, one payment."
 
-**Exact Add Product path:** Open **HN Staff** → enter Zoya PIN `2026` → **Sauda** → **Place order** → select **HE/NCH** date if needed → **Pick vendor** or tap **Vendor** to add one → search product → tap **Product** / **Add product** → **Save product**.
+**Exact Add Product path:** Open **HN Ops** → enter Zoya PIN `2026` → **Sauda** → **Place order** → select **HE/NCH** date if needed → **Pick vendor** or tap **Vendor** to add one → search product → tap **Product** / **Add product** → **Save product**.
 
 The product button is intentionally not a top-level tab. A product belongs under a vendor, so the app unlocks **Product** only after a vendor is selected.
 
@@ -82,11 +82,13 @@ A **⚠ note** on a line (e.g. "price is per box — confirm at bill") means the
 
 ## 8. Updates — how the app stays current
 - **Most changes need nothing from Zoya.** New vendors, new items, price or routing fixes live on our server — her app shows them the next time she opens a screen. No download.
-- **When the app itself changes,** she sees an **"Update available"** banner on the home screen → tap **Update** → it downloads and installs in place. No links, no reinstall hunting. (First update asks "allow this source" once; after that it's one tap.)
+- **Before login:** tap **Update app** on the PIN screen. If a newer app exists, the installer opens directly.
+- **After login:** if a newer app exists, she also sees an **"Update available"** banner on the home screen → tap **Update**.
+- First update asks **allow this source** once. After that, updates are one tap.
 
 ---
 
 ## What's deliberately **not** here (yet)
 Automatic Tijori cash reduction, khata diary intelligence, and Nihaf Agent reminder loops are the next layers. This slice closes tomorrow's purchase miss: demand -> ordered -> received proof -> rate/payment trail.
 
-*PINs: Azeem `7341` · Nafees `3160` · Zoya `2026` · Bashir `8523` · Admin Console `5634` · owner `0305`. Admin Console sees all outlets/chambers but does not carry final owner payment approval. App: HN Staff (Android). Backend: hn-ops-api (Cloudflare).*
+*PINs: Azeem `7341` · Nafees `3160` · Zoya `2026` · Bashir `8523` · Admin Console `5634` · owner `0305`. Admin Console sees all outlets/chambers but does not carry final owner payment approval. App: HN Ops (Android). Backend: hn-ops-api (Cloudflare).*

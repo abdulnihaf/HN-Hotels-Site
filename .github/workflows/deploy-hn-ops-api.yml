@@ -1,4 +1,4 @@
-name: Deploy HN Ops API Staff App
+name: Deploy HN Ops Android App
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Build Android staff APK
+      - name: Build Android ops APK
         working-directory: android/HNStaff
         run: ./gradlew assembleDebug
 
@@ -38,14 +38,14 @@ jobs:
           rm -rf /tmp/hn-ops-api-dist
           mkdir -p /tmp/hn-ops-api-dist/functions/api /tmp/hn-ops-api-dist/get
           cp functions/api/ops.js /tmp/hn-ops-api-dist/functions/api/ops.js
-          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff-2.1.apk
-          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Staff.apk
+          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Ops-2.2.apk
+          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Ops.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 21,
-            "versionName": "2.1",
-            "url": "https://hn-ops-api.pages.dev/HN-Staff-2.1.apk",
-            "notes": "Sauda 2.1: flexible purchase units. Use decimal quantities like 0.5 kg for half kg, or override the line unit to g/pcs/L when the vendor bill uses that unit."
+            "versionCode": 22,
+            "versionName": "2.2",
+            "url": "https://hn-ops-api.pages.dev/HN-Ops-2.2.apk",
+            "notes": "Sauda 2.2: login-screen Update app button plus flexible purchase units. Use 0.5 kg for half kg, or override line unit to g/pcs/L when the vendor bill uses that unit."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -54,7 +54,7 @@ jobs:
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>HN Staff Android</title>
+            <title>HN Ops Android</title>
             <style>
               body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#581810;color:#fff;min-height:100vh;display:grid;place-items:center}
               main{width:min(420px,calc(100vw - 40px))}
@@ -66,10 +66,10 @@ jobs:
           </head>
           <body>
             <main>
-              <h1>HN Staff</h1>
-              <p>Install the current Android staff app for Sauda purchase work.</p>
-              <a href="/HN-Staff-2.1.apk">Download & install 2.1</a>
-              <small>Version 2.1 · HN Hotels Pvt Ltd</small>
+              <h1>HN Ops</h1>
+              <p>Install the current Android ops app for Sauda purchase work.</p>
+              <a href="/HN-Ops-2.2.apk?v=22">Download & install 2.2</a>
+              <small>Version 2.2 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>

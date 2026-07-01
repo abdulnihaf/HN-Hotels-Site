@@ -156,23 +156,32 @@ object Updater {
         if (Build.VERSION.SDK_INT >= 28) p.longVersionCode else @Suppress("DEPRECATION") p.versionCode.toLong()
     } catch (e: Exception) { 0L }
 
-    // returns the update JSON {versionCode,url,versionName,notes} if a newer one exists, else null
-    suspend fun check(ctx: Context): JSONObject? = withContext(Dispatchers.IO) {
+    suspend fun latest(): JSONObject? = withContext(Dispatchers.IO) {
         try {
             val c = URL(VERSION_URL).openConnection() as HttpURLConnection
             c.connectTimeout = 8000; c.readTimeout = 8000
+            c.setRequestProperty("Cache-Control", "no-cache")
+            c.setRequestProperty("Pragma", "no-cache")
             val txt = c.inputStream.bufferedReader().readText(); c.disconnect()
-            val j = JSONObject(txt)
-            if (j.optLong("versionCode") > installedCode(ctx)) j else null
+            JSONObject(txt)
         } catch (e: Exception) { null }
+    }
+
+    // returns the update JSON {versionCode,url,versionName,notes} if a newer one exists, else null
+    suspend fun check(ctx: Context): JSONObject? {
+        val j = latest() ?: return null
+        return if (j.optLong("versionCode") > installedCode(ctx)) j else null
     }
 
     // download the apk to cache and launch the system installer; returns error string or null
     suspend fun downloadAndInstall(ctx: Context, url: String): String? = withContext(Dispatchers.IO) {
         try {
-            val out = File(ctx.externalCacheDir, "HN-Staff-update.apk")
-            val c = URL(url).openConnection() as HttpURLConnection
+            val out = File(ctx.externalCacheDir, "HN-Ops-update.apk")
+            val sep = if (url.contains("?")) "&" else "?"
+            val c = URL("$url${sep}install_ts=${System.currentTimeMillis()}").openConnection() as HttpURLConnection
             c.connectTimeout = 12000; c.readTimeout = 30000
+            c.setRequestProperty("Cache-Control", "no-cache")
+            c.setRequestProperty("Pragma", "no-cache")
             c.inputStream.use { i -> out.outputStream().use { o -> i.copyTo(o) } }
             c.disconnect()
             val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", out)
@@ -219,16 +228,21 @@ fun App() {
 // ---- PIN gate -------------------------------------------------------------
 @Composable
 fun PinGate(onAuthed: (JSONObject, String) -> Unit) {
+    val ctx = LocalContext.current
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var updateMsg by remember { mutableStateOf("") }
+    var updateBusy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     Column(
         Modifier.fillMaxSize().background(Maroon).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
+        HnOpsLogo()
+        Spacer(Modifier.height(18.dp))
         Text("HN Hotels", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        Text("Staff Console", color = Color.White.copy(alpha = 0.7f), fontSize = 15.sp)
+        Text("Ops Console", color = Color.White.copy(alpha = 0.7f), fontSize = 15.sp)
         Spacer(Modifier.height(44.dp))
         OutlinedTextField(
             value = pin, onValueChange = { if (it.length <= 4) { pin = it; error = "" } },
@@ -259,6 +273,59 @@ fun PinGate(onAuthed: (JSONObject, String) -> Unit) {
             modifier = Modifier.width(190.dp).height(50.dp)
         ) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Maroon, strokeWidth = 2.dp)
             else Text("Enter", color = Maroon, fontWeight = FontWeight.SemiBold) }
+        Spacer(Modifier.height(14.dp))
+        OutlinedButton(
+            onClick = {
+                if (updateBusy) return@OutlinedButton
+                updateBusy = true; updateMsg = ""
+                scope.launch {
+                    val latest = Updater.latest()
+                    if (latest == null) {
+                        updateMsg = "Cannot check update. Try network again."
+                    } else if (latest.optLong("versionCode") <= Updater.installedCode(ctx)) {
+                        updateMsg = "Already on latest version ${latest.optString("versionName")}."
+                    } else {
+                        val e = Updater.downloadAndInstall(ctx, latest.optString("url"))
+                        updateMsg = e ?: "Installer opened for version ${latest.optString("versionName")}."
+                    }
+                    updateBusy = false
+                }
+            },
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            modifier = Modifier.width(190.dp).height(46.dp)
+        ) {
+            if (updateBusy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+            else { Icon(Icons.Filled.SystemUpdateAlt, null, tint = Color.White); Spacer(Modifier.width(8.dp)); Text("Update app", color = Color.White, fontWeight = FontWeight.SemiBold) }
+        }
+        if (updateMsg.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(updateMsg, color = Color.White.copy(alpha = 0.78f), fontSize = 12.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+fun HnOpsLogo() {
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.size(76.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("H", color = Maroon, fontSize = 31.sp, fontWeight = FontWeight.ExtraBold)
+                Text("N", color = Color(0xFFD7B46A), fontSize = 31.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 13.dp)
+                    .width(34.dp)
+                    .height(3.dp)
+                    .background(Maroon.copy(alpha = 0.88f), RoundedCornerShape(2.dp))
+            )
+        }
     }
 }
 
