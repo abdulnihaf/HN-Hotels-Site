@@ -884,20 +884,52 @@ async function importHistory(env, body) {
 
 async function classifyHiringThreads(env, { limit, offset }) {
   const stats = { source: 'hiring', scanned: 0, classified: 0, skipped: 0 };
-  if (!(await tableExists(env, 'conversations')) || !(await tableExists(env, 'campaigns'))) return stats;
+  if (!(await tableExists(env, 'campaigns'))) return stats;
+  const sources = [];
+  if (await tableExists(env, 'conversations')) {
+    sources.push(`
+      SELECT c.phone, c.candidate_name, c.campaign_id,
+             cam.name AS campaign_name, cam.role AS campaign_role,
+             cam.brand AS campaign_brand, cam.category AS campaign_category,
+             c.created_at AS created_at
+        FROM conversations c
+        LEFT JOIN campaigns cam ON cam.id = c.campaign_id
+       WHERE c.phone IS NOT NULL
+         AND trim(c.phone) != ''
+         AND (c.campaign_id IS NOT NULL OR cam.category = 'hiring')
+    `);
+  }
+  if (await tableExists(env, 'messages')) {
+    sources.push(`
+      SELECT m.phone, m.candidate_name, m.campaign_id,
+             cam.name AS campaign_name, cam.role AS campaign_role,
+             cam.brand AS campaign_brand, cam.category AS campaign_category,
+             COALESCE(m.sent_at, m.queued_at, m.delivered_at, m.read_at, m.failed_at, datetime('now')) AS created_at
+        FROM messages m
+        LEFT JOIN campaigns cam ON cam.id = m.campaign_id
+       WHERE m.phone IS NOT NULL
+         AND trim(m.phone) != ''
+         AND (m.campaign_id IS NOT NULL OR cam.category = 'hiring')
+    `);
+  }
+  if (!sources.length) return stats;
+
   const rows = await env.DB.prepare(`
-    SELECT c.phone, c.candidate_name, c.campaign_id,
-           cam.name AS campaign_name, cam.role AS campaign_role,
-           cam.brand AS campaign_brand, cam.category AS campaign_category,
-           MAX(c.created_at) AS last_at,
+    WITH hiring_rows AS (
+      ${sources.join('\nUNION ALL\n')}
+    )
+    SELECT phone,
+           MAX(candidate_name) AS candidate_name,
+           MAX(campaign_id) AS campaign_id,
+           MAX(campaign_name) AS campaign_name,
+           MAX(campaign_role) AS campaign_role,
+           MAX(campaign_brand) AS campaign_brand,
+           MAX(campaign_category) AS campaign_category,
+           MAX(created_at) AS last_at,
            COUNT(*) AS total_messages
-      FROM conversations c
-      LEFT JOIN campaigns cam ON cam.id = c.campaign_id
-     WHERE c.phone IS NOT NULL
-       AND trim(c.phone) != ''
-       AND (c.campaign_id IS NOT NULL OR cam.category = 'hiring')
-     GROUP BY c.phone
-     ORDER BY MAX(c.created_at) DESC
+      FROM hiring_rows
+     GROUP BY phone
+     ORDER BY MAX(created_at) DESC
      LIMIT ? OFFSET ?
   `).bind(limit, offset).all();
 
