@@ -1,0 +1,95 @@
+name: Deploy HN Comms Android APK
+
+on:
+  push:
+    branches: [codex/comms-native-inbox]
+    paths:
+      - 'android/HNCommsApp/**'
+      - '.github/workflows/deploy-hn-comms-app.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: cf-pages-hn-comms-app
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK
+        working-directory: android/HNCommsApp
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIST=/tmp/hn-comms-app-dist
+          rm -rf "$DIST"
+          mkdir -p "$DIST/get"
+          cp android/HNCommsApp/app/build/outputs/apk/debug/app-debug.apk "$DIST/HN-Comms.apk"
+          VERSION_CODE=$(grep -E 'versionCode = ' android/HNCommsApp/app/build.gradle.kts | sed -E 's/.*versionCode = ([0-9]+).*/\1/')
+          VERSION_NAME=$(grep -E 'versionName = ' android/HNCommsApp/app/build.gradle.kts | sed -E 's/.*versionName = "([^"]+)".*/\1/')
+          BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          cat > "$DIST/version.json" <<JSON
+          {
+            "app": "HN Comms",
+            "packageName": "com.hnhotels.comms",
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "apkUrl": "https://hn-comms-app.pages.dev/HN-Comms.apk",
+            "notes": "WhatsApp Business API inbox with HE/NCH threads, templates, quick replies, attachments, and send-status logging.",
+            "builtAt": "${BUILT_AT}",
+            "commit": "${GITHUB_SHA}"
+          }
+          JSON
+          cat > "$DIST/get/index.html" <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>Install HN Comms</title>
+              <style>
+                body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: #f8fafc; color: #0f172a; }
+                main { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+                section { width: min(460px, 100%); background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 22px; box-shadow: 0 18px 38px rgba(15, 23, 42, .08); }
+                h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.15; }
+                p { margin: 0 0 18px; color: #475569; line-height: 1.45; }
+                a { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 8px; background: #0f766e; color: white; font-weight: 700; text-decoration: none; }
+                small { display: block; margin-top: 14px; color: #64748b; line-height: 1.4; }
+              </style>
+            </head>
+            <body>
+              <main>
+                <section>
+                  <h1>HN Comms</h1>
+                  <p>Native Android WhatsApp Business inbox for Hamza Express and Nawabi Chai House.</p>
+                  <a href="/HN-Comms.apk">Download APK</a>
+                  <small>Android may ask to allow installs from this browser. Updates are checked inside the app from /version.json.</small>
+                </section>
+              </main>
+            </body>
+          </html>
+          HTML
+
+      - name: Deploy APK install page
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy /tmp/hn-comms-app-dist --project-name=hn-comms-app --branch=main
