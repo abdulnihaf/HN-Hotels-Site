@@ -10,6 +10,7 @@
 		26817AB212390E369124D5BC /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251E2F0E5B7B827519547BB6 /* App.swift */; };
 		4FF67A056E49A0F1D1BB85CC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 62D500C9F787C096E4F97F7C /* Assets.xcassets */; };
 		7286FB92CE4D17E35792CE84 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9739B3470D2F16260E857F29 /* Models.swift */; };
+		A60F50252FB7C565920710D7 /* LiquidGlassSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF1AE17E8E3088E197769CA /* LiquidGlassSupport.swift */; };
 		A7D335B979F6908ED4233830 /* CommsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CEB6D0CB46F45DC10B52FD /* CommsClient.swift */; };
 		DD5FEAA23CC19046147B970E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E00A5A8A917AD683CC52B56 /* ContentView.swift */; };
 /* End PBXBuildFile section */
@@ -22,6 +23,7 @@
 		62D500C9F787C096E4F97F7C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		65CEB6D0CB46F45DC10B52FD /* CommsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommsClient.swift; sourceTree = "<group>"; };
 		85661E3E8FF4A41865CA72FF /* HNCommsApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HNCommsApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BF1AE17E8E3088E197769CA /* LiquidGlassSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassSupport.swift; sourceTree = "<group>"; };
 		9739B3470D2F16260E857F29 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -35,6 +37,7 @@
 				5E00A5A8A917AD683CC52B56 /* ContentView.swift */,
 				0940054FFFBCF5020586439A /* HNComms.entitlements */,
 				5058D8B3B911CF3A61865069 /* Info.plist */,
+				8BF1AE17E8E3088E197769CA /* LiquidGlassSupport.swift */,
 				9739B3470D2F16260E857F29 /* Models.swift */,
 			);
 			path = HNComms;
@@ -130,6 +133,7 @@
 				26817AB212390E369124D5BC /* App.swift in Sources */,
 				A7D335B979F6908ED4233830 /* CommsClient.swift in Sources */,
 				DD5FEAA23CC19046147B970E /* ContentView.swift in Sources */,
+				A60F50252FB7C565920710D7 /* LiquidGlassSupport.swift in Sources */,
 				7286FB92CE4D17E35792CE84 /* Models.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
