@@ -51,33 +51,46 @@ function requireAuth(env, request, body = null) {
   return readAuth(request, body) === expected;
 }
 
+function pickToken(env, names) {
+  for (const name of names) {
+    if (env[name]) return { token: env[name], source: name };
+  }
+  return { token: null, source: 'none' };
+}
+
 function brandConfig(env, brand) {
   const b = (brand || '').toLowerCase();
   if (b === 'he') {
+    const picked = pickToken(env, ['WA_HE_TOKEN', 'WA_COMMS_TOKEN', 'WA_ACCESS_TOKEN']);
     return {
       brand: 'he',
       label: 'Hamza Express',
       phone_id: env.WA_HE_PHONE_ID || env.WA_PHONE_ID,
       waba_id: env.WA_HE_WABA_ID || env.WABA_ID,
-      token: env.WA_HE_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+      token: picked.token,
+      token_source: picked.source,
     };
   }
   if (b === 'nch') {
+    const picked = pickToken(env, ['WA_NCH_TOKEN', 'WA_COMMS_TOKEN', 'WA_ACCESS_TOKEN']);
     return {
       brand: 'nch',
       label: 'Nawabi Chai House',
       phone_id: env.WA_NCH_PHONE_ID,
       waba_id: env.WA_NCH_WABA_ID,
-      token: env.WA_NCH_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+      token: picked.token,
+      token_source: picked.source,
     };
   }
   if (b === 'sparksol') {
+    const picked = pickToken(env, ['WA_SPARKSOL_TOKEN', 'WA_COMMS_TOKEN', 'WA_ACCESS_TOKEN']);
     return {
       brand: 'sparksol',
       label: 'SparkSol',
       phone_id: env.WA_SPARKSOL_PHONE_ID,
       waba_id: env.WA_SPARKSOL_WABA_ID || env.WABA_ID,
-      token: env.WA_SPARKSOL_TOKEN || env.WA_COMMS_TOKEN || env.WA_ACCESS_TOKEN,
+      token: picked.token,
+      token_source: picked.source,
     };
   }
   return null;
@@ -607,6 +620,7 @@ async function health(env) {
         phone_id_configured: !!cfg?.phone_id,
         waba_id_configured: !!cfg?.waba_id,
         token_configured: !!cfg?.token,
+        token_source: cfg?.token_source || 'none',
       }];
     })),
   });
