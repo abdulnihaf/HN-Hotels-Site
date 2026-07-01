@@ -25,6 +25,8 @@ const BRAND_LABELS = {
   sparksol: 'SparkSol',
 };
 
+const THREAD_SOURCES = new Set(['all', 'hiring', 'darbar_staff', 'from_darbar', 'staff', 'customer']);
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -259,6 +261,35 @@ function safeStringify(value, max = 10000) {
   try { return JSON.stringify(value || {}).slice(0, max); } catch { return '{}'; }
 }
 
+function sourceForFilter(raw) {
+  const source = String(raw || 'all').toLowerCase();
+  return THREAD_SOURCES.has(source) ? source : 'all';
+}
+
+function hiringLeadContext(row) {
+  return {
+    source: 'Darbar Hiring',
+    campaign_name: row.campaign_name || '',
+    campaign_role: row.campaign_role || row.role || '',
+    campaign_brand: row.campaign_brand || '',
+    candidate_name: row.candidate_name || '',
+    campaign_id: row.campaign_id ? String(row.campaign_id) : '',
+    last_classified_at: nowIso(),
+  };
+}
+
+function staffLeadContext(row) {
+  return {
+    source: 'From Darbar',
+    staff_id: row.id ? String(row.id) : '',
+    staff_name: row.known_as || row.name || '',
+    staff_brand: row.brand_label || '',
+    staff_role: row.job_name || '',
+    staff_pin: row.pin || '',
+    last_classified_at: nowIso(),
+  };
+}
+
 function safeParse(raw) {
   if (!raw || typeof raw !== 'string') return raw && typeof raw === 'object' ? raw : null;
   try { return JSON.parse(raw); } catch { return null; }
@@ -356,17 +387,24 @@ async function upsertThreadForMessage(env, message) {
   const lastOutboundAt = direction === 'outbound' ? createdAt : null;
   const unreadIncrement = direction === 'inbound' && message.status === 'unread' ? 1 : 0;
   const serviceExpires = direction === 'inbound' ? serviceWindowExpiresAt(createdAt) : null;
+  const leadSource = message.lead_source || null;
+  const leadStatus = message.lead_status || null;
+  const leadContext = message.lead_context ? safeStringify(message.lead_context, 4000) : null;
 
   await env.DB.prepare(`
     INSERT INTO comms_threads
       (thread_id, brand, phone, wa_id, phone_number_id, display_name, status,
+       lead_status, lead_source, lead_context_json,
        last_message_at, last_inbound_at, last_outbound_at, last_body, last_direction,
        last_msg_type, unread_count, service_window_expires_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, 'open', COALESCE(?, 'unknown'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(thread_id) DO UPDATE SET
        wa_id = COALESCE(excluded.wa_id, comms_threads.wa_id),
        phone_number_id = COALESCE(excluded.phone_number_id, comms_threads.phone_number_id),
        display_name = COALESCE(NULLIF(excluded.display_name, ''), comms_threads.display_name),
+       lead_status = COALESCE(NULLIF(excluded.lead_status, 'unknown'), comms_threads.lead_status),
+       lead_source = COALESCE(excluded.lead_source, comms_threads.lead_source),
+       lead_context_json = COALESCE(excluded.lead_context_json, comms_threads.lead_context_json),
        status = CASE
          WHEN comms_threads.status = 'closed' AND excluded.last_direction = 'inbound' THEN 'open'
          ELSE comms_threads.status
@@ -404,6 +442,9 @@ async function upsertThreadForMessage(env, message) {
     normalizePhone(message.wa_id || phone),
     message.phone_number_id || null,
     String(message.display_name || '').slice(0, 160),
+    leadStatus,
+    leadSource,
+    leadContext,
     createdAt,
     lastInboundAt,
     lastOutboundAt,
@@ -614,7 +655,8 @@ async function importLegacyConversations(env, { limit, offset }) {
   const stats = blankImportStats('conversations', limit, offset);
   if (!(await tableExists(env, 'conversations'))) return stats;
   const rows = await env.DB.prepare(`
-    SELECT c.*, cam.brand AS campaign_brand, cam.name AS campaign_name
+    SELECT c.*, cam.brand AS campaign_brand, cam.name AS campaign_name,
+           cam.role AS campaign_role, cam.category AS campaign_category
       FROM conversations c
       LEFT JOIN campaigns cam ON cam.id = c.campaign_id
      ORDER BY c.created_at ASC, c.id ASC
@@ -639,6 +681,9 @@ async function importLegacyConversations(env, { limit, offset }) {
       status: direction === 'inbound'
         ? (row.status === 'read' ? 'read' : 'unread')
         : (row.status || 'sent'),
+      lead_source: row.campaign_id || row.campaign_category === 'hiring' ? 'hiring' : null,
+      lead_status: row.status === 'read' ? 'active' : 'new',
+      lead_context: row.campaign_id || row.campaign_category === 'hiring' ? hiringLeadContext(row) : null,
       media_id: row.media_id || null,
       raw_payload: { source: 'conversations', row },
       created_at: row.created_at,
@@ -653,7 +698,9 @@ async function importLegacyMessages(env, { limit, offset }) {
   const stats = blankImportStats('messages', limit, offset);
   if (!(await tableExists(env, 'messages'))) return stats;
   const rows = await env.DB.prepare(`
-    SELECT m.*, cam.brand AS campaign_brand, cam.name AS campaign_name, cam.template_name AS campaign_template
+    SELECT m.*, cam.brand AS campaign_brand, cam.name AS campaign_name,
+           cam.template_name AS campaign_template, cam.role AS campaign_role,
+           cam.category AS campaign_category
       FROM messages m
       LEFT JOIN campaigns cam ON cam.id = m.campaign_id
      ORDER BY COALESCE(m.sent_at, m.queued_at, m.delivered_at, m.read_at, m.failed_at) ASC, m.id ASC
@@ -682,6 +729,9 @@ async function importLegacyMessages(env, { limit, offset }) {
       template_name: templateName || null,
       wamid: row.wamid || `legacy:message:${row.id}`,
       status: row.status || 'queued',
+      lead_source: row.campaign_id || row.campaign_category === 'hiring' ? 'hiring' : null,
+      lead_status: 'active',
+      lead_context: row.campaign_id || row.campaign_category === 'hiring' ? hiringLeadContext(row) : null,
       provider_response: row.error_message ? { error: row.error_message, code: row.error_code || null } : null,
       error_text: row.error_message || null,
       raw_payload: { source: 'messages', row },
@@ -769,6 +819,9 @@ async function importCommsOutbox(env, { limit, offset }) {
       template_name: row.template_name || null,
       wamid: row.provider_msg_id || `outbox:${row.id}`,
       status: row.status || 'sent',
+      lead_source: brand === 'sparksol' ? 'darbar_staff' : null,
+      lead_status: brand === 'sparksol' ? 'active' : null,
+      lead_context: brand === 'sparksol' ? { source: 'From Darbar', tier: row.tier || '', alert_id: row.alert_id || '' } : null,
       provider_response: safeParse(row.provider_response) || null,
       error_text: row.error_text || null,
       raw_payload: { source: 'comms_outbox', row },
@@ -829,10 +882,102 @@ async function importHistory(env, body) {
   });
 }
 
+async function classifyHiringThreads(env, { limit, offset }) {
+  const stats = { source: 'hiring', scanned: 0, classified: 0, skipped: 0 };
+  if (!(await tableExists(env, 'conversations')) || !(await tableExists(env, 'campaigns'))) return stats;
+  const rows = await env.DB.prepare(`
+    SELECT c.phone, c.candidate_name, c.campaign_id,
+           cam.name AS campaign_name, cam.role AS campaign_role,
+           cam.brand AS campaign_brand, cam.category AS campaign_category,
+           MAX(c.created_at) AS last_at,
+           COUNT(*) AS total_messages
+      FROM conversations c
+      LEFT JOIN campaigns cam ON cam.id = c.campaign_id
+     WHERE c.phone IS NOT NULL
+       AND trim(c.phone) != ''
+       AND (c.campaign_id IS NOT NULL OR cam.category = 'hiring')
+     GROUP BY c.phone
+     ORDER BY MAX(c.created_at) DESC
+     LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+
+  for (const row of rows.results || []) {
+    stats.scanned += 1;
+    const phone = normalizePhone(row.phone);
+    if (!phone) { stats.skipped += 1; continue; }
+    const context = hiringLeadContext(row);
+    context.total_messages = String(row.total_messages || '');
+    const result = await env.DB.prepare(`
+      UPDATE comms_threads
+         SET lead_source = 'hiring',
+             lead_status = CASE WHEN unread_count > 0 THEN 'new' ELSE COALESCE(NULLIF(lead_status, 'unknown'), 'active') END,
+             lead_context_json = ?,
+             updated_at = ?
+       WHERE phone = ?
+    `).bind(safeStringify(context, 4000), nowIso(), phone).run();
+    stats.classified += result.meta?.changes || 0;
+  }
+  return stats;
+}
+
+async function classifyStaffThreads(env) {
+  const stats = { source: 'darbar_staff', scanned: 0, classified: 0, skipped: 0 };
+  if (!(await tableExists(env, 'hr_employees'))) return stats;
+  const rows = await env.DB.prepare(`
+    SELECT id, pin, name, known_as, phone, brand_label, job_name
+      FROM hr_employees
+     WHERE is_active = 1
+       AND phone IS NOT NULL
+       AND trim(phone) != ''
+  `).all();
+
+  for (const row of rows.results || []) {
+    stats.scanned += 1;
+    const phone = normalizePhone(row.phone);
+    if (!phone) { stats.skipped += 1; continue; }
+    const result = await env.DB.prepare(`
+      UPDATE comms_threads
+         SET lead_source = 'darbar_staff',
+             lead_status = COALESCE(NULLIF(lead_status, 'unknown'), 'active'),
+             lead_context_json = ?,
+             updated_at = ?
+       WHERE phone = ?
+    `).bind(safeStringify(staffLeadContext(row), 4000), nowIso(), phone).run();
+    stats.classified += result.meta?.changes || 0;
+  }
+
+  const spark = await env.DB.prepare(`
+    UPDATE comms_threads
+       SET lead_source = 'darbar_staff',
+           lead_status = COALESCE(NULLIF(lead_status, 'unknown'), 'active'),
+           lead_context_json = COALESCE(lead_context_json, ?),
+           updated_at = ?
+     WHERE brand = 'sparksol'
+  `).bind(safeStringify({ source: 'From Darbar', last_classified_at: nowIso() }, 4000), nowIso()).run();
+  stats.classified += spark.meta?.changes || 0;
+  return stats;
+}
+
+async function classifyHistory(env, body) {
+  const source = sourceForFilter(body.source || 'all');
+  const limit = Math.min(parseInt(body.limit || '500', 10) || 500, 1000);
+  const offset = Math.max(parseInt(body.offset || '0', 10) || 0, 0);
+  const results = [];
+  if (source === 'all' || source === 'hiring') {
+    results.push(await classifyHiringThreads(env, { limit, offset }));
+  }
+  if (source === 'all' || source === 'darbar_staff' || source === 'from_darbar' || source === 'staff') {
+    results.push(await classifyStaffThreads(env));
+  }
+  if (!results.length) return bad('unknown source');
+  return json({ ok: true, source, limit, offset, results });
+}
+
 async function listThreads(env, url) {
   const brand = url.searchParams.get('brand') || 'all';
   const leadStatus = url.searchParams.get('lead_status') || 'all';
   const status = url.searchParams.get('status') || 'all';
+  const source = sourceForFilter(url.searchParams.get('source') || 'all');
   const search = (url.searchParams.get('q') || '').trim();
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 100);
   const offset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10) || 0, 0);
@@ -846,6 +991,13 @@ async function listThreads(env, url) {
   if (leadStatus !== 'all') {
     where += " AND COALESCE(lead_status, 'unknown') = ?";
     params.push(leadStatus);
+  }
+  if (source === 'hiring') {
+    where += " AND lead_source = 'hiring'";
+  } else if (source === 'darbar_staff' || source === 'from_darbar' || source === 'staff') {
+    where += " AND lead_source = 'darbar_staff'";
+  } else if (source === 'customer') {
+    where += " AND COALESCE(lead_source, '') NOT IN ('hiring', 'darbar_staff')";
   }
   if (status !== 'all') {
     if (status === 'unread') {
@@ -879,6 +1031,7 @@ async function listThreads(env, url) {
     ok: true,
     threads: (rows.results || []).map(publicThread),
     total: count?.n || 0,
+    source,
     limit,
     offset,
   });
@@ -1222,6 +1375,14 @@ async function sendStaffCampaign(env, body) {
 
   const stamp = Date.now();
   const results = [];
+  const staffRows = await env.DB.prepare(`
+    SELECT id, pin, name, known_as, phone, brand_label, job_name
+      FROM hr_employees
+     WHERE is_active = 1
+       AND phone IS NOT NULL
+       AND trim(phone) != ''
+  `).all().catch(() => ({ results: [] }));
+  const staffByPhone = new Map((staffRows.results || []).map(row => [normalizePhone(row.phone), row]));
   for (let i = 0; i < recipients.length; i += 1) {
     const phone = recipients[i];
     let result = null;
@@ -1246,6 +1407,27 @@ async function sendStaffCampaign(env, body) {
       provider_msg_id: result.provider_msg_id || null,
       provider_response: { actor, response: result.response },
       error_text: errText,
+    });
+    const staff = staffByPhone.get(phone);
+    await insertHistoryMessage(env, {
+      brand: 'sparksol',
+      phone,
+      wa_id: phone,
+      direction: 'outbound',
+      msg_type: 'template',
+      body: `[from Darbar] ${template}${vars.length ? ` ${vars.join(' | ')}` : ''}`,
+      template_name: template,
+      wamid: result.provider_msg_id || `staff-campaign:${stamp}:${i}`,
+      status: result.ok ? 'sent' : 'failed',
+      provider_response: { actor, response: result.response },
+      error_text: errText,
+      raw_payload: { source: 'staff-campaign', vars },
+      outbox_id: outboxId,
+      actor,
+      lead_source: 'darbar_staff',
+      lead_status: 'active',
+      lead_context: staff ? staffLeadContext(staff) : { source: 'From Darbar' },
+      created_at: nowIso(),
     });
     results.push({
       phone,
@@ -1443,5 +1625,6 @@ export async function onRequest(context) {
   if (action === 'staff-campaign' || body.action === 'staff_campaign') return await sendStaffCampaign(env, body);
   if (action === 'mark-read' || body.action === 'mark_read') return await markRead(env, body);
   if (action === 'import-history' || body.action === 'import_history') return await importHistory(env, body);
+  if (action === 'classify-history' || body.action === 'classify_history') return await classifyHistory(env, body);
   return bad('unknown action', 404);
 }

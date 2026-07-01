@@ -33,6 +33,64 @@ enum LeadStatusFilter: String, CaseIterable, Identifiable {
     var title: String { rawValue.capitalized }
 }
 
+enum InboxCategory: String, CaseIterable, Identifiable {
+    case all
+    case unread
+    case hiring
+    case fromDarbar
+    case customers
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .unread: "Unread"
+        case .hiring: "Hiring"
+        case .fromDarbar: "From Darbar"
+        case .customers: "Customers"
+        }
+    }
+
+    var sourceValue: String {
+        switch self {
+        case .all, .unread: "all"
+        case .hiring: "hiring"
+        case .fromDarbar: "darbar_staff"
+        case .customers: "customer"
+        }
+    }
+
+    var statusValue: String {
+        switch self {
+        case .unread: "unread"
+        default: "all"
+        }
+    }
+}
+
+struct LeadContext: Decodable, Hashable {
+    let source: String?
+    let campaignName: String?
+    let campaignRole: String?
+    let campaignBrand: String?
+    let candidateName: String?
+    let staffName: String?
+    let staffBrand: String?
+    let staffRole: String?
+    let totalMessages: String?
+
+    var primary: String {
+        campaignRole?.nilIfEmpty ?? staffRole?.nilIfEmpty ?? source?.nilIfEmpty ?? ""
+    }
+
+    var secondary: String {
+        [candidateName, campaignName, staffName, staffBrand]
+            .compactMap { $0?.nilIfEmpty }
+            .joined(separator: " · ")
+    }
+}
+
 struct CommsThread: Identifiable, Decodable, Hashable {
     let threadId: String
     let brand: String
@@ -54,6 +112,7 @@ struct CommsThread: Identifiable, Decodable, Hashable {
     let serviceWindowExpiresAt: String?
     let serviceWindowOpen: Bool
     let serviceWindowMinutesRemaining: Int
+    let leadContext: LeadContext?
     let updatedAt: String?
 
     var id: String { threadId }
@@ -98,6 +157,11 @@ struct WabaTemplate: Identifiable, Decodable, Hashable {
     let components: [TemplateComponent]?
 
     var stableId: String { id ?? "\(name):\(language ?? "en")" }
+    var bodyText: String { components?.first { ($0.type ?? "").uppercased() == "BODY" }?.text ?? "" }
+    var variableCount: Int {
+        guard !bodyText.isEmpty else { return 0 }
+        return (1...20).filter { bodyText.contains("{{\($0)}}") }.count
+    }
 }
 
 struct StaffMember: Identifiable, Decodable, Hashable {
@@ -212,4 +276,11 @@ struct StaffCampaignResult: Decodable, Hashable {
     let providerMsgId: String?
     let outboxId: Int?
     let error: String?
+}
+
+extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
