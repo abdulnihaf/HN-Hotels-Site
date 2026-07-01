@@ -771,16 +771,51 @@ async function placeOrder(env, db, kiteHeaders, body, opts = {}) {
     }
   }
 
+  // ─── FIX (marketable-limit): Zerodha rejects bare MARKET orders via the API
+  // ("Market orders without market protection are not allowed via API. Please set
+  // market protection or use a Limit order."). Convert a MARKET order into a
+  // MARKETABLE LIMIT — a limit set just THROUGH the touch so it fills immediately
+  // like a market order but can NEVER fill at a runaway price (strictly SAFER than a
+  // raw market order). LTP source: live Kite quote → cached instrument last_price. ──
+  let resolvedOrderType = body.order_type || 'MARKET';
+  let resolvedPrice = body.price != null ? Number(body.price) : null;
+  if (resolvedOrderType === 'MARKET') {
+    let ltp = (body.ref_price != null && Number(body.ref_price) > 0) ? Number(body.ref_price) : null;
+    if (!ltp) {
+      try {
+        const q = await kiteFetch(db, `${KITE_BASE}/quote/ltp?i=${encodeURIComponent(body.exchange + ':' + body.tradingsymbol)}`, { method: 'GET', headers: kiteHeaders });
+        const qb = (q && typeof q.body === 'string') ? JSON.parse(q.body) : (q && q.body) || {};
+        const rec = qb?.data?.[`${body.exchange}:${body.tradingsymbol}`];
+        if (rec && rec.last_price != null && Number(rec.last_price) > 0) ltp = Number(rec.last_price);
+      } catch { /* fall through to cache */ }
+    }
+    if (!ltp) {
+      try {
+        const inst = await db.prepare(`SELECT last_price FROM kite_instruments WHERE tradingsymbol=? AND exchange=? LIMIT 1`).bind(body.tradingsymbol, body.exchange).first();
+        if (inst && inst.last_price != null && Number(inst.last_price) > 0) ltp = Number(inst.last_price);
+      } catch { /* none */ }
+    }
+    if (ltp && ltp > 0) {
+      const TICK = 0.05;
+      const buf = Math.max(ltp * 0.007, TICK * 4);   // 0.7% or 4 ticks — ensures an immediate fill, bounds worst-case slippage
+      const rawPx = body.transaction_type === 'BUY' ? ltp + buf : Math.max(ltp - buf, TICK);
+      resolvedPrice = Math.round(Math.round(rawPx / TICK) * TICK * 100) / 100;
+      resolvedOrderType = 'LIMIT';
+    }
+    // If no LTP could be resolved, leave as MARKET — Zerodha returns its clear validation
+    // message and (for capped Lab orders) the notional guard already refused a no-LTP order.
+  }
+
   const formData = new URLSearchParams({
     exchange: body.exchange,
     tradingsymbol: body.tradingsymbol,
     transaction_type: body.transaction_type,
     quantity: String(body.quantity),
     product: body.product,
-    order_type: body.order_type || 'MARKET',
+    order_type: resolvedOrderType,
     validity: body.validity || 'DAY',
   });
-  if (body.price != null) formData.set('price', String(body.price));
+  if (resolvedPrice != null) formData.set('price', String(resolvedPrice));
   if (body.trigger_price != null) formData.set('trigger_price', String(body.trigger_price));
   if (body.disclosed_quantity != null) formData.set('disclosed_quantity', String(body.disclosed_quantity));
   if (body.tag) formData.set('tag', String(body.tag).slice(0, 20));
