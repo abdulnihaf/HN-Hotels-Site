@@ -1,12 +1,20 @@
 package com.hnhotels.comms
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +55,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -72,6 +82,10 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NotificationHelper.ensureChannel(this)
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2101)
+        }
         setContent {
             val store = remember { CommsStore(applicationContext) }
             HNCommsTheme {
@@ -81,12 +95,40 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+object NotificationHelper {
+    private const val CHANNEL_ID = "hn-comms-inbox"
+
+    fun ensureChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(CHANNEL_ID, "HN Comms inbox", NotificationManager.IMPORTANCE_DEFAULT)
+        context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+
+    fun notifyUnread(context: Context, unreadCount: Int) {
+        if (unreadCount <= 0) return
+        if (Build.VERSION.SDK_INT >= 33 && ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("HN Comms")
+            .setContentText("$unreadCount unread WhatsApp message${if (unreadCount == 1) "" else "s"}")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(2101, notification)
+    }
+}
+
 class CommsStore(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("hn-comms", Context.MODE_PRIVATE)
     var baseUrl by mutableStateOf(prefs.getString("baseUrl", "https://hnhotels.in") ?: "https://hnhotels.in")
     var apiKey by mutableStateOf(prefs.getString("apiKey", null) ?: BuildConfig.HN_COMMS_APP_KEY)
+    var selectedTab by mutableStateOf("inbox")
+    var selectedSource by mutableStateOf("all")
     var selectedBrand by mutableStateOf("all")
+    var selectedStaffBrand by mutableStateOf("all")
     var selectedLeadStatus by mutableStateOf("all")
     var query by mutableStateOf("")
     var threads by mutableStateOf<List<CommsThread>>(emptyList())
@@ -95,13 +137,21 @@ class CommsStore(context: Context) {
     var quickReplies by mutableStateOf<List<QuickReply>>(emptyList())
     var templates by mutableStateOf<List<WabaTemplate>>(emptyList())
     var draft by mutableStateOf("")
+    var templateVars by mutableStateOf<List<String>>(emptyList())
+    var staff by mutableStateOf<List<StaffMember>>(emptyList())
+    var staffTemplates by mutableStateOf<List<CampaignTemplate>>(emptyList())
+    var selectedStaffTemplate by mutableStateOf<CampaignTemplate?>(null)
+    var staffTemplateVars by mutableStateOf<List<String>>(emptyList())
     var loading by mutableStateOf(false)
     var sending by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var remoteUpdate by mutableStateOf<RemoteVersion?>(null)
+    private var lastUnreadNotified = 0
 
-    val configured: Boolean get() = apiKey.isNotBlank()
-    val pollKey: String get() = "$configured|$selectedBrand|$selectedLeadStatus|$query|${currentThread?.threadId.orEmpty()}"
+    val configured: Boolean get() = apiKey.isNotBlank() && !apiKey.contains("${'$'}(")
+    val sourceForApi: String get() = if (selectedSource == "unread") "all" else selectedSource
+    val statusForApi: String get() = if (selectedSource == "unread") "unread" else "all"
+    val pollKey: String get() = "$configured|$selectedTab|$selectedSource|$selectedBrand|$selectedStaffBrand|$selectedLeadStatus|$query|${currentThread?.threadId.orEmpty()}"
     private val api: CommsApi get() = CommsApi(baseUrl, apiKey)
 
     fun save() {
@@ -120,8 +170,13 @@ class CommsStore(context: Context) {
         if (!configured) return
         if (!silent) loading = true
         runCatching {
-            api.threads(selectedBrand, selectedLeadStatus, query)
+            api.threads(sourceForApi, selectedBrand, selectedLeadStatus, statusForApi, query)
         }.onSuccess {
+            val unread = it.sumOf { thread -> thread.unreadCount }
+            if (silent && unread > lastUnreadNotified) {
+                NotificationHelper.notifyUnread(appContext, unread)
+            }
+            lastUnreadNotified = unread
             threads = it
             error = null
         }.onFailure {
@@ -188,14 +243,50 @@ class CommsStore(context: Context) {
         sending = false
     }
 
-    suspend fun sendTemplate(template: WabaTemplate) {
+    suspend fun sendTemplate(template: WabaTemplate, vars: List<String>) {
         val thread = currentThread ?: return
         sending = true
         runCatching {
-            api.sendTemplate(thread.brand, thread.phone, template.name)
+            api.sendTemplate(thread.brand, thread.phone, template.name, vars)
         }.onSuccess {
             if (!it.optBoolean("ok", false)) error = it.optString("error", "Template send failed")
+            templateVars = emptyList()
             openThread(thread.threadId, markRead = false)
+            refreshThreads(silent = true)
+        }.onFailure {
+            error = it.message
+        }
+        sending = false
+    }
+
+    suspend fun refreshStaffLayer() {
+        if (!configured) return
+        loading = true
+        runCatching {
+            val rows = api.staff()
+            val templates = api.staffTemplates()
+            rows to templates
+        }.onSuccess { (rows, templates) ->
+            staff = rows
+            staffTemplates = templates
+            if (selectedStaffTemplate == null) {
+                selectedStaffTemplate = templates.firstOrNull()
+                staffTemplateVars = List(selectedStaffTemplate?.varCount ?: 0) { "" }
+            }
+            error = null
+        }.onFailure {
+            error = it.message
+        }
+        loading = false
+    }
+
+    suspend fun sendStaffTemplate(member: StaffMember) {
+        val template = selectedStaffTemplate ?: return
+        sending = true
+        runCatching {
+            api.sendStaffCampaign(template, member, staffTemplateVars)
+        }.onSuccess {
+            if (!it.optBoolean("ok", false)) error = it.optString("error", "Staff template failed")
             refreshThreads(silent = true)
         }.onFailure {
             error = it.message
@@ -242,6 +333,8 @@ fun HNCommsApp(store: CommsStore) {
         SettingsScreen(store)
     } else if (store.currentThread != null) {
         ThreadScreen(store)
+    } else if (store.selectedTab == "darbar") {
+        DarbarScreen(store)
     } else {
         InboxScreen(store)
     }
@@ -252,10 +345,15 @@ fun HNCommsApp(store: CommsStore) {
 
     LaunchedEffect(store.pollKey) {
         if (!store.configured) return@LaunchedEffect
+        if (store.selectedTab == "darbar") {
+            store.selectedSource = "darbar_staff"
+            store.refreshStaffLayer()
+        }
         store.refreshThreads()
         while (true) {
             delay(15_000)
             store.refreshThreads(silent = true)
+            if (store.selectedTab == "darbar") store.refreshStaffLayer()
             store.currentThread?.let { store.openThread(it.threadId, markRead = false) }
         }
     }
@@ -311,12 +409,21 @@ fun InboxScreen(store: CommsStore) {
                 .padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            TabRow(selectedTabIndex = 0) {
+                Tab(selected = true, onClick = { store.selectedTab = "inbox" }, text = { Text("Inbox") })
+                Tab(selected = false, onClick = { store.selectedTab = "darbar" }, text = { Text("From Darbar") })
+            }
             OutlinedTextField(
                 value = store.query,
                 onValueChange = { store.query = it },
                 label = { Text("Search") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
+            )
+            FilterRow(
+                selected = store.selectedSource,
+                values = listOf("all" to "All", "unread" to "Unread", "hiring" to "Hiring", "darbar_staff" to "Darbar", "customer" to "Customers"),
+                onSelect = { store.selectedSource = it }
             )
             FilterRow(
                 selected = store.selectedBrand,
@@ -349,6 +456,121 @@ fun FilterRow(selected: String, values: List<Pair<String, String>>, onSelect: (S
                 onClick = { onSelect(value) },
                 label = { Text(label) }
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DarbarScreen(store: CommsStore) {
+    val scope = rememberCoroutineScope()
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("HN Comms") },
+                actions = {
+                    IconButton(onClick = { store.clear() }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(horizontal = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            TabRow(selectedTabIndex = 1) {
+                Tab(selected = false, onClick = { store.selectedTab = "inbox" }, text = { Text("Inbox") })
+                Tab(selected = true, onClick = { store.selectedTab = "darbar" }, text = { Text("From Darbar") })
+            }
+            FilterRow(
+                selected = store.selectedStaffBrand,
+                values = listOf("all" to "All staff", "HE" to "HE", "NCH" to "NCH", "HQ" to "HQ"),
+                onSelect = { store.selectedStaffBrand = it }
+            )
+            TemplateSelector(
+                templates = store.staffTemplates,
+                selected = store.selectedStaffTemplate,
+                vars = store.staffTemplateVars,
+                onTemplate = {
+                    store.selectedStaffTemplate = it
+                    store.staffTemplateVars = List(it.varCount) { "" }
+                },
+                onVar = { index, value ->
+                    store.staffTemplateVars = store.staffTemplateVars.toMutableList().also { if (index in it.indices) it[index] = value }
+                }
+            )
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val rows = store.staff.filter { member ->
+                    store.selectedStaffBrand == "all" || member.brand.equals(store.selectedStaffBrand, ignoreCase = true)
+                }
+                items(rows, key = { it.id }) { member ->
+                    StaffCard(member, store.selectedStaffTemplate, store.sending) {
+                        scope.launch { store.sendStaffTemplate(member) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TemplateSelector(
+    templates: List<CampaignTemplate>,
+    selected: CampaignTemplate?,
+    vars: List<String>,
+    onTemplate: (CampaignTemplate) -> Unit,
+    onVar: (Int, String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(templates, key = { it.id }) { template ->
+                FilterChip(
+                    selected = selected?.id == template.id,
+                    onClick = { onTemplate(template) },
+                    label = { Text(template.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                )
+            }
+        }
+        selected?.let { template ->
+            Text(template.bodyText.ifBlank { template.name }, style = MaterialTheme.typography.bodySmall, color = Color(0xFF475569), maxLines = 3, overflow = TextOverflow.Ellipsis)
+            repeat(template.varCount) { index ->
+                OutlinedTextField(
+                    value = vars.getOrNull(index).orEmpty(),
+                    onValueChange = { onVar(index, it) },
+                    label = { Text("Template variable ${index + 1}") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun StaffCard(member: StaffMember, template: CampaignTemplate?, sending: Boolean, onSend: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(containerColor = Color.White)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BrandBadge("sparksol")
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(member.name.ifBlank { member.e164 }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(listOf(member.brand, member.role, member.e164).filter { it.isNotBlank() }.joinToString(" · "), color = Color(0xFF64748B), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Template-only via SparkSol", color = Color(0xFFB45309), style = MaterialTheme.typography.labelSmall)
+            }
+            Button(enabled = template != null && !sending, onClick = onSend) {
+                Text("Send")
+            }
         }
     }
 }
@@ -392,7 +614,17 @@ fun ThreadCard(thread: CommsThread, onClick: () -> Unit) {
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (thread.serviceWindowOpen) "Open ${thread.serviceWindowMinutesRemaining}m" else "Template only", color = if (thread.serviceWindowOpen) Color(0xFF0F766E) else Color(0xFFB45309))
+                    Text(thread.laneLabel, color = Color(0xFF334155))
                     Text(thread.leadStatus, color = Color(0xFF64748B))
+                }
+                if (thread.leadContext.primary.isNotBlank() || thread.leadContext.secondary.isNotBlank()) {
+                    Text(
+                        listOf(thread.leadContext.primary, thread.leadContext.secondary).filter { it.isNotBlank() }.joinToString(" · "),
+                        color = Color(0xFF64748B),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -431,6 +663,7 @@ fun ThreadScreen(store: CommsStore) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var templatesOpen by remember { mutableStateOf(false) }
+    var selectedTemplate by remember { mutableStateOf<WabaTemplate?>(null) }
     val attachmentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { scope.launch { store.sendAttachment(it) } }
     }
@@ -481,7 +714,8 @@ fun ThreadScreen(store: CommsStore) {
                                             text = { Text(template.name) },
                                             onClick = {
                                                 templatesOpen = false
-                                                scope.launch { store.sendTemplate(template) }
+                                                selectedTemplate = template
+                                                store.templateVars = List(template.variableCount) { "" }
                                             }
                                         )
                                     }
@@ -513,6 +747,35 @@ fun ThreadScreen(store: CommsStore) {
                             onClick = { scope.launch { store.sendDraft() } }
                         ) {
                             Icon(Icons.Default.Send, contentDescription = "Send", tint = Color(0xFF0F766E))
+                        }
+                    }
+                    selectedTemplate?.let { template ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(template.bodyText.ifBlank { template.name }, color = Color(0xFF475569), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            repeat(template.variableCount) { index ->
+                                OutlinedTextField(
+                                    value = store.templateVars.getOrNull(index).orEmpty(),
+                                    onValueChange = { value ->
+                                        store.templateVars = store.templateVars.toMutableList().also { if (index in it.indices) it[index] = value }
+                                    },
+                                    label = { Text("Template variable ${index + 1}") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(enabled = !store.sending, onClick = {
+                                    scope.launch {
+                                        store.sendTemplate(template, store.templateVars)
+                                        selectedTemplate = null
+                                    }
+                                }) {
+                                    Text("Send template")
+                                }
+                                TextButton(onClick = { selectedTemplate = null; store.templateVars = emptyList() }) {
+                                    Text("Cancel")
+                                }
+                            }
                         }
                     }
                 }
@@ -548,7 +811,15 @@ fun ContactPanel(thread: CommsThread) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AssistChip(onClick = {}, label = { Text("Lead: ${thread.leadStatus}") })
+            AssistChip(onClick = {}, label = { Text(thread.laneLabel) })
             if (thread.leadSource.isNotBlank()) AssistChip(onClick = {}, label = { Text(thread.leadSource) })
+        }
+        if (thread.leadContext.primary.isNotBlank() || thread.leadContext.secondary.isNotBlank()) {
+            Text(
+                listOf(thread.leadContext.primary, thread.leadContext.secondary).filter { it.isNotBlank() }.joinToString(" · "),
+                color = Color(0xFF475569),
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

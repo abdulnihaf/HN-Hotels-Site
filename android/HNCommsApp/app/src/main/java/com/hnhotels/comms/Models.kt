@@ -18,8 +18,28 @@ data class CommsThread(
     val serviceWindowExpiresAt: String,
     val serviceWindowOpen: Boolean,
     val serviceWindowMinutesRemaining: Int,
+    val leadContext: LeadContext,
 ) {
     val title: String get() = displayName.ifBlank { phone.replaceFirst("91", "+91 ") }
+    val laneLabel: String get() = when (leadSource) {
+        "hiring" -> "Hiring"
+        "darbar_staff" -> "From Darbar"
+        "" -> "Customer"
+        else -> leadSource.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    }
+}
+
+data class LeadContext(
+    val source: String = "",
+    val campaignName: String = "",
+    val campaignRole: String = "",
+    val candidateName: String = "",
+    val staffName: String = "",
+    val staffBrand: String = "",
+    val staffRole: String = "",
+) {
+    val primary: String get() = listOf(campaignRole, staffRole, source).firstOrNull { it.isNotBlank() }.orEmpty()
+    val secondary: String get() = listOf(candidateName, campaignName, staffName, staffBrand).filter { it.isNotBlank() }.joinToString(" · ")
 }
 
 data class CommsMessage(
@@ -53,4 +73,34 @@ data class WabaTemplate(
     val status: String,
     val category: String,
     val language: String,
+    val components: List<TemplateComponent>,
+) {
+    val bodyText: String get() = components.firstOrNull { it.type.equals("BODY", ignoreCase = true) }?.text.orEmpty()
+    val variableCount: Int get() = (1..20).count { bodyText.contains("{{$it}}") }
+}
+
+data class TemplateComponent(
+    val type: String,
+    val text: String,
+    val format: String,
+)
+
+data class StaffMember(
+    val id: Int,
+    val name: String,
+    val phone: String,
+    val e164: String,
+    val brand: String,
+    val role: String,
+    val wabaStatus: String,
+)
+
+data class CampaignTemplate(
+    val id: String,
+    val name: String,
+    val status: String,
+    val category: String,
+    val language: String,
+    val bodyText: String,
+    val varCount: Int,
 )

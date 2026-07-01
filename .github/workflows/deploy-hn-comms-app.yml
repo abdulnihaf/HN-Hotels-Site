@@ -2,7 +2,7 @@ name: Deploy HN Comms Android APK
 
 on:
   push:
-    branches: [codex/comms-native-inbox]
+    branches: [main, codex/comms-native-inbox]
     paths:
       - 'android/HNCommsApp/**'
       - '.github/workflows/deploy-hn-comms-app.yml'
@@ -56,7 +56,7 @@ jobs:
             "versionCode": ${VERSION_CODE},
             "versionName": "${VERSION_NAME}",
             "apkUrl": "https://hn-comms-app.pages.dev/HN-Comms.apk",
-            "notes": "WhatsApp Business API inbox with HE/NCH threads, templates, quick replies, attachments, and send-status logging.",
+            "notes": "WhatsApp Business API inbox with HE/NCH/SparkSol lanes, Darbar hiring history, From Darbar staff templates, attachments, notifications, and send-status logging.",
             "builtAt": "${BUILT_AT}",
             "commit": "${GITHUB_SHA}"
           }
@@ -82,7 +82,7 @@ jobs:
               <main>
                 <section>
                   <h1>HN Comms</h1>
-                  <p>Native Android WhatsApp Business inbox for Hamza Express and Nawabi Chai House.</p>
+                  <p>Native Android WhatsApp Business inbox for Hamza Express, Nawabi Chai House, SparkSol, hiring replies, and From Darbar staff templates.</p>
                   <a href="/HN-Comms.apk">Download APK</a>
                   <small>Android may ask to allow installs from this browser. Updates are checked inside the app from /version.json.</small>
                 </section>

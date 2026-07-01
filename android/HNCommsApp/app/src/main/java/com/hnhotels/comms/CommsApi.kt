@@ -22,12 +22,14 @@ class CommsApi(
 ) {
     private val jsonType = "application/json".toMediaType()
 
-    suspend fun threads(brand: String, leadStatus: String, query: String): List<CommsThread> {
+    suspend fun threads(source: String, brand: String, leadStatus: String, status: String, query: String): List<CommsThread> {
         val json = get(
             mapOf(
                 "action" to "threads",
+                "source" to source,
                 "brand" to brand,
                 "lead_status" to leadStatus,
+                "status" to status,
                 "q" to query,
             )
         )
@@ -63,14 +65,36 @@ class CommsApi(
         )
     }
 
-    suspend fun sendTemplate(brand: String, phone: String, template: String): JSONObject {
+    suspend fun sendTemplate(brand: String, phone: String, template: String, vars: List<String>): JSONObject {
         return post(
             mapOf("action" to "reply"),
             JSONObject()
                 .put("brand", brand)
                 .put("phone", phone)
                 .put("template_name", template)
-                .put("template_vars", JSONArray())
+                .put("template_vars", JSONArray(vars))
+                .put("actor", "android")
+        )
+    }
+
+    suspend fun staff(): List<StaffMember> {
+        val json = get(mapOf("action" to "staff"))
+        return json.getJSONArray("staff").mapObjects { it.toStaffMember() }
+    }
+
+    suspend fun staffTemplates(): List<CampaignTemplate> {
+        val json = get(mapOf("action" to "staff-templates"))
+        return json.getJSONArray("templates").mapObjects { it.toCampaignTemplate() }
+    }
+
+    suspend fun sendStaffCampaign(template: CampaignTemplate, staff: StaffMember, vars: List<String>): JSONObject {
+        return post(
+            mapOf("action" to "staff-campaign"),
+            JSONObject()
+                .put("template", template.name)
+                .put("recipients", JSONArray(listOf(staff.e164)))
+                .put("vars", JSONArray(vars))
+                .put("language", template.language.ifBlank { "en" })
                 .put("actor", "android")
         )
     }
@@ -186,6 +210,7 @@ private fun JSONObject.toThread() = CommsThread(
     serviceWindowExpiresAt = s("service_window_expires_at"),
     serviceWindowOpen = optBoolean("service_window_open", false),
     serviceWindowMinutesRemaining = optInt("service_window_minutes_remaining", 0),
+    leadContext = optJSONObject("lead_context")?.toLeadContext() ?: LeadContext(),
 )
 
 private fun JSONObject.toMessage() = CommsMessage(
@@ -217,4 +242,41 @@ private fun JSONObject.toTemplate() = WabaTemplate(
     status = s("status"),
     category = s("category"),
     language = s("language"),
+    components = optJSONArray("components")?.mapObjects { it.toTemplateComponent() } ?: emptyList(),
+)
+
+private fun JSONObject.toTemplateComponent() = TemplateComponent(
+    type = s("type"),
+    text = s("text"),
+    format = s("format"),
+)
+
+private fun JSONObject.toLeadContext() = LeadContext(
+    source = s("source"),
+    campaignName = s("campaign_name"),
+    campaignRole = s("campaign_role"),
+    candidateName = s("candidate_name"),
+    staffName = s("staff_name"),
+    staffBrand = s("staff_brand"),
+    staffRole = s("staff_role"),
+)
+
+private fun JSONObject.toStaffMember() = StaffMember(
+    id = optInt("id", 0),
+    name = s("name").ifBlank { s("known_as") },
+    phone = s("phone"),
+    e164 = s("e164"),
+    brand = s("brand"),
+    role = s("role"),
+    wabaStatus = s("waba_status"),
+)
+
+private fun JSONObject.toCampaignTemplate() = CampaignTemplate(
+    id = s("id").ifBlank { s("name") },
+    name = s("name"),
+    status = s("status"),
+    category = s("category"),
+    language = s("language"),
+    bodyText = s("body_text"),
+    varCount = optInt("var_count", 0),
 )
