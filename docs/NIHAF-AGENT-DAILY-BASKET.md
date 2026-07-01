@@ -66,8 +66,11 @@ Spelling/format **variants fragment the count** — merge them via aliases or es
   true daily frequency in half) · Cutlets ↔ Cutlets (30 pcs) ↔ Cutlets (50 pcs) · Butter ↔ Butter (3 kg
   total) ↔ (2.5 kg total) · Silver pouch 5/7 ↔ 5/7 silver pouch · Bisleri 500ml ↔ 500 ml · cups variants.
 
-## Data anomalies to guard
-- **Egg range 2–90 crate** — the 90 is an outlier (bulk/typo); daily norm is ~3. Use median + a range band.
+## Units first, then anomalies (First Law: no assumptions)
+- **Egg "90" was NOT an outlier — it was a unit mismatch.** 30 May read "Egg 90 **pcs**"; with `1 crate = 30
+  eggs` (Nihaf), 90 pcs = **3 crate** = the normal daily amount. Lesson: **normalize units first** (a
+  conversions table: crate=30 eggs, box, bag, katta, bora, case…) *then* compare. Never call a number
+  anomalous before checking its unit; if still unclear after normalizing, **ask** — never assume.
 - Qty blank "—" is normal (kitchen didn't specify; vendor fills) — absence of qty ≠ a gap.
 
 ## Coverage caveats

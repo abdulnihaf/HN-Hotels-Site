@@ -8,6 +8,20 @@
 > **Fact status (Hukum truth contract):** lines marked *(verified 2026-06-30)* were queried live;
 > *(Nihaf)* = his ground truth; the rest is design decided in-session. Re-verify any *(verified)*
 > line before building on it — reality moves.
+>
+> ## ★ FIRST LAW — NO ASSUMPTIONS *(2026-07-01, Nihaf — above everything in this spine)*
+> The agent **never assumes**. When it does not know something, it **ASKS the right person** — Nihaf, or
+> Zoya, or Bashir — and reaches out **continuously until it has the accurate answer**. The agent is
+> *responsible for making the data accurate*, not for guessing well. "It is fine to not know" — knowing is
+> reached by asking the people who hold the truth, relentlessly; never by a plausible assumption. This binds
+> the agent **and me (Claude)**: a hedge like *"maybe an outlier"* is a banned assumption — resolve it by asking.
+>
+> **Worked example — units (why this is not trivia):** learning "how much per day" is impossible without the
+> unit. `1 crate of eggs = 30 eggs` *(Nihaf)*. So the "Egg 90 **pcs**" on 30 May normalizes to exactly
+> **3 crate** — the normal daily amount. There was never an anomaly, only an un-normalized unit; my earlier
+> "90 = outlier" was the banned assumption. The agent keeps a **conversions table** (crate=30 eggs, box, bag,
+> katta, bora, case …) that it **fills by asking** whenever a unit is unknown — it never assumes a conversion,
+> and it **normalizes every quantity to a common unit before** judging "how much" or "is this off."
 
 ---
 
@@ -460,8 +474,10 @@ itself, without him.
 - **Variant-merge:** auto-detect near-duplicate item names (fuzzy + learned aliases) into families so counts
   don't fragment (`Milk — morning` ↔ `Milk (morning)`, the oil family, cutlet pack sizes). A new spelling
   maps to its family; a genuinely-new item is flagged to confirm (the bootstrap ask, §16).
-- **Robust stats:** median + robust bands, never mean — one outlier (egg 90 crate) cannot poison the
-  expectation; anomalies are flagged, not absorbed.
+- **Robust stats + unit-normalize FIRST:** every quantity is converted to a common unit (via the
+  conversions table, First Law) *before* comparing — so a unit mismatch like "Egg 90 pcs" = 3 crate is
+  never mistaken for an anomaly. Then median + robust bands (never mean) so a genuine outlier can't poison
+  the expectation. A quantity that still looks off after normalizing is **asked, not assumed**.
 - **Drift + confidence:** if its "missing" flags keep turning out fine, or its predicted qty is consistently
   off, it **recalibrates instead of nagging** — it self-tunes its own false-alarm rate. On thin data it holds
   back (less strict) until confident; strictness rises as the trail grows.
