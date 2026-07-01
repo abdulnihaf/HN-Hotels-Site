@@ -28,9 +28,21 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Decode Android signing key
+        run: |
+          set -euo pipefail
+          printf '%s' "${HN_OPS_UPLOAD_KEYSTORE_B64}" | base64 -d > android/HNStaff/hn-ops-upload.jks
+        env:
+          HN_OPS_UPLOAD_KEYSTORE_B64: ${{ secrets.HN_OPS_UPLOAD_KEYSTORE_B64 }}
+
       - name: Build Android ops APK
         working-directory: android/HNStaff
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease
+        env:
+          HN_OPS_KEYSTORE_PATH: ${{ github.workspace }}/android/HNStaff/hn-ops-upload.jks
+          HN_OPS_KEYSTORE_PASSWORD: ${{ secrets.HN_OPS_KEYSTORE_PASSWORD }}
+          HN_OPS_KEY_ALIAS: ${{ secrets.HN_OPS_KEY_ALIAS }}
+          HN_OPS_KEY_PASSWORD: ${{ secrets.HN_OPS_KEY_PASSWORD }}
 
       - name: Prepare Pages artifact
         run: |
@@ -38,14 +50,14 @@ jobs:
           rm -rf /tmp/hn-ops-api-dist
           mkdir -p /tmp/hn-ops-api-dist/functions/api /tmp/hn-ops-api-dist/get
           cp functions/api/ops.js /tmp/hn-ops-api-dist/functions/api/ops.js
-          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Ops-2.3.apk
-          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Ops.apk
+          cp android/HNStaff/app/build/outputs/apk/release/app-release.apk /tmp/hn-ops-api-dist/HN-Ops-2.4.apk
+          cp android/HNStaff/app/build/outputs/apk/release/app-release.apk /tmp/hn-ops-api-dist/HN-Ops.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 23,
-            "versionName": "2.3",
-            "url": "https://hn-ops-api.pages.dev/HN-Ops-2.3.apk",
-            "notes": "Sauda 2.3: place-order button stays visible with long baskets, add-more item list remains usable, and unit overrides no longer carry kg/L master rates into g/ml lines."
+            "versionCode": 24,
+            "versionName": "2.4",
+            "url": "https://hn-ops-api.pages.dev/HN-Ops-2.4.apk",
+            "notes": "Sauda 2.4: stable signed HN Ops release. If Android shows package conflict, uninstall the old debug build once, then install 2.4; future updates will install normally."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -68,8 +80,9 @@ jobs:
             <main>
               <h1>HN Ops</h1>
               <p>Install the current Android ops app for Sauda purchase work.</p>
-              <a href="/HN-Ops-2.3.apk?v=23">Download & install 2.3</a>
-              <small>Version 2.3 · HN Hotels Pvt Ltd</small>
+              <a href="/HN-Ops-2.4.apk?v=24">Download & install 2.4</a>
+              <p class="note">If Android says package conflict, uninstall the old HN Ops once, then install this. Future updates will work normally.</p>
+              <small>Version 2.4 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>

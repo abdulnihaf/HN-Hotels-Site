@@ -8,17 +8,30 @@ android {
     compileSdk = 35
     buildToolsVersion = "35.0.0"
 
+    signingConfigs {
+        create("hnOpsRelease") {
+            val keystorePath = System.getenv("HN_OPS_KEYSTORE_PATH")
+            if (!keystorePath.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("HN_OPS_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("HN_OPS_KEY_ALIAS")
+                keyPassword = System.getenv("HN_OPS_KEY_PASSWORD")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.hnhotels.hnstaff"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "2.3"
+        versionCode = 24
+        versionName = "2.4"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("hnOpsRelease")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
