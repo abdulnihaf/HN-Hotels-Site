@@ -125,6 +125,12 @@ Goal: connect Kite without dumping the user on the web dashboard's key gate.
 - Lab is promoted into the visible tab row for this build: **Now · Stocks · Lab · Execute · More**. The old hidden-Lab-under-More placement was wrong for a test-first Quant rollout.
 - Locked into `COCKPIT-MANIFEST.md` with new source checks for the Quant control client and Lab trail cards. `project.yml` build number moved to 29. `build-and-install.sh` now uses the current checkout, generates Xcode project files, and builds the `WealthApp` scheme.
 
+## Build 30 — Execute owns Quant remote control (2026-07-01, Codex)
+- Corrected the UX boundary after owner feedback: **Lab is only for testing/proof**. It now shows the Quant proof trail and recent broker/test proof history, but no timer execution button.
+- Moved Quant remote control into **Execute**. The Execute tab now owns paper timer tick, timer-plan prefill, timer override save/clear, and the future Face-ID-gated real timer tick path.
+- Real timer execution remains locked unless the backend reports both `quant_timer_real_enabled=true` and `execution_gate.trade_authorized=true`; Build 30 exposes the control surface without weakening the server broker contract.
+- Added `quantControlSetOverride` and `quantControlClearOverride` client calls, plus manifest checks that prevent future builds from moving execution controls back into Lab.
+
 ## Next (the gaps — for the intraday-profit objective)
 1. **"Now" tab** — surface the engine's existing phase-aware coaching (`todays_plan` current_step) + the 08:30 verdict plan (entry/stop/target/qty) + live position as ONE guided "do this now" flow. *This is the whole objective; the brain already produces it, the app just doesn't show it.*
 2. **One-tap engine trade** — Execute pre-fills from the verdict pick (no manual re-typing).
