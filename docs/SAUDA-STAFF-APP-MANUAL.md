@@ -57,7 +57,7 @@ The phone asks to "allow this source" only the **first** time. After that, insta
 
 The product button is intentionally not a top-level tab. A product belongs under a vendor, so the app unlocks **Product** only after a vendor is selected.
 
-**Unit rule in version 2.1:** do not create a second product just because one purchase is half kg. Keep the master item as kg and enter decimal quantity (`0.5 kg`). Change the line unit only when the vendor bill uses another unit, such as `g`, `pcs`, `box`, or `L`; the saved rate is then read against that line unit.
+**Unit rule in version 2.3:** do not create a second product just because one purchase is half kg. Keep the master item as kg and enter decimal quantity (`0.5 kg`). Change the line unit only when the vendor bill uses another unit, such as `g`, `pcs`, `box`, or `L`. If the line unit changes away from the master unit, the expected rate is cleared and that line becomes **rate at bill** so grams are never multiplied by a kg rate.
 
 ---
 

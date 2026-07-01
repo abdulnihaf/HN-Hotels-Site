@@ -2023,11 +2023,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
             if (draft.isEmpty()) error = ""
         }
         if (draft.none { d -> d.optString("item_code") == code }) {
-            val unit = it2.optString("unit")
-            val pr = it2.optInt("price_paise")
-            draft.add(JSONObject().put("item_code", code).put("item_label", it2.optString("label"))
-                .put("qty", 1).put("uom", unit)
-                .put("unit_cost_paise", if (it2.optString("price_mode") != "live") pr else 0))
+            draft.add(catalogItemToDraftLine(it2))
         }
     }
     fun addCreatedItemToDraft(it2: JSONObject) {
@@ -2035,9 +2031,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
         if (code.isEmpty()) return
         vendorKey = it2.optString("default_vendor").ifEmpty { vendorKey }
         if (draft.none { d -> d.optString("item_code") == code }) {
-            draft.add(JSONObject().put("item_code", code).put("item_label", it2.optString("label"))
-                .put("qty", 1).put("uom", it2.optString("unit"))
-                .put("unit_cost_paise", if (it2.optString("price_mode") != "live") it2.optInt("price_paise") else 0))
+            draft.add(catalogItemToDraftLine(it2))
         }
     }
     fun openProductDialog(defaultLabel: String = searchText) {
@@ -2281,7 +2275,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
         )
     }
     Scaffold(topBar = { HnBar("Place order", subtitle = prettyDate(s.date), onBack = back) }) { p ->
-        Column(Modifier.padding(p).fillMaxSize().padding(16.dp)) {
+        Column(Modifier.padding(p).fillMaxSize().padding(16.dp).navigationBarsPadding()) {
             if (cat == null && error.isEmpty()) { Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) { CircularProgressIndicator(color = Maroon) }; return@Column }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
@@ -2338,13 +2332,15 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                     Column(Modifier.padding(12.dp)) {
                         Text("Order card · $vendorName", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         Spacer(Modifier.height(6.dp))
-                        draft.forEachIndexed { idx, d ->
-                            DraftLineEditor(
-                                line = d,
-                                onQty = { q -> draft[idx] = JSONObject(d.toString()).put("qty", q.ifEmpty { "0" }) },
-                                onUom = { u -> draft[idx] = JSONObject(d.toString()).put("uom", u) },
-                                onRemove = { draft.removeAt(idx) }
-                            )
+                        Column(Modifier.heightIn(max = 250.dp).verticalScroll(rememberScrollState())) {
+                            draft.forEachIndexed { idx, d ->
+                                DraftLineEditor(
+                                    line = d,
+                                    onQty = { q -> draft[idx] = JSONObject(d.toString()).put("qty", q.ifEmpty { "0" }) },
+                                    onUom = { u -> draft[idx] = draftLineWithUnit(d, u) },
+                                    onRemove = { draft.removeAt(idx) }
+                                )
+                            }
                         }
                     }
                 }
@@ -2400,7 +2396,7 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
                                     Spacer(Modifier.width(4.dp))
                                     OutlinedTextField(
                                         value = inDraft.optString("uom").ifEmpty { unit },
-                                        onValueChange = { v -> draft[idx] = JSONObject(inDraft.toString()).put("uom", cleanUnitText(v)) },
+                                        onValueChange = { v -> draft[idx] = draftLineWithUnit(inDraft, v) },
                                         singleLine = true,
                                         modifier = Modifier.width(62.dp),
                                         label = { Text("unit", fontSize = 10.sp) }
@@ -2433,7 +2429,10 @@ fun PlaceScreen(me: JSONObject, s: Screen.Place, back: () -> Unit, placed: () ->
             }
             if (draft.isNotEmpty()) {
                 val tot = draft.sumOf { d -> ((d.optDouble("qty", 0.0)) * d.optInt("unit_cost_paise")).toInt() }
-                Text("${draft.size} items" + (if (tot > 0) " · ${rupee(tot)} expected" else ""),
+                val pendingRates = draft.count { d -> d.optInt("unit_cost_paise") <= 0 }
+                Text("${draft.size} items" +
+                    (if (tot > 0) " · ${rupee(tot)} expected" else "") +
+                    (if (pendingRates > 0) " · $pendingRates rates at bill" else ""),
                     color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp))
             }
             if (error.isNotEmpty()) Text("⚠ $error", color = WarnA, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
@@ -2519,6 +2518,35 @@ fun CenterMsg(msg: String, onRetry: (() -> Unit)?) {
 
 fun numStr(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else d.toString()
 fun cleanUnitText(s: String): String = s.replace(Regex("[^A-Za-z0-9./ -]"), "").take(12)
+fun sameUnit(a: String, b: String): Boolean = a.trim().equals(b.trim(), ignoreCase = true)
+fun catalogItemToDraftLine(it2: JSONObject): JSONObject {
+    val unit = it2.optString("unit")
+    val cost = if (it2.optString("price_mode") != "live") it2.optInt("price_paise") else 0
+    val flag = it2.optString("flag")
+    return JSONObject()
+        .put("item_code", it2.optString("item_code"))
+        .put("item_label", it2.optString("label"))
+        .put("qty", 1)
+        .put("uom", unit)
+        .put("unit_cost_paise", cost)
+        .put("flag", flag)
+        .put("_base_uom", unit)
+        .put("_base_unit_cost_paise", cost)
+        .put("_base_flag", flag)
+}
+fun draftLineWithUnit(line: JSONObject, rawUnit: String): JSONObject {
+    val clean = cleanUnitText(rawUnit)
+    val baseUnit = line.optString("_base_uom").ifEmpty { line.optString("uom") }
+    val baseCost = if (line.has("_base_unit_cost_paise")) line.optInt("_base_unit_cost_paise") else line.optInt("unit_cost_paise")
+    val baseFlag = line.optString("_base_flag")
+    val out = JSONObject(line.toString()).put("uom", clean)
+    return if (clean.isNotEmpty() && baseUnit.isNotEmpty() && !sameUnit(clean, baseUnit)) {
+        out.put("unit_cost_paise", 0)
+            .put("flag", "Unit changed from $baseUnit; rate at bill")
+    } else {
+        out.put("unit_cost_paise", baseCost).put("flag", baseFlag)
+    }
+}
 fun JSONArray.toStrList(): List<String> = (0 until length()).map { optString(it) }
 fun JSONArray.toObjList(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 fun JSONObject.optDoubleOrNull(key: String): Double? {

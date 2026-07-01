@@ -38,14 +38,14 @@ jobs:
           rm -rf /tmp/hn-ops-api-dist
           mkdir -p /tmp/hn-ops-api-dist/functions/api /tmp/hn-ops-api-dist/get
           cp functions/api/ops.js /tmp/hn-ops-api-dist/functions/api/ops.js
-          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Ops-2.2.apk
+          cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Ops-2.3.apk
           cp android/HNStaff/app/build/outputs/apk/debug/app-debug.apk /tmp/hn-ops-api-dist/HN-Ops.apk
           cat > /tmp/hn-ops-api-dist/version.json <<'JSON'
           {
-            "versionCode": 22,
-            "versionName": "2.2",
-            "url": "https://hn-ops-api.pages.dev/HN-Ops-2.2.apk",
-            "notes": "Sauda 2.2: login-screen Update app button plus flexible purchase units. Use 0.5 kg for half kg, or override line unit to g/pcs/L when the vendor bill uses that unit."
+            "versionCode": 23,
+            "versionName": "2.3",
+            "url": "https://hn-ops-api.pages.dev/HN-Ops-2.3.apk",
+            "notes": "Sauda 2.3: place-order button stays visible with long baskets, add-more item list remains usable, and unit overrides no longer carry kg/L master rates into g/ml lines."
           }
           JSON
           cat > /tmp/hn-ops-api-dist/get/index.html <<'HTML'
@@ -68,8 +68,8 @@ jobs:
             <main>
               <h1>HN Ops</h1>
               <p>Install the current Android ops app for Sauda purchase work.</p>
-              <a href="/HN-Ops-2.2.apk?v=22">Download & install 2.2</a>
-              <small>Version 2.2 · HN Hotels Pvt Ltd</small>
+              <a href="/HN-Ops-2.3.apk?v=23">Download & install 2.3</a>
+              <small>Version 2.3 · HN Hotels Pvt Ltd</small>
             </main>
           </body>
           </html>
